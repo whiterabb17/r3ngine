@@ -11,6 +11,7 @@ import {
   Alert,
   Stack
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
   Upload as UploadIcon,
   Extension as ExtensionIcon,
@@ -98,7 +99,7 @@ const PluginManagementPage: React.FC = () => {
     return (
       <Box sx={{ display: "flex", flexDirection: 'column', alignItems: "center", justifyContent: 'center', height: '60vh', gap: 2 }}>
         <CircularProgress sx={{ color: tokens.accent.primary }} />
-        <Typography sx={{ fontFamily: 'Orbitron', color: 'text.secondary', fontSize: '0.8rem', letterSpacing: 2 }}>
+        <Typography sx={{ fontFamily: 'var(--r3-heading-font)', color: 'text.secondary', fontSize: '0.8rem', letterSpacing: 2 }}>
           BROWSING THE MARKETPLACE...
         </Typography>
       </Box>
@@ -117,7 +118,7 @@ const PluginManagementPage: React.FC = () => {
         <Box>
           <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 1 }}>
             <Shield size={32} color={tokens.accent.primary} />
-            <Typography variant="h3" sx={{ fontFamily: 'Orbitron', fontWeight: 900, letterSpacing: -1, color: 'text.primary' }}>
+            <Typography variant="h3" sx={{ fontFamily: 'var(--r3-heading-font)', fontWeight: 900, letterSpacing: -1, color: 'text.primary' }}>
               PLUGIN ORCHESTRATION
             </Typography>
           </Stack>
@@ -132,8 +133,8 @@ const PluginManagementPage: React.FC = () => {
           startIcon={<UploadIcon />}
           sx={{
             bgcolor: tokens.accent.primary,
-            color: 'background.default',
-            fontFamily: 'Orbitron',
+            color: tokens.mode === 'light' ? '#fff' : '#000',
+            fontFamily: 'var(--r3-heading-font)',
             fontWeight: 900,
             borderRadius: 0,
             px: 4,
@@ -151,7 +152,7 @@ const PluginManagementPage: React.FC = () => {
         <Alert 
           severity="error" 
           variant="outlined"
-          sx={{ mb: 4, borderColor: 'rgba(255, 0, 60, 0.3)', color: '#ff003c', bgcolor: 'rgba(255, 0, 60, 0.05)' }}
+          sx={{ mb: 4, borderColor: alpha(tokens.accent.error, 0.3), color: tokens.accent.error, bgcolor: alpha(tokens.accent.error, 0.05) }}
         >
           CRITICAL ERROR: Failed to synchronize with orchestration backend.
         </Alert>
@@ -173,7 +174,7 @@ const PluginManagementPage: React.FC = () => {
             bgcolor: 'action.hover',
             '& .MuiTab-root': {
               minHeight: 70,
-              fontFamily: 'Orbitron',
+              fontFamily: 'var(--r3-heading-font)',
               fontWeight: 800,
               fontSize: '0.8rem',
               letterSpacing: 1,
@@ -213,10 +214,10 @@ const PluginManagementPage: React.FC = () => {
           severity={snackbar.severity} 
           variant="filled"
           sx={{ 
-            fontFamily: 'Orbitron', 
+            fontFamily: 'var(--r3-heading-font)', 
             fontWeight: 800,
-            bgcolor: snackbar.severity === 'success' ? '#00ffaa' : '#ff003c',
-            color: '#000',
+            bgcolor: snackbar.severity === 'success' ? tokens.accent.success : tokens.accent.error,
+            color: tokens.mode === 'light' ? '#fff' : '#000',
             borderRadius: 0
           }}
         >
