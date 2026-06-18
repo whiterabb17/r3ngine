@@ -479,3 +479,69 @@ class TestWorkflowStructuralInvariants(TestCase):
                         "It must be guarded by 'if success:' so it only runs on clean completion."
                     )
         self.fail("MasterScanWorkflow.run() not found in temporal_workflows.py")
+
+    def test_masterscan_nuclei_failure_does_not_raise(self):
+        """NucleiPlannerWorkflow failure must be caught so Tier 7 still runs.
+
+        Reads temporal_workflows.py source and asserts the execute_child_workflow
+        call for NucleiPlannerWorkflow is wrapped in a try-except block,
+        confirming Tier 7 correlation/risk/Neo4j activities are not gated on it.
+        """
+        import ast, textwrap
+
+        src_path = os.path.join(
+            os.path.dirname(__file__), '..', 'reNgine', 'temporal_workflows.py'
+        )
+        with open(src_path) as f:
+            source = f.read()
+
+        tree = ast.parse(source)
+
+        # Find the MasterScanWorkflow.run method
+        run_method = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == 'MasterScanWorkflow':
+                for item in node.body:
+                    if isinstance(item, (ast.AsyncFunctionDef, ast.FunctionDef)) and item.name == 'run':
+                        run_method = item
+                        break
+                break
+
+        self.assertIsNotNone(run_method, "MasterScanWorkflow.run not found")
+
+        # Find execute_child_workflow("NucleiPlannerWorkflow") call node
+        nuclei_call_node = None
+        for node in ast.walk(run_method):
+            if isinstance(node, ast.Expr) and isinstance(node.value, (ast.Await, ast.Call)):
+                call = node.value.value if isinstance(node.value, ast.Await) else node.value
+                if isinstance(call, ast.Call):
+                    func = call.func
+                    func_name = (
+                        func.attr if isinstance(func, ast.Attribute) else
+                        func.id if isinstance(func, ast.Name) else ''
+                    )
+                    if func_name == 'execute_child_workflow':
+                        if call.args and isinstance(call.args[0], ast.Constant):
+                            if call.args[0].value == 'NucleiPlannerWorkflow':
+                                nuclei_call_node = node
+                                break
+
+        self.assertIsNotNone(
+            nuclei_call_node,
+            "execute_child_workflow('NucleiPlannerWorkflow') call not found in MasterScanWorkflow.run",
+        )
+
+        # The call must be inside a Try block (i.e. wrapped in try-except)
+        def _is_inside_try(target_node, search_root):
+            """Return True if target_node is a direct statement inside a Try body."""
+            for node in ast.walk(search_root):
+                if isinstance(node, ast.Try):
+                    if target_node in node.body:
+                        return True
+            return False
+
+        self.assertTrue(
+            _is_inside_try(nuclei_call_node, run_method),
+            "execute_child_workflow('NucleiPlannerWorkflow') must be wrapped in a try-except "
+            "so that nuclei failures do not kill Tier 7 (correlation, risk scoring, Neo4j).",
+        )
