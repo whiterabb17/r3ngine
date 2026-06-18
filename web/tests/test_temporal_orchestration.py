@@ -487,7 +487,7 @@ class TestWorkflowStructuralInvariants(TestCase):
         call for NucleiPlannerWorkflow is wrapped in a try-except block,
         confirming Tier 7 correlation/risk/Neo4j activities are not gated on it.
         """
-        import ast, textwrap
+        import ast
 
         src_path = os.path.join(
             os.path.dirname(__file__), '..', 'reNgine', 'temporal_workflows.py'

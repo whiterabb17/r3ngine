@@ -596,6 +596,7 @@ class MasterScanWorkflow:
             # activity (not child workflow) so gather is safe for it.
             # ------------------------------------------------------------------
             ran_t6 = False
+            nuclei_failed = False
 
             if "vulnerability_scan" in tasks:
                 # Spawn as a child workflow so Nuclei execution has its own
@@ -619,6 +620,7 @@ class MasterScanWorkflow:
                         "NucleiPlannerWorkflow failed for scan_id=%s — continuing to Tier 7. error=%s",
                         ctx.get('scan_history_id'), str(nuclei_err),
                     )
+                    nuclei_failed = True
 
             other_t6_futures = []
             if "waf_bypass" in tasks:
