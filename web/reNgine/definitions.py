@@ -116,6 +116,11 @@ NUCLEI_TAGS = 'tags'
 NUCLEI_TEMPLATE = 'templates'
 NUCLEI_SEVERITY = 'severities'
 NUCLEI_CONCURRENCY = 'concurrency'
+# Maximum concurrency and rate when routing nuclei through a proxy file.
+# nuclei v3.9.0 AdaptiveWaitGroup deadlocks at high concurrency when the
+# proxy error rate exceeds ~60% — these caps prevent the semaphore hang.
+NUCLEI_PROXY_MAX_CONCURRENCY = 10
+NUCLEI_PROXY_MAX_RATE_LIMIT = 10
 NUCLEI_MAX_TEMPLATES_PER_BATCH = 'max_templates_per_batch'
 OSINT = 'osint'
 OSINT_DOCUMENTS_LIMIT = 'documents_limit'

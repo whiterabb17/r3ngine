@@ -3914,6 +3914,22 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 	concurrency = config.get(NUCLEI_CONCURRENCY) or self.yaml_configuration.get(THREADS, DEFAULT_THREADS)
 	intensity = config.get(INTENSITY) or self.yaml_configuration.get(INTENSITY, DEFAULT_SCAN_INTENSITY)
 	rate_limit = config.get(RATE_LIMIT) or self.yaml_configuration.get(RATE_LIMIT, DEFAULT_RATE_LIMIT)
+	# Cap concurrency and rate when routing through a proxy file.
+	# nuclei v3.9.0 AdaptiveWaitGroup deadlocks at high concurrency under proxy
+	# error rates of 60%+. See: scan 37 post-mortem / nuclei-stacktrace-*.dump.
+	if proxies_file_path and os.path.exists(proxies_file_path):
+		if concurrency > NUCLEI_PROXY_MAX_CONCURRENCY:
+			logger.warning(
+				'nuclei proxy mode: capping concurrency %s -> %s to prevent semaphore deadlock',
+				concurrency, NUCLEI_PROXY_MAX_CONCURRENCY,
+			)
+			concurrency = NUCLEI_PROXY_MAX_CONCURRENCY
+		if rate_limit > NUCLEI_PROXY_MAX_RATE_LIMIT:
+			logger.warning(
+				'nuclei proxy mode: capping rate_limit %s -> %s req/s',
+				rate_limit, NUCLEI_PROXY_MAX_RATE_LIMIT,
+			)
+			rate_limit = NUCLEI_PROXY_MAX_RATE_LIMIT
 	retries = config.get(RETRIES) or self.yaml_configuration.get(RETRIES, DEFAULT_RETRIES)
 	timeout = config.get(TIMEOUT) or self.yaml_configuration.get(TIMEOUT, DEFAULT_HTTP_TIMEOUT)
 	custom_headers = self.yaml_configuration.get(CUSTOM_HEADERS, [])
