@@ -1,6 +1,6 @@
 # Changelog
 
-### [v3.7.0] — unreleased
+### [v3.6.2]
 
 #### Fixed
 
@@ -38,7 +38,36 @@
   and every individual network probe (URL, status code or exception) so any future slowdown
   is immediately visible in the orchestrator log rather than appearing as a silent hang.
 
-### CPDE Enhancements (Parameter Discovery)
+- **`nuclei_scan` — proxy concurrency cap prevents AdaptiveWaitGroup deadlock**:
+  nuclei v3.9.0 deadlocks when concurrency is high and the proxy error rate exceeds ~60%.
+  The scan 37 post-mortem confirmed this via a `nuclei-stacktrace-*.dump` showing goroutine 1
+  stuck in `semaphore.Acquire` for 9 minutes during the `wordpress,wp,wp-plugin` batch.
+  Added `NUCLEI_PROXY_MAX_CONCURRENCY = 10` and `NUCLEI_PROXY_MAX_RATE_LIMIT = 10` constants to
+  `definitions.py`. When `proxies_file_path` is set and the file exists, `nuclei_scan()` now
+  caps both values before building the command, logging a warning when a cap is applied.
+
+- **`MasterScanWorkflow` — NucleiPlannerWorkflow failure is now isolated**:
+  Previously, any failure in `NucleiPlannerWorkflow` (e.g. nuclei deadlock exhausting all
+  retries) propagated as an unhandled exception, setting `success = False` and skipping all
+  of Tier 7 (vulnerability correlation, risk scoring, Neo4j sync, notification). Scan 37
+  had 8 of 9 nuclei batches complete successfully — those findings were never correlated.
+  The `execute_child_workflow("NucleiPlannerWorkflow")` call is now wrapped in
+  `try/except Exception`, with a `nuclei_failed` flag set on failure. Tier 7 runs
+  regardless, processing whatever findings the completed batches wrote to the database.
+
+- **`web_api_discovery` — null `endpoint_id` constraint violation from LinkFinder**:
+  `save_endpoint()` returns `(None, False)` for off-domain URLs discovered by LinkFinder
+  (CDN links, third-party assets). When such a URL also contained `?`, `save_parameter(None, …)`
+  was called, hitting the `NOT NULL` constraint on `Parameter.endpoint_id`. The parameter loop
+  now guards with `if endpoint is not None and '?' in full_url:`.
+
+- **`web/.gitignore` — nuclei hang-monitor crash dumps no longer tracked**:
+  nuclei's `-hang-monitor` flag writes `*-stacktrace-*.dump` and `crash-resume-file-*.dump`
+  to the working directory on deadlock detection. Added three patterns (`*-stacktrace-*.dump`,
+  `crash-resume-file-*.dump`, `*.dump`) to `web/.gitignore` so these diagnostic artifacts
+  are never accidentally staged or committed.
+
+#### CPDE Enhancements (Parameter Discovery)
 - Added `url_param_collector.py` sub-module to `web/reNgine/cpde/`:
   reads `urls_*.txt` (Katana/gau/gospider/waybackurls), `arjun_*.json`,
   `ps_*.txt` (ParamSpider), `kr_*.json` (Kiterunner), and `lf_*.txt`
@@ -52,10 +81,6 @@
 - CPDE `param_discovery` now correlates parameters from all discovered
   sources (JS AST, OpenAPI, + all tool output files) instead of only
   JavaScript files and OpenAPI schemas.
-
----
-
-### [v3.6.2]
 
 - **Intelligent Auth Form Extraction — Full Rewrite (`auth_discovery_tasks.py`)**:
   - Replaced the single-attempt, regex-based implementation with a robust two-helper architecture:
@@ -259,10 +284,7 @@
     - **Layer 2 — `_run_task` helper**: Pre-flight guard at the entry point of every activity function. Catches activities that were in-flight mid-scan at the time of abort/delete, preventing them from proceeding and entering retry loops.
     - **Layer 3 — `CheckScanAliveActivity` (child workflow guard)**: Child workflows (`NucleiPlannerWorkflow`, `SubScanWorkflow`) are replayed by Temporal independently of `MasterScanWorkflow` after a container restart, so they skip Layer 1 entirely. A new `CheckScanAliveActivity` is now called as the **first activity** in both child workflows. It performs the same abort/delete check and raises `ApplicationError(non_retryable=True)` to terminate the child workflow cleanly before any scan data is accessed. This closes the remaining gap in lifecycle guard coverage for replayed child workflows.
   - Orphaned `TemporalWorkflowExecution` DB records for aborted scans (scans 4 and 8) were reconciled and marked `CANCELLED`/`TERMINATED`. The actively-looping workflow for deleted scan 32 (`master-scan-32-run-0-f36d62b1-nuclei`) was cancelled directly via the Temporal API.
-
-
-
-
+---
 
 ### [v3.5.0] - 2026-06-04
 
