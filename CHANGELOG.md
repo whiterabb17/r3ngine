@@ -2,6 +2,38 @@
 
 ### [v3.6.2]
 
+#### Enhanced
+
+- **Proxy Fetching & Validation System — Comprehensive Overhaul**:
+  Fixed two compounding problems that caused many proxies to appear live at fetch time but be dead by scan time:
+
+  **`check_proxy_robust` (reNgine/common_func.py)**:
+  - Both IP-reflection endpoints (`api.ipify.org` + `ip-api.com`) are now checked in **parallel** via `ThreadPoolExecutor`, halving worst-case validation latency (the first success short-circuits the other).
+  - Added **IPv4/IPv6 format validation** on the returned IP string using `ipaddress.ip_address()`. Captive-portal pages that return `{"ip": "Login Required"}` or HTML bodies no longer produce false positives.
+  - Added opt-in **transparent-proxy detection**: when `OpSec.enable_transparent_proxy_detection=True`, the server's own outbound IP is detected once and any proxy that reports the same IP is rejected.
+  - Default timeout raised from 5 s → **10 s** to reduce false negatives on slow SOCKS5 proxies.
+
+  **`get_random_proxy` (reNgine/common_func.py)**:
+  - **Freshness short-circuit**: if `Proxy.proxies_verified_at` is within the configured TTL (default 120 min), the batch-verified list is trusted directly and a random entry is returned with **zero re-validation overhead**. Previously every tool call triggered up to 125 s of sequential blocking.
+  - When the list is stale, re-validation is now **fully parallel** (up to 50 workers; first live proxy wins, rest cancelled) instead of sequential with an arbitrary 25-cap.
+  - Added module-level **`_failed_proxy_cache`** (in-process set): proxies that fail during a scan session are cached and skipped on subsequent calls within the same Celery worker, eliminating repeated timeout waits against already-dead entries.
+
+  **`fetch_proxies_task` (reNgine/tasks.py)**:
+  - Batch verification now passes `timeout=10` explicitly to `check_proxy_robust`.
+  - After saving the live proxy list, `proxy_obj.proxies_verified_at = now()` is stamped so the freshness short-circuit in `get_random_proxy` is immediately active.
+
+  **`ProxychainsWrapper.get_random_proxy` (reNgine/utils/opsec.py)**:
+  - Replaced the old sequential 5-proxy cap with the same **parallel `ThreadPoolExecutor`** pattern used in `get_random_proxy`. All candidates are checked concurrently; first live line wins.
+
+  **`Proxy` model (scanEngine/models.py)**:
+  - Added `proxies_verified_at` (`DateTimeField`, nullable) — records when the stored list was last batch-verified.
+  - Added `proxy_ttl_minutes` (`IntegerField`, default 120) — configurable TTL for the freshness short-circuit.
+
+  **`OpSec` model (scanEngine/models.py)**:
+  - Added `enable_transparent_proxy_detection` (`BooleanField`, default False) — opt-in transparent-proxy rejection.
+
+  **Migration**: `scanEngine/migrations/0015_proxy_verified_at_opsec_transparent.py`
+
 #### Fixed
 
 - **`run_param_discovery_activity` (CPDE) — ScanActivity permanently stuck at RUNNING**:

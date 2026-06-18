@@ -43,18 +43,11 @@ python3 manage.py sync_roles
 # Load all hardware_profile fixtures in a single command
 
     echo "Loading default fixtures..."
-    python3 manage.py loaddata fixtures/external_tools.yaml
-    python3 manage.py loaddata fixtures/default_keywords.yaml
-    python3 manage.py loaddata fixtures/scan_engines/*.yaml
-    python3 manage.py loaddata fixtures/hardware_profiles/*.yaml
-
-    # The below two loops are not required if we load all fixtures in a single command
-    # for f in fixtures/scan_engines/*.yaml; do
-    #     python3 manage.py loaddata "$f" --app scanEngine.EngineType
-    # done
-    # for f in fixtures/hardware_profiles/*.yaml; do
-    #     python3 manage.py loaddata "$f" --app scanEngine.HardwareProfile
-    # done
+    python3 manage.py loaddata \
+        fixtures/external_tools.yaml \
+        fixtures/default_keywords.yaml \
+        fixtures/scan_engines/*.yaml \
+        fixtures/hardware_profiles/*.yaml
 # else
 #     echo "Default fixtures already exist. Skipping..."
 # fi

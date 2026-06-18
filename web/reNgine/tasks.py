@@ -6726,7 +6726,7 @@ def fetch_proxies_task(limit=1000, job_id=None):
     MAX_WORKERS = min(1000, max(1, total))
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        future_map = {pool.submit(check_proxy_robust, p): p for p in unique_proxies}
+        future_map = {pool.submit(check_proxy_robust, p, 10): p for p in unique_proxies}
         for future in concurrent.futures.as_completed(future_map):
             proxy_str = future_map[future]
             try:
@@ -6764,8 +6764,12 @@ def fetch_proxies_task(limit=1000, job_id=None):
             proxy_obj = Proxy.objects.create()
         proxy_obj.proxies = proxy_str
         proxy_obj.use_proxy = True
+        # Record the timestamp of this batch verification so that get_random_proxy()
+        # can short-circuit individual re-validation while the list is still fresh.
+        from django.utils import timezone as _dj_tz
+        proxy_obj.proxies_verified_at = _dj_tz.now()
         proxy_obj.save()
-        logger.info("Automatically saved live proxies to database.")
+        logger.info("Automatically saved live proxies to database (verified_at=%s).", proxy_obj.proxies_verified_at)
     except Exception as e:
         logger.error(f"Failed to auto-save proxies: {e}")
 

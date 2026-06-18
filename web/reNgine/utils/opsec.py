@@ -278,47 +278,55 @@ class ProxychainsWrapper:
         Retrieves a random, verified alive, and unauthenticated proxy from the fetched proxy list.
         Converts the proxychains line format to standard requests proxy dictionary for testing.
 
+        Enhancement: all candidates are checked in *parallel* (up to 10 workers) and the first
+        live one wins, instead of the old sequential loop capped at 5.  This removes the hard
+        upper-bound on tries while cutting worst-case wait time dramatically.
+
         Returns:
             str: Validated proxy line in 'type host port [user pass]' format, or None if no valid proxy is found.
         """
         if not self.proxies:
             return None
-        
-        # Create a copy and shuffle to test proxies in a random sequence
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from reNgine.common_func import check_proxy_robust
+
+        # Shuffle for random distribution across the available pool
         test_list = list(self.proxies)
         random.shuffle(test_list)
-        
-        checked_count = 0
-        for proxy_str in test_list:
-            if checked_count >= 5:
-                logging.getLogger(__name__).warning("Reached maximum sequential proxychains validation limit (5). Stopping checks.")
-                break
-            checked_count += 1
-            # Parse the proxychains formatted line: type host port [user pass]
+
+        _log = logging.getLogger(__name__)
+
+        def _check_line(proxy_str):
+            """Parse a proxychains line, validate via HTTP, and return the line or None."""
             parts = proxy_str.split()
-            if len(parts) >= 3:
-                p_type = parts[0]
-                p_host = parts[1]
-                p_port = parts[2]
-                
-                # Map proxychains protocol name to requests standard scheme
-                scheme = "http" if p_type in ["http", "https"] else p_type
-                proxy_url = f"{scheme}://{p_host}:{p_port}"
-                
+            if len(parts) < 3:
+                return None
+            p_type, p_host, p_port = parts[0], parts[1], parts[2]
+            scheme = 'http' if p_type in ['http', 'https'] else p_type
+            proxy_url = f'{scheme}://{p_host}:{p_port}'
+            if check_proxy_robust(proxy_url, timeout=10):
+                return proxy_str
+            _log.error('Proxychains proxy %s validation failed.', proxy_url)
+            return None
+
+        max_workers = min(10, len(test_list))
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            future_map = {pool.submit(_check_line, line): line for line in test_list}
+            for fut in as_completed(future_map):
                 try:
-                    from reNgine.common_func import check_proxy_robust
-                    
-                    # Perform validation check with robust verification method to avoid false positives
-                    if not check_proxy_robust(proxy_url, timeout=5):
-                        raise Exception("Proxy verification failed (robust check)")
-                        
-                    # Valid proxy found, return the original proxychains formatted line
-                    return proxy_str
-                except Exception as e:
-                    # Log the proxy validation failure and continue to the next one
-                    logging.getLogger(__name__).error(f"Proxychains proxy {proxy_url} validation failed: {e}")
-                    
+                    result = fut.result()
+                except Exception:
+                    result = None
+                if result:
+                    # Cancel remaining futures – we have a winner
+                    for other in future_map:
+                        if other is not fut:
+                            other.cancel()
+                    return result
+
         return None
+
 
     def should_wrap(self):
         proxy_obj = Proxy.objects.first()
