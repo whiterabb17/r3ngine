@@ -9,3 +9,7 @@ web/static/plugins
 entrypoint.sh
 executor-entrypoint.sh
 temporal-entrypoint.sh
+# nuclei hang-monitor crash files (written to CWD on deadlock detection)
+*-stacktrace-*.dump
+crash-resume-file-*.dump
+*.dump
