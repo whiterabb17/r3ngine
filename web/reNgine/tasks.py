@@ -3562,7 +3562,7 @@ def web_api_discovery(self, urls=[], ctx={}, description=None):
 									full_url = line
 								endpoint, _ = save_endpoint(full_url, ctx=ctx, subdomain=subdomain)
 								lf_endpoints += 1
-								if '?' in full_url:
+								if endpoint is not None and '?' in full_url:
 									params = extract_params_from_url(full_url)
 									for p in params:
 										save_parameter(endpoint, p['name'], param_type='LinkFinder', value=p['value'])
