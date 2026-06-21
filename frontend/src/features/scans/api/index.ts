@@ -79,8 +79,6 @@ export const useInitiateScan = (projectSlug: string) => {
       kr_wordlist?: string;
       spiderfoot_scan?: boolean;
       selected_plugins?: string[];
-      worker_name?: string;
-      task_queue?: string;
     }) => {
       const response = await fetch('/api/action/initiate/scan/', {
         method: 'POST',

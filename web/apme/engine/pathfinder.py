@@ -76,7 +76,7 @@ class Pathfinder:
     MAX_DEPTH = 8
     MAX_PATHS = 20
     DFS_MAX_DEPTH = 6
-    MAX_ENTRY_POINTS = 500
+    MAX_ENTRY_POINTS = 50
     QUERY_TIMEOUT_MS = 30_000
 
     def __init__(self, min_edge_confidence: float = 0.20):

@@ -16,7 +16,6 @@ from typing import List, Tuple
 
 from apme.models.node import Node
 from apme.models.edge import Edge
-from apme.ingestion.correlation import ExposureCorrelator
 
 logger = logging.getLogger(__name__)
 
@@ -305,6 +304,4 @@ def ingest_vulnerabilities(target_id: int) -> Tuple[List[Node], List[Edge]]:
         "APME Ingestion [vulnerabilities]: %d nodes, %d edges (target_id=%s)",
         len(nodes), len(edges), target_id,
     )
-    
-    correlator = ExposureCorrelator()
-    return correlator.correlate(nodes, edges)
+    return nodes, edges

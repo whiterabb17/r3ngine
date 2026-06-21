@@ -546,7 +546,6 @@ RUN playwright install-deps chromium && \
 # above this line are fully cached on code-only rebuilds)
 # ---------------------------------------------------------------------------
 COPY web/ /usr/src/app/
-COPY docker/scripts/nuclei_tag_splitter.py /usr/src/app/scripts/nuclei_tag_splitter.py
 COPY docker/web/entrypoint.sh /usr/src/app/entrypoint.sh
 COPY docker/temporal-python-orchestrator/entrypoint.sh /usr/src/app/temporal-entrypoint.sh
 COPY docker/temporal-go-executor/entrypoint.sh /usr/src/app/executor-entrypoint.sh

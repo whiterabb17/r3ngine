@@ -141,39 +141,6 @@ class SOCSettingsViewSet(viewsets.ModelViewSet):
 		}, status=status.HTTP_200_OK)
 
 
-class ScanWorkerViewSet(viewsets.ModelViewSet):
-	permission_classes = [IsAuditor]
-	serializer_class = ScanWorkerSerializer
-	queryset = ScanWorker.objects.all()
-
-	def get_queryset(self):
-		return ScanWorker.objects.all().order_by('-id')
-
-class WorkerHeartbeatAPIView(APIView):
-	permission_classes = [AllowAny]
-	def post(self, request):
-		token = request.data.get('token')
-		worker_name = request.data.get('worker_name')
-		if not token or not worker_name:
-			return Response({'status': False, 'message': 'Missing token or worker_name'}, status=status.HTTP_400_BAD_REQUEST)
-		from django.utils.crypto import constant_time_compare
-		worker = ScanWorker.objects.filter(name=worker_name).first()
-		if not worker or not constant_time_compare(worker.auth_token, token):
-			return Response({'status': False, 'message': 'Invalid token or worker not found'}, status=status.HTTP_403_FORBIDDEN)
-		
-		# simple ip extraction
-		x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-		if x_forwarded_for:
-			ip = x_forwarded_for.split(',')[0]
-		else:
-			ip = request.META.get('REMOTE_ADDR')
-
-		worker.last_heartbeat = timezone.now()
-		worker.ip_address = ip
-		worker.save()
-		return Response({'status': True, 'message': 'Heartbeat received'})
-
-
 class HackerOneProgramViewSet(viewsets.ViewSet):
 	permission_classes = [IsPenetrationTester]
 	"""
@@ -2394,18 +2361,6 @@ class InitiateScan(APIView):
 						except Exception as exc:
 							logger.warning("[SCAN] Failed to load scan profile %s: %s", _profile_name or _profile_id, exc)
 
-					worker_name = data.get('worker_name')
-					task_queue = data.get('task_queue')
-					
-					if worker_name:
-						from django.utils import timezone
-						from datetime import timedelta
-						worker = ScanWorker.objects.filter(name=worker_name, is_active=True).first()
-						if not worker:
-							raise Exception(f"Worker '{worker_name}' not found or inactive")
-						if not worker.last_heartbeat or worker.last_heartbeat < timezone.now() - timedelta(minutes=5):
-							raise Exception(f"Worker '{worker_name}' is offline (last heartbeat: {worker.last_heartbeat})")
-					
 					# Start the scan via Temporal durable workflow orchestration
 					kwargs = {
 						'scan_history_id': scan.id,
@@ -2422,7 +2377,6 @@ class InitiateScan(APIView):
 						'initiated_by_id': request.user.id,
 						'selected_plugin_slugs': selected_plugins,
 						'profile_ctx': _profile_ctx,
-						'task_queue': task_queue or worker_name,
 					}
 					res = initiate_scan_temporal(**kwargs)
 					if not res.get('success'):
@@ -2475,18 +2429,6 @@ class InitiateSubTask(APIView):
 		selected_plugins = data.get('selected_plugins', [])
 		if isinstance(selected_plugins, str):
 			selected_plugins = [selected_plugins]
-		worker_name = data.get('worker_name')
-		task_queue = data.get('task_queue')
-		
-		if worker_name:
-			from django.utils import timezone
-			from datetime import timedelta
-			worker = ScanWorker.objects.filter(name=worker_name, is_active=True).first()
-			if not worker:
-				return Response({'status': False, 'message': f"Worker '{worker_name}' not found or inactive"}, status=status.HTTP_400_BAD_REQUEST)
-			if not worker.last_heartbeat or worker.last_heartbeat < timezone.now() - timedelta(minutes=5):
-				return Response({'status': False, 'message': f"Worker '{worker_name}' is offline"}, status=status.HTTP_400_BAD_REQUEST)
-		
 		# Accept both subdomain_ids (list) and subdomain_id (single int) for mobile compatibility
 		subdomain_ids = data.get('subdomain_ids') or []
 		if not subdomain_ids:
@@ -2503,7 +2445,6 @@ class InitiateSubTask(APIView):
 				'scan_type': scan_types,
 				'engine_id': engine_id,
 				'selected_plugin_slugs': selected_plugins,
-				'task_queue': task_queue or worker_name,
 			}
 			res = initiate_subscan_temporal(**ctx)
 			if not res.get('success'):

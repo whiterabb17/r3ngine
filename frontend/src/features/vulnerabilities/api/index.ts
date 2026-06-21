@@ -186,25 +186,8 @@ export const useImpactGraphData = (projectSlug: string, vulnId: number | null) =
     enabled: !!projectSlug && !!vulnId,
   });
 };
-export interface AttackChainStep {
-  phase: string;
-  description: string;
-}
-
-export interface ImpactAssessmentResponse {
-  status: boolean;
-  potential_impact?: string;
-  remediation_priority?: number;
-  potential_attack_chain?: {
-    steps: AttackChainStep[];
-    confidence?: string;
-  };
-  created_at?: string;
-  is_ai_generated?: boolean;
-}
-
 export const useImpactAssessment = (projectSlug: string, vulnId: number | null) => {
-  return useQuery<ImpactAssessmentResponse>({
+  return useQuery({
     queryKey: ['impact-assessment', projectSlug, vulnId],
     queryFn: async () => {
       const response = await fetch(`/${projectSlug}/api/impact/vulnerability/${vulnId}/details/`, {
@@ -213,11 +196,12 @@ export const useImpactAssessment = (projectSlug: string, vulnId: number | null) 
       if (!response.ok) {
         throw new Error('Failed to fetch impact assessment');
       }
-      return response.json() as Promise<ImpactAssessmentResponse>;
+      return response.json();
     },
     enabled: !!projectSlug && !!vulnId,
-    refetchInterval: (query) => {
-      if (!query.state.data || query.state.data.status === false) return 5000;
+    refetchInterval: (data) => {
+      // If AI generation is in progress (no assessment yet or marked as generated recently), poll
+      if (!data || (data as any).status === false) return 5000;
       return false;
     }
   });

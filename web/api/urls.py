@@ -24,37 +24,9 @@ from .subscans import SubScanViewSet
 from .scan_history import ScanHistoryViewSet
 from .users import UserManageViewSet
 from .stress_testing_views import StressTestingAPIView, StressTestingHistoryAPIView
-from .apme_views import AttackPathsAPIView, TriggerLLMAPMEAPIView, RecalculateAttackPathsAPIView, AttackPathExplanationAPIView, AttackTreeAPIView
-from .apme_mobile_views import (
-    RiskSummaryMobileView,
-    ImpactDetailMobileView,
-    RegenerateImpactMobileView,
-    AttackTreeMobileView,
-    DismissPathMobileView,
-)
+from .apme_views import AttackPathsAPIView, TriggerLLMAPMEAPIView, RecalculateAttackPathsAPIView, AttackPathExplanationAPIView
 from .scan_configuration import ScanConfigurationAPI
 from .config_migration_views import ExportConfig, ImportConfig, ExportScanResults
-from .cert_views import CertificateIntelView
-from .identity_views import IdentityInfraView
-from .identity_mobile_views import (
-    IdentityMobileDetailView,
-    IdentityConfirmView,
-    IdentityDismissView,
-)
-from .graph_intel_views import FullChainGraphView, ChainNodesByTypeView
-from .exposure_mobile_views import (
-    ExposureMobileListView,
-    ExposureMobileDetailView,
-    ExposureStatsMobileView,
-    ExposureStatusUpdateView,
-    ExposureBulkStatusView,
-)
-from .cert_mobile_views import (
-    CertificateMobileListView,
-    CertificateMobileDetailView,
-    CertificateResyncView,
-    CertificateFlagView,
-)
 
 
 app_name = 'api'
@@ -89,12 +61,10 @@ router.register(r'subscans', SubScanViewSet, basename='subscans')
 router.register(r'soc-settings', SOCSettingsViewSet, basename='soc-settings')
 router.register(r'listScans', ScanHistoryViewSet, basename='list-scans')
 router.register(r'users', UserManageViewSet, basename='users')
-router.register(r'workers', ScanWorkerViewSet, basename='workers')
 
 
 urlpatterns = [
     re_path(r'^', include(router.urls)),
-    path('settings/workers/heartbeat/', WorkerHeartbeatAPIView.as_view(), name='worker_heartbeat'),
     path(
         'add/target/',
         AddTarget.as_view(),
@@ -520,17 +490,6 @@ urlpatterns = [
         ParameterSummaryView.as_view(),
         name='parameters_summary'
     ),
-    # Exposure mobile views (order matters: stats/bulk-status before <int:pk>)
-    path('exposures/', ExposureMobileListView.as_view(), name='exposures_mobile_list'),
-    path('exposures/stats/', ExposureStatsMobileView.as_view(), name='exposures_mobile_stats'),
-    path('exposures/bulk-status/', ExposureBulkStatusView.as_view(), name='exposures_bulk_status'),
-    path('exposures/<int:pk>/', ExposureMobileDetailView.as_view(), name='exposures_mobile_detail'),
-    path('exposures/<int:pk>/status/', ExposureStatusUpdateView.as_view(), name='exposures_status_update'),
-    path('apme/risk-summary/', RiskSummaryMobileView.as_view(), name='apme_risk_summary_mobile'),
-    path('apme/tree/<str:target_id>/', AttackTreeMobileView.as_view(), name='apme_tree_mobile'),
-    path('apme/impact/regenerate/', RegenerateImpactMobileView.as_view(), name='apme_impact_regenerate'),
-    path('apme/impact/<str:path_id>/', ImpactDetailMobileView.as_view(), name='apme_impact_detail'),
-    path('apme/path/<str:path_id>/dismiss/', DismissPathMobileView.as_view(), name='apme_path_dismiss'),
     path(
         'apme/paths/',
         AttackPathsAPIView.as_view(),
@@ -551,22 +510,6 @@ urlpatterns = [
         AttackPathExplanationAPIView.as_view(),
         name='apme_explain'
     ),
-    path(
-        'apme/attack-trees/<str:scan_id>/<str:target_id>/',
-        AttackTreeAPIView.as_view(),
-        name='apme_attack_trees'
-    ),
-    path('certs/', CertificateIntelView.as_view(), name='certificate_intel'),
-    # Certificate mobile views (order matters: resync/flag before <int:pk>)
-    path('certificates/', CertificateMobileListView.as_view(), name='certificates_mobile_list'),
-    path('certificates/<int:pk>/resync/', CertificateResyncView.as_view(), name='certificates_resync'),
-    path('certificates/<int:pk>/flag/', CertificateFlagView.as_view(), name='certificates_flag'),
-    path('certificates/<int:pk>/', CertificateMobileDetailView.as_view(), name='certificates_mobile_detail'),
-    path('identity/', IdentityInfraView.as_view(), name='identity_infra'),
-    # Identity mobile views (confirm/dismiss before <int:pk> so literals are matched first)
-    path('identity/<int:pk>/confirm/', IdentityConfirmView.as_view(), name='identity_confirm'),
-    path('identity/<int:pk>/dismiss/', IdentityDismissView.as_view(), name='identity_dismiss'),
-    path('identity/<int:pk>/', IdentityMobileDetailView.as_view(), name='identity_mobile_detail'),
     path(
         'action/ad-assessment/from-subdomain/',
         LaunchADAssessmentFromSubdomain.as_view(),
@@ -602,16 +545,6 @@ urlpatterns = [
         'graph/node/<str:node_id>/',
         GetNodeDetails.as_view(),
         name='get_node_details'
-    ),
-    path(
-        'graph/chain/',
-        FullChainGraphView.as_view(),
-        name='full_chain_graph',
-    ),
-    path(
-        'graph/chain/nodes/',
-        ChainNodesByTypeView.as_view(),
-        name='chain_nodes_by_type',
     ),
     path(
         'system/logs/',

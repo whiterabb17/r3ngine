@@ -990,7 +990,7 @@ class ScorerWeightTests(TestCase):
 
     def test_ten_factors_in_weights(self):
         from apme.engine.scorer import Scorer
-        self.assertEqual(len(Scorer.WEIGHTS), 12)
+        self.assertEqual(len(Scorer.WEIGHTS), 10)
 
     def test_weights_sum_to_one(self):
         from apme.engine.scorer import Scorer

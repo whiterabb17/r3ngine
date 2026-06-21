@@ -11,7 +11,6 @@ from typing import List, Tuple
 
 from apme.models.node import Node
 from apme.models.edge import Edge
-from apme.ingestion.correlation import ExposureCorrelator
 
 logger = logging.getLogger(__name__)
 
@@ -151,9 +150,7 @@ def ingest_subdomains(target_id: int) -> Tuple[List[Node], List[Edge]]:
         f"APME Ingestion [assets]: {len(nodes)} nodes, {len(edges)} edges "
         f"(target_id={target_id})"
     )
-    
-    correlator = ExposureCorrelator()
-    return correlator.correlate(nodes, edges)
+    return nodes, edges
 
 
 def ingest_endpoints(target_id: int) -> Tuple[List[Node], List[Edge]]:
@@ -199,9 +196,7 @@ def ingest_endpoints(target_id: int) -> Tuple[List[Node], List[Edge]]:
     logger.info(
         f"APME Ingestion [endpoints]: {len(nodes)} nodes, {len(edges)} edges"
     )
-    
-    correlator = ExposureCorrelator()
-    return correlator.correlate(nodes, edges)
+    return nodes, edges
 
 
 # Technology subtype detection: keyword → APME subtype
@@ -288,6 +283,4 @@ def ingest_technologies(target_id: int) -> Tuple[List[Node], List[Edge]]:
         "APME Ingestion [technologies]: %d nodes, %d edges (target_id=%s)",
         len(nodes), len(edges), target_id,
     )
-    
-    correlator = ExposureCorrelator()
-    return correlator.correlate(nodes, edges)
+    return nodes, edges

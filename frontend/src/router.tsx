@@ -47,7 +47,6 @@ const ReNgineSettingsPage = lazyRouteComponent(() => import("./features/settings
 const NotificationSettingsPage = lazyRouteComponent(() => import("./features/settings").then(m => ({ default: m.NotificationSettingsPage })));
 const ProfileSettingsPage = lazyRouteComponent(() => import("./features/settings").then(m => ({ default: m.ProfileSettingsPage })));
 const AdminSettingsPage = lazyRouteComponent(() => import("./features/settings").then(m => ({ default: m.AdminSettingsPage })));
-const RemoteWorkersPage = lazyRouteComponent(() => import("./features/settings").then(m => ({ default: m.RemoteWorkersPage })));
 const StressTestingPage = lazyRouteComponent(() => import("./pages/StressTestingPage").then(m => ({ default: m.StressTestingPage })));
 
 interface RouterContext {
@@ -385,12 +384,6 @@ const adminSettingsRoute = createRoute({
   component: AdminSettingsPage,
 });
 
-const remoteWorkersRoute = createRoute({
-  getParentRoute: () => projectRoute,
-  path: "settings/workers",
-  component: RemoteWorkersPage,
-});
-
 
 
 
@@ -595,7 +588,6 @@ const routeTree = rootRoute.addChildren([
     rengineSettingsRoute,
     notificationSettingsRoute,
     adminSettingsRoute,
-    remoteWorkersRoute,
     bountyHubRoute,
     searchRoute,
     pluginsRoute,

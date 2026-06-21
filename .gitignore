@@ -72,7 +72,7 @@ web/templates/report/stress_test_report/content.md
 stress_test_report.pdf
 scripts/generate_stress_report.py
 # Plugin files
-web/scripts
+
 web/ca.crt
 backups/
 .remember

@@ -42,7 +42,6 @@ import { TacticalPanel } from '../../../components/TacticalPanel';
 import { Bot, Brain } from 'lucide-react';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 import { getSeverityColor } from '../../../theme/semanticColors';
-import { AttackTreeViewer } from './AttackTreeViewer';
 
 const RISK_LABEL: Record<string, string> = {
   critical: 'CRITICAL',
@@ -468,9 +467,6 @@ const AttackPathCard: React.FC<AttackPathCardProps> = ({ path, rank, projectSlug
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.3, flexWrap: 'wrap', gap: 0.5 }}>
             <RiskBadge risk={path.risk} />
-            {path.remediation_priority !== undefined && path.remediation_priority !== null && (
-              <PriorityBadge priority={path.remediation_priority} />
-            )}
             <Typography
               noWrap
               sx={{ fontSize: '0.7rem', color: 'text.secondary', fontFamily: 'monospace', fontStyle: 'italic' }}
@@ -496,14 +492,12 @@ const AttackPathCard: React.FC<AttackPathCardProps> = ({ path, rank, projectSlug
 
         {/* Stats */}
         <Stack direction="row" spacing={{ xs: 1, sm: 2 }} sx={{ alignItems: 'center', flexShrink: 0, ml: 'auto' }}>
-          <Tooltip title="Risk score 0–10: weighted combination of CVSS severity, exploitability, attack-chain depth, and lateral movement potential." arrow placement="top">
-            <Stack sx={{ alignItems: 'center', cursor: 'help' }}>
-              <Typography sx={{ fontSize: { xs: '0.8rem', sm: '1rem' }, fontWeight: 900, color: riskColor, fontFamily: 'Orbitron' }}>
-                {path.score.toFixed(2)}<Box component="span" sx={{ fontSize: '0.55rem', color: 'text.disabled', ml: 0.25 }}>/10</Box>
-              </Typography>
-              <Typography sx={{ fontSize: '0.55rem', color: 'text.disabled', fontWeight: 700 }}>SCORE</Typography>
-            </Stack>
-          </Tooltip>
+          <Stack sx={{ alignItems: 'center' }}>
+            <Typography sx={{ fontSize: { xs: '0.8rem', sm: '1rem' }, fontWeight: 900, color: riskColor, fontFamily: 'Orbitron' }}>
+              {path.score.toFixed(2)}
+            </Typography>
+            <Typography sx={{ fontSize: '0.55rem', color: 'text.disabled', fontWeight: 700 }}>SCORE</Typography>
+          </Stack>
           <Stack sx={{ alignItems: 'center' }}>
             <Typography sx={{ fontSize: { xs: '0.8rem', sm: '1rem' }, fontWeight: 900, color: tokens.accent.primary, fontFamily: 'Orbitron' }}>
               {path.step_count}
@@ -705,142 +699,6 @@ const AttackPathCard: React.FC<AttackPathCardProps> = ({ path, rank, projectSlug
           </Typography>
           
           <AttackPathTimeline steps={path.steps} projectSlug={projectSlug} />
-          
-          {path.steps.length > 0 && scanId && (
-            <AttackTreeViewer scanId={scanId} targetId={path.steps[path.steps.length - 1].to} />
-          )}
-        </Box>
-      </Collapse>
-    </Box>
-  );
-};
-
-// ─── Risk Summary Bar ─────────────────────────────────────────────────────────
-const RiskSummaryBar: React.FC<{ paths: AttackPath[] }> = ({ paths }) => {
-  const { tokens } = useThemeTokens();
-  const counts = { critical: 0, high: 0, medium: 0, low: 0 };
-  paths.forEach((p) => {
-    if (p.risk in counts) counts[p.risk as keyof typeof counts]++;
-  });
-  const items = [
-    { label: 'CRITICAL', count: counts.critical, color: tokens.accent.error },
-    { label: 'HIGH',     count: counts.high,     color: '#f97316' },
-    { label: 'MEDIUM',   count: counts.medium,   color: tokens.accent.warning },
-    { label: 'LOW',      count: counts.low,      color: tokens.accent.success },
-  ];
-  return (
-    <Box
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: 1.5,
-        mb: 2,
-        p: 1.5,
-        borderRadius: 1,
-        border: 1,
-        borderColor: 'divider',
-        bgcolor: 'action.hover',
-      }}
-    >
-      {items.map(({ label, count, color }) => (
-        <Box key={label} sx={{ textAlign: 'center' }}>
-          <Typography sx={{ fontSize: '1.2rem', fontWeight: 900, color, fontFamily: 'Orbitron', lineHeight: 1 }}>
-            {count}
-          </Typography>
-          <Typography sx={{ fontSize: '0.5rem', color: 'text.disabled', fontWeight: 700, letterSpacing: 1, mt: 0.5 }}>
-            {label}
-          </Typography>
-        </Box>
-      ))}
-    </Box>
-  );
-};
-
-// ─── Priority badge ───────────────────────────────────────────────────────────
-const PRIORITY_LABEL: Record<number, string> = { 1: 'LOW', 2: 'MED', 3: 'HIGH', 4: 'CRITICAL' };
-const PRIORITY_COLOR = (tokens: ReturnType<typeof useThemeTokens>['tokens'], p: number): string =>
-  p >= 4 ? tokens.accent.error : p === 3 ? '#f97316' : p === 2 ? tokens.accent.warning : tokens.accent.success;
-
-const PriorityBadge: React.FC<{ priority: number }> = ({ priority }) => {
-  const { tokens } = useThemeTokens();
-  const color = PRIORITY_COLOR(tokens, priority);
-  const label = PRIORITY_LABEL[priority] ?? String(priority);
-  return (
-    <Tooltip title={`Remediation priority: ${label}`} arrow placement="top">
-      <Box
-        sx={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 0.3,
-          px: 0.75,
-          py: 0.15,
-          borderRadius: 0.5,
-          bgcolor: `${color}15`,
-          border: `1px solid ${color}40`,
-          color,
-          fontSize: '0.5rem',
-          fontWeight: 900,
-          fontFamily: 'Orbitron',
-          letterSpacing: 0.5,
-          cursor: 'default',
-        }}
-      >
-        P{priority}
-      </Box>
-    </Tooltip>
-  );
-};
-
-// ─── Speculative paths section ────────────────────────────────────────────────
-const SpeculativePathsSection: React.FC<{ paths: AttackPath[]; projectSlug?: string }> = ({ paths, projectSlug }) => {
-  const { tokens } = useThemeTokens();
-  const [open, setOpen] = useState(false);
-  if (!paths || paths.length === 0) return null;
-
-  return (
-    <Box
-      sx={{
-        mt: 3,
-        borderRadius: 1.5,
-        border: `1px solid ${tokens.accent.warning}30`,
-        bgcolor: `${tokens.accent.warning}06`,
-        overflow: 'hidden',
-      }}
-    >
-      <Stack
-        direction="row"
-        spacing={1.5}
-        sx={{
-          px: 2,
-          py: 1.5,
-          alignItems: 'center',
-          cursor: 'pointer',
-          '&:hover': { bgcolor: 'action.hover' },
-        }}
-        onClick={() => setOpen((p) => !p)}
-      >
-        <HelpCircle size={16} color={tokens.accent.warning} />
-        <Box sx={{ flex: 1 }}>
-          <Typography sx={{ fontSize: '0.65rem', fontWeight: 900, fontFamily: 'Orbitron', color: tokens.accent.warning, letterSpacing: 1 }}>
-            SPECULATIVE PATHS — {paths.length} AI-DERIVED
-          </Typography>
-          <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary' }}>
-            Hypothetical attack chains derived by AI with no direct vulnerability evidence. Use for proactive hardening.
-          </Typography>
-        </Box>
-        <IconButton size="small" sx={{ color: tokens.accent.warning }}>
-          {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        </IconButton>
-      </Stack>
-
-      <Collapse in={open}>
-        <Divider sx={{ borderColor: `${tokens.accent.warning}20` }} />
-        <Box sx={{ p: 2 }}>
-          <Stack spacing={1.5}>
-            {paths.map((path, i) => (
-              <AttackPathCard key={path.path_id} path={path} rank={i} projectSlug={projectSlug} />
-            ))}
-          </Stack>
         </Box>
       </Collapse>
     </Box>
@@ -1054,17 +912,11 @@ export const AttackPathsTab: React.FC<AttackPathsTabProps> = ({ scanId }) => {
           data.total_paths === 0 ? (
             <EmptyState />
           ) : (
-            <>
-              <RiskSummaryBar paths={data.paths} />
-              <Stack spacing={1.5}>
-                {data.paths.map((path, i) => (
-                  <AttackPathCard key={path.path_id} path={path} rank={i} projectSlug={projectSlug} />
-                ))}
-              </Stack>
-              {data.speculative_paths && data.speculative_paths.length > 0 && (
-                <SpeculativePathsSection paths={data.speculative_paths} projectSlug={projectSlug} />
-              )}
-            </>
+            <Stack spacing={1.5}>
+              {data.paths.map((path, i) => (
+                <AttackPathCard key={path.path_id} path={path} rank={i} projectSlug={projectSlug} />
+              ))}
+            </Stack>
           )
         )}
       </Box>

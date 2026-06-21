@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://github.com/whiterabb17/r3ngine/releases" target="_blank">
-    <img src="https://img.shields.io/badge/version-v3.7.0-informational?&logo=none" alt="r3ngine Latest Version" />
+    <img src="https://img.shields.io/badge/version-v3.6.3-informational?&logo=none" alt="r3ngine Latest Version" />
   </a>
   &nbsp;
   <a href="https://www.gnu.org/licenses/gpl-3.0" target="_blank">
@@ -30,9 +30,9 @@
   </a>
 </p>
 
-<h3 align="center">r3ngine 3.7.0: The Phoenix Rebirth</h3>
+<h3 align="center">r3ngine 3.6.3: The Phoenix Rebirth</h3>
 <p>
-  r3ngine v3.7.0 is the production-stabilized, enterprise-grade evolution of the platform. Building off the original reNgine and further inspired by rengine-ng (Check out <a href="https://github.com/Security-Tools-Alliance/rengine-ng" target="_blank">rengine-ng v3</a> if you haven't!) This release delivers a massively expanded <b>Attack Path Modeling Engine</b> (179 rules, MITRE ATT&CK, 10-factor scoring), <b>Distributed Remote Workers</b>, <b>Certificate Intelligence</b> (tlsx-driven TLS reconnaissance), <b>Identity Infrastructure Intelligence</b> (SSO/IdP detection), <b>Expanded Graph & API Intelligence</b> (Organization → Application → APIEndpoint chain with a dedicated full-chain visualizer), <b>Exposure Correlation Engine</b> (cross-tool dedup + 18-category taxonomy), <b>WPScan/WPTaint SAST integration</b>, <b>Nuclei proxy rotation</b>, <b>session-based LinkedIn OSINT</b>, <b>Tier 7 LLM auto-enrichment</b>, <b>offline hash cracking</b>, <b>intelligent Tier 5 tool gating</b>, and a full <b>Target Editing</b> workflow. The infrastructure remains hardened with <b>Django 5.2.3 LTS</b>, <b>PostgreSQL 16</b>, and <b>Gunicorn + Uvicorn ASGI</b> production serving. Building on the v3.2.0 Celery → Temporal migration — which replaced the legacy at-most-once task broker with a durable workflow engine providing crash-safe execution, full replay history, and pause/resume signaling — v3.7.0 focuses on attack intelligence depth, operational security, horizontal scaling, and production reliability at scale.
+  r3ngine v3.6.3 is the production-stabilized, enterprise-grade evolution of the platform. Building off the original reNgine and further inspired by rengine-ng (Check out <a href="https://github.com/Security-Tools-Alliance/rengine-ng" target="_blank">rengine-ng v3</a> if you haven't!) This release delivers a massively expanded <b>Attack Path Modeling Engine</b> (179 rules, MITRE ATT&CK, 10-factor scoring), <b>WPScan/WPTaint SAST integration</b>, <b>Nuclei proxy rotation</b>, <b>session-based LinkedIn OSINT</b>, <b>Tier 7 LLM auto-enrichment</b>, <b>offline hash cracking</b>, <b>intelligent Tier 5 tool gating</b>, and a full <b>Target Editing</b> workflow. The infrastructure remains hardened with <b>Django 5.2.3 LTS</b>, <b>PostgreSQL 16</b>, and <b>Gunicorn + Uvicorn ASGI</b> production serving. Building on the v3.2.0 Celery → Temporal migration — which replaced the legacy at-most-once task broker with a durable workflow engine providing crash-safe execution, full replay history, and pause/resume signaling — v3.6.3 focuses on attack intelligence depth, operational security, and production reliability at scale.
 </p>
 
 ![-----------------------------------------------------](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/aqua.png)
@@ -142,8 +142,6 @@ r3ngine is a production-grade web reconnaissance and vulnerability scanning plat
 🤖&nbsp;&nbsp; **Local LLM Orchestration**: Manage your own localized Ollama Docker containers natively from the LLM Toolkit dashboard to power offline vulnerability risk assessments, mitigation strategy generation, and intelligent reporting without leaving your infrastructure.
 
 📃&nbsp;&nbsp; **PDF Reports**: Full Scan, Vulnerability, and OSINT report types with customizable templates, executive summaries, LLM-generated impact narratives, and remediation priorities.
-
-🌐&nbsp;&nbsp; **Distributed Remote Workers**: Horizontally scale scanning infrastructure by deploying standalone remote workers with UI management, secure token authentication, and automatic heartbeat validation.
 
 ⚙️&nbsp;&nbsp; **Role-based access control**: Sys Admin, Penetration Tester, and Auditor roles with precisely defined permissions.
 
@@ -284,16 +282,6 @@ AI-specific onboarding entrypoints are also available in `AGENTS.md`, `CLAUDE.md
 ![-----------------------------------------------------](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/aqua.png)
 
 ## Features
-
-### 🛰️ Distributed Workers, TLS, Identity & API Intelligence (v3.7.0)
-*   **Distributed Remote Workers**: `ScanWorker` model + `RemoteWorkersPage` Settings UI manage isolated worker pools with `auth_token` shared secrets and timing-attack-resistant heartbeat validation. Workers run headless via `docker-compose.worker.yml` and emit non-blocking `asyncio.to_thread` heartbeats; scans only route to workers active within 5 minutes.
-*   **Certificate Intelligence**: `CertificateIntelligence` model + `tlsx` ingest pipeline persist per-host issuer/subject/SAN/validity/signature/fingerprint/wildcard/self-signed metadata. APME `Certificate` nodes with `PROTECTS` edges and `x_cert_intel.yaml` rules surface expired, self-signed, and weak-signature paths. `/api/cert-intel/<scan_id>/` REST endpoint + `CertIntelTab` panel.
-*   **Identity Infrastructure Intelligence**: `IdentityInfraDiscovery` catalogs Okta/ADFS/Auth0/Ping/Azure AD/Keycloak/generic SAML/OIDC endpoints via a URL → title → header precedence pipeline. APME `x_identity_infra.yaml` rules map findings to credential-harvesting and authenticated-access capabilities. `/api/identity-infra/<scan_id>/` + `IdentityInfraPanel`.
-*   **Expanded Graph & API Intelligence**: `APIIntelligenceProfile` clusters endpoints by `(base_url, api_type)` with REST/GraphQL/SOAP/generic classification. New `Organization` (from `Domain.project`), `Application` (per webserver-fingerprinted subdomain), and `APIEndpoint` APME nodes with `DEPENDS_ON`, `TRUSTS_DOMAIN`, and `PART_OF` edges anchor the new top of chain. `x_api_intelligence.yaml` rules cover GraphQL data exfil, unauthenticated REST → account takeover, SOAP → RCE. New `/api/graph/chain/` REST endpoints back a `FullChainGraphTab` visualizer with stat tiles and per-type drilldown. Two-pass node + edge queries with allowlist-validated labels replace the prior cartesian truncation.
-*   **Exposure Correlation Engine & Taxonomy Expansion**: `ExposureCorrelator` consolidates duplicate exposures across Nuclei, Semgrep, Trivy, and Dalfox via fuzzy URL + signature matching. 18 new exposure categories with MITRE technique mapping and remediation priorities, backed by 18 new tests; 14 review edge-cases hardened.
-*   **APME Attack Trees UX**: `RiskSummaryBar`, `PriorityBadge`, score weight tooltips, speculative-paths section (showing why paths were gated out), and leaf-node detectability chips. Attack-tree 404s fixed by URL-encoding `targetId`. `ImpactExplorer` fully typed and themed; MITRE helpers consolidated into `apme.utils.mitre`.
-*   **Exposure UI**: `ExposureList` aggregate stats bar and status filter chips. `ExposureCard` asset summary (host + path + method). `ExposureDetailsDrawer` renders evidence as key-value list with timestamps and inline linked vulnerabilities.
-*   **Feroxbuster Directory Fuzzing**: New `run_feroxbuster` engine config key runs `feroxbuster` alongside `ffuf` with shared wordlist/proxy settings; results merged and deduped on URL. Disabled by default in bundled engine YAMLs.
 
 ### 🔬 CVE Intelligence & Enrichment (v3.5.0)
 *   **CVE Enrichment Service**: Fetches CVSS v3.1 metrics from **NVD API v2.0**, exploitation probability scores from **FIRST EPSS** (synced daily via local feed), and syncs the **CISA KEV** (Known Exploited Vulnerabilities) catalog. Enriched data is cached (7-day TTL for CVEs, 1-hour for KEV) and gracefully degrades when external APIs are unavailable.

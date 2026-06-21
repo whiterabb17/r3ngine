@@ -185,7 +185,6 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
         { title: 'Tool Arsenal', path: `/${projectSlug}/settings/tools-arsenal` },
         { title: 'Report Settings', path: `/${projectSlug}/settings/report-settings` },
         { title: 'reNgine Settings', path: `/${projectSlug}/settings/rengine-settings` },
-        { title: 'Remote Workers', path: `/${projectSlug}/settings/workers` },
         { title: 'Notification Settings', path: `/${projectSlug}/settings/notifications` },
       ]
     },

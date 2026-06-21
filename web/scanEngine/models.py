@@ -321,18 +321,3 @@ class ScanProfile(models.Model):
             if getattr(self, flag):
                 d[flag] = True
         return d
-
-
-class ScanWorker(models.Model):
-    id = models.AutoField(primary_key=True)
-    name = models.CharField(max_length=100, unique=True)
-    description = models.TextField(null=True, blank=True)
-    auth_token = models.CharField(max_length=255, unique=True) # Used to secure worker access
-    task_queue = models.CharField(max_length=100)
-    hostname = models.CharField(max_length=100, null=True, blank=True)
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    is_active = models.BooleanField(default=True)
-    last_heartbeat = models.DateTimeField(null=True, blank=True)
-    
-    def __str__(self):
-        return self.name

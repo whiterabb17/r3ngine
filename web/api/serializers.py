@@ -55,13 +55,6 @@ class ProxySerializer(serializers.ModelSerializer):
 		fields = '__all__'
 
 
-class ScanWorkerSerializer(serializers.ModelSerializer):
-	class Meta:
-		model = ScanWorker
-		fields = '__all__'
-		read_only_fields = ['id', 'last_heartbeat', 'hostname', 'ip_address']
-
-
 class ConfigurationSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = Configuration

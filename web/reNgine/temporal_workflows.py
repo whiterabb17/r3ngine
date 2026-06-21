@@ -619,25 +619,31 @@ class MasterScanWorkflow:
             # activity (not child workflow) so gather is safe for it.
             # ------------------------------------------------------------------
             ran_t6 = False
+            nuclei_failed = False
 
             if "vulnerability_scan" in tasks:
                 # Spawn as a child workflow so Nuclei execution has its own
                 # independent Temporal history and can be tracked separately.
-                # NucleiPlannerWorkflow handles per-tool failures internally
-                # (nuclei timeout/error → logs and continues with cpanel/wpscan/etc.)
-                # so this await only raises on a catastrophic workflow-level failure.
-                # In that case the exception propagates to the outer except, success
-                # stays False, and tier 7 is correctly blocked.
                 ran_t6 = True
-                await workflow.execute_child_workflow(
-                    "NucleiPlannerWorkflow",
-                    ctx,
-                    id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-nuclei",
-                    task_queue="python-orchestrator-queue",
-                    execution_timeout=timedelta(hours=24),
-                    run_timeout=timedelta(hours=24),
-                    retry_policy=RetryPolicy(maximum_attempts=1),
-                )
+                try:
+                    await workflow.execute_child_workflow(
+                        "NucleiPlannerWorkflow",
+                        ctx,
+                        id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-nuclei",
+                        task_queue="python-orchestrator-queue",
+                        execution_timeout=timedelta(hours=24),
+                        run_timeout=timedelta(hours=24),
+                        retry_policy=RetryPolicy(maximum_attempts=1),
+                    )
+                except Exception as nuclei_err:
+                    # Nuclei failure is non-fatal: completed batches are already in DB.
+                    # Tier 7 (correlation, risk scoring, Neo4j) will still run on partial
+                    # results. Failure is logged and the scan continues.
+                    workflow.logger.error(
+                        "NucleiPlannerWorkflow failed for scan_id=%s — continuing to Tier 7. error=%s",
+                        ctx.get('scan_history_id'), str(nuclei_err),
+                    )
+                    nuclei_failed = True
 
             other_t6_futures = []
             if "waf_bypass" in tasks:
@@ -763,31 +769,6 @@ class MasterScanWorkflow:
                                 heartbeat_timeout=timedelta(minutes=5),
                                 retry_policy=_RETRY_NETWORK_SCAN,
                                 task_queue="python-orchestrator-queue"
-                            )
-                            # Certificate intelligence — must run before APME ingestion
-                            await workflow.execute_activity(
-                                "run_certificate_intel_activity",
-                                args=[ctx.get("scan_history_id")],
-                                start_to_close_timeout=timedelta(minutes=15),
-                                heartbeat_timeout=timedelta(minutes=5),
-                                retry_policy=RetryPolicy(maximum_attempts=2),
-                                task_queue="python-orchestrator-queue",
-                            )
-                            # Identity infrastructure detection — must run before APME
-                            await workflow.execute_activity(
-                                "run_identity_infra_activity",
-                                args=[ctx.get("scan_history_id")],
-                                start_to_close_timeout=timedelta(minutes=10),
-                                retry_policy=RetryPolicy(maximum_attempts=2),
-                                task_queue="python-orchestrator-queue",
-                            )
-                            # API intelligence — cluster endpoints before APME
-                            await workflow.execute_activity(
-                                "run_api_intel_activity",
-                                args=[ctx.get("scan_history_id")],
-                                start_to_close_timeout=timedelta(minutes=10),
-                                retry_policy=RetryPolicy(maximum_attempts=2),
-                                task_queue="python-orchestrator-queue",
                             )
                             # Attack Path Modeling Engine — must be the final analysis step
                             await workflow.execute_activity(
@@ -989,178 +970,143 @@ class NucleiPlannerWorkflow:
                                 retry_policy=_RETRY_LONG_SCAN,
                                 task_queue="python-orchestrator-queue",
                             )
-                except Exception as _nuclei_err:
-                    # Nuclei failure is isolated — remaining tier 6 tools (cpanel, wpscan,
-                    # s3scanner, vigolium, etc.) must still run. The parent workflow
-                    # (MasterScanWorkflow) will only block tier 7 if this entire child
-                    # workflow raises, not because nuclei specifically failed.
-                    workflow.logger.error(
-                        "Nuclei scan failed for scan_id=%s — continuing with remaining "
-                        "tier 6 tools. error=%s",
-                        ctx.get('scan_history_id'), str(_nuclei_err),
-                    )
                 finally:
                     if proxies_file_path:
-                        try:
-                            # Clean up the proxies list to avoid leaving sensitive network details around
-                            await workflow.execute_activity(
-                                "CleanupProxyListActivity",
-                                args=[proxies_file_path],
-                                start_to_close_timeout=timedelta(minutes=5),
-                                retry_policy=_RETRY_INTERNAL,
-                                task_queue="python-orchestrator-queue",
-                            )
-                        except Exception as _cleanup_exc:
-                            workflow.logger.warning(
-                                "CleanupProxyListActivity failed for scan_id=%s (non-fatal): %s",
-                                ctx.get('scan_history_id'), str(_cleanup_exc),
-                            )
+                        # Clean up the proxies list to avoid leaving sensitive network details around
+                        await workflow.execute_activity(
+                            "CleanupProxyListActivity",
+                            args=[proxies_file_path],
+                            start_to_close_timeout=timedelta(minutes=5),
+                            retry_policy=_RETRY_INTERNAL,
+                            task_queue="python-orchestrator-queue",
+                        )
             else:
                 # Gather tags and pre-built batches via activity.
                 # Activity counts templates per tag so each batch is bounded by
                 # template count rather than tag count — prevents 2-hour timeouts
                 # on WordPress-heavy scans with 2000+ templates.
-                try:
-                    nuclei_tag_result = await workflow.execute_activity(
-                        "GatherNucleiTagsActivity",
-                        args=[ctx],
-                        start_to_close_timeout=timedelta(minutes=10),
-                        retry_policy=_RETRY_INTERNAL,
-                        task_queue="python-orchestrator-queue",
-                    )
-                    tag_batches = nuclei_tag_result.get('batches') or [None]
-
-                    for severity in severities:
-                        for batch in tag_batches:
-                            severity_ctx = {
-                                **ctx,
-                                "nuclei_severity_filter": severity
-                            }
-                            await workflow.execute_activity(
-                                "RunNucleiActivity",
-                                args=[severity_ctx, severity, batch],
-                                start_to_close_timeout=timedelta(hours=6),
-                                heartbeat_timeout=timedelta(minutes=5),
-                                retry_policy=_RETRY_LONG_SCAN,
-                                task_queue="python-orchestrator-queue",
-                            )
-                except Exception as _nuclei_err:
-                    workflow.logger.error(
-                        "Nuclei scan failed for scan_id=%s — continuing with remaining "
-                        "tier 6 tools. error=%s",
-                        ctx.get('scan_history_id'), str(_nuclei_err),
-                    )
-
-        try:
-            if vuln_config.get('run_crlfuzz', False):
-                await workflow.execute_activity(
-                    "RunCRLFuzzActivity",
-                    ctx,
-                    start_to_close_timeout=timedelta(hours=4),
-                    heartbeat_timeout=timedelta(minutes=5),
-                    task_queue="python-orchestrator-queue"
+                nuclei_tag_result = await workflow.execute_activity(
+                    "GatherNucleiTagsActivity",
+                    args=[ctx],
+                    start_to_close_timeout=timedelta(minutes=10),
+                    retry_policy=_RETRY_INTERNAL,
+                    task_queue="python-orchestrator-queue",
                 )
+                tag_batches = nuclei_tag_result.get('batches') or [None]
 
-            if vuln_config.get('run_dalfox', False):
-                await workflow.execute_activity(
-                    "RunDalfoxActivity",
-                    ctx,
-                    start_to_close_timeout=timedelta(hours=4),
-                    heartbeat_timeout=timedelta(minutes=5),
-                    task_queue="python-orchestrator-queue"
-                )
+                for severity in severities:
+                    for batch in tag_batches:
+                        severity_ctx = {
+                            **ctx,
+                            "nuclei_severity_filter": severity
+                        }
+                        await workflow.execute_activity(
+                            "RunNucleiActivity",
+                            args=[severity_ctx, severity, batch],
+                            start_to_close_timeout=timedelta(hours=6),
+                            heartbeat_timeout=timedelta(minutes=5),
+                            retry_policy=_RETRY_LONG_SCAN,
+                            task_queue="python-orchestrator-queue",
+                        )
 
-            if vuln_config.get('run_s3scanner', True):
-                await workflow.execute_activity(
-                    "RunS3ScannerActivity",
-                    ctx,
-                    start_to_close_timeout=timedelta(hours=2),
-                    heartbeat_timeout=timedelta(minutes=5),
-                    task_queue="python-orchestrator-queue"
-                )
+        if vuln_config.get('run_crlfuzz', False):
+            await workflow.execute_activity(
+                "RunCRLFuzzActivity", 
+                ctx, 
+                start_to_close_timeout=timedelta(hours=4), 
+                heartbeat_timeout=timedelta(minutes=5),
+                task_queue="python-orchestrator-queue"
+            )
+            
+        if vuln_config.get('run_dalfox', False):
+            await workflow.execute_activity(
+                "RunDalfoxActivity", 
+                ctx, 
+                start_to_close_timeout=timedelta(hours=4), 
+                heartbeat_timeout=timedelta(minutes=5),
+                task_queue="python-orchestrator-queue"
+            )
+            
+        if vuln_config.get('run_s3scanner', True):
+            await workflow.execute_activity(
+                "RunS3ScannerActivity", 
+                ctx, 
+                start_to_close_timeout=timedelta(hours=2), 
+                heartbeat_timeout=timedelta(minutes=5),
+                task_queue="python-orchestrator-queue"
+            )
+            
+        # --- Stage 2: Additional scanners ---
+        if vuln_config.get('run_acunetix', False):
+            await workflow.execute_activity(
+                "RunAcunetixActivity", 
+                ctx, 
+                start_to_close_timeout=timedelta(hours=4), 
+                heartbeat_timeout=timedelta(minutes=5),
+                task_queue="python-orchestrator-queue"
+            )
+            
+        cpanel_cfg = vuln_config.get('cpanel_scanner', {})
+        if cpanel_cfg.get('run_cpanel2shell', True):
+            await workflow.execute_activity(
+                "RunCpanelScanActivity", 
+                ctx, 
+                start_to_close_timeout=timedelta(hours=2), 
+                heartbeat_timeout=timedelta(minutes=5),
+                task_queue="python-orchestrator-queue"
+            )
+            
+        if vuln_config.get('run_wpscan', True):
+            await workflow.execute_activity(
+                "RunWpscanActivity", 
+                ctx, 
+                start_to_close_timeout=timedelta(hours=2), 
+                heartbeat_timeout=timedelta(minutes=5),
+                task_queue="python-orchestrator-queue"
+            )
+            
+        react_cfg = vuln_config.get('react_scanner', {})
+        if react_cfg.get('run_react2shell', True):
+            await workflow.execute_activity(
+                "RunReact2ShellActivity", 
+                ctx, 
+                start_to_close_timeout=timedelta(hours=2), 
+                heartbeat_timeout=timedelta(minutes=5),
+                task_queue="python-orchestrator-queue"
+            )
+            
+        leaks_config = yaml_config.get('leaks_and_secrets', {})
+        if leaks_config.get('run_semgrep', True):
+            await workflow.execute_activity(
+                "RunSemgrepActivity", 
+                ctx, 
+                start_to_close_timeout=timedelta(hours=2), 
+                heartbeat_timeout=timedelta(minutes=5),
+                task_queue="python-orchestrator-queue"
+            )
 
-            # --- Stage 2: Additional scanners ---
-            if vuln_config.get('run_acunetix', False):
-                await workflow.execute_activity(
-                    "RunAcunetixActivity",
-                    ctx,
-                    start_to_close_timeout=timedelta(hours=4),
-                    heartbeat_timeout=timedelta(minutes=5),
-                    task_queue="python-orchestrator-queue"
-                )
+        if vuln_config.get('run_vigolium', True):
+            await workflow.execute_activity(
+                "RunVigoliumScanActivity",
+                ctx,
+                start_to_close_timeout=timedelta(hours=6),
+                heartbeat_timeout=timedelta(minutes=5),
+                retry_policy=_RETRY_LONG_SCAN,
+                task_queue="python-orchestrator-queue"
+            )
 
-            cpanel_cfg = vuln_config.get('cpanel_scanner', {})
-            if cpanel_cfg.get('run_cpanel2shell', True):
-                await workflow.execute_activity(
-                    "RunCpanelScanActivity",
-                    ctx,
-                    start_to_close_timeout=timedelta(hours=2),
-                    heartbeat_timeout=timedelta(minutes=5),
-                    task_queue="python-orchestrator-queue"
-                )
-
-            if vuln_config.get('run_wpscan', True):
-                await workflow.execute_activity(
-                    "RunWpscanActivity",
-                    ctx,
-                    start_to_close_timeout=timedelta(hours=2),
-                    heartbeat_timeout=timedelta(minutes=5),
-                    task_queue="python-orchestrator-queue"
-                )
-
-            react_cfg = vuln_config.get('react_scanner', {})
-            if react_cfg.get('run_react2shell', True):
-                await workflow.execute_activity(
-                    "RunReact2ShellActivity",
-                    ctx,
-                    start_to_close_timeout=timedelta(hours=2),
-                    heartbeat_timeout=timedelta(minutes=5),
-                    task_queue="python-orchestrator-queue"
-                )
-
-            leaks_config = yaml_config.get('leaks_and_secrets', {})
-            if leaks_config.get('run_semgrep', True):
-                await workflow.execute_activity(
-                    "RunSemgrepActivity",
-                    ctx,
-                    start_to_close_timeout=timedelta(hours=2),
-                    heartbeat_timeout=timedelta(minutes=5),
-                    task_queue="python-orchestrator-queue"
-                )
-
-            if vuln_config.get('run_vigolium', True):
-                await workflow.execute_activity(
-                    "RunVigoliumScanActivity",
-                    ctx,
-                    start_to_close_timeout=timedelta(hours=6),
-                    heartbeat_timeout=timedelta(minutes=5),
-                    retry_policy=_RETRY_LONG_SCAN,
-                    task_queue="python-orchestrator-queue"
-                )
-
-            if vuln_config.get('run_wptaint_scan', True):
-                await workflow.execute_activity(
-                    "RunWPTaintScanActivity",
-                    ctx,
-                    start_to_close_timeout=timedelta(hours=2),
-                    heartbeat_timeout=timedelta(minutes=5),
-                    task_queue="python-orchestrator-queue"
-                )
-        except Exception as _stage2_exc:
-            # A Stage 2 tool failed. The individual activity already wrote FAILED_TASK
-            # to its ScanActivity row via _run_task. Log and fall through so
-            # MarkVulnerabilityScanCompleteActivity always runs below — this prevents
-            # vulnerability_scan from being permanently stuck as INITIATED_TASK.
-            workflow.logger.error(
-                "NucleiPlannerWorkflow Stage 2 tool failed for scan_id=%s (non-fatal): %s",
-                ctx.get('scan_history_id'), str(_stage2_exc),
+        if vuln_config.get('run_wptaint_scan', True):
+            await workflow.execute_activity(
+                "RunWPTaintScanActivity", 
+                ctx, 
+                start_to_close_timeout=timedelta(hours=2), 
+                heartbeat_timeout=timedelta(minutes=5),
+                task_queue="python-orchestrator-queue"
             )
 
         # Write a ScanActivity(name='vulnerability_scan', status=SUCCESS) so that
         # resume_scan_temporal can recognise this compound task as complete and
         # skip it on crash recovery, instead of restarting the whole vuln scan.
-        # Runs regardless of partial Stage 2 failures — individual tool rows are
-        # already marked FAILED by _run_task before the exception propagated.
         await workflow.execute_activity(
             "MarkVulnerabilityScanCompleteActivity",
             ctx,
@@ -1814,31 +1760,6 @@ class SubScanWorkflow:
                                 retry_policy=_RETRY_NETWORK_SCAN,
                                 task_queue="python-orchestrator-queue",
                             )
-                            # Certificate intelligence — must run before APME ingestion
-                            await workflow.execute_activity(
-                                "run_certificate_intel_activity",
-                                args=[ctx.get("scan_history_id")],
-                                start_to_close_timeout=timedelta(minutes=15),
-                                heartbeat_timeout=timedelta(minutes=5),
-                                retry_policy=RetryPolicy(maximum_attempts=2),
-                                task_queue="python-orchestrator-queue",
-                            )
-                            # Identity infrastructure detection — must run before APME
-                            await workflow.execute_activity(
-                                "run_identity_infra_activity",
-                                args=[ctx.get("scan_history_id")],
-                                start_to_close_timeout=timedelta(minutes=10),
-                                retry_policy=RetryPolicy(maximum_attempts=2),
-                                task_queue="python-orchestrator-queue",
-                            )
-                            # API intelligence — cluster endpoints before APME
-                            await workflow.execute_activity(
-                                "run_api_intel_activity",
-                                args=[ctx.get("scan_history_id")],
-                                start_to_close_timeout=timedelta(minutes=10),
-                                retry_policy=RetryPolicy(maximum_attempts=2),
-                                task_queue="python-orchestrator-queue",
-                            )
                             await workflow.execute_activity(
                                 "RunGenericTaskActivity",
                                 args=[ctx, "run_apme", "Attack Path Modeling Engine", {"scan_history_id": ctx.get("scan_history_id")}],
@@ -1855,21 +1776,6 @@ class SubScanWorkflow:
                         raise
                     except Exception as post_e:
                         workflow.logger.error(f"SubScanWorkflow post-scan tasks failed: {post_e}")
-                        # Tier-7 failed — mark any still-untracked tasks as failed so
-                        # finalization reflects the correct status.
-                        for _t in tasks:
-                            if _t not in task_success:
-                                task_success[_t] = False
-                    else:
-                        # Tier-7 succeeded — backfill task_success for tasks that were
-                        # excluded from active_tasks (e.g. "attack_path_modeling",
-                        # "run_apme") and therefore never went through run_and_track_task.
-                        # Without this, any subscan whose type matches a tier-7 name
-                        # defaults to False in task_success and is finalized as FAILED
-                        # even though the activity completed successfully.
-                        for _t in tasks:
-                            if _t not in task_success:
-                                task_success[_t] = True
 
                 # 3. Always finalize all subscan records, regardless of success/failure.
                 # This ensures the UI reflects the correct terminal state even when tasks fail.
@@ -3161,22 +3067,6 @@ class RecalculateApmeWorkflow:
             start_to_close_timeout=timedelta(minutes=30),
             heartbeat_timeout=timedelta(minutes=5),
             retry_policy=RetryPolicy(maximum_attempts=3),
-            task_queue="python-orchestrator-queue",
-        )
-
-
-@workflow.defn(name="CertificateResyncWorkflow")
-class CertificateResyncWorkflow:
-    """Workflow to re-probe a single certificate's host via tlsx on demand."""
-
-    @workflow.run
-    async def run(self, cert_id: int, job_id: str = None) -> dict:
-        return await workflow.execute_activity(
-            "resync_certificate_activity",
-            args=[cert_id, job_id],
-            start_to_close_timeout=timedelta(minutes=5),
-            heartbeat_timeout=timedelta(minutes=2),
-            retry_policy=RetryPolicy(maximum_attempts=2),
             task_queue="python-orchestrator-queue",
         )
 

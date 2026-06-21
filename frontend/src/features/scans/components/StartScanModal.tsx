@@ -22,11 +22,10 @@ import {
   useTheme,
   alpha
 } from '@mui/material';
-import { X, Zap, Shield, Cpu, Terminal, ChevronDown, ChevronUp, Puzzle, Server } from 'lucide-react';
+import { X, Zap, Shield, Cpu, Terminal, ChevronDown, ChevronUp, Puzzle } from 'lucide-react';
 import { useEngines, useHardwareProfiles } from '../../engines/api';
 import { usePlugins } from '../../plugins/api/pluginsApi';
 import { useInitiateScan } from '../api';
-import { useRemoteWorkers } from '../../settings/api';
 import { useNavigate } from '@tanstack/react-router';
 import { generateDorks } from '../utils/dorkUtils';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
@@ -61,7 +60,6 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
     importSubdomainTextArea: '',
     outOfScopeSubdomainTextarea: '',
     profile_name: '',
-    worker_name: '',
   });
   const [selectedPlugins, setSelectedPlugins] = useState<string[]>([]);
   const [pluginSectionOpen, setPluginSectionOpen] = useState(false);
@@ -71,7 +69,6 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
   const { data: hardwareProfiles } = useHardwareProfiles();
   const { data: allPlugins } = usePlugins();
   const enabledPlugins = (allPlugins ?? []).filter(p => p.is_enabled);
-  const { data: remoteWorkers } = useRemoteWorkers();
   const { mutate: initiateScan, isPending, error, reset } = useInitiateScan(projectSlug);
   const navigate = useNavigate();
 
@@ -104,7 +101,6 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
       outOfScopeSubdomainTextarea: formData.outOfScopeSubdomainTextarea.split('\n').filter(s => s.trim()),
       selected_plugins: selectedPlugins,
       ...(formData.profile_name ? { profile_name: formData.profile_name } : {}),
-      ...(formData.worker_name ? { worker_name: formData.worker_name } : {}),
     }, {
       onSuccess: () => {
         onClose();
@@ -265,30 +261,6 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
                   {hardwareProfiles?.filter(p => p.is_active).map((profile) => (
                     <MenuItem key={profile.id} value={profile.id}>
                       {profile.name.toUpperCase()} {profile.is_default ? '(DEFAULT)' : ''} (Threads: {profile.threads}, Rate: {profile.rate_limit}/s)
-                    </MenuItem>
-                  ))}
-                </TextField>
-
-                <TextField
-                  label="Scan Worker (Optional)"
-                  select
-                  fullWidth
-                  value={formData.worker_name}
-                  onChange={(e) => setFormData({ ...formData, worker_name: e.target.value })}
-                  sx={fieldStyles}
-                  slotProps={{
-                    input: {
-                      startAdornment: <Server size={18} style={{ marginRight: 12, color: tokens.accent.primary }} />
-                    }
-                  }}
-                  helperText="Leave empty to use the default worker pool"
-                >
-                  <MenuItem value="">
-                    <em>Default Worker Pool</em>
-                  </MenuItem>
-                  {remoteWorkers?.map((worker) => (
-                    <MenuItem key={worker.id} value={worker.name}>
-                      {worker.name} {worker.ip_address ? `(${worker.ip_address})` : ''}
                     </MenuItem>
                   ))}
                 </TextField>

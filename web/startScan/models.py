@@ -621,13 +621,10 @@ class Exposure(models.Model):
 	EXPOSURE_STATUS_CHOICES = (
 		('open', 'Open'),
 		('verified', 'Verified'),
-		('accepted', 'Accepted'),
 		('false_positive', 'False Positive'),
 		('remediated', 'Remediated'),
-		('resolved', 'Resolved'),
 	)
 	status = models.CharField(max_length=20, choices=EXPOSURE_STATUS_CHOICES, default='open')
-	status_note = models.TextField(blank=True, default='')
 	first_seen = models.DateTimeField(auto_now_add=True)
 	last_seen = models.DateTimeField(auto_now=True)
 	risk_score = models.FloatField(default=0.0)
@@ -635,146 +632,6 @@ class Exposure(models.Model):
 	def __str__(self):
 		target = self.subdomain.name if self.subdomain else (self.target_domain.name if self.target_domain else "Unknown")
 		return f"{self.type} on {target}"
-
-
-class CertificateIntelligence(models.Model):
-	id = models.AutoField(primary_key=True)
-	scan_history = models.ForeignKey(
-		ScanHistory, on_delete=models.CASCADE, null=True, blank=True,
-		related_name='certificate_intel',
-	)
-	target_domain = models.ForeignKey(
-		Domain, on_delete=models.CASCADE, null=True, blank=True,
-	)
-	subdomain = models.ForeignKey(
-		'Subdomain', on_delete=models.CASCADE, null=True, blank=True,
-		related_name='certificates',
-	)
-	host = models.CharField(max_length=1000)
-	port = models.IntegerField(default=443)
-	subject_cn = models.CharField(max_length=500, null=True, blank=True)
-	subject_an = ArrayField(
-		models.CharField(max_length=500), default=list, blank=True
-	)
-	issuer_cn = models.CharField(max_length=500, null=True, blank=True)
-	issuer_org = models.CharField(max_length=500, null=True, blank=True)
-	not_before = models.DateTimeField(null=True, blank=True)
-	not_after = models.DateTimeField(null=True, blank=True)
-	tls_version = models.CharField(max_length=20, null=True, blank=True)
-	cipher = models.CharField(max_length=300, null=True, blank=True)
-	fingerprint_sha256 = models.CharField(
-		max_length=100, null=True, blank=True, db_index=True
-	)
-	self_signed = models.BooleanField(default=False)
-	mismatched = models.BooleanField(default=False)
-	is_expired = models.BooleanField(default=False)
-	has_weak_cipher = models.BooleanField(default=False)
-	trust_chain = models.JSONField(default=list, blank=True)
-	raw_json = models.JSONField(default=dict, blank=True)
-	flag_type = models.CharField(max_length=50, blank=True, null=True)
-	flag_note = models.TextField(blank=True, null=True)
-
-	class Meta:
-		constraints = [
-			models.UniqueConstraint(
-				fields=['target_domain', 'fingerprint_sha256'],
-				name='unique_cert_per_domain',
-				condition=models.Q(fingerprint_sha256__isnull=False),
-			),
-		]
-
-	def __str__(self) -> str:
-		return f"{self.host}:{self.port} ({self.subject_cn or 'unknown CN'})"
-
-
-class IdentityInfraDiscovery(models.Model):
-	INFRA_TYPE_CHOICES = [
-		("adfs", "ADFS"),
-		("owa", "Outlook Web Access"),
-		("exchange", "Exchange"),
-		("ldap", "LDAP"),
-		("sso", "SSO Portal"),
-		("saml_idp", "SAML Identity Provider"),
-		("vpn_portal", "VPN Portal"),
-		("ntlm_endpoint", "NTLM Endpoint"),
-		("generic_auth_portal", "Generic Auth Portal"),
-	]
-
-	DETECTION_METHOD_CHOICES = [
-		("url_pattern", "URL Pattern"),
-		("title_keyword", "Page Title Keyword"),
-		("header_analysis", "HTTP Header Analysis"),
-		("combined", "Multiple Signals"),
-	]
-
-	id = models.AutoField(primary_key=True)
-	scan_history = models.ForeignKey(
-		ScanHistory, on_delete=models.CASCADE, null=True, blank=True,
-		related_name="identity_infra",
-	)
-	target_domain = models.ForeignKey(
-		Domain, on_delete=models.CASCADE, null=True, blank=True,
-	)
-	subdomain = models.ForeignKey(
-		"Subdomain", on_delete=models.CASCADE, null=True, blank=True,
-		related_name="identity_infra",
-	)
-	url = models.URLField(max_length=2000, null=True, blank=True)
-	host = models.CharField(max_length=1000)
-	infra_type = models.CharField(
-		max_length=50, choices=INFRA_TYPE_CHOICES, default="generic_auth_portal"
-	)
-	detection_method = models.CharField(
-		max_length=50, choices=DETECTION_METHOD_CHOICES, default="url_pattern"
-	)
-	confidence_score = models.FloatField(default=0.5)
-	is_externally_accessible = models.BooleanField(default=True)
-	additional_signals = models.JSONField(default=dict, blank=True)
-	confirmed = models.BooleanField(null=True)
-	dismissed = models.BooleanField(null=True)
-	dismiss_reason = models.TextField(blank=True, null=True)
-
-	class Meta:
-		unique_together = [("scan_history", "host", "infra_type")]
-
-	def __str__(self) -> str:
-		return f"{self.infra_type.upper()} @ {self.host}"
-
-
-class APIIntelligenceProfile(models.Model):
-	API_TYPE_CHOICES = [
-		("rest", "REST"),
-		("graphql", "GraphQL"),
-		("soap", "SOAP"),
-		("generic", "Generic"),
-	]
-
-	id = models.AutoField(primary_key=True)
-	scan_history = models.ForeignKey(
-		ScanHistory, on_delete=models.CASCADE, null=True, blank=True,
-		related_name="api_intel",
-	)
-	target_domain = models.ForeignKey(
-		Domain, on_delete=models.CASCADE, null=True, blank=True,
-	)
-	subdomain = models.ForeignKey(
-		"Subdomain", on_delete=models.CASCADE, null=True, blank=True,
-		related_name="api_intel",
-	)
-	base_url = models.URLField(max_length=2000)
-	api_type = models.CharField(max_length=20, choices=API_TYPE_CHOICES, default="rest")
-	endpoint_count = models.IntegerField(default=0)
-	requires_auth = models.BooleanField(default=False)
-	auth_scheme = models.CharField(max_length=100, null=True, blank=True)
-	parameters_sample = models.JSONField(default=list, blank=True)
-	graphql_schema_snippet = models.TextField(null=True, blank=True)
-	raw_endpoints = models.JSONField(default=list, blank=True)
-
-	class Meta:
-		unique_together = [("scan_history", "base_url", "api_type")]
-
-	def __str__(self) -> str:
-		return f"{self.api_type.upper()} @ {self.base_url}"
 
 
 class ExposureEvidence(models.Model):
@@ -947,8 +804,6 @@ class ImpactAssessment(models.Model):
 
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)
-	dismissed = models.BooleanField(default=False)
-	dismiss_reason = models.TextField(blank=True, null=True)
 
 	class Meta:
 		# Enforce one ImpactAssessment per Vulnerability to prevent

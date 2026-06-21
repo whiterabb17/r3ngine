@@ -184,7 +184,6 @@ def initiate_scan_temporal(
 		enable_spiderfoot_scan=False,
 		selected_plugin_slugs=None,
 		profile_ctx=None,
-		task_queue=None,
 	):
 	"""Initiate a new scan using Temporal durable workflow orchestration.
 
@@ -403,9 +402,9 @@ def initiate_scan_temporal(
 					)
 					handle = await client.start_workflow(
 						"MasterScanWorkflow",
-						args=[temporal_ctx],
+						temporal_ctx,
 						id=workflow_id,
-						task_queue=task_queue or "python-orchestrator-queue",
+						task_queue="python-orchestrator-queue",
 						execution_timeout=timedelta(days=30),
 						run_timeout=timedelta(days=30),
 						task_timeout=timedelta(hours=1),
@@ -484,7 +483,6 @@ def initiate_subscan_temporal(
 		excluded_paths=[],
 		custom_dorks=None,
 		selected_plugin_slugs=None,
-		task_queue=None,
 	):
 	"""Initiate a new subscan using Temporal durable workflow orchestration.
 
@@ -714,7 +712,7 @@ def initiate_subscan_temporal(
 						"SubScanWorkflow",
 						args=[temporal_ctx, pending_scan_types],
 						id=workflow_id,
-						task_queue=task_queue or "python-orchestrator-queue",
+						task_queue="python-orchestrator-queue",
 						execution_timeout=timedelta(days=7),
 						run_timeout=timedelta(days=7),
 						task_timeout=timedelta(hours=1),

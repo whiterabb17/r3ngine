@@ -217,10 +217,6 @@ vulnx update
 # Configure vigolium to scan all severity levels for known issues
 vigolium config set known_issue_scan.severities "critical,high,medium,low,info" || true
 
-# Split oversized nuclei tags
-echo "[entrypoint] Running Nuclei tag splitter..."
-python3 /usr/src/app/scripts/nuclei_tag_splitter.py &
-
 # wait $INTERNAL_TOOLS_PID
 echo "[entrypoint] Starting Temporal Python Orchestrator..."
-exec python3 /usr/src/app/manage.py run_temporal_orchestrator "$@"
+exec python3 /usr/src/app/manage.py run_temporal_orchestrator
