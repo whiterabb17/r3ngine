@@ -59,6 +59,12 @@ def _fetch_with_proxy_retry(url: str, proxy_list: list, timeout: int = 10):
             last_exc = exc
             if proxy_url:
                 logger.warning("Proxy %s failed for %s: %s", proxy_url, url, type(exc).__name__)
+                try:
+                    from reNgine.common_func import _failed_proxy_cache
+                    import time
+                    _failed_proxy_cache[proxy_url] = time.time()
+                except Exception:
+                    pass
             else:
                 logger.warning("Direct connection failed for %s: %s", url, type(exc).__name__)
 
@@ -167,11 +173,12 @@ def extract_auth_candidates(self, ctx=None, description=None):
         ctx = {}
     logger.info("Starting Intelligent Auth Form Extraction for Scan %s", self.scan_id)
 
+    from django.db.models import Q
     endpoints = EndPoint.objects.filter(
-        subdomain__scan_history=self.scan,
-        http_status__isnull=False,
-        http_status__gt=0,
-        http_status__lt=500,
+        Q(subdomain__scan_history=self.scan),
+        Q(http_status__isnull=True) |
+        Q(http_status=0) |
+        (Q(http_status__gt=0) & Q(http_status__lt=500))
     ).exclude(http_status=404).select_related('subdomain')
 
     existing_candidate_urls = set(
@@ -195,26 +202,53 @@ def extract_auth_candidates(self, ctx=None, description=None):
         len(potential_endpoints),
     )
 
-    # Build the proxy list.  TOR mode: get_proxy_list() returns [] but
-    # get_random_proxy() returns 'socks5://tor:9050', so we use it as the
-    # single proxy in the rotation so TOR traffic is respected.
-    proxy_list = get_proxy_list()
-    if not proxy_list:
-        tor_or_single = get_random_proxy()
-        if tor_or_single:
-            proxy_list = [tor_or_single]
+    import time
+    from reNgine.common_func import _failed_proxy_cache
+
+    current_proxy = get_random_proxy(http_only=True)
+    auth_endpoints_to_crawl = []
 
     for ep in potential_endpoints:
         parsed_ep = urlparse(ep.http_url)
         if parsed_ep.scheme not in ('http', 'https'):
             logger.warning("Skipping non-HTTP endpoint %s", ep.http_url)
             continue
+        
+        response = None
         try:
-            response, _ = _fetch_with_proxy_retry(ep.http_url, proxy_list)
+            response, _ = _fetch_with_proxy_retry(ep.http_url, [current_proxy] if current_proxy else [])
+        except Exception as exc:
+            if current_proxy:
+                logger.warning("Proxy %s failed for %s. Cycling for a valid proxy...", current_proxy, ep.http_url)
+                _failed_proxy_cache[current_proxy] = time.time()
+                current_proxy = get_random_proxy(http_only=True)
+                try:
+                    response, _ = _fetch_with_proxy_retry(ep.http_url, [current_proxy] if current_proxy else [])
+                except Exception as retry_exc:
+                    logger.error("Retry with proxy %s failed for %s: %s", current_proxy, ep.http_url, type(retry_exc).__name__)
+                    continue
+            else:
+                logger.error("Direct connection failed for %s: %s", ep.http_url, type(exc).__name__)
+                continue
+
+        if response is None:
+            continue
+
+        try:
+            # Update http_status if it was 0 or null
+            if ep.http_status is None or ep.http_status == 0:
+                ep.http_status = response.status_code
+                ep.save()
+                logger.info("Updated http_status to %d for auth endpoint %s", response.status_code, ep.http_url)
+
             forms = _extract_login_forms(response.text, ep.http_url)
 
             if not forms:
                 continue
+
+            # Queue this endpoint for HTTP crawl to ensure it gets fully crawled and not silently dropped
+            if ep.http_url not in auth_endpoints_to_crawl:
+                auth_endpoints_to_crawl.append(ep.http_url)
 
             parsed = urlparse(ep.http_url)
             raw_scheme = (parsed.scheme or 'http').lower()
@@ -248,5 +282,13 @@ def extract_auth_candidates(self, ctx=None, description=None):
                 "Error extracting form from %s: %s",
                 ep.http_url, type(exc).__name__,
             )
+
+    if auth_endpoints_to_crawl:
+        logger.info("Running http_crawl on %d discovered auth endpoints...", len(auth_endpoints_to_crawl))
+        from reNgine.tasks import http_crawl
+        try:
+            http_crawl(self, urls=auth_endpoints_to_crawl, recrawl=True, ctx=ctx)
+        except Exception as e:
+            logger.error("Failed to run http_crawl on discovered auth endpoints: %s", str(e))
 
     return True

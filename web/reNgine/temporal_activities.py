@@ -3500,6 +3500,8 @@ def recalculate_apme_activity(scan_history_id: int, job_id: str = None) -> dict:
 def extract_auth_for_url_activity(ctx: dict) -> dict:
     from startScan.models import ScanHistory
     from urllib.parse import urlparse
+    import time
+    from reNgine.common_func import _failed_proxy_cache
 
     url = ctx.get('url')
     scan_id = ctx.get('scan_id')
@@ -3510,18 +3512,46 @@ def extract_auth_for_url_activity(ctx: dict) -> dict:
     try:
         scan = ScanHistory.objects.get(id=scan_id)
 
-        proxy_list = get_proxy_list()
-        if not proxy_list:
-            tor_or_single = get_random_proxy()
-            if tor_or_single:
-                proxy_list = [tor_or_single]
+        current_proxy = get_random_proxy(http_only=True)
 
         parsed_url = urlparse(url)
         if parsed_url.scheme not in ('http', 'https'):
             logger.log_line("[AUTH_EXTRACT]", "COMPLETE", "skipped non-HTTP URL %s" % url)
             return {'found': 0}
 
-        response, _ = _fetch_with_proxy_retry(url, proxy_list)
+        response = None
+        try:
+            response, _ = _fetch_with_proxy_retry(url, [current_proxy] if current_proxy else [])
+        except Exception as exc:
+            if current_proxy:
+                logger.log_line("[AUTH_EXTRACT]", "WARNING", "Proxy %s failed. Cycling for a valid proxy..." % current_proxy)
+                _failed_proxy_cache[current_proxy] = time.time()
+                current_proxy = get_random_proxy(http_only=True)
+                try:
+                    response, _ = _fetch_with_proxy_retry(url, [current_proxy] if current_proxy else [])
+                except Exception as retry_exc:
+                    logger.log_line("[AUTH_EXTRACT]", "ERROR", "Retry failed for %s: %s" % (url, str(retry_exc)), level="error")
+                    raise retry_exc
+            else:
+                logger.log_line("[AUTH_EXTRACT]", "ERROR", "Direct fetch failed for %s: %s" % (url, str(exc)), level="error")
+                raise exc
+
+        if response is None:
+            return {'found': 0}
+
+        # Update http_status of the EndPoint if it is 0 or null
+        from startScan.models import EndPoint
+        endpoint_updated = False
+        try:
+            ep = EndPoint.objects.filter(scan_history=scan, http_url=url).first()
+            if ep and (ep.http_status is None or ep.http_status == 0):
+                ep.http_status = response.status_code
+                ep.save()
+                endpoint_updated = True
+                logger.log_line("[AUTH_EXTRACT]", "INFO", "Updated http_status to %d for auth endpoint %s" % (response.status_code, url))
+        except Exception as e:
+            logger.log_line("[AUTH_EXTRACT]", "WARNING", "Could not update http_status for %s: %s" % (url, str(e)))
+
         forms = _extract_login_forms(response.text, url)
 
         if not forms:
@@ -3555,6 +3585,22 @@ def extract_auth_for_url_activity(ctx: dict) -> dict:
             )
             if created:
                 saved += 1
+
+        # Trigger http_crawl again if it was status 0/None and forms were found
+        if saved > 0 and endpoint_updated:
+            from reNgine.tasks import http_crawl
+            logger.log_line("[AUTH_EXTRACT]", "INFO", "Running http_crawl for newly identified auth endpoint %s" % url)
+            try:
+                _run_task(
+                    http_crawl,
+                    ctx,
+                    task_name='http_crawl_auth',
+                    description='HTTP Crawl for Auth Endpoint',
+                    urls=[url],
+                    recrawl=True
+                )
+            except Exception as e:
+                logger.log_line("[AUTH_EXTRACT]", "ERROR", "Failed to run http_crawl for auth endpoint: %s" % str(e), level="error")
 
         logger.log_line("[AUTH_EXTRACT]", "COMPLETE",
                         "found %d new auth candidates from %s" % (saved, url))

@@ -28,8 +28,9 @@ class TestExtractAuthForURLActivity(TestCase):
     @patch('reNgine.temporal_activities._extract_login_forms')
     @patch('reNgine.temporal_activities.get_proxy_list', return_value=[])
     @patch('reNgine.temporal_activities.get_random_proxy', return_value=None)
+    @patch('reNgine.temporal_activities._run_task')
     def test_extract_auth_saves_candidates(
-        self, mock_rand_proxy, mock_proxy_list, mock_extract_forms, mock_fetch
+        self, mock_run_task, mock_rand_proxy, mock_proxy_list, mock_extract_forms, mock_fetch
     ):
         mock_response = MagicMock()
         mock_response.text = '<html></html>'
@@ -54,8 +55,9 @@ class TestExtractAuthForURLActivity(TestCase):
     @patch('reNgine.temporal_activities._fetch_with_proxy_retry')
     @patch('reNgine.temporal_activities.get_proxy_list', return_value=[])
     @patch('reNgine.temporal_activities.get_random_proxy', return_value=None)
+    @patch('reNgine.temporal_activities._run_task')
     def test_extract_auth_no_forms_returns_zero(
-        self, mock_rand_proxy, mock_proxy_list, mock_fetch
+        self, mock_run_task, mock_rand_proxy, mock_proxy_list, mock_fetch
     ):
         mock_response = MagicMock()
         mock_response.text = '<html><body>No forms here</body></html>'
@@ -74,8 +76,9 @@ class TestExtractAuthForURLActivity(TestCase):
            side_effect=Exception("connection refused"))
     @patch('reNgine.temporal_activities.get_proxy_list', return_value=[])
     @patch('reNgine.temporal_activities.get_random_proxy', return_value=None)
+    @patch('reNgine.temporal_activities._run_task')
     def test_extract_auth_fetch_failure_raises(
-        self, mock_rand_proxy, mock_proxy_list, mock_fetch
+        self, mock_run_task, mock_rand_proxy, mock_proxy_list, mock_fetch
     ):
         from reNgine.temporal_activities import extract_auth_for_url_activity
         with self.assertRaises(Exception):
@@ -83,6 +86,114 @@ class TestExtractAuthForURLActivity(TestCase):
                 'url': 'http://example.com/login',
                 'scan_id': self.scan.id,
             })
+
+    @patch('reNgine.temporal_activities._fetch_with_proxy_retry')
+    @patch('reNgine.temporal_activities._extract_login_forms')
+    @patch('reNgine.temporal_activities.get_proxy_list')
+    @patch('reNgine.temporal_activities.get_random_proxy')
+    @patch('reNgine.temporal_activities._run_task')
+    def test_extract_auth_activity_filters_socks_proxies(
+        self, mock_run_task, mock_rand_proxy, mock_proxy_list, mock_extract_forms, mock_fetch
+    ):
+        mock_proxy_list.return_value = []
+        mock_rand_proxy.return_value = 'http://http-ip'
+        mock_response = MagicMock()
+        mock_response.text = '<html></html>'
+        mock_fetch.return_value = (mock_response, None)
+        mock_extract_forms.return_value = []
+
+        from reNgine.temporal_activities import extract_auth_for_url_activity
+        extract_auth_for_url_activity({
+            'url': 'http://example.com/login',
+            'scan_id': self.scan.id,
+        })
+
+        mock_fetch.assert_called_once()
+        called_proxy_list = mock_fetch.call_args[0][1]
+        self.assertEqual(called_proxy_list, ['http://http-ip'])
+        mock_rand_proxy.assert_called_once_with(http_only=True)
+
+    @patch('reNgine.temporal_activities._fetch_with_proxy_retry')
+    @patch('reNgine.temporal_activities._extract_login_forms')
+    @patch('reNgine.temporal_activities.get_proxy_list')
+    @patch('reNgine.temporal_activities.get_random_proxy')
+    @patch('reNgine.temporal_activities._run_task')
+    def test_extract_auth_activity_falls_back_to_http_only_random_proxy(
+        self, mock_run_task, mock_rand_proxy, mock_proxy_list, mock_extract_forms, mock_fetch
+    ):
+        mock_proxy_list.return_value = []
+        mock_rand_proxy.return_value = 'http://random-http'
+        mock_response = MagicMock()
+        mock_response.text = '<html></html>'
+        mock_fetch.return_value = (mock_response, None)
+        mock_extract_forms.return_value = []
+
+        from reNgine.temporal_activities import extract_auth_for_url_activity
+        extract_auth_for_url_activity({
+            'url': 'http://example.com/login',
+            'scan_id': self.scan.id,
+        })
+
+        mock_fetch.assert_called_once()
+        called_proxy_list = mock_fetch.call_args[0][1]
+        self.assertEqual(called_proxy_list, ['http://random-http'])
+        mock_rand_proxy.assert_called_once_with(http_only=True)
+
+    @patch('reNgine.temporal_activities._fetch_with_proxy_retry')
+    @patch('reNgine.temporal_activities._extract_login_forms')
+    @patch('reNgine.temporal_activities.get_proxy_list', return_value=[])
+    @patch('reNgine.temporal_activities.get_random_proxy', return_value=None)
+    @patch('reNgine.temporal_activities._run_task')
+    def test_extract_auth_updates_status_and_triggers_crawl_for_status_0(
+        self, mock_run_task, mock_rand_proxy, mock_proxy_list, mock_extract_forms, mock_fetch
+    ):
+        from startScan.models import EndPoint, Subdomain
+        subdomain = Subdomain.objects.create(
+            scan_history=self.scan,
+            name='example.com',
+            target_domain=self.domain,
+        )
+        ep = EndPoint.objects.create(
+            scan_history=self.scan,
+            subdomain=subdomain,
+            http_url='http://example.com/login',
+            http_status=0,
+        )
+
+        mock_response = MagicMock()
+        mock_response.text = '<html></html>'
+        mock_response.status_code = 200
+        mock_fetch.return_value = (mock_response, None)
+        mock_extract_forms.return_value = [{
+            'action': 'http://example.com/login',
+            'method': 'POST',
+            'user_field': 'username',
+            'pass_field': 'password',
+            'hidden_fields': {},
+            'all_fields': ['username', 'password'],
+        }]
+
+        from reNgine.temporal_activities import extract_auth_for_url_activity
+        result = extract_auth_for_url_activity({
+            'url': 'http://example.com/login',
+            'scan_id': self.scan.id,
+        })
+
+        self.assertEqual(result['found'], 1)
+        ep.refresh_from_db()
+        self.assertEqual(ep.http_status, 200)
+
+        # Assert mock_run_task was called to trigger http_crawl
+        mock_run_task.assert_called_once()
+        args, kwargs = mock_run_task.call_args
+        self.assertEqual(kwargs['task_name'], 'http_crawl_auth')
+        self.assertEqual(kwargs['urls'], ['http://example.com/login'])
+        self.assertEqual(kwargs['recrawl'], True)
+
+        mock_fetch.assert_called_once()
+        called_proxy_list = mock_fetch.call_args[0][1]
+        self.assertEqual(called_proxy_list, [])
+        mock_rand_proxy.assert_called_once_with(http_only=True)
 
 
 class TestDirectoryFileDispatchView(TestCase):

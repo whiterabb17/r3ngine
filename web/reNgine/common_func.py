@@ -1121,7 +1121,7 @@ def get_random_user_agent():
 	return _DEFAULT_USER_AGENT
 
 
-def get_random_proxy():
+def get_random_proxy(http_only=False):
 	"""Get a random proxy from the list stored in the database.
 
 	Enhancements over the old implementation:
@@ -1153,7 +1153,7 @@ def get_random_proxy():
 	# TOR mode: bypass all proxy logic and return the TOR SOCKS5 address
 	# ------------------------------------------------------------------
 	_proxy_obj = Proxy.objects.first()
-	if _proxy_obj and _proxy_obj.use_tor:
+	if _proxy_obj and _proxy_obj.use_tor and not http_only:
 		return 'socks5://tor:9050'
 
 	if not _proxy_obj or not _proxy_obj.use_proxy:
@@ -1170,6 +1170,9 @@ def get_random_proxy():
 		if not p.startswith('http') and not p.startswith('socks'):
 			p = f'http://{p}'
 		proxies.append(p)
+
+	if http_only:
+		proxies = [p for p in proxies if p.lower().startswith('http')]
 
 	# Remove entries that have already failed this session (within TTL)
 	now_epoch = time.time()

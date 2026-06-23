@@ -267,12 +267,13 @@ class TestExtractAuthCandidates(TestCase):
     @patch('reNgine.auth_discovery_tasks.get_proxy_list')
     @patch('reNgine.auth_discovery_tasks.get_random_proxy')
     @patch('reNgine.auth_discovery_tasks._fetch_with_proxy_retry')
+    @patch('reNgine.tasks.http_crawl')
     def test_saves_auth_candidate_when_login_form_found(
-        self, mock_fetch, mock_rp, mock_pl
+        self, mock_http_crawl, mock_fetch, mock_rp, mock_pl
     ):
         mock_pl.return_value = []
         mock_rp.return_value = ''
-        mock_fetch.return_value = (MagicMock(text=SIMPLE_LOGIN_FORM), None)
+        mock_fetch.return_value = (MagicMock(text=SIMPLE_LOGIN_FORM, status_code=200), None)
 
         from reNgine.auth_discovery_tasks import extract_auth_candidates
         extract_auth_candidates(self.mock_self, ctx={})
@@ -292,13 +293,14 @@ class TestExtractAuthCandidates(TestCase):
     @patch('reNgine.auth_discovery_tasks.get_proxy_list')
     @patch('reNgine.auth_discovery_tasks.get_random_proxy')
     @patch('reNgine.auth_discovery_tasks._fetch_with_proxy_retry')
+    @patch('reNgine.tasks.http_crawl')
     def test_no_candidate_saved_when_no_login_form(
-        self, mock_fetch, mock_rp, mock_pl
+        self, mock_http_crawl, mock_fetch, mock_rp, mock_pl
     ):
         mock_pl.return_value = []
         mock_rp.return_value = ''
         mock_fetch.return_value = (
-            MagicMock(text='<html><body><p>Welcome</p></body></html>'), None
+            MagicMock(text='<html><body><p>Welcome</p></body></html>', status_code=200), None
         )
 
         from reNgine.auth_discovery_tasks import extract_auth_candidates
@@ -311,8 +313,9 @@ class TestExtractAuthCandidates(TestCase):
     @patch('reNgine.auth_discovery_tasks.get_proxy_list')
     @patch('reNgine.auth_discovery_tasks.get_random_proxy')
     @patch('reNgine.auth_discovery_tasks._fetch_with_proxy_retry')
+    @patch('reNgine.tasks.http_crawl')
     def test_skips_endpoints_already_in_candidate_list(
-        self, mock_fetch, mock_rp, mock_pl
+        self, mock_http_crawl, mock_fetch, mock_rp, mock_pl
     ):
         AuthCandidate.objects.create(
             scan_history=self.scan,
@@ -331,8 +334,9 @@ class TestExtractAuthCandidates(TestCase):
     @patch('reNgine.auth_discovery_tasks.get_proxy_list')
     @patch('reNgine.auth_discovery_tasks.get_random_proxy')
     @patch('reNgine.auth_discovery_tasks._fetch_with_proxy_retry')
+    @patch('reNgine.tasks.http_crawl')
     def test_continues_to_next_endpoint_on_fetch_error(
-        self, mock_fetch, mock_rp, mock_pl
+        self, mock_http_crawl, mock_fetch, mock_rp, mock_pl
     ):
         EndPoint.objects.create(
             scan_history=self.scan,
@@ -344,7 +348,7 @@ class TestExtractAuthCandidates(TestCase):
         mock_rp.return_value = ''
         mock_fetch.side_effect = [
             req.exceptions.ConnectionError("down"),
-            (MagicMock(text=SIMPLE_LOGIN_FORM), None),
+            (MagicMock(text=SIMPLE_LOGIN_FORM, status_code=200), None),
         ]
 
         from reNgine.auth_discovery_tasks import extract_auth_candidates
@@ -360,8 +364,9 @@ class TestExtractAuthCandidates(TestCase):
     @patch('reNgine.auth_discovery_tasks.get_proxy_list')
     @patch('reNgine.auth_discovery_tasks.get_random_proxy')
     @patch('reNgine.auth_discovery_tasks._fetch_with_proxy_retry')
+    @patch('reNgine.tasks.http_crawl')
     def test_protocol_is_http_for_https_endpoints(
-        self, mock_fetch, mock_rp, mock_pl
+        self, mock_http_crawl, mock_fetch, mock_rp, mock_pl
     ):
         """HTTPS endpoints are mapped to protocol='http' (PROTOCOL_CHOICES has no 'https')."""
         EndPoint.objects.create(
@@ -372,7 +377,7 @@ class TestExtractAuthCandidates(TestCase):
         )
         mock_pl.return_value = []
         mock_rp.return_value = ''
-        mock_fetch.return_value = (MagicMock(text=SIMPLE_LOGIN_FORM), None)
+        mock_fetch.return_value = (MagicMock(text=SIMPLE_LOGIN_FORM, status_code=200), None)
 
         # Remove the http endpoint so only the https one fires
         self.login_endpoint.delete()
@@ -386,3 +391,73 @@ class TestExtractAuthCandidates(TestCase):
         self.assertEqual(candidates.first().protocol, 'http')
         # port should default to 443 for https endpoints
         self.assertEqual(candidates.first().port, 443)
+
+    @patch('reNgine.auth_discovery_tasks.get_proxy_list')
+    @patch('reNgine.auth_discovery_tasks.get_random_proxy')
+    @patch('reNgine.auth_discovery_tasks._fetch_with_proxy_retry')
+    @patch('reNgine.tasks.http_crawl')
+    def test_extract_auth_candidates_filters_socks_proxies(
+        self, mock_http_crawl, mock_fetch, mock_rp, mock_pl
+    ):
+        mock_pl.return_value = []
+        mock_rp.return_value = 'http://http.com'
+        mock_fetch.return_value = (MagicMock(text=SIMPLE_LOGIN_FORM, status_code=200), None)
+
+        from reNgine.auth_discovery_tasks import extract_auth_candidates
+        extract_auth_candidates(self.mock_self, ctx={})
+
+        mock_fetch.assert_called_once()
+        called_proxy_list = mock_fetch.call_args[0][1]
+        self.assertEqual(called_proxy_list, ['http://http.com'])
+        mock_rp.assert_called_once_with(http_only=True)
+
+    @patch('reNgine.auth_discovery_tasks.get_proxy_list')
+    @patch('reNgine.auth_discovery_tasks.get_random_proxy')
+    @patch('reNgine.auth_discovery_tasks._fetch_with_proxy_retry')
+    @patch('reNgine.tasks.http_crawl')
+    def test_extract_auth_candidates_falls_back_to_http_only_random_proxy(
+        self, mock_http_crawl, mock_fetch, mock_rp, mock_pl
+    ):
+        mock_pl.return_value = []
+        mock_rp.return_value = 'http://random-http.com'
+        mock_fetch.return_value = (MagicMock(text=SIMPLE_LOGIN_FORM, status_code=200), None)
+
+        from reNgine.auth_discovery_tasks import extract_auth_candidates
+        extract_auth_candidates(self.mock_self, ctx={})
+
+        mock_fetch.assert_called_once()
+        called_proxy_list = mock_fetch.call_args[0][1]
+        self.assertEqual(called_proxy_list, ['http://random-http.com'])
+        mock_rp.assert_called_once_with(http_only=True)
+
+    @patch('reNgine.auth_discovery_tasks.get_proxy_list')
+    @patch('reNgine.auth_discovery_tasks.get_random_proxy')
+    @patch('reNgine.auth_discovery_tasks._fetch_with_proxy_retry')
+    @patch('reNgine.tasks.http_crawl')
+    def test_updates_endpoint_status_and_triggers_crawl_when_status_is_0(
+        self, mock_http_crawl, mock_fetch, mock_rp, mock_pl
+    ):
+        mock_pl.return_value = []
+        mock_rp.return_value = ''
+        mock_fetch.return_value = (MagicMock(text=SIMPLE_LOGIN_FORM, status_code=200), None)
+
+        # Create an endpoint with status 0
+        zero_status_ep = EndPoint.objects.create(
+            scan_history=self.scan,
+            subdomain=self.subdomain,
+            http_url='http://test.example.com/zero-status-login',
+            http_status=0,
+        )
+
+        # Delete the login endpoint so only zero_status_ep fires
+        self.login_endpoint.delete()
+
+        from reNgine.auth_discovery_tasks import extract_auth_candidates
+        extract_auth_candidates(self.mock_self, ctx={})
+
+        # Reload ep from DB and assert status updated
+        zero_status_ep.refresh_from_db()
+        self.assertEqual(zero_status_ep.http_status, 200)
+
+        # Assert http_crawl was called with this URL
+        mock_http_crawl.assert_called_once_with(self.mock_self, urls=['http://test.example.com/zero-status-login'], recrawl=True, ctx={})
