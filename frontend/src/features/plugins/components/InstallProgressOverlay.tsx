@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Backdrop,
   Box,
@@ -19,7 +19,7 @@ import {
   RefreshCw,
   AlertTriangle,
 } from 'lucide-react';
-import { useInstallStatus, type InstallStep } from '../api/pluginsApi';
+import { useInstallStatus, useRestartServer, type InstallStep } from '../api/pluginsApi';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 
 // All steps in the expected order — used to fill in pending steps before backend emits them
@@ -44,6 +44,8 @@ interface Props {
 const InstallProgressOverlay: React.FC<Props> = ({ installId, onComplete, onError }) => {
   const { tokens } = useThemeTokens();
   const { data } = useInstallStatus(installId);
+  const restartServerMutation = useRestartServer();
+  const [isRestarting, setIsRestarting] = useState(false);
 
   // Merge backend steps with the full ordered step list so pending steps are always visible
   const mergedSteps: InstallStep[] = ALL_STEPS.map(({ key, label }) => {
@@ -161,8 +163,31 @@ const InstallProgressOverlay: React.FC<Props> = ({ installId, onComplete, onErro
         {(isSuccess || isFailed) && (
           <Button
             fullWidth
-            onClick={() => window.location.reload()}
-            startIcon={<RefreshCw size={14} />}
+            disabled={isRestarting}
+            onClick={() => {
+              if (isSuccess) {
+                setIsRestarting(true);
+                restartServerMutation.mutate(undefined, {
+                  onSettled: () => {
+                    // Reload after giving the server time to restart.
+                    // The restart-server endpoint delays the actual container restart by 3 s,
+                    // so waiting 6 s before reloading gives it time to come back up.
+                    setTimeout(() => window.location.reload(), 6000);
+                  },
+                });
+              } else {
+                window.location.reload();
+              }
+            }}
+            startIcon={
+              isRestarting ? (
+                <Box sx={{ display: 'flex', animation: 'spin 1s linear infinite', '@keyframes spin': { from: { transform: 'rotate(0deg)' }, to: { transform: 'rotate(360deg)' } } }}>
+                  <Loader size={14} />
+                </Box>
+              ) : (
+                <RefreshCw size={14} />
+              )
+            }
             sx={{
               mt: 3,
               fontFamily: 'var(--r3-heading-font)',
@@ -177,9 +202,12 @@ const InstallProgressOverlay: React.FC<Props> = ({ installId, onComplete, onErro
               '&:hover': {
                 bgcolor: isSuccess ? alpha(tokens.accent.success, 0.12) : alpha(tokens.accent.error, 0.12),
               },
+              '&.Mui-disabled': {
+                color: alpha(isSuccess ? tokens.accent.success : tokens.accent.error, 0.5),
+              },
             }}
           >
-            {isSuccess ? 'CLOSE & RELOAD' : 'DISMISS & RELOAD'}
+            {isRestarting ? 'RESTARTING SERVER...' : isSuccess ? 'RELOAD & RESTART' : 'DISMISS & RELOAD'}
           </Button>
         )}
       </Box>

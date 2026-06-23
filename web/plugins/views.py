@@ -1,17 +1,22 @@
+import logging
+import mimetypes
+import os
+import threading
+import uuid
+
+from django.core.cache import cache
+from django.http import Http404
+from django.views import View
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
-from django.http import FileResponse, Http404
-from django.views import View
-from django.core.cache import cache
+
 from .models import Plugin
 from .serializers import PluginSerializer
 from .utils import AtomicInstaller, PluginManager, MarketplaceManager
-import os
-import mimetypes
-import threading
-import uuid
+
+logger = logging.getLogger(__name__)
 
 class PluginViewSet(viewsets.ModelViewSet):
     queryset = Plugin.objects.all()
@@ -106,6 +111,42 @@ class PluginViewSet(viewsets.ModelViewSet):
             return Response({'success': True, 'message': 'Restart command sent to orchestrator.'})
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'], url_path='restart-server')
+    def restart_server(self, request):
+        """
+        User-triggered restart of the orchestrator and web container after plugin install.
+        The web container restart is delayed 3 s so this HTTP response can reach the client
+        before the connection is severed.
+        """
+        import redis
+        from django.conf import settings
+
+        try:
+            rdb = redis.StrictRedis(
+                host=settings.REDIS_HOST,
+                port=settings.REDIS_PORT,
+                password=settings.REDIS_PASSWORD,
+                db=0
+            )
+            rdb.publish('orchestrator_control', 'restart')
+        except Exception as e:
+            logger.warning("Could not send orchestrator restart signal: %s", e)
+
+        def _restart_web():
+            import time
+            time.sleep(3)
+            try:
+                import docker
+                client = docker.from_env()
+                web_container = client.containers.get('r3ngine-web-1')
+                logger.info("User-triggered web container restart.")
+                web_container.restart()
+            except Exception as _e:
+                logger.error("Failed to restart web container: %s", _e)
+
+        threading.Thread(target=_restart_web, daemon=True).start()
+        return Response({'success': True, 'message': 'Server restart initiated.'})
 
     @action(detail=False, methods=['get'], url_path='registry')
     def registry(self, request):
