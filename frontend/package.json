@@ -44,6 +44,7 @@
     "echarts-for-react": "^3.0.6",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.14.0",
+    "mermaid": "^11.15.0",
     "prism-react-renderer": "^2.4.1",
     "prismjs": "^1.30.0",
     "react": "^19.2.5",
@@ -52,9 +53,9 @@
     "react-dom": "^19.2.5",
     "react-leaflet": "^5.0.0",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.0",
     "react-router-dom": "^7.15.0",
     "react-simple-code-editor": "^0.14.1",
+    "remark-gfm": "^4.0.0",
     "tailwind-merge": "^3.5.0",
     "tslib": "^2.8.1",
     "zustand": "^5.0.13"

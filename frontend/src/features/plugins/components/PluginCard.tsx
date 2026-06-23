@@ -52,7 +52,40 @@ import {
   useBurpHealth,
 } from '../api/pluginsApi';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import mermaid from 'mermaid';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
+
+// ── Mermaid diagram renderer ───────────────────────────────────────────────────
+
+let mermaidInitialized = false;
+
+const MermaidBlock: React.FC<{ chart: string }> = ({ chart }) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [renderError, setRenderError] = React.useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!mermaidInitialized) {
+      mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
+      mermaidInitialized = true;
+    }
+    const id = `mermaid-${Math.random().toString(36).slice(2, 10)}`;
+    mermaid.render(id, chart)
+      .then(({ svg }) => {
+        if (!cancelled && containerRef.current) {
+          containerRef.current.innerHTML = svg;
+        }
+      })
+      .catch(() => { if (!cancelled) setRenderError(true); });
+    return () => { cancelled = true; };
+  }, [chart]);
+
+  if (renderError) {
+    return <pre style={{ overflowX: 'auto', fontSize: '0.72rem', opacity: 0.7 }}>{chart}</pre>;
+  }
+  return <div ref={containerRef} style={{ overflowX: 'auto', textAlign: 'center' }} />;
+};
 
 interface Props {
   plugin?: Plugin;
@@ -435,7 +468,20 @@ const PluginDocsModal: React.FC<DocsModalProps> = ({ open, onClose, plugin }) =>
                     File: {filename}
                   </Typography>
                 )}
-                <ReactMarkdown>{content}</ReactMarkdown>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    code({ className, children, ...rest }) {
+                      const lang = /language-(\w+)/.exec(className || '')?.[1];
+                      if (lang === 'mermaid') {
+                        return <MermaidBlock chart={String(children).replace(/\n$/, '')} />;
+                      }
+                      return <code className={className} {...rest}>{children}</code>;
+                    },
+                  }}
+                >
+                  {content}
+                </ReactMarkdown>
               </Box>
             ))}
           </Box>
