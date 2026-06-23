@@ -3564,8 +3564,9 @@ def extract_auth_for_url_activity(ctx: dict) -> dict:
 
         saved = 0
         for form in forms:
-            from startScan.models import AuthCandidate
-            _, created = AuthCandidate.objects.get_or_create(
+            from startScan.models import AuthCandidate, EndPoint
+            ep = EndPoint.objects.filter(scan_history=scan, http_url=url).first()
+            candidate, created = AuthCandidate.objects.get_or_create(
                 scan_history=scan,
                 target=form.get('action', url),
                 protocol=protocol,
@@ -3581,10 +3582,17 @@ def extract_auth_for_url_activity(ctx: dict) -> dict:
                         'all_fields': form.get('all_fields', []),
                     },
                     'status': 'pending',
+                    'endpoint': ep,
+                    'subdomain': ep.subdomain if ep else None,
                 },
             )
             if created:
                 saved += 1
+            else:
+                if ep and not candidate.endpoint:
+                    candidate.endpoint = ep
+                    candidate.subdomain = ep.subdomain
+                    candidate.save()
 
         # Trigger http_crawl again if it was status 0/None and forms were found
         if saved > 0 and endpoint_updated:

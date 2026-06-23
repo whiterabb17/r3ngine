@@ -52,6 +52,7 @@ import type { DirectoryFile } from '../../subdomains/types';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { usePlugins } from '../../plugins/api/pluginsApi';
 import { useDirectoryFileDispatch, useDirectoryFileDelete } from '../api';
+import { BruteConfigDialog } from './BruteConfigDialog';
 import { getMenuPaperSx } from '../../../theme/semanticColors';
 
 interface DirectoriesTabProps {
@@ -88,6 +89,9 @@ export const DirectoriesTab: React.FC<DirectoriesTabProps> = ({ projectSlug, sca
     severity: 'success' | 'error' | 'info' | 'warning';
   }>({ open: false, message: '', severity: 'success' });
 
+  const [bruteModalOpen, setBruteModalOpen] = useState(false);
+  const [pendingActionId, setPendingActionId] = useState<{ id: number; action: string } | null>(null);
+
   const { data: plugins } = usePlugins();
   const credPluginEnabled = plugins?.some(
     (p: { slug: string; is_enabled: boolean }) =>
@@ -113,14 +117,25 @@ export const DirectoriesTab: React.FC<DirectoriesTabProps> = ({ projectSlug, sca
 
   const handleActionClose = () => setAnchorEl(null);
 
-  const handleDispatchAction = async (action: string, label: string) => {
+  const handleDispatchAction = async (action: string, label: string, extraParams?: any) => {
     if (!selectedFile || !scanId) return;
     handleActionClose();
+    setPendingActionId({ id: selectedFile.id, action });
     try {
-      await dispatchMutation.mutateAsync({ url: selectedFile.url, action, scan_id: scanId });
-      showNotification(`${label} DISPATCHED`);
-    } catch {
-      showNotification(`Failed to dispatch ${label.toLowerCase()} — check Temporal logs`, 'error');
+      await dispatchMutation.mutateAsync({
+        url: selectedFile.url,
+        action,
+        scan_id: scanId,
+        ...extraParams
+      });
+      showNotification(`${label} DISPATCHED`, 'success');
+      if (action === 'brute_test') {
+        setBruteModalOpen(false);
+      }
+    } catch (error: any) {
+      showNotification(error.message || `Failed to dispatch ${label.toLowerCase()} — check Temporal logs`, 'error');
+    } finally {
+      setPendingActionId(null);
     }
   };
 
@@ -832,7 +847,10 @@ export const DirectoriesTab: React.FC<DirectoriesTabProps> = ({ projectSlug, sca
           <span>
             <MenuItem
               disabled={!credPluginEnabled}
-              onClick={() => handleDispatchAction('brute_test', 'BRUTE TEST')}
+              onClick={() => {
+                setBruteModalOpen(true);
+                handleActionClose();
+              }}
             >
               <ListItemIcon>
                 <UserX
@@ -902,6 +920,19 @@ export const DirectoriesTab: React.FC<DirectoriesTabProps> = ({ projectSlug, sca
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {selectedFile && (
+        <BruteConfigDialog
+          open={bruteModalOpen}
+          onClose={() => {
+            setBruteModalOpen(false);
+            setSelectedFile(null);
+          }}
+          onSubmit={(params) => handleDispatchAction('brute_test', 'BRUTE TEST', params)}
+          targetUrl={selectedFile.url}
+          isPending={pendingActionId?.id === selectedFile.id && pendingActionId?.action === 'brute_test'}
+        />
+      )}
     </Box>
   );
 };

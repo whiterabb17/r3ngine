@@ -1410,10 +1410,17 @@ class SubdomainSerializer(serializers.ModelSerializer):
 			return None
 
 
+class AuthCandidateSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = AuthCandidate
+		fields = '__all__'
+
+
 class EndpointSerializer(serializers.ModelSerializer):
 
 	techs = TechnologySerializer(many=True)
 	parameters = ParameterSerializer(many=True, read_only=True)
+	auth_candidates = AuthCandidateSerializer(many=True, read_only=True, source='authcandidate_set')
 
 	class Meta:
 		model = EndPoint

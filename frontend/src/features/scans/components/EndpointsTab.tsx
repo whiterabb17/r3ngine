@@ -22,11 +22,17 @@ import {
   Filter,
   LayoutGrid,
   ChevronDown,
+  ChevronRight,
   Trash2,
-  ExternalLink
+  ExternalLink,
+  Key,
+  Play
 } from 'lucide-react';
 
 import { useEndpoints, useDeleteEndpoints } from '../../endpoints/api';
+import { usePlugins } from '../../plugins/api/pluginsApi';
+import { useDirectoryFileDispatch } from '../api';
+import { BruteConfigDialog } from './BruteConfigDialog';
 import { TacticalPanel } from '../../../components/TacticalPanel';
 import { copyToClipboard } from '../../endpoints/utils/copy';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
@@ -50,6 +56,18 @@ export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId,
   const [isAliveFilter, setIsAliveFilter] = useState(initialAlive || false);
 
   // Actions state
+  const { data: plugins } = usePlugins();
+  const credPluginEnabled = plugins?.some(
+    (p: { slug: string; is_enabled: boolean }) =>
+      p.slug === 'credential_intelligence' && p.is_enabled
+  );
+  const dispatchMutation = useDirectoryFileDispatch();
+
+  const [expandedRows, setExpandedRows] = useState<number[]>([]);
+  const [bruteModalOpen, setBruteModalOpen] = useState(false);
+  const [bruteEndpoint, setBruteEndpoint] = useState<{ id: number; url: string } | null>(null);
+  const [pendingActionId, setPendingActionId] = useState<{ id: number; action: string } | null>(null);
+
   const [selectedEndpoints, setSelectedEndpoints] = useState<number[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState({
@@ -66,6 +84,60 @@ export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId,
 
   const showNotification = (message: string, severity: 'success' | 'error' | 'info' | 'warning' = 'success') => {
     setSnackbar({ open: true, message, severity });
+  };
+
+  const handleExtractAuth = async (id: number, url: string) => {
+    if (!scanId) return;
+    setPendingActionId({ id, action: 'extract_auth' });
+    try {
+      await dispatchMutation.mutateAsync({
+        url,
+        action: 'extract_auth',
+        scan_id: scanId
+      });
+      showNotification('Auth extraction dispatched successfully', 'success');
+    } catch (error: any) {
+      showNotification(error.message || 'Failed to dispatch auth extraction', 'error');
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
+  const handleBruteOpen = (id: number, url: string) => {
+    setBruteEndpoint({ id, url });
+    setBruteModalOpen(true);
+  };
+
+  const handleBruteSubmit = async (params: {
+    tool: string;
+    wordlist_user: string;
+    wordlist_pass: string;
+    threads: number;
+    additional_flags: string;
+  }) => {
+    if (!bruteEndpoint || !scanId) return;
+    setPendingActionId({ id: bruteEndpoint.id, action: 'brute_test' });
+    try {
+      await dispatchMutation.mutateAsync({
+        url: bruteEndpoint.url,
+        action: 'brute_test',
+        scan_id: scanId,
+        ...params
+      });
+      showNotification('Brute force test dispatched successfully', 'success');
+      setBruteModalOpen(false);
+      setBruteEndpoint(null);
+    } catch (error: any) {
+      showNotification(error.message || 'Failed to dispatch brute test', 'error');
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
+  const toggleRowExpand = (id: number) => {
+    setExpandedRows(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
   };
 
   const deleteMutation = useDeleteEndpoints(projectSlug);
@@ -423,143 +495,239 @@ export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId,
                     <CircularProgress size={24} sx={{ color: tokens.accent.primary }} />
                   </td>
                 </tr>
-              ) : data?.results.map((endpoint) => (
-                <tr key={endpoint.id} style={{
-                  borderBottom: '1px solid',
-                  borderColor: theme.palette.divider,
-                  backgroundColor: selectedEndpoints.includes(endpoint.id)
-                    ? (isLight ? 'rgba(14, 165, 233, 0.04)' : 'rgba(0, 243, 255, 0.02)')
-                    : 'transparent',
-                  transition: 'background 0.2s'
-                }}>
-                  <td style={{ padding: '16px', verticalAlign: 'top', textAlign: 'center' }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedEndpoints.includes(endpoint.id)}
-                      onChange={() => toggleSelectEndpoint(endpoint.id)}
-                      style={{
-                        width: '14px',
-                        height: '14px',
-                        accentColor: tokens.accent.primary,
-                        cursor: 'pointer',
-                        opacity: 0.6
-                      }}
-                    />
-                  </td>
-                  <td style={{ padding: '16px', verticalAlign: 'top' }}>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography sx={{
-                          fontSize: '12px',
-                          fontWeight: 500,
-                          color: 'text.primary',
-                          textDecoration: 'none',
-                          wordBreak: 'break-all',
-                          '&:hover': { color: tokens.accent.primary }
-                        }} component="a" href={endpoint.http_url} target="_blank">
-                          {endpoint.http_url}
-                        </Typography>
-                      </Box>
+              ) : data?.results.map((endpoint) => {
+                const hasAuthForm = endpoint.auth_candidates && endpoint.auth_candidates.length > 0;
+                const isExpanded = expandedRows.includes(endpoint.id);
+                const isExtractPending = pendingActionId?.id === endpoint.id && pendingActionId?.action === 'extract_auth';
+                const isBrutePending = pendingActionId?.id === endpoint.id && pendingActionId?.action === 'brute_test';
 
-                      {/* Tech Badges */}
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {endpoint.webserver && (
-                          <Box sx={{ px: 0.8, py: 0.2, bgcolor: isLight ? 'rgba(112, 0, 255, 0.08)' : 'rgba(112, 0, 255, 0.1)', border: `1px solid ${isLight ? 'rgba(112, 0, 255, 0.2)' : 'rgba(112, 0, 255, 0.3)'}`, borderRadius: 0.5 }}>
-                            <Typography sx={{ fontSize: '9px', fontWeight: 800, color: isLight ? '#7c3aed' : '#7000ff' }}>{endpoint.webserver}</Typography>
-                          </Box>
-                        )}
-                        {endpoint.techs?.map(tech => (
-                          <Box key={tech.id} sx={{ px: 0.8, py: 0.2, bgcolor: `${tokens.accent.primary}15`, border: `1px solid ${tokens.accent.primary}4D`, borderRadius: 0.5 }}>
-                            <Typography sx={{ fontSize: '9px', fontWeight: 800, color: tokens.accent.primary }}>{tech.name}</Typography>
-                          </Box>
-                        ))}
-                      </Box>
-                    </Box>
-                  </td>
-                  <td style={{ padding: '16px', verticalAlign: 'top' }}>
-                    <Box sx={{
-                      display: 'inline-flex',
-                      px: 1.2,
-                      py: 0.4,
-                      borderRadius: 0.5,
-                      bgcolor: `${getStatusColor(endpoint.http_status)}15`,
-                      border: `1px solid ${getStatusColor(endpoint.http_status)}44`
+                return (
+                  <React.Fragment key={endpoint.id}>
+                    <tr style={{
+                      borderBottom: '1px solid',
+                      borderColor: theme.palette.divider,
+                      backgroundColor: selectedEndpoints.includes(endpoint.id)
+                        ? (isLight ? 'rgba(14, 165, 233, 0.04)' : 'rgba(0, 243, 255, 0.02)')
+                        : 'transparent',
+                      transition: 'background 0.2s'
                     }}>
-                      <Typography sx={{ fontSize: '10px', fontWeight: 900, color: getStatusColor(endpoint.http_status), fontFamily: 'monospace' }}>
-                        {endpoint.http_status}
-                      </Typography>
-                    </Box>
-                  </td>
-                  <Box component="td" sx={{ display: { xs: 'none', md: 'table-cell' }, padding: '16px', verticalAlign: 'top' }}>
-                    <Typography sx={{ fontSize: '11px', color: 'text.secondary', fontWeight: 500, fontStyle: endpoint.page_title ? 'normal' : 'italic' }}>
-                      {endpoint.page_title || 'No Title Available'}
-                    </Typography>
-                  </Box>
-                  <Box component="td" sx={{ display: { xs: 'none', sm: 'table-cell' }, padding: '16px', verticalAlign: 'top' }}>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {endpoint.matched_gf_patterns && endpoint.matched_gf_patterns.split(',').map((tag) => (
-                        <Chip
-                          key={tag}
-                          label={tag.toUpperCase()}
-                          size="small"
-                          sx={{
-                            height: 16,
-                            fontSize: '8px',
-                            fontWeight: 900,
-                            bgcolor: `${tokens.accent.primary}15`,
-                            color: tokens.accent.primary,
-                            border: `1px solid ${tokens.accent.primary}33`,
-                            borderRadius: 0.5
+                      <td style={{ padding: '16px', verticalAlign: 'top', textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedEndpoints.includes(endpoint.id)}
+                          onChange={() => toggleSelectEndpoint(endpoint.id)}
+                          style={{
+                            width: '14px',
+                            height: '14px',
+                            accentColor: tokens.accent.primary,
+                            cursor: 'pointer',
+                            opacity: 0.6
                           }}
                         />
-                      ))}
-                    </Box>
-                  </Box>
-                  <Box component="td" sx={{ display: { xs: 'none', lg: 'table-cell' }, padding: '16px', verticalAlign: 'top' }}>
-                    <Stack spacing={0.5}>
-                      <Typography sx={{ fontSize: '10px', color: 'text.secondary', fontFamily: 'monospace' }}>
-                        TIME: {endpoint.response_time ? `${endpoint.response_time.toFixed(3)}s` : 'N/A'}
-                      </Typography>
-                    </Stack>
-                  </Box>
-                  <td style={{ padding: '16px', verticalAlign: 'top', textAlign: 'right' }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                      <Tooltip title="Copy URL">
-                        <IconButton
-                          size="small"
-                          onClick={() => {
-                            copyToClipboard(endpoint.http_url);
-                            showNotification('Copied URL to clipboard');
-                          }}
-                          sx={{ color: 'text.secondary', '&:hover': { color: tokens.accent.primary } }}
-                        >
-                          <Copy size={14} />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Open in browser">
-                        <IconButton
-                          size="small"
-                          component="a"
-                          href={endpoint.http_url}
-                          target="_blank"
-                          sx={{ color: 'text.secondary', '&:hover': { color: tokens.accent.primary } }}
-                        >
-                          <ExternalLink size={14} />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete Endpoint">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleSingleDelete(endpoint.id)}
-                          sx={{ color: 'text.secondary', '&:hover': { color: tokens.accent.error } }}
-                        >
-                          <Trash2 size={14} />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                  </td>
-                </tr>
-              ))}
+                      </td>
+                      <td style={{ padding: '16px', verticalAlign: 'top' }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {hasAuthForm && (
+                              <IconButton
+                                size="small"
+                                onClick={() => toggleRowExpand(endpoint.id)}
+                                sx={{ p: 0.2, color: tokens.accent.primary }}
+                              >
+                                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                              </IconButton>
+                            )}
+                            <Typography sx={{
+                              fontSize: '12px',
+                              fontWeight: 500,
+                              color: 'text.primary',
+                              textDecoration: 'none',
+                              wordBreak: 'break-all',
+                              '&:hover': { color: tokens.accent.primary }
+                            }} component="a" href={endpoint.http_url} target="_blank">
+                              {endpoint.http_url}
+                            </Typography>
+                          </Box>
+
+                          {/* Tech Badges */}
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {endpoint.webserver && (
+                              <Box sx={{ px: 0.8, py: 0.2, bgcolor: isLight ? 'rgba(112, 0, 255, 0.08)' : 'rgba(112, 0, 255, 0.1)', border: `1px solid ${isLight ? 'rgba(112, 0, 255, 0.2)' : 'rgba(112, 0, 255, 0.3)'}`, borderRadius: 0.5 }}>
+                                <Typography sx={{ fontSize: '9px', fontWeight: 800, color: isLight ? '#7c3aed' : '#7000ff' }}>{endpoint.webserver}</Typography>
+                              </Box>
+                            )}
+                            {endpoint.techs?.map(tech => (
+                              <Box key={tech.id} sx={{ px: 0.8, py: 0.2, bgcolor: `${tokens.accent.primary}15`, border: `1px solid ${tokens.accent.primary}4D`, borderRadius: 0.5 }}>
+                                <Typography sx={{ fontSize: '9px', fontWeight: 800, color: tokens.accent.primary }}>{tech.name}</Typography>
+                              </Box>
+                            ))}
+                            {hasAuthForm && (
+                              <Box sx={{ px: 0.8, py: 0.2, bgcolor: 'rgba(249, 115, 22, 0.1)', border: '1px solid rgba(249, 115, 22, 0.3)', borderRadius: 0.5 }}>
+                                <Typography sx={{ fontSize: '9px', fontWeight: 800, color: '#f97316' }}>🔑 AUTH FORM</Typography>
+                              </Box>
+                            )}
+                          </Box>
+                        </Box>
+                      </td>
+                      <td style={{ padding: '16px', verticalAlign: 'top' }}>
+                        <Box sx={{
+                          display: 'inline-flex',
+                          px: 1.2,
+                          py: 0.4,
+                          borderRadius: 0.5,
+                          bgcolor: `${getStatusColor(endpoint.http_status)}15`,
+                          border: `1px solid ${getStatusColor(endpoint.http_status)}44`
+                        }}>
+                          <Typography sx={{ fontSize: '10px', fontWeight: 900, color: getStatusColor(endpoint.http_status), fontFamily: 'monospace' }}>
+                            {endpoint.http_status}
+                          </Typography>
+                        </Box>
+                      </td>
+                      <Box component="td" sx={{ display: { xs: 'none', md: 'table-cell' }, padding: '16px', verticalAlign: 'top' }}>
+                        <Typography sx={{ fontSize: '11px', color: 'text.secondary', fontWeight: 500, fontStyle: endpoint.page_title ? 'normal' : 'italic' }}>
+                          {endpoint.page_title || 'No Title Available'}
+                        </Typography>
+                      </Box>
+                      <Box component="td" sx={{ display: { xs: 'none', sm: 'table-cell' }, padding: '16px', verticalAlign: 'top' }}>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {endpoint.matched_gf_patterns && endpoint.matched_gf_patterns.split(',').map((tag) => (
+                            <Chip
+                              key={tag}
+                              label={tag.toUpperCase()}
+                              size="small"
+                              sx={{
+                                height: 16,
+                                fontSize: '8px',
+                                fontWeight: 900,
+                                bgcolor: `${tokens.accent.primary}15`,
+                                color: tokens.accent.primary,
+                                border: `1px solid ${tokens.accent.primary}33`,
+                                borderRadius: 0.5
+                              }}
+                            />
+                          ))}
+                        </Box>
+                      </Box>
+                      <Box component="td" sx={{ display: { xs: 'none', lg: 'table-cell' }, padding: '16px', verticalAlign: 'top' }}>
+                        <Stack spacing={0.5}>
+                          <Typography sx={{ fontSize: '10px', color: 'text.secondary', fontFamily: 'monospace' }}>
+                            TIME: {endpoint.response_time ? `${endpoint.response_time.toFixed(3)}s` : 'N/A'}
+                          </Typography>
+                        </Stack>
+                      </Box>
+                      <td style={{ padding: '16px', verticalAlign: 'top', textAlign: 'right' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                          <Tooltip title="Extract Auth Forms">
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleExtractAuth(endpoint.id, endpoint.http_url)}
+                                disabled={isExtractPending}
+                                sx={{ color: 'text.secondary', '&:hover': { color: tokens.accent.primary } }}
+                              >
+                                {isExtractPending ? <CircularProgress size={14} color="inherit" /> : <Key size={14} />}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          {credPluginEnabled && (
+                            <Tooltip title="Brute Force Test">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleBruteOpen(endpoint.id, endpoint.http_url)}
+                                  disabled={isBrutePending}
+                                  sx={{ color: 'text.secondary', '&:hover': { color: tokens.accent.primary } }}
+                                >
+                                  {isBrutePending ? <CircularProgress size={14} color="inherit" /> : <Play size={14} />}
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          )}
+                          <Tooltip title="Copy URL">
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                copyToClipboard(endpoint.http_url);
+                                showNotification('Copied URL to clipboard');
+                              }}
+                              sx={{ color: 'text.secondary', '&:hover': { color: tokens.accent.primary } }}
+                            >
+                              <Copy size={14} />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Open in browser">
+                            <IconButton
+                              size="small"
+                              component="a"
+                              href={endpoint.http_url}
+                              target="_blank"
+                              sx={{ color: 'text.secondary', '&:hover': { color: tokens.accent.primary } }}
+                            >
+                              <ExternalLink size={14} />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete Endpoint">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleSingleDelete(endpoint.id)}
+                              sx={{ color: 'text.secondary', '&:hover': { color: tokens.accent.error } }}
+                            >
+                              <Trash2 size={14} />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </td>
+                    </tr>
+
+                    {/* Collapsible Auth Candidates section */}
+                    {isExpanded && endpoint.auth_candidates && endpoint.auth_candidates.map((candidate: any, idx: number) => (
+                      <tr key={`expanded-${endpoint.id}-${idx}`} style={{ backgroundColor: isLight ? 'rgba(0,0,0,0.01)' : 'rgba(255,255,255,0.01)' }}>
+                        <td colSpan={7} style={{ padding: '8px 16px 16px 56px' }}>
+                          <Box sx={{
+                            p: 2,
+                            border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : `${tokens.accent.primary}22`}`,
+                            borderRadius: 1,
+                            bgcolor: isLight ? '#fcfcfc' : 'rgba(255,255,255,0.02)',
+                            boxShadow: `0 2px 8px ${tokens.accent.primary}08`
+                          }}>
+                            <Typography sx={{ fontSize: '10px', fontWeight: 800, color: tokens.accent.primary, mb: 1.5, letterSpacing: 1.5, fontFamily: 'Orbitron' }}>
+                              EXTRACTED AUTH FORM DETAILS (CANDIDATE #{idx + 1})
+                            </Typography>
+                            <Stack spacing={1}>
+                              <Box sx={{ display: 'flex', gap: 2 }}>
+                                <Box sx={{ flex: 1 }}>
+                                  <Typography sx={{ fontSize: '10px', color: 'text.secondary', fontWeight: 600 }}>ACTION (TARGET URL)</Typography>
+                                  <Typography sx={{ fontSize: '11px', fontFamily: 'monospace', color: 'text.primary', wordBreak: 'break-all' }}>{candidate.target}</Typography>
+                                </Box>
+                                <Box sx={{ width: '120px' }}>
+                                  <Typography sx={{ fontSize: '10px', color: 'text.secondary', fontWeight: 600 }}>METHOD</Typography>
+                                  <Chip label={(candidate.metadata?.method || 'POST').toUpperCase()} size="small" sx={{ fontSize: '9px', fontWeight: 800, bgcolor: 'rgba(14, 165, 233, 0.1)', color: '#0ea5e9' }} />
+                                </Box>
+                              </Box>
+                              <Box sx={{ display: 'flex', gap: 2, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                                <Box sx={{ flex: 1 }}>
+                                  <Typography sx={{ fontSize: '10px', color: 'text.secondary', fontWeight: 600 }}>USERNAME FIELD</Typography>
+                                  <Typography sx={{ fontSize: '11px', fontFamily: 'monospace', color: 'text.primary' }}>{candidate.metadata?.user_field || 'N/A'}</Typography>
+                                </Box>
+                                <Box sx={{ flex: 1 }}>
+                                  <Typography sx={{ fontSize: '10px', color: 'text.secondary', fontWeight: 600 }}>PASSWORD FIELD</Typography>
+                                  <Typography sx={{ fontSize: '11px', fontFamily: 'monospace', color: 'text.primary' }}>{candidate.metadata?.pass_field || 'N/A'}</Typography>
+                                </Box>
+                                {candidate.metadata?.all_fields && (
+                                  <Box sx={{ flex: 2 }}>
+                                    <Typography sx={{ fontSize: '10px', color: 'text.secondary', fontWeight: 600 }}>ALL FIELDS</Typography>
+                                    <Typography sx={{ fontSize: '11px', fontFamily: 'monospace', color: 'text.primary' }}>{candidate.metadata.all_fields.join(', ')}</Typography>
+                                  </Box>
+                                )}
+                              </Box>
+                            </Stack>
+                          </Box>
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
               {(!isLoading && data?.results.length === 0) && (
                 <tr>
                   <td colSpan={7} style={{ padding: '60px', textAlign: 'center' }}>
@@ -597,6 +765,19 @@ export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId,
           />
         </Box>
       </TacticalPanel>
+
+      {bruteEndpoint && (
+        <BruteConfigDialog
+          open={bruteModalOpen}
+          onClose={() => {
+            setBruteModalOpen(false);
+            setBruteEndpoint(null);
+          }}
+          onSubmit={handleBruteSubmit}
+          targetUrl={bruteEndpoint.url}
+          isPending={pendingActionId?.id === bruteEndpoint.id && pendingActionId?.action === 'brute_test'}
+        />
+      )}
 
       {/* Confirmation Dialog */}
       <ConfirmDialog

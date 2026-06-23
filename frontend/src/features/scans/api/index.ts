@@ -804,6 +804,11 @@ export const useDirectoryFileDispatch = () => {
       url: string;
       action: string;
       scan_id: number;
+      tool?: string;
+      wordlist_user?: string;
+      wordlist_pass?: string;
+      threads?: number;
+      additional_flags?: string;
     }): Promise<{ status: string; workflow_id: string }> => {
       const response = await fetch('/api/action/directory-file/dispatch/', {
         method: 'POST',

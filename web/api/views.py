@@ -5903,8 +5903,35 @@ class DirectoryFileDispatchView(APIView):
                     {'error': 'Credential Intelligence plugin not installed or disabled'},
                     status=status.HTTP_403_FORBIDDEN,
                 )
+            from plugins_data.credential_intelligence.backend.models import CredentialTask
+            from startScan.models import ScanHistory
+            
+            scan_hist = ScanHistory.objects.filter(id=scan_id).first()
+            tool = request.data.get('tool', 'brutus')
+            wordlist_user = request.data.get('wordlist_user')
+            wordlist_pass = request.data.get('wordlist_pass')
+            threads = request.data.get('threads', 5)
+            additional_flags = request.data.get('additional_flags', '')
+            
+            try:
+                threads = int(threads)
+            except (ValueError, TypeError):
+                threads = 5
+                
+            cred_task = CredentialTask.objects.create(
+                scan_history=scan_hist,
+                target_domain=scan_hist.domain if scan_hist else None,
+                name=f"Brute Test for {url}",
+                tool=tool,
+                target=url,
+                wordlist_user=wordlist_user,
+                wordlist_pass=wordlist_pass,
+                threads=threads,
+                additional_flags=additional_flags,
+                status='pending'
+            )
             workflow_name = 'CredentialIntelligenceWorkflow'
-            ctx = {'url': url, 'scan_id': scan_id}
+            ctx = {'task_id': cred_task.id}
         else:
             return Response(
                 {'error': f'Unknown action: {action}'},
