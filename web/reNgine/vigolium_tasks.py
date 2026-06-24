@@ -443,7 +443,7 @@ def vigolium_analysis(self, ctx={}, description=None):
         f" --stateless"
         f" --format jsonl"
         f" -o {output_file}"
-        f" --only dynamic-assessment"
+        f" --only external-harvest,spidering,discovery,known-issue-scan,dynamic-assessment"
         f" -c {concurrency}"
         f" -r {rate_limit}"
         f" --timeout {timeout}"
