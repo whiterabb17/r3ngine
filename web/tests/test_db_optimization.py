@@ -234,6 +234,39 @@ class SaveEndpointCacheTest(TestCase):
         self.assertLessEqual(len(scan_selects), 1, "ScanHistory queried more than once")
         self.assertLessEqual(len(domain_selects), 1, "Domain queried more than once")
 
+    def test_scan_fetched_once_for_matching_urls(self):
+        """URLs whose host matches the domain name reach the else-branch where
+        _scan_obj is fetched and cached.  Three calls with the same ctx must
+        produce at most one SELECT against scanhistory.
+        """
+        from reNgine.utils.task import save_endpoint
+
+        # Use the domain name as the URL host so the guard at
+        #   ``if domain and domain.name not in http_url``
+        # is satisfied and execution falls through to the else-branch where
+        # ScanHistory is fetched (and then cached in ctx['_scan_obj']).
+        domain_host = self.domain.name  # 'endpoint-cache-test.invalid'
+        ctx = {'scan_history_id': self.scan.id, 'domain_id': self.domain.id}
+
+        with CaptureQueriesContext(connection) as captured:
+            for port in [9080, 9443, 9000]:
+                save_endpoint(f'http://{domain_host}:{port}/', ctx=ctx)
+
+        scan_selects = [
+            q for q in captured.captured_queries
+            if 'scanhistory' in q['sql'].lower()
+            and q['sql'].strip().upper().startswith('SELECT')
+        ]
+        self.assertLessEqual(
+            len(scan_selects),
+            1,
+            msg=(
+                f"Expected at most 1 ScanHistory SELECT across 3 matching-URL calls, "
+                f"got {len(scan_selects)}. Queries: "
+                + str([q['sql'] for q in scan_selects])
+            ),
+        )
+
 
 class SaveVulnerabilityQueryCountTest(TestCase):
     """Saving a vuln with tags/CVEs/CWEs should not UPDATE the vuln row per M2M entry."""
