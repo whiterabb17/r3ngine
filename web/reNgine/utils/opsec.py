@@ -306,6 +306,8 @@ class ProxychainsWrapper:
             scheme = 'http' if p_type in ['http', 'https'] else p_type
             proxy_url = f'{scheme}://{p_host}:{p_port}'
             if check_proxy_robust(proxy_url, timeout=10):
+                from reNgine.common_func import mark_proxy_used
+                mark_proxy_used(proxy_url)
                 return proxy_str
             _log.error('Proxychains proxy %s validation failed.', proxy_url)
             from reNgine.common_func import remove_proxy_from_pool

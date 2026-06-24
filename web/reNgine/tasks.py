@@ -6791,9 +6791,21 @@ def fetch_proxies_task(limit=1000, job_id=None):
     proxy_str = "\n".join(final_list)
     try:
         from scanEngine.models import Proxy
+        from reNgine.common_func import is_proxy_recently_used
         proxy_obj = Proxy.objects.first()
         if not proxy_obj:
             proxy_obj = Proxy.objects.create()
+
+        # Preserve proxies that were successfully used within the last 24 hours
+        # and are absent from the newly fetched batch (e.g. user-added proxies).
+        existing_proxies = [p.strip() for p in (proxy_obj.proxies or '').splitlines() if p.strip()]
+        final_set = set(final_list)
+        preserved = [p for p in existing_proxies if is_proxy_recently_used(p) and p not in final_set]
+        if preserved:
+            logger.info('Preserving %d recently-used proxies during pool refresh.', len(preserved))
+            final_list = final_list + preserved
+            proxy_str = "\n".join(final_list)
+
         proxy_obj.proxies = proxy_str
         proxy_obj.use_proxy = True
         # Record the timestamp of this batch verification so that get_random_proxy()

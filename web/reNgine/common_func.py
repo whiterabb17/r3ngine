@@ -886,6 +886,11 @@ ALL_PROXY_CHECKERS = [
 _failed_proxy_cache: dict = {}
 _FAILED_PROXY_TTL = 1800  # 30 minutes
 
+# Cache of proxies successfully validated and used, mapping proxy_url -> epoch timestamp.
+# Protects proxies from DB removal for 24 hours after last successful use.
+_used_proxy_cache: dict = {}
+_USED_PROXY_TTL = 86400  # 24 hours
+
 # Standard exceptions suggesting proxy itself is down/unreachable (connection phase)
 _PROXY_DEAD_EXCEPTIONS = (
 	requests.exceptions.ProxyError,
@@ -913,6 +918,27 @@ def _detect_server_ip(timeout: int = 5) -> str:
 	except Exception:
 		pass
 	return ''
+
+
+def mark_proxy_used(proxy_url: str) -> None:
+	"""Record that a proxy was successfully validated and used.
+
+	Proxies in this cache are shielded from remove_proxy_from_pool for
+	_USED_PROXY_TTL seconds (24 h) after last successful use, preventing
+	transient failures from evicting known-good proxies.
+	"""
+	normalized = _normalize_proxy_pool_line(proxy_url)
+	if normalized:
+		_used_proxy_cache[normalized] = time.time()
+
+
+def is_proxy_recently_used(proxy_url: str) -> bool:
+	"""Return True if the proxy was successfully used within the last 24 hours."""
+	normalized = _normalize_proxy_pool_line(proxy_url)
+	if not normalized:
+		return False
+	last_used = _used_proxy_cache.get(normalized)
+	return last_used is not None and (time.time() - last_used) < _USED_PROXY_TTL
 
 
 def check_proxy_robust(proxy_url, timeout=PROXY_VALIDATION_TIMEOUT, server_ip=''):
@@ -1072,7 +1098,15 @@ def get_valid_proxy_count(proxy_obj=None):
 
 
 def remove_proxy_from_pool(proxy_value, proxy_obj=None):
-	"""Remove a proxy from the persisted pool safely and idempotently."""
+	"""Remove a proxy from the persisted pool safely and idempotently.
+
+	Proxies that were successfully used within the last 24 hours are protected
+	from removal even if they temporarily fail a liveness check.
+	"""
+	if is_proxy_recently_used(proxy_value):
+		logger.info('Proxy %s was recently used — skipping removal to honour 24-hour retention.', proxy_value)
+		return False
+
 	proxy_obj = proxy_obj or Proxy.objects.first()
 	if not proxy_obj or not proxy_obj.proxies:
 		return False
@@ -1198,6 +1232,7 @@ def get_random_proxy(http_only=False):
 		age_minutes = (now_utc - verified_at).total_seconds() / 60
 		if age_minutes <= ttl_minutes:
 			chosen = random.choice(candidates)
+			mark_proxy_used(chosen)
 			logger.info(
 				'Proxy list is fresh (%.1f min old, TTL %d min). '
 				'Returning %s without re-validation.',
@@ -1260,6 +1295,7 @@ def get_random_proxy(http_only=False):
 				break
 
 	if result_holder[0]:
+		mark_proxy_used(result_holder[0])
 		logger.info('Using valid proxy (parallel validation): %s', result_holder[0])
 		return result_holder[0]
 
