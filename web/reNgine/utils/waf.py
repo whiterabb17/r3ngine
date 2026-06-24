@@ -76,7 +76,7 @@ class OriginDiscoveryManager:
             sdk = SDK(personal_access_token=self.censys_key)
             query = "services.tls.certificates.leaf_data.names: %s" % self.domain
             response = sdk.global_data.search(
-                SearchQueryInputBody(data={"query": query, "page_size": 100})
+                SearchQueryInputBody(query=query, page_size=100)
             )
             for hit in (response.result.hits or []):
                 host = getattr(hit, 'host_v1', None)
