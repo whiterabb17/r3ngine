@@ -69,3 +69,21 @@ class TestSubScanWorkflowTierOrder(TestCase):
         fuzz_tier = next(i for i, t in enumerate(tiers) if "dir_file_fuzz" in t)
         self.assertLess(param_tier, fuzz_tier,
                         "dir_file_fuzz must still run after param_discovery")
+
+    def test_standalone_workflows_not_in_any_tier(self):
+        """Standalone child-workflow types must never appear in any execution tier.
+
+        They are stripped from active_tasks before tier construction and executed
+        as a concurrent flat gather after the tier pipeline.
+        """
+        from reNgine.temporal_workflows import _STANDALONE_SUBSCAN_WORKFLOWS
+        # Pass all standalone types as if they were active tasks
+        tiers = self._build_tiers(list(_STANDALONE_SUBSCAN_WORKFLOWS))
+        all_tiered = set()
+        for tier in tiers:
+            all_tiered.update(tier)
+        for t in _STANDALONE_SUBSCAN_WORKFLOWS:
+            self.assertNotIn(
+                t, all_tiered,
+                f"'{t}' is a standalone workflow and must not appear in any execution tier"
+            )
