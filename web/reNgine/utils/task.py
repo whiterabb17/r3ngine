@@ -1433,6 +1433,65 @@ def bulk_apply_gf_pattern_from_file(gf_output_file, gf_pattern, ctx, batch_size=
 	return updated
 
 
+def bulk_apply_gf_pattern_from_urls(urls, gf_pattern, ctx, batch_size=500):
+	"""Apply a GF pattern match to endpoints given a list of matched URL strings.
+
+	Mirrors bulk_apply_gf_pattern_from_file but accepts an in-memory list instead of a file,
+	so callers that already hold matched URLs (e.g. RunGFOnAllEndpointsActivity) avoid a
+	round-trip through disk.
+	"""
+	scan_id = ctx.get('scan_history_id')
+	domain_id = ctx.get('domain_id')
+	scan = ScanHistory.objects.filter(pk=scan_id).first()
+	domain = Domain.objects.filter(pk=domain_id).first()
+	if not scan or not domain or not urls:
+		return 0
+
+	updated = 0
+
+	def _flush(batch):
+		nonlocal updated
+		if not batch:
+			return
+		sanitized = [sanitize_url(u) for u in batch if u and validators.url(sanitize_url(u))]
+		if not sanitized:
+			return
+		bulk_persist_fetch_urls(sanitized, ctx, batch_size=len(sanitized))
+		endpoints = EndPoint.objects.filter(
+			scan_history=scan,
+			target_domain=domain,
+			http_url__in=sanitized,
+		)
+		to_update = []
+		for ep in endpoints:
+			earlier = ep.matched_gf_patterns or ''
+			if earlier:
+				if gf_pattern in {p.strip() for p in earlier.split(',') if p.strip()}:
+					continue
+				ep.matched_gf_patterns = f'{earlier},{gf_pattern}'
+			else:
+				ep.matched_gf_patterns = gf_pattern
+			to_update.append(ep)
+		if to_update:
+			EndPoint.objects.bulk_update(to_update, ['matched_gf_patterns'], batch_size=batch_size)
+			updated += len(to_update)
+
+	url_batch = []
+	for i, url in enumerate(urls):
+		url = url.strip() if url else ''
+		if not url:
+			continue
+		url_batch.append(url)
+		if len(url_batch) >= batch_size:
+			_flush(url_batch)
+			url_batch = []
+		if i % 5000 == 0 and i > 0:
+			activity_heartbeat_safe(f'gf pattern {gf_pattern} url {i}')
+
+	_flush(url_batch)
+	return updated
+
+
 def ensure_endpoints_crawled_and_execute(task_proxy, task_function, ctx, description=None, max_wait_time=300):
 	"""
 	Ensure endpoints are crawled before executing a task that needs alive endpoints.

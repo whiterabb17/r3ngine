@@ -556,6 +556,17 @@ class MasterScanWorkflow:
                     task_queue="python-orchestrator-queue"
                 )
 
+            # Run gf patterns against every endpoint accumulated up to this point
+            # (covers fetch_url + http_crawl + dir_file_fuzz results).
+            await workflow.execute_activity(
+                "RunGFOnAllEndpointsActivity",
+                ctx,
+                start_to_close_timeout=timedelta(minutes=30),
+                heartbeat_timeout=timedelta(minutes=10),
+                retry_policy=_RETRY_INTERNAL,
+                task_queue="python-orchestrator-queue"
+            )
+
             # Consolidation: log total endpoint count after Tiers 2-4 complete
             await workflow.execute_activity(
                 "ParseEnumerationResultsActivity",
@@ -1728,6 +1739,16 @@ class SubScanWorkflow:
                         ctx,
                         start_to_close_timeout=timedelta(minutes=5),
                         heartbeat_timeout=timedelta(minutes=5),
+                        retry_policy=_RETRY_INTERNAL,
+                        task_queue="python-orchestrator-queue"
+                    )
+                    await self._check_paused()
+                    # Run gf patterns against every endpoint accumulated up to this point.
+                    await workflow.execute_activity(
+                        "RunGFOnAllEndpointsActivity",
+                        ctx,
+                        start_to_close_timeout=timedelta(minutes=30),
+                        heartbeat_timeout=timedelta(minutes=10),
                         retry_policy=_RETRY_INTERNAL,
                         task_queue="python-orchestrator-queue"
                     )
@@ -3271,6 +3292,7 @@ class SingleTaskRetryWorkflow:
             elif task_name == "dir_file_fuzz":
                 await workflow.execute_activity("RunDirFileFuzzActivity", ctx, start_to_close_timeout=timedelta(hours=8), heartbeat_timeout=timedelta(minutes=15), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("ParseFuzzResultsActivity", ctx, start_to_close_timeout=timedelta(minutes=15), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
+                await workflow.execute_activity("RunGFOnAllEndpointsActivity", ctx, start_to_close_timeout=timedelta(minutes=30), heartbeat_timeout=timedelta(minutes=10), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
             elif task_name == "waf_detection":
                 await workflow.execute_activity("RunWAFDetectionActivity", ctx, start_to_close_timeout=timedelta(minutes=30), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_NETWORK_SCAN, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("ParseAnalysisResultsActivity", ctx, start_to_close_timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
