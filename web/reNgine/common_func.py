@@ -5,6 +5,7 @@ import glob
 import os
 import pickle
 import subprocess
+import threading
 from reNgine.validators import validate_external_url
 import random
 import shutil
@@ -891,6 +892,10 @@ _FAILED_PROXY_TTL = 1800  # 30 minutes
 _used_proxy_cache: dict = {}
 _USED_PROXY_TTL = 86400  # 24 hours
 
+# Serialises read-modify-write operations on Proxy.proxies within this process.
+# select_for_update() handles cross-process serialisation at the DB level.
+_proxy_pool_lock = threading.Lock()
+
 # Standard exceptions suggesting proxy itself is down/unreachable (connection phase)
 _PROXY_DEAD_EXCEPTIONS = (
 	requests.exceptions.ProxyError,
@@ -1104,31 +1109,45 @@ def remove_proxy_from_pool(proxy_value, proxy_obj=None):
 	from removal even if they temporarily fail a liveness check.
 	"""
 	if is_proxy_recently_used(proxy_value):
-		logger.info('Proxy %s was recently used — skipping removal to honour 24-hour retention.', proxy_value)
-		return False
-
-	proxy_obj = proxy_obj or Proxy.objects.first()
-	if not proxy_obj or not proxy_obj.proxies:
+		logger.info(
+			'Proxy %s was recently used — skipping removal to honour 24-hour retention.',
+			proxy_value,
+		)
 		return False
 
 	target = _normalize_proxy_pool_line(proxy_value)
 	if not target:
 		return False
 
-	remaining_lines = []
-	removed = False
-	for line in proxy_obj.proxies.splitlines():
-		stripped = line.strip()
-		if not stripped:
-			continue
-		if not removed and _normalize_proxy_pool_line(stripped) == target:
-			removed = True
-			continue
-		remaining_lines.append(stripped)
+	from django.db import transaction
 
-	if removed:
-		proxy_obj.proxies = '\n'.join(remaining_lines)
-		proxy_obj.save(update_fields=['proxies'])
+	with _proxy_pool_lock:
+		with transaction.atomic():
+			# Re-fetch inside lock+transaction; select_for_update prevents
+			# concurrent DB transactions from reading a stale pool simultaneously.
+			if proxy_obj is None:
+				locked_obj = Proxy.objects.select_for_update().first()
+			else:
+				locked_obj = Proxy.objects.select_for_update().filter(pk=proxy_obj.pk).first()
+
+			if not locked_obj or not locked_obj.proxies:
+				return False
+
+			remaining_lines = []
+			removed = False
+			for line in locked_obj.proxies.splitlines():
+				stripped = line.strip()
+				if not stripped:
+					continue
+				if not removed and _normalize_proxy_pool_line(stripped) == target:
+					removed = True
+					continue
+				remaining_lines.append(stripped)
+
+			if removed:
+				locked_obj.proxies = '\n'.join(remaining_lines)
+				locked_obj.save(update_fields=['proxies'])
+
 	return removed
 
 

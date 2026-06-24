@@ -1,6 +1,8 @@
 import concurrent.futures
+import threading
 from unittest.mock import patch, MagicMock
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
+from scanEngine.models import Proxy
 
 
 class FetchProxiesThreadCapTest(TestCase):
@@ -46,3 +48,51 @@ class FetchProxiesThreadCapTest(TestCase):
             32,
             f"Expected max_workers <= 32, got {captured['max_workers']}",
         )
+
+
+class RemoveProxyRaceTest(TransactionTestCase):
+    """Concurrent removals must not cause lost updates.
+
+    Uses TransactionTestCase (not TestCase) so that each removal runs in its
+    own real committed transaction. TestCase wraps everything in a single
+    outer transaction; select_for_update() inside a nested atomic block on a
+    different thread connection would deadlock or see stale snapshots.
+    """
+
+    def setUp(self):
+        self.proxy = Proxy.objects.create(
+            use_proxy=True,
+            proxies='http://a.example.com:8080\nhttp://b.example.com:8080\nhttp://c.example.com:8080',
+        )
+
+    def test_concurrent_removals_no_lost_update(self):
+        from reNgine.common_func import remove_proxy_from_pool
+        results = []
+        errors = []
+
+        def _remove(addr):
+            try:
+                results.append(remove_proxy_from_pool(f'http://{addr}:8080'))
+            except Exception as e:
+                errors.append(e)
+
+        threads = [
+            threading.Thread(target=_remove, args=(host,))
+            for host in ['a.example.com', 'b.example.com', 'c.example.com']
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        self.assertEqual(errors, [], msg=f"Threads raised exceptions: {errors}")
+        self.proxy.refresh_from_db()
+        remaining = [ln.strip() for ln in (self.proxy.proxies or '').splitlines() if ln.strip()]
+        self.assertEqual(remaining, [], msg=f"Expected all proxies removed, got: {remaining}")
+
+    def test_idempotent_removal(self):
+        from reNgine.common_func import remove_proxy_from_pool
+        r1 = remove_proxy_from_pool('http://a.example.com:8080', self.proxy)
+        r2 = remove_proxy_from_pool('http://a.example.com:8080')
+        self.assertTrue(r1)
+        self.assertFalse(r2)
