@@ -141,6 +141,13 @@ services:
   neo4j:
     image: neo4j:5.12.0
     restart: always
+    # Override entrypoint to remove stale PID file before each start.
+    # The PID file survives stop (non-remove) cycles in the container's writable
+    # layer and makes Neo4j refuse to launch with "already running".
+    entrypoint: >
+      bash -c "rm -f /var/lib/neo4j/run/neo4j.pid /var/lib/neo4j/run/*.pid 2>/dev/null;
+               exec tini -g -- /startup/docker-entrypoint.sh neo4j"
+    stop_grace_period: 60s
     ports:
       - "127.0.0.1:8474:7474"
       - "127.0.0.1:7687:7687"
