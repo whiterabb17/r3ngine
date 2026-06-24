@@ -39,7 +39,7 @@ from reNgine.settings import (
 	DEFAULT_HTTP_TIMEOUT,
 	DEFAULT_THREADS
 )
-from reNgine.utils.opsec import OpSecManager
+from reNgine.utils.opsec import get_opsec_manager
 from reNgine.common_func import get_http_urls, get_subdomain_from_url, extract_path_from_url, get_random_proxy, sanitize_url
 from reNgine.utils.task import (
 	run_command,
@@ -528,7 +528,7 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 
 		results = []
 		redis_client = Redis.from_url(os.environ.get('REDIS_URL', 'redis://redis:6379/0'))
-		opsec = OpSecManager()
+		opsec = get_opsec_manager()
 		scan = ScanHistory.objects.filter(pk=ctx.get('scan_history_id')).first()
 
 		for target_url in urls:

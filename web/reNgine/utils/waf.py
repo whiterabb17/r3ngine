@@ -6,7 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 from startScan.models import Subdomain, WafBypassFinding
 from dashboard.models import ShodanAPIKey, CensysAPIKey
-from reNgine.utils.opsec import OpSecManager
+from reNgine.utils.opsec import get_opsec_manager
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ class OriginDiscoveryManager:
         self.domain = subdomain_obj.name
         self.shodan_key = self._get_shodan_key()
         self.censys_key = self._get_censys_key()
-        self.opsec = OpSecManager()
+        self.opsec = get_opsec_manager()
 
     def _get_shodan_key(self):
         key_obj = ShodanAPIKey.objects.first()
@@ -141,7 +141,7 @@ class WafBypassOrchestrator:
     def __init__(self, subdomain_obj):
         self.subdomain = subdomain_obj
         self.target_url = f"https://{subdomain_obj.name}"
-        self.opsec = OpSecManager()
+        self.opsec = get_opsec_manager()
 
     def run_all_tests(self, use_nuclei=True, use_benchmarking=True):
         findings = []

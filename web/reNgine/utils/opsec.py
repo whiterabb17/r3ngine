@@ -5,6 +5,7 @@ import re
 import tempfile
 import subprocess
 import json
+import threading
 from urllib.parse import urlparse
 from django.conf import settings
 from scanEngine.models import OpSec, Proxy
@@ -356,10 +357,28 @@ class ProxychainsWrapper:
         """
         if not proxy:
             proxy = self.get_random_proxy()
-        
+
         if proxy and self.should_wrap():
             conf_path = self.write_temp_config(proxy)
             return f"{PROXYCHAINS_EXEC_PATH} -f {conf_path} {cmd}", conf_path
         return cmd, None
 
+
+# Module-level singleton for OpSecManager.
+# Fires 2 DB queries on first call; cached for the process lifetime thereafter.
+# Call get_opsec_manager(refresh=True) after user saves OpSec/Proxy settings.
+_opsec_manager_instance: 'OpSecManager | None' = None
+_opsec_manager_lock = threading.Lock()
+
+
+def get_opsec_manager(refresh: bool = False) -> 'OpSecManager':
+    """Return a cached OpSecManager, instantiating once per process."""
+    global _opsec_manager_instance
+    if not refresh and _opsec_manager_instance is not None:
+        return _opsec_manager_instance
+    with _opsec_manager_lock:
+        if not refresh and _opsec_manager_instance is not None:
+            return _opsec_manager_instance
+        _opsec_manager_instance = OpSecManager()
+    return _opsec_manager_instance
 

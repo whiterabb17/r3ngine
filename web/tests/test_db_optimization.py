@@ -307,3 +307,38 @@ class SaveVulnerabilityQueryCountTest(TestCase):
         # Before fix: 8 UPDATEs (one per tag + CVE + CWE + reference).
         self.assertLessEqual(len(update_queries), 2,
             msg=f"Too many UPDATEs: {[q['sql'] for q in update_queries]}")
+
+
+class OpSecManagerSingletonTest(TestCase):
+    """get_opsec_manager() should query the DB only once regardless of call count."""
+
+    def setUp(self):
+        # Reset singleton between tests
+        import reNgine.utils.opsec as opsec_mod
+        opsec_mod._opsec_manager_instance = None
+
+    def tearDown(self):
+        import reNgine.utils.opsec as opsec_mod
+        opsec_mod._opsec_manager_instance = None
+
+    def test_db_queried_only_once_across_multiple_calls(self):
+        from reNgine.utils.opsec import get_opsec_manager
+
+        with CaptureQueriesContext(connection) as ctx:
+            get_opsec_manager()
+            get_opsec_manager()
+            get_opsec_manager()
+
+        db_queries = ctx.captured_queries
+        # 2 queries on first call (OpSec + Proxy); 0 on subsequent calls
+        self.assertLessEqual(len(db_queries), 2,
+            msg=f"Expected ≤2 queries, got {len(db_queries)}: {[q['sql'] for q in db_queries]}")
+
+    def test_refresh_re_queries_db(self):
+        from reNgine.utils.opsec import get_opsec_manager
+
+        get_opsec_manager()  # warms cache
+        with CaptureQueriesContext(connection) as ctx:
+            get_opsec_manager(refresh=True)  # must re-query
+
+        self.assertGreaterEqual(len(ctx.captured_queries), 2)

@@ -42,7 +42,7 @@ from reNgine.definitions import *
 from reNgine.settings import *
 from reNgine.llm import *
 from reNgine.utilities import *
-from reNgine.utils.opsec import OpSecManager, ProxychainsWrapper
+from reNgine.utils.opsec import OpSecManager, ProxychainsWrapper, get_opsec_manager
 from reNgine.utils.waf import OriginDiscoveryManager, WafBypassOrchestrator
 from scanEngine.models import (EngineType, InstalledExternalTool, Notification, Proxy, OpSec)
 from startScan.models import *
@@ -162,8 +162,8 @@ def finish_osint(results, scan_history_id):
 
 def finish_osint_discovery(results, results_dir):
     """Callback for OSINT discovery tasks. Strips metadata from results."""
-    from reNgine.utils.opsec import OpSecManager
-    opsec = OpSecManager()
+    from reNgine.utils.opsec import get_opsec_manager
+    opsec = get_opsec_manager()
     opsec.strip_directory(results_dir)
     logger.info(f"OSINT discovery completed and cleaned up in {results_dir}")
     return results
@@ -938,7 +938,7 @@ def subdomain_discovery(
 	default_subdomain_tools.append('baddns')
 
 	# Run tools
-	opsec = OpSecManager()
+	opsec = get_opsec_manager()
 	existing_subs = set(Subdomain.objects.filter(scan_history=self.scan).values_list('name', flat=True))
 	new_discoveries = []
 
@@ -1439,8 +1439,8 @@ def osint_discovery(self, config, host, scan_history_id, activity_id, results_di
 	finish_osint_discovery([results], results_dir=results_dir)
 
 	# Strip metadata from OSINT results
-	from reNgine.utils.opsec import OpSecManager
-	opsec = OpSecManager()
+	from reNgine.utils.opsec import get_opsec_manager
+	opsec = get_opsec_manager()
 	opsec.strip_directory(results_dir)
 
 	return results
@@ -2714,7 +2714,7 @@ def nmap(
 
 	# Apply OpSec stealth
 	proxy = get_random_proxy()
-	opsec = OpSecManager()
+	opsec = get_opsec_manager()
 	nmap_cmd = opsec.apply_stealth('nmap', nmap_cmd, proxy=proxy)
 
 	# Run cmd
@@ -4110,7 +4110,7 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 
 	# Apply OpSec stealth
 	proxy = get_random_proxy()
-	opsec = OpSecManager()
+	opsec = get_opsec_manager()
 	cmd = opsec.apply_stealth('nuclei', cmd, proxy=proxy)
 	formatted_headers = ' '.join(f'-H "{header}"' for header in custom_headers)
 	if formatted_headers:
@@ -4379,7 +4379,7 @@ def dalfox_xss_scan(self, urls=[], ctx={}, description=None):
 
 	# command builder
 	proxy = get_random_proxy()
-	opsec = OpSecManager()
+	opsec = get_opsec_manager()
 	cmd = 'dalfox scan --no-color'
 	cmd += f' --only-poc v,r'
 	cmd += f' --ignore-return 302,404,403'
@@ -4737,7 +4737,7 @@ def http_crawl(
 		cmd += ' --follow-redirects'
 	
 	# Apply OpSec stealth
-	opsec = OpSecManager()
+	opsec = get_opsec_manager()
 	cmd = opsec.apply_stealth('httpx', cmd, proxy=proxy)
 
 	results = []
