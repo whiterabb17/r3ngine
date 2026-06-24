@@ -13,12 +13,14 @@ from reNgine.definitions import (
     RUN_VIGOLIUM_ANALYSIS,
     RUN_VIGOLIUM_AUDIT,
     RUN_VIGOLIUM_DISCOVERY,
+    RUN_VIGOLIUM_HARVEST,
     VIGOLIUM,
     VIGOLIUM_AUDIT,
     VIGOLIUM_AUDIT_INTENSITY,
     VIGOLIUM_AUDIT_TIMEOUT,
     VIGOLIUM_AUDIT_USE_AI,
     VIGOLIUM_CONCURRENCY,
+    VIGOLIUM_HARVEST,
     VIGOLIUM_MODULES,
     VIGOLIUM_RATE_LIMIT,
     VIGOLIUM_SEVERITY_FILTER,
@@ -263,43 +265,49 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
     return "Vigolium scan completed"
 
 
-def vigolium_discovery(self, ctx={}, description=None):
-    """Run vigolium endpoint discovery for all subdomains in a single tool call.
+def vigolium_harvest(self, ctx={}, description=None):
+    """Run vigolium passive ingestion harvest at Tier 1.
 
-    Passes all subdomain targets via -T (targets file) so vigolium handles
-    concurrency internally rather than spawning one process per subdomain.
-    Saves http_records as EndPoint entries for downstream pipeline stages.
+    Collects data from external passive sources (wayback, CT logs, passive DNS, etc.)
+    using vigolium's ingestion phase only. Runs early in Tier 1 so that passively
+    harvested endpoints seed the DB before active crawling begins.
+
+    Works with just the root domain — does not require prior subdomain enumeration.
+    Falls back to the root domain when no subdomains are present in the DB yet.
     """
-    logger.info("Starting Vigolium Discovery")
+    logger.info("Starting Vigolium Passive Harvest")
 
-    discovery_config = self.yaml_configuration.get('vigolium_discovery', {})
-    if not discovery_config.get(RUN_VIGOLIUM_DISCOVERY, True):
-        logger.info("Vigolium discovery disabled in configuration. Skipping.")
+    harvest_config = self.yaml_configuration.get(VIGOLIUM_HARVEST, {})
+    if not harvest_config.get(RUN_VIGOLIUM_HARVEST, True):
+        logger.info("Vigolium harvest disabled in configuration. Skipping.")
         return
 
-    strategy = discovery_config.get(VIGOLIUM_STRATEGY, 'balanced')
-    concurrency = discovery_config.get(VIGOLIUM_CONCURRENCY, 20)
-    rate_limit = discovery_config.get(VIGOLIUM_RATE_LIMIT, 50)
-    timeout = _ensure_duration(discovery_config.get(VIGOLIUM_TIMEOUT, '10s'))
+    strategy = harvest_config.get(VIGOLIUM_STRATEGY, 'thorough')
+    concurrency = harvest_config.get(VIGOLIUM_CONCURRENCY, 30)
+    rate_limit = harvest_config.get(VIGOLIUM_RATE_LIMIT, 100)
+    timeout = _ensure_duration(harvest_config.get(VIGOLIUM_TIMEOUT, '60s'))
 
     if self.subscan and self.subdomain:
-        subdomains = list(Subdomain.objects.filter(pk=self.subdomain.id))
+        target_hosts = [f"https://{self.subdomain.name}"]
     else:
         subdomains = list(Subdomain.objects.filter(scan_history=self.scan))
+        if subdomains:
+            target_hosts = [f"https://{s.name}" for s in subdomains]
+        elif self.scan and self.scan.domain:
+            target_hosts = [f"https://{self.scan.domain.name}"]
+        else:
+            logger.warning("Vigolium harvest: no targets available. Skipping.")
+            return
 
-    if not subdomains:
-        logger.info("No subdomains found for Vigolium discovery.")
-        return
-
-    results_dir = f"{self.scan.results_dir}/vigolium/discovery"
+    results_dir = f"{self.scan.results_dir}/vigolium/harvest"
     os.makedirs(results_dir, exist_ok=True)
 
     targets_file = f"{results_dir}/targets.txt"
     with open(targets_file, 'w') as f:
-        for subdomain in subdomains:
-            f.write(f"https://{subdomain.name}\n")
+        for host in target_hosts:
+            f.write(f"{host}\n")
 
-    output_file = f"{results_dir}/discovery.jsonl"
+    output_file = f"{results_dir}/harvest.jsonl"
 
     cmd = (
         f"vigolium scan"
@@ -307,7 +315,7 @@ def vigolium_discovery(self, ctx={}, description=None):
         f" --stateless"
         f" --format jsonl"
         f" -o {output_file}"
-        f" --only ingestion,discovery"
+        f" --only ingestion"
         f" -c {concurrency}"
         f" -r {rate_limit}"
         f" --timeout {timeout}"
@@ -319,7 +327,74 @@ def vigolium_discovery(self, ctx={}, description=None):
     if proxy:
         cmd += f" --proxy {proxy}"
 
-    _run_vigolium_phase(self, cmd, output_file, f"Discovery ({len(subdomains)} targets)", save_http_records=True)
+    _run_vigolium_phase(self, cmd, output_file, f"Harvest ({len(target_hosts)} targets)", save_http_records=True)
+    return "Vigolium harvest completed"
+
+
+def vigolium_discovery(self, ctx={}, description=None):
+    """Run vigolium active discovery at Tier 1.
+
+    Executes vigolium's discovery phase (active probing / crawling) against all
+    known targets. Runs in Tier 1 in parallel with subdomain enumeration so that
+    vigolium-discovered endpoints are available to http_crawl in Tier 2.
+
+    Falls back to the root domain if no subdomains have been enumerated yet,
+    ensuring the task is never a no-op early in a full scan.
+    Saves http_records as EndPoint entries for downstream pipeline stages.
+    """
+    logger.info("Starting Vigolium Discovery")
+
+    discovery_config = self.yaml_configuration.get('vigolium_discovery', {})
+    if not discovery_config.get(RUN_VIGOLIUM_DISCOVERY, True):
+        logger.info("Vigolium discovery disabled in configuration. Skipping.")
+        return
+
+    strategy = discovery_config.get(VIGOLIUM_STRATEGY, 'thorough')
+    concurrency = discovery_config.get(VIGOLIUM_CONCURRENCY, 40)
+    rate_limit = discovery_config.get(VIGOLIUM_RATE_LIMIT, 100)
+    timeout = _ensure_duration(discovery_config.get(VIGOLIUM_TIMEOUT, '30s'))
+
+    if self.subscan and self.subdomain:
+        target_hosts = [f"https://{self.subdomain.name}"]
+    else:
+        subdomains = list(Subdomain.objects.filter(scan_history=self.scan))
+        if subdomains:
+            target_hosts = [f"https://{s.name}" for s in subdomains]
+        elif self.scan and self.scan.domain:
+            target_hosts = [f"https://{self.scan.domain.name}"]
+        else:
+            logger.warning("Vigolium discovery: no targets available. Skipping.")
+            return
+
+    results_dir = f"{self.scan.results_dir}/vigolium/discovery"
+    os.makedirs(results_dir, exist_ok=True)
+
+    targets_file = f"{results_dir}/targets.txt"
+    with open(targets_file, 'w') as f:
+        for host in target_hosts:
+            f.write(f"{host}\n")
+
+    output_file = f"{results_dir}/discovery.jsonl"
+
+    cmd = (
+        f"vigolium scan"
+        f" -T {targets_file}"
+        f" --stateless"
+        f" --format jsonl"
+        f" -o {output_file}"
+        f" --only discovery"
+        f" -c {concurrency}"
+        f" -r {rate_limit}"
+        f" --timeout {timeout}"
+        f" --strategy {strategy}"
+        f" --skip-dependency-check"
+    )
+
+    proxy = get_random_proxy()
+    if proxy:
+        cmd += f" --proxy {proxy}"
+
+    _run_vigolium_phase(self, cmd, output_file, f"Discovery ({len(target_hosts)} targets)", save_http_records=True)
 
     return "Vigolium discovery completed"
 

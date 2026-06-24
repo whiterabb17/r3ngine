@@ -15,10 +15,11 @@ _TASK_TITLES = {
     'osint':                      'OSINT Gathering',
     'spiderfoot_scan':            'SpiderFoot OSINT',
     'baddns':                     'BadDNS Vulnerability Check',
+    'vigolium_harvest':           'Vigolium Passive Harvest',
+    'vigolium_discovery':         'Vigolium Discovery',
     # Tier 2
     'http_crawl':                 'HTTP Crawl',
     'port_scan':                  'Port Scan',
-    'vigolium_discovery':         'Vigolium Discovery',
     # Tier 3
     'fetch_url':                  'URL Fetching',
     'http_crawl_bridge':          'HTTP Crawl Bridge',
@@ -62,9 +63,10 @@ _TASK_TIER = {
     'osint':                 1,
     'spiderfoot_scan':       1,
     'baddns':                1,
+    'vigolium_harvest':      1,
+    'vigolium_discovery':    1,
     'http_crawl':            2,
     'port_scan':             2,
-    'vigolium_discovery':    2,
     'fetch_url':             3,
     'http_crawl_bridge':     3,
     'screenshot':            3,
@@ -100,6 +102,7 @@ _TIER7_TASKS = [
 _TIER1_TO_5 = [
     'subdomain_discovery', 'amass_intel_discovery', 'firewall_vpn_scan',
     'dns_security', 'osint', 'spiderfoot_scan', 'baddns',
+    'vigolium_harvest', 'vigolium_discovery',
     'http_crawl', 'port_scan',
     'fetch_url', 'screenshot', 'param_discovery',
     'http_crawl_bridge',
@@ -144,16 +147,23 @@ def build_scan_task_plan(tasks: list, yaml_configuration: dict) -> list:
         elif t == 'http_crawl_bridge' and 'fetch_url' in tasks:
             add(t)
 
-    # Vigolium discovery/analysis are sub-tasks inside vulnerability_scan
+    # Vigolium tasks: harvest + discovery auto-added when vulnerability_scan is selected
+    # (unless explicitly disabled in yaml_configuration).
+    # vigolium_analysis and vigolium_scan remain gated by vulnerability_scan.
     vuln_cfg = yaml_configuration.get('vulnerability_scan') or {}
 
-    vd_cfg = vuln_cfg.get('vigolium_discovery') or {}
-    if vd_cfg.get('run_vigolium_discovery', True) and 'vulnerability_scan' in tasks:
-        add('vigolium_discovery')
+    if 'vulnerability_scan' in tasks:
+        vh_cfg = yaml_configuration.get('vigolium_harvest') or {}
+        if vh_cfg.get('run_vigolium_harvest', True):
+            add('vigolium_harvest')
 
-    va_cfg = vuln_cfg.get('vigolium_analysis') or {}
-    if va_cfg.get('run_vigolium_analysis', True) and 'vulnerability_scan' in tasks:
-        add('vigolium_analysis')
+        vd_cfg = yaml_configuration.get('vigolium_discovery') or {}
+        if vd_cfg.get('run_vigolium_discovery', True):
+            add('vigolium_discovery')
+
+        va_cfg = vuln_cfg.get('vigolium_analysis') or {}
+        if va_cfg.get('run_vigolium_analysis', True):
+            add('vigolium_analysis')
 
     # Tier 6: vulnerability_scan parent + per-tool sub-tasks
     if 'vulnerability_scan' in tasks:

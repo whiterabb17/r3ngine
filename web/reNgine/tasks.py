@@ -3074,9 +3074,9 @@ def fetch_url(self, urls=[], ctx={}, description=None):
 		vigolium_urls_file = f'{self.results_dir}/urls_vigolium.txt'
 
 		vig_spider_config = config.get('vigolium_spider', {})
-		vig_concurrency = vig_spider_config.get(VIGOLIUM_CONCURRENCY, 20)
-		vig_rate_limit = vig_spider_config.get(VIGOLIUM_RATE_LIMIT, 50)
-		vig_timeout = _ensure_vigolium_duration(vig_spider_config.get(VIGOLIUM_TIMEOUT, '10s'))
+		vig_concurrency = vig_spider_config.get(VIGOLIUM_CONCURRENCY, 30)
+		vig_rate_limit = vig_spider_config.get(VIGOLIUM_RATE_LIMIT, 80)
+		vig_timeout = _ensure_vigolium_duration(vig_spider_config.get(VIGOLIUM_TIMEOUT, '20s'))
 		vig_strategy = vig_spider_config.get(VIGOLIUM_STRATEGY, 'balanced')
 
 		vig_cmd = (

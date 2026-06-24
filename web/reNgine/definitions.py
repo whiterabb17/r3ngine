@@ -225,9 +225,11 @@ WPSCAN_SCAN_DEFAULT_CONFIG = {
 
 # ─── Vigolium ─────────────────────────────────────────────────────────────────
 RUN_VIGOLIUM = 'run_vigolium'
+RUN_VIGOLIUM_HARVEST = 'run_vigolium_harvest'
 RUN_VIGOLIUM_DISCOVERY = 'run_vigolium_discovery'
 RUN_VIGOLIUM_ANALYSIS = 'run_vigolium_analysis'
 VIGOLIUM = 'vigolium'
+VIGOLIUM_HARVEST = 'vigolium_harvest'
 VIGOLIUM_STRATEGY = 'strategy'
 VIGOLIUM_CONCURRENCY = 'concurrency'
 VIGOLIUM_RATE_LIMIT = 'rate_limit'
@@ -243,12 +245,22 @@ VIGOLIUM_DEFAULT_CONFIG = {
     'timeout': '15s',
 }
 
+# Tier 1 — passive ingestion harvest (works with root domain only, no subdomains needed)
+VIGOLIUM_DEFAULT_HARVEST_CONFIG = {
+    'run_vigolium_harvest': True,
+    'strategy': 'thorough',
+    'concurrency': 30,
+    'rate_limit': 100,
+    'timeout': '60s',
+}
+
+# Tier 1 — active discovery (falls back to root domain if no subdomains yet)
 VIGOLIUM_DEFAULT_DISCOVERY_CONFIG = {
     'run_vigolium_discovery': True,
-    'strategy': 'balanced',
-    'concurrency': 20,
-    'rate_limit': 50,
-    'timeout': '10s',
+    'strategy': 'thorough',
+    'concurrency': 40,
+    'rate_limit': 100,
+    'timeout': '30s',
 }
 
 VIGOLIUM_DEFAULT_ANALYSIS_CONFIG = {
@@ -257,6 +269,14 @@ VIGOLIUM_DEFAULT_ANALYSIS_CONFIG = {
     'concurrency': 20,
     'rate_limit': 50,
     'timeout': '10s',
+}
+
+# Tier 3 — spidering within fetch_url against fetched URL set
+VIGOLIUM_DEFAULT_SPIDER_CONFIG = {
+    'strategy': 'balanced',
+    'concurrency': 30,
+    'rate_limit': 80,
+    'timeout': '20s',
 }
 
 RUN_VIGOLIUM_AUDIT = 'run_vigolium_audit'

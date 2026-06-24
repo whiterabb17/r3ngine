@@ -1564,12 +1564,27 @@ def run_vigolium_scan_activity(ctx: dict) -> bool:
     return _run_task(vigolium_scan, ctx, task_name='vigolium_scan', description='Vigolium Vulnerability Scan')
 
 
+@activity.defn(name="RunVigoliumHarvestActivity")
+def run_vigolium_harvest_activity(ctx: dict) -> bool:
+    """Run Vigolium passive ingestion harvest at Tier 1.
+
+    Collects passively harvested endpoints (wayback, CT logs, passive DNS) before
+    active crawling begins. Works with just the root domain — falls back gracefully
+    when no subdomains have been enumerated yet.
+    Controlled by vigolium_harvest.run_vigolium_harvest in engine YAML.
+    """
+    from reNgine.vigolium_tasks import vigolium_harvest
+    activity.logger.info(f"[RunVigoliumHarvestActivity] scan_id={ctx.get('scan_history_id')}")
+    return _run_task(vigolium_harvest, ctx, task_name='vigolium_harvest', description='Vigolium Passive Harvest')
+
+
 @activity.defn(name="RunVigoliumDiscoveryActivity")
 def run_vigolium_discovery_activity(ctx: dict) -> bool:
-    """Run Vigolium discovery phase to seed the endpoint DB.
+    """Run Vigolium active discovery phase at Tier 1.
 
-    Runs at Tier 2 in parallel with http_crawl. Populates EndPoint records
-    with URLs discovered by vigolium's ingestion + discovery phases.
+    Runs in parallel with subdomain enumeration. Populates EndPoint records
+    via vigolium's active discovery phase; falls back to the root domain when
+    no subdomains are in the DB yet.
     Controlled by vigolium_discovery.run_vigolium_discovery in engine YAML.
     """
     from reNgine.vigolium_tasks import vigolium_discovery

@@ -346,6 +346,36 @@ class MasterScanWorkflow:
                     )
                 )
 
+            # Vigolium harvest (passive ingestion) and discovery (active probing) both
+            # run at Tier 1 alongside subdomain enumeration.  Harvest seeds the DB with
+            # passively gathered endpoints early; discovery actively probes targets with
+            # a robust config so results are available before http_crawl in Tier 2.
+            vigolium_harvest_config = yaml_config.get('vigolium_harvest', {})
+            if vigolium_harvest_config.get('run_vigolium_harvest', True):
+                discovery_futures.append(
+                    workflow.execute_activity(
+                        "RunVigoliumHarvestActivity",
+                        ctx,
+                        start_to_close_timeout=timedelta(hours=3),
+                        heartbeat_timeout=timedelta(minutes=10),
+                        retry_policy=_RETRY_LONG_SCAN,
+                        task_queue="python-orchestrator-queue"
+                    )
+                )
+
+            vigolium_discovery_config = yaml_config.get('vigolium_discovery', {})
+            if vigolium_discovery_config.get('run_vigolium_discovery', True):
+                discovery_futures.append(
+                    workflow.execute_activity(
+                        "RunVigoliumDiscoveryActivity",
+                        ctx,
+                        start_to_close_timeout=timedelta(hours=4),
+                        heartbeat_timeout=timedelta(minutes=10),
+                        retry_policy=_RETRY_LONG_SCAN,
+                        task_queue="python-orchestrator-queue"
+                    )
+                )
+
             if discovery_futures:
                 await asyncio.gather(*discovery_futures)
                 # Verify / log discovery results persisted to DB
@@ -406,19 +436,6 @@ class MasterScanWorkflow:
                         "RunPortScanActivity",
                         ctx,
                         start_to_close_timeout=timedelta(hours=6),
-                        heartbeat_timeout=timedelta(minutes=5),
-                        retry_policy=_RETRY_LONG_SCAN,
-                        task_queue="python-orchestrator-queue"
-                    )
-                )
-
-            vigolium_discovery_config = yaml_config.get('vigolium_discovery', {})
-            if vigolium_discovery_config.get('run_vigolium_discovery', True):
-                tier2_futures.append(
-                    workflow.execute_activity(
-                        "RunVigoliumDiscoveryActivity",
-                        ctx,
-                        start_to_close_timeout=timedelta(hours=4),
                         heartbeat_timeout=timedelta(minutes=5),
                         retry_policy=_RETRY_LONG_SCAN,
                         task_queue="python-orchestrator-queue"
@@ -1321,9 +1338,14 @@ _SUBSCAN_DISPATCH = {
         "timeout": timedelta(minutes=30),
         "args_builder": lambda ctx: [ctx, "run_apme", "Attack Path Modeling Engine", {"scan_history_id": ctx.get("scan_history_id")}],
     },
+    "vigolium_harvest": {
+        "activity": "RunVigoliumHarvestActivity",
+        "timeout": timedelta(hours=3),
+        "args_builder": lambda ctx: [ctx],
+    },
     "vigolium_discovery": {
         "activity": "RunVigoliumDiscoveryActivity",
-        "timeout": timedelta(hours=2),
+        "timeout": timedelta(hours=4),
         "args_builder": lambda ctx: [ctx],
     },
     "vigolium_analysis": {
@@ -1592,16 +1614,18 @@ class SubScanWorkflow:
 
             tiers = [
                 # TIER 1: Discovery — all discovery tools run concurrently.
-                # All must complete before Tier 2 (subdomains must be in DB).
+                # vigolium_harvest and vigolium_discovery also run here: harvest seeds
+                # passive endpoints early; discovery actively probes with robust config.
                 [t for t in active_tasks if t in {
                     "subdomain_discovery", "amass_intel_discovery", "firewall_vpn_scan",
-                    "dns_security", "osint", "spiderfoot_scan", "baddns"
+                    "dns_security", "osint", "spiderfoot_scan", "baddns",
+                    "vigolium_harvest", "vigolium_discovery",
                 }],
                 # TIER 2: HTTP Crawl & Port Scan — populates endpoint DB for Tiers 3+.
-                # vigolium_discovery runs alongside http_crawl to seed endpoints concurrently.
-                [t for t in active_tasks if t in {"http_crawl", "port_scan", "vigolium_discovery"}],
+                [t for t in active_tasks if t in {"http_crawl", "port_scan"}],
                 # TIER 3: URL Fetching + Screenshot — both depend only on Tier 2 http_crawl;
                 # screenshot does NOT depend on fetch_url output so they run concurrently.
+                # vigolium spidering runs as part of fetch_url (uses_tools: [vigolium]).
                 [t for t in active_tasks if t in {"fetch_url", "screenshot"}],
                 # TIER 3a: HTTP Crawl Bridge — crawls new/dead endpoints from fetch_url
                 [t for t in active_tasks if t == "http_crawl_bridge"],
@@ -1622,10 +1646,12 @@ class SubScanWorkflow:
                 # Handles future tasks added to _SUBSCAN_DISPATCH without breaking existing tiers.
                 [t for t in active_tasks if t not in {
                     "subdomain_discovery", "amass_intel_discovery", "firewall_vpn_scan",
-                    "dns_security", "osint", "spiderfoot_scan", "baddns", "http_crawl", "port_scan",
+                    "dns_security", "osint", "spiderfoot_scan", "baddns",
+                    "vigolium_harvest", "vigolium_discovery",
+                    "http_crawl", "port_scan",
                     "fetch_url", "screenshot", "dir_file_fuzz", "web_api_discovery", "waf_detection",
                     "secret_scanning", "vulnerability_scan", "waf_bypass",
-                    "vigolium_discovery", "vigolium_analysis", "vigolium_scan", "param_discovery",
+                    "vigolium_analysis", "vigolium_scan", "param_discovery",
                     "http_crawl_bridge", "run_acunetix"
                 }],
             ]
@@ -3278,8 +3304,10 @@ class SingleTaskRetryWorkflow:
             elif task_name == "port_scan":
                 await workflow.execute_activity("RunPortScanActivity", ctx, start_to_close_timeout=timedelta(hours=6), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("ParseEnumerationResultsActivity", ctx, start_to_close_timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
+            elif task_name == "vigolium_harvest":
+                await workflow.execute_activity("RunVigoliumHarvestActivity", ctx, start_to_close_timeout=timedelta(hours=3), heartbeat_timeout=timedelta(minutes=10), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
             elif task_name == "vigolium_discovery":
-                await workflow.execute_activity("RunVigoliumDiscoveryActivity", ctx, start_to_close_timeout=timedelta(hours=4), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
+                await workflow.execute_activity("RunVigoliumDiscoveryActivity", ctx, start_to_close_timeout=timedelta(hours=4), heartbeat_timeout=timedelta(minutes=10), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
             elif task_name == "fetch_url":
                 await workflow.execute_activity("RunFetchURLActivity", ctx, start_to_close_timeout=timedelta(hours=8), heartbeat_timeout=timedelta(minutes=15), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("RunHTTPCrawlBridgeActivity", ctx, start_to_close_timeout=timedelta(hours=3), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
