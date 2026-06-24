@@ -207,6 +207,7 @@ class TemporalTaskProxy:
             error_message (str, optional): Error message if the task failed.
         """
         from startScan.models import ScanActivity
+        from reNgine.definitions import SUCCESS_TASK
         try:
             if getattr(self, 'activity', None):
                 now = timezone.now()
@@ -217,6 +218,10 @@ class TemporalTaskProxy:
                 }
                 if error_message is not None:
                     update_kwargs['error_message'] = str(error_message)[:300]
+                elif status == SUCCESS_TASK:
+                    # Clear stale error fields from any previous failed attempt on this record
+                    update_kwargs['error_message'] = ''
+                    update_kwargs['traceback'] = ''
                 ScanActivity.objects.filter(pk=self.activity.pk).update(**update_kwargs)
         except Exception as e:
             logger.warning(f"Could not update ScanActivity for {self.task_name}: {e}")
