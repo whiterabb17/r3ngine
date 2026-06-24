@@ -313,13 +313,15 @@ class OpSecManagerSingletonTest(TestCase):
     """get_opsec_manager() should query the DB only once regardless of call count."""
 
     def setUp(self):
-        # Reset singleton between tests
+        # Reset singleton and TTL timestamp between tests
         import reNgine.utils.opsec as opsec_mod
         opsec_mod._opsec_manager_instance = None
+        opsec_mod._opsec_manager_fetched_at = 0.0
 
     def tearDown(self):
         import reNgine.utils.opsec as opsec_mod
         opsec_mod._opsec_manager_instance = None
+        opsec_mod._opsec_manager_fetched_at = 0.0
 
     def test_db_queried_only_once_across_multiple_calls(self):
         from reNgine.utils.opsec import get_opsec_manager
@@ -342,3 +344,24 @@ class OpSecManagerSingletonTest(TestCase):
             get_opsec_manager(refresh=True)  # must re-query
 
         self.assertGreaterEqual(len(ctx.captured_queries), 2)
+
+    def test_ttl_expiry_triggers_re_fetch(self):
+        """After TTL elapses, the next call should re-query the DB."""
+        import reNgine.utils.opsec as opsec_mod
+        from reNgine.utils.opsec import get_opsec_manager
+        from unittest.mock import patch
+
+        get_opsec_manager()  # warm the cache
+        first_instance = opsec_mod._opsec_manager_instance
+
+        # Simulate TTL expiry by backdating the fetch timestamp
+        opsec_mod._opsec_manager_fetched_at -= opsec_mod._OPSEC_MANAGER_TTL + 1.0
+
+        with CaptureQueriesContext(connection) as ctx:
+            second = get_opsec_manager()
+
+        self.assertGreaterEqual(
+            len(ctx.captured_queries), 2,
+            "Expected DB re-query after TTL expiry"
+        )
+        self.assertIsNot(second, first_instance, "Expected a new OpSecManager instance after TTL")

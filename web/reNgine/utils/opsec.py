@@ -6,6 +6,7 @@ import tempfile
 import subprocess
 import json
 import threading
+import time
 from urllib.parse import urlparse
 from django.conf import settings
 from scanEngine.models import OpSec, Proxy
@@ -364,21 +365,35 @@ class ProxychainsWrapper:
         return cmd, None
 
 
-# Module-level singleton for OpSecManager.
-# Fires 2 DB queries on first call; cached for the process lifetime thereafter.
-# Call get_opsec_manager(refresh=True) after user saves OpSec/Proxy settings.
+# Module-level singleton for OpSecManager with TTL-based expiry.
+# Fires 2 DB queries on first call; re-fetched after _OPSEC_MANAGER_TTL seconds.
+# Call get_opsec_manager(refresh=True) to force an immediate re-fetch.
 _opsec_manager_instance: 'OpSecManager | None' = None
+_opsec_manager_fetched_at: float = 0.0
+_OPSEC_MANAGER_TTL: float = 300.0  # 5 minutes; settings changes propagate within one TTL window
 _opsec_manager_lock = threading.Lock()
 
 
 def get_opsec_manager(refresh: bool = False) -> 'OpSecManager':
-    """Return a cached OpSecManager, instantiating once per process."""
-    global _opsec_manager_instance
-    if not refresh and _opsec_manager_instance is not None:
+    """Return a cached OpSecManager, re-fetching after TTL or on explicit refresh.
+
+    The Temporal worker runs in a separate process; Django signals do not cross
+    process boundaries. The TTL ensures settings changes take effect within
+    _OPSEC_MANAGER_TTL seconds without requiring a worker restart.
+    """
+    global _opsec_manager_instance, _opsec_manager_fetched_at
+    now = time.monotonic()
+    if (not refresh
+            and _opsec_manager_instance is not None
+            and now - _opsec_manager_fetched_at < _OPSEC_MANAGER_TTL):
         return _opsec_manager_instance
     with _opsec_manager_lock:
-        if not refresh and _opsec_manager_instance is not None:
+        now = time.monotonic()  # re-read inside the lock
+        if (not refresh
+                and _opsec_manager_instance is not None
+                and now - _opsec_manager_fetched_at < _OPSEC_MANAGER_TTL):
             return _opsec_manager_instance
         _opsec_manager_instance = OpSecManager()
+        _opsec_manager_fetched_at = now
     return _opsec_manager_instance
 

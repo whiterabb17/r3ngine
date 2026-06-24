@@ -2509,90 +2509,89 @@ def port_scan(self, hosts=[], ctx={}, description=None, prepare_only=False, pars
 
 	# One SELECT per unique host instead of one per port (N+1 fix).
 	_subdomain_cache: dict = {}
-	with transaction.atomic():
-		for line in line_source:
-			if not isinstance(line, dict):
-				continue
-			results.append(line)
-			port_number = line['port']
-			ip_address = line['ip']
-			host = line.get('host') or ip_address
-			if port_number == 0:
-				continue
+	for line in line_source:
+		if not isinstance(line, dict):
+			continue
+		results.append(line)
+		port_number = line['port']
+		ip_address = line['ip']
+		host = line.get('host') or ip_address
+		if port_number == 0:
+			continue
 
-			# Grab subdomain — lazy per-host cache; one DB hit per unique host, not per port.
-			if host not in _subdomain_cache:
-				_subdomain_cache[host] = Subdomain.objects.filter(
-					name=host,
-					target_domain=self.domain,
+		# Grab subdomain — lazy per-host cache; one DB hit per unique host, not per port.
+		if host not in _subdomain_cache:
+			_subdomain_cache[host] = Subdomain.objects.filter(
+				name=host,
+				target_domain=self.domain,
+				scan_history=self.scan,
+			).first()
+		subdomain = _subdomain_cache[host]
+
+		# Add IP DB — save_ip_address() already handles ip_subscan_ids.add(subscan)
+		# when subscan= is passed, so no redundant M2M add needed here.
+		ip, _ = save_ip_address(ip_address, subdomain, subscan=self.subscan, scan_id=self.scan_id, activity_id=self.activity_id)
+
+		# Add endpoint to DB
+		# port 80 and 443 not needed as http crawl already does that.
+		if port_number not in [80, 443]:
+			http_url = f'{host}:{port_number}'
+			endpoint, _ = save_endpoint(
+				http_url,
+				crawl=False,
+				ctx=ctx,
+				subdomain=subdomain)
+			if endpoint:
+				http_url = endpoint.http_url
+			urls.append(http_url)
+
+		# Add Port in DB
+		res = get_port_service_description(port_number)
+		# get or create port
+		port, created = update_or_create_port(
+			port_number=port_number,
+			service_name=res.get('service_name', ''),
+			description=res.get('description', '')
+		)
+
+		if created:
+			logger.warning(f'Added new port {port_number} to DB')
+
+		# Centralized Brute-Force Candidate Registration for Naabu findings
+		bf_protocols = {
+			21: 'ftp',
+			22: 'ssh',
+			23: 'telnet',
+			445: 'smb',
+			3389: 'rdp'
+		}
+		if port_number in bf_protocols:
+			from reNgine.utilities import save_auth_candidate
+			try:
+				save_auth_candidate(
 					scan_history=self.scan,
-				).first()
-			subdomain = _subdomain_cache[host]
+					subdomain=subdomain,
+					target=host,
+					protocol=bf_protocols[port_number],
+					port=port_number,
+					source_tool='naabu',
+					tech_hint=f"Open Port {port_number}"
+				)
+			except Exception as e:
+				logger.error(f"Error registering AuthCandidate from Naabu port {port_number}: {e}")
 
-			# Add IP DB — save_ip_address() already handles ip_subscan_ids.add(subscan)
-			# when subscan= is passed, so no redundant M2M add needed here.
-			ip, _ = save_ip_address(ip_address, subdomain, subscan=self.subscan, scan_id=self.scan_id, activity_id=self.activity_id)
+		if port_number in UNCOMMON_WEB_PORTS:
+			port.is_uncommon = True
+			port.save()
+		# M2M .add() writes directly to the join table — no parent ip.save() needed.
+		ip.ports.add(port)
+		if host in ports_data:
+			ports_data[host].append(port_number)
+		else:
+			ports_data[host] = [port_number]
 
-			# Add endpoint to DB
-			# port 80 and 443 not needed as http crawl already does that.
-			if port_number not in [80, 443]:
-				http_url = f'{host}:{port_number}'
-				endpoint, _ = save_endpoint(
-					http_url,
-					crawl=False,
-					ctx=ctx,
-					subdomain=subdomain)
-				if endpoint:
-					http_url = endpoint.http_url
-				urls.append(http_url)
-
-			# Add Port in DB
-			res = get_port_service_description(port_number)
-			# get or create port
-			port, created = update_or_create_port(
-				port_number=port_number,
-				service_name=res.get('service_name', ''),
-				description=res.get('description', '')
-			)
-
-			if created:
-				logger.warning(f'Added new port {port_number} to DB')
-
-			# Centralized Brute-Force Candidate Registration for Naabu findings
-			bf_protocols = {
-				21: 'ftp',
-				22: 'ssh',
-				23: 'telnet',
-				445: 'smb',
-				3389: 'rdp'
-			}
-			if port_number in bf_protocols:
-				from reNgine.utilities import save_auth_candidate
-				try:
-					save_auth_candidate(
-						scan_history=self.scan,
-						subdomain=subdomain,
-						target=host,
-						protocol=bf_protocols[port_number],
-						port=port_number,
-						source_tool='naabu',
-						tech_hint=f"Open Port {port_number}"
-					)
-				except Exception as e:
-					logger.error(f"Error registering AuthCandidate from Naabu port {port_number}: {e}")
-
-			if port_number in UNCOMMON_WEB_PORTS:
-				port.is_uncommon = True
-				port.save()
-			# M2M .add() writes directly to the join table — no parent ip.save() needed.
-			ip.ports.add(port)
-			if host in ports_data:
-				ports_data[host].append(port_number)
-			else:
-				ports_data[host] = [port_number]
-
-			# Send notification
-			logger.warning(f'Found opened port {port_number} on {ip_address} ({host})')
+		# Send notification
+		logger.warning(f'Found opened port {port_number} on {ip_address} ({host})')
 
 	if len(ports_data) == 0:
 		logger.info('Finished running naabu port scan - No open ports found.')
