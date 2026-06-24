@@ -779,43 +779,47 @@ def save_vulnerability(vuln_data=None, scan_history=None, target_domain=None, de
 		vuln.exploit_url = exploit_url
 		vuln.save()
 
-	# Save vuln tags
-	for tag_name in tags or []:
-		tag, created = VulnerabilityTags.objects.get_or_create(name=tag_name)
-		if tag:
-			vuln.tags.add(tag)
-			vuln.save()
+	# Save vuln tags — collect then add in one call; no save() needed after M2M add
+	if tags:
+		tag_objs = []
+		for tag_name in tags:
+			tag, _ = VulnerabilityTags.objects.get_or_create(name=tag_name)
+			tag_objs.append(tag)
+		vuln.tags.add(*tag_objs)
 
 	# Save CVEs
-	for cve_id in cve_ids or []:
-		# Ignore empty/null CVE IDs
-		if not cve_id or not str(cve_id).strip():
-			continue
-		normalized = str(cve_id).strip().upper()
-		# Accept bare YYYY-NNNNN values (missing the CVE- prefix)
-		if re.match(r'^\d{4}-\d+$', normalized):
-			normalized = 'CVE-' + normalized
-		cve, created = CveId.objects.get_or_create(name=normalized)
-		if cve:
-			vuln.cve_ids.add(cve)
-			vuln.save()
+	if cve_ids:
+		cve_objs = []
+		for cve_id in cve_ids:
+			if not cve_id or not str(cve_id).strip():
+				continue
+			normalized = str(cve_id).strip().upper()
+			# Accept bare YYYY-NNNNN values (missing the CVE- prefix)
+			if re.match(r'^\d{4}-\d+$', normalized):
+				normalized = 'CVE-' + normalized
+			cve, _ = CveId.objects.get_or_create(name=normalized)
+			cve_objs.append(cve)
+		if cve_objs:
+			vuln.cve_ids.add(*cve_objs)
 
 	# Save CWEs
-	for cwe_id in cwe_ids or []:
-		# Ignore empty/null CWE IDs
-		if not cwe_id or not str(cwe_id).strip():
-			continue
-		cwe, created = CweId.objects.get_or_create(name=str(cwe_id).strip())
-		if cwe:
-			vuln.cwe_ids.add(cwe)
-			vuln.save()
+	if cwe_ids:
+		cwe_objs = []
+		for cwe_id in cwe_ids:
+			if not cwe_id or not str(cwe_id).strip():
+				continue
+			cwe, _ = CweId.objects.get_or_create(name=str(cwe_id).strip())
+			cwe_objs.append(cwe)
+		if cwe_objs:
+			vuln.cwe_ids.add(*cwe_objs)
 
-	# Save vuln reference
-	for url in references or []:
-		ref, created = VulnerabilityReference.objects.get_or_create(url=url)
-		if ref:
-			vuln.references.add(ref)
-			vuln.save()
+	# Save vuln references
+	if references:
+		ref_objs = []
+		for url in references:
+			ref, _ = VulnerabilityReference.objects.get_or_create(url=url)
+			ref_objs.append(ref)
+		vuln.references.add(*ref_objs)
 
 	# Save subscan id in vuln object
 	if subscan:
@@ -823,7 +827,7 @@ def save_vulnerability(vuln_data=None, scan_history=None, target_domain=None, de
 		subscan_pk = subscan.pk if hasattr(subscan, 'pk') else subscan
 		if SubScan.objects.filter(pk=subscan_pk).exists():
 			vuln.vuln_subscan_ids.add(subscan)
-			vuln.save()
+			# No vuln.save() needed — M2M add writes directly to the join table
 
 	return vuln, created
 

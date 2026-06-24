@@ -2,6 +2,8 @@ import concurrent.futures
 import threading
 from unittest.mock import patch, MagicMock
 from django.test import TestCase, TransactionTestCase
+from django.test.utils import CaptureQueriesContext
+from django.db import connection
 from django.utils import timezone
 from scanEngine.models import Proxy, EngineType
 
@@ -192,3 +194,44 @@ class PortScanSubdomainCacheTest(TestCase):
                 + str([q['sql'] for q in subdomain_selects])
             ),
         )
+
+
+class SaveVulnerabilityQueryCountTest(TestCase):
+    """Saving a vuln with tags/CVEs/CWEs should not UPDATE the vuln row per M2M entry."""
+
+    def setUp(self):
+        from targetApp.models import Domain
+        from startScan.models import ScanHistory
+        self.domain = Domain.objects.create(name='vuln-test.invalid')
+        self.engine = EngineType.objects.create(engine_name='Test Engine Vuln')
+        self.scan = ScanHistory.objects.create(
+            scan_status=0,
+            domain=self.domain,
+            scan_type=self.engine,
+            start_scan_date=timezone.now(),
+        )
+
+    def test_no_update_per_m2m_entry(self):
+        from reNgine.common_func import save_vulnerability
+
+        with CaptureQueriesContext(connection) as ctx:
+            save_vulnerability(
+                name='Test XSS',
+                severity=2,
+                scan_history=self.scan,
+                target_domain=self.domain,
+                tags=['xss', 'sqli', 'csrf'],
+                cve_ids=['CVE-2021-1234', 'CVE-2022-5678'],
+                cwe_ids=['CWE-79', 'CWE-89'],
+                references=['https://nvd.nist.gov/vuln/detail/CVE-2021-1234'],
+            )
+
+        update_queries = [
+            q for q in ctx.captured_queries
+            if q['sql'].strip().upper().startswith('UPDATE')
+            and 'vulnerability' in q['sql'].lower()
+        ]
+        # At most 2 UPDATEs: one for the initial upsert, one for discovered_date/status.
+        # Before fix: 8 UPDATEs (one per tag + CVE + CWE + reference).
+        self.assertLessEqual(len(update_queries), 2,
+            msg=f"Too many UPDATEs: {[q['sql'] for q in update_queries]}")
