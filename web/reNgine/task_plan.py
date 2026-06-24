@@ -24,10 +24,10 @@ _TASK_TITLES = {
     'http_crawl_bridge':          'HTTP Crawl Bridge',
     'screenshot':                 'Screenshot Capture',
     'param_discovery':            'Parameter Discovery (CPDE)',
+    'web_api_discovery':          'Web API Discovery',
     # Tier 4
     'dir_file_fuzz':              'Directory & File Fuzzing',
     # Tier 5
-    'web_api_discovery':          'Web API Discovery',
     'waf_detection':              'WAF Detection',
     'secret_scanning':            'Secret Scanning',
     'vigolium_analysis':          'Vigolium Analysis',
@@ -69,8 +69,8 @@ _TASK_TIER = {
     'http_crawl_bridge':     3,
     'screenshot':            3,
     'param_discovery':       3,
+    'web_api_discovery':     3,
     'dir_file_fuzz':         4,
-    'web_api_discovery':     5,
     'waf_detection':         5,
     'secret_scanning':       5,
     'vigolium_analysis':     5,
