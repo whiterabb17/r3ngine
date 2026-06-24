@@ -2,7 +2,8 @@ import concurrent.futures
 import threading
 from unittest.mock import patch, MagicMock
 from django.test import TestCase, TransactionTestCase
-from scanEngine.models import Proxy
+from django.utils import timezone
+from scanEngine.models import Proxy, EngineType
 
 
 class FetchProxiesThreadCapTest(TestCase):
@@ -96,3 +97,98 @@ class RemoveProxyRaceTest(TransactionTestCase):
         r2 = remove_proxy_from_pool('http://a.example.com:8080')
         self.assertTrue(r1)
         self.assertFalse(r2)
+
+
+class PortScanSubdomainCacheTest(TestCase):
+    """Subdomain table should be queried once per unique host, not once per port."""
+
+    def setUp(self):
+        import os
+        import tempfile
+        from targetApp.models import Domain
+        from startScan.models import ScanHistory, Subdomain
+
+        self.domain = Domain.objects.create(name='test-portscan.invalid')
+        self.engine = EngineType.objects.create(engine_name='Test Engine Port Scan')
+        self.scan = ScanHistory.objects.create(
+            scan_status=0,
+            domain=self.domain,
+            scan_type=self.engine,
+            start_scan_date=timezone.now(),
+        )
+        self.subdomain = Subdomain.objects.create(
+            name='192.0.2.1',
+            target_domain=self.domain,
+            scan_history=self.scan,
+        )
+        # Temporary results dir so port_scan can write files
+        self.results_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.results_dir, ignore_errors=True)
+
+    def _build_proxy(self):
+        """Build a minimal mock proxy that satisfies port_scan()'s self interface."""
+        from unittest.mock import MagicMock, PropertyMock
+        proxy = MagicMock()
+        proxy.scan = self.scan
+        proxy.domain = self.domain
+        proxy.subscan = None
+        proxy.scan_id = self.scan.id
+        proxy.subscan_id = None
+        proxy.activity_id = None
+        proxy.results_dir = self.results_dir
+        proxy.history_file = f'{self.results_dir}/commands.txt'
+        proxy.output_path = f'{self.results_dir}/port_scan.txt'
+        proxy.yaml_configuration = {}
+        # MagicMock.notify() will silently absorb calls
+        return proxy
+
+    def test_subdomain_queried_once_per_host(self):
+        """10 ports on the same host → at most 1 Subdomain SELECT after caching is applied."""
+        import json
+        from unittest.mock import patch, MagicMock
+        from django.test.utils import CaptureQueriesContext
+        from django.db import connection
+        from reNgine.tasks import port_scan
+
+        parse_lines = [
+            json.dumps({'host': '192.0.2.1', 'ip': '192.0.2.1', 'port': 8000 + i})
+            for i in range(10)
+        ]
+        parse_only = '\n'.join(parse_lines)
+
+        proxy = self._build_proxy()
+
+        mock_ip = MagicMock()
+        mock_ip.ports = MagicMock()
+        mock_port = MagicMock()
+        mock_port.is_uncommon = False
+
+        with patch('reNgine.tasks.save_ip_address', return_value=(mock_ip, True)), \
+             patch('reNgine.tasks.save_endpoint', return_value=(None, False)), \
+             patch('reNgine.tasks.update_or_create_port', return_value=(mock_port, False)), \
+             patch('reNgine.tasks.get_port_service_description', return_value={}), \
+             patch('reNgine.tasks.save_auth_candidate', return_value=None):
+
+            with CaptureQueriesContext(connection) as ctx:
+                port_scan(proxy, hosts=['192.0.2.1'], ctx={
+                    'scan_history_id': self.scan.id,
+                    'domain_id': self.domain.id,
+                }, parse_only=parse_only)
+
+        subdomain_selects = [
+            q for q in ctx.captured_queries
+            if 'subdomain' in q['sql'].lower()
+            and q['sql'].strip().upper().startswith('SELECT')
+        ]
+        self.assertLessEqual(
+            len(subdomain_selects),
+            1,
+            msg=(
+                f"Expected at most 1 Subdomain SELECT for 10 ports on the same host, "
+                f"got {len(subdomain_selects)}. Queries: "
+                + str([q['sql'] for q in subdomain_selects])
+            ),
+        )
