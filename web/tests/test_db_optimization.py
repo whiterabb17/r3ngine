@@ -196,6 +196,45 @@ class PortScanSubdomainCacheTest(TestCase):
         )
 
 
+class SaveEndpointCacheTest(TestCase):
+    """ScanHistory and Domain should be fetched at most once across repeated save_endpoint() calls."""
+
+    def setUp(self):
+        from targetApp.models import Domain
+        from startScan.models import ScanHistory
+        from scanEngine.models import EngineType
+        engine = EngineType.objects.create(engine_name='Test Engine Endpoint Cache')
+        self.domain = Domain.objects.create(name='endpoint-cache-test.invalid')
+        self.scan = ScanHistory.objects.create(
+            scan_status=0,
+            domain=self.domain,
+            scan_type=engine,
+            start_scan_date=timezone.now(),
+        )
+
+    def test_scan_and_domain_fetched_once(self):
+        from reNgine.utils.task import save_endpoint
+        ctx = {'scan_history_id': self.scan.id, 'domain_id': self.domain.id}
+
+        with CaptureQueriesContext(connection) as captured:
+            for port in [8080, 8443, 3000]:
+                save_endpoint(f'http://192.0.2.1:{port}', ctx=ctx)
+
+        scan_selects = [
+            q for q in captured.captured_queries
+            if 'scanhistory' in q['sql'].lower()
+            and q['sql'].strip().upper().startswith('SELECT')
+        ]
+        domain_selects = [
+            q for q in captured.captured_queries
+            if 'domain' in q['sql'].lower()
+            and q['sql'].strip().upper().startswith('SELECT')
+            and 'endpoint' not in q['sql'].lower()
+        ]
+        self.assertLessEqual(len(scan_selects), 1, "ScanHistory queried more than once")
+        self.assertLessEqual(len(domain_selects), 1, "Domain queried more than once")
+
+
 class SaveVulnerabilityQueryCountTest(TestCase):
     """Saving a vuln with tags/CVEs/CWEs should not UPDATE the vuln row per M2M entry."""
 

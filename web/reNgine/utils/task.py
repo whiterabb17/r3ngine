@@ -669,11 +669,15 @@ def save_endpoint(
     created = False
     
     if ctx.get('domain_id'):
-        domain = Domain.objects.filter(id=ctx.get('domain_id')).first()
+        # Cache resolved Domain in ctx to avoid repeated SELECT per save_endpoint() call.
+        domain = ctx.get('_domain_obj')
+        if domain is None:
+            domain = Domain.objects.filter(id=ctx.get('domain_id')).first()
+            ctx['_domain_obj'] = domain
         if domain and domain.name not in http_url:
             logger.error(f"{http_url} is not a URL of domain {domain.name}. Skipping.")
             return None, False
-            
+
     if crawl:
         # Avoid circular import by importing here
         from reNgine.tasks import http_crawl
@@ -694,8 +698,18 @@ def save_endpoint(
     elif not scheme:
         return None, False
     else:
-        scan = ScanHistory.objects.filter(pk=ctx.get('scan_history_id')).first()
-        domain = Domain.objects.filter(pk=ctx.get('domain_id')).first()
+        # Cache resolved ORM objects in ctx to avoid repeated queries within
+        # the same scan context (e.g., once per port in port_scan's hot loop).
+        scan = ctx.get('_scan_obj')
+        if scan is None:
+            scan = ScanHistory.objects.filter(pk=ctx.get('scan_history_id')).first()
+            ctx['_scan_obj'] = scan
+
+        domain = ctx.get('_domain_obj')
+        if domain is None:
+            domain = Domain.objects.filter(pk=ctx.get('domain_id')).first()
+            ctx['_domain_obj'] = domain
+
         if not validators.url(http_url):
             return None, False
         http_url = sanitize_url(http_url)
@@ -728,7 +742,7 @@ def save_endpoint(
             from startScan.models import SubScan
             if SubScan.objects.filter(pk=subscan_id).exists():
                 endpoint.endpoint_subscan_ids.add(subscan_id)
-            endpoint.save()
+            # No second save() — M2M add() writes directly to the join table
 
     return endpoint, created
 
