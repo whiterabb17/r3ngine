@@ -6755,7 +6755,7 @@ def fetch_proxies_task(limit=1000, job_id=None):
     # Capture job_id here so inner threads can report progress without accessing self
     _job_id = job_id
 
-    MAX_WORKERS = min(1000, max(1, total))
+    MAX_WORKERS = min(32, max(1, total))  # 32 concurrent HTTP checks saturates bandwidth while leaving ~68 connections free for the main Django/Temporal/worker pool.
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         future_map = {pool.submit(check_proxy_robust, p, 10): p for p in unique_proxies}
