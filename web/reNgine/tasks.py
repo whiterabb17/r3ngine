@@ -42,7 +42,7 @@ from reNgine.definitions import *
 from reNgine.settings import *
 from reNgine.llm import *
 from reNgine.utilities import *
-from reNgine.utils.opsec import OpSecManager, ProxychainsWrapper, get_opsec_manager
+from reNgine.utils.opsec import ProxychainsWrapper, get_opsec_manager
 from reNgine.utils.waf import OriginDiscoveryManager, WafBypassOrchestrator
 from scanEngine.models import (EngineType, InstalledExternalTool, Notification, Proxy, OpSec)
 from startScan.models import *
@@ -162,7 +162,6 @@ def finish_osint(results, scan_history_id):
 
 def finish_osint_discovery(results, results_dir):
     """Callback for OSINT discovery tasks. Strips metadata from results."""
-    from reNgine.utils.opsec import get_opsec_manager
     opsec = get_opsec_manager()
     opsec.strip_directory(results_dir)
     logger.info(f"OSINT discovery completed and cleaned up in {results_dir}")
@@ -862,10 +861,7 @@ def amass_intel_discovery(self, host, ctx={}, description=None):
 	#proxy = get_random_proxy()
 	#if proxy:
 	#	cmd = f"export HTTP_PROXY='{proxy}' HTTPS_PROXY='{proxy}' && {cmd}"
-		
-	#opsec = OpSecManager()
-	#cmd = opsec.apply_stealth('amass', cmd, proxy=proxy)
-	
+
 	run_command(
 		cmd,
 		shell=True,
@@ -1439,7 +1435,6 @@ def osint_discovery(self, config, host, scan_history_id, activity_id, results_di
 	finish_osint_discovery([results], results_dir=results_dir)
 
 	# Strip metadata from OSINT results
-	from reNgine.utils.opsec import get_opsec_manager
 	opsec = get_opsec_manager()
 	opsec.strip_directory(results_dir)
 
