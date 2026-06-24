@@ -488,20 +488,20 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 						fcmd = ffuf_base_cmd + f' -u {_fuzz_url}FUZZ -json'
 						
 						ffuf_proxy = proxy
-						if ffuf_proxy and ffuf_proxy.startswith('socks'):
-							for _ in range(10):
+						if ffuf_proxy and ffuf_proxy.startswith('socks4'):
+							for _ in range(25):
 								new_proxy = get_random_proxy()
 								if not new_proxy:
 									ffuf_proxy = None
 									break
 								if not new_proxy.startswith('http') and not new_proxy.startswith('socks'):
 									new_proxy = 'http://' + new_proxy
-								if new_proxy.startswith('http'):
+								if new_proxy.startswith('http') or new_proxy.startswith('socks5'):
 									ffuf_proxy = new_proxy
 									break
 							else:
 								ffuf_proxy = None
-								logger.warning('ffuf proxy requirement: failed to find an http/s proxy after 10 retries, bypassing proxy for ffuf')
+								logger.warning('ffuf proxy requirement: failed to find an http/s or socks5 proxy after 25 retries (socks4 not supported), bypassing proxy for ffuf')
 							
 						fcmd += f' -x {ffuf_proxy}' if ffuf_proxy else ''
 						fcmd = opsec.apply_stealth('ffuf', fcmd, proxy=ffuf_proxy)
