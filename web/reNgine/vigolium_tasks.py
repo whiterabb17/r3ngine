@@ -100,6 +100,11 @@ def parse_vigolium_finding(task_instance, finding_data, subdomain):
     raw_cvss = finding_data.get('cvss_score')
     cvss_score = float(raw_cvss) if raw_cvss else None
 
+    # Deduplicate on (name, scan_history, subdomain, http_url, template_id) so
+    # findings emitted by multiple phases (ExternalHarvest, Spidering, Discovery,
+    # KnownIssueScan, DynamicAssessment) within a single vigolium run, or by
+    # vigolium_scan and vigolium_analysis running at different tiers, never
+    # create separate database rows for the same underlying issue.
     save_vulnerability(
         target_domain=task_instance.domain,
         http_url=http_url,
@@ -118,7 +123,8 @@ def parse_vigolium_finding(task_instance, finding_data, subdomain):
         tags=tags,
         cve_ids=[],
         references=[],
-        source='Vigolium'
+        source='Vigolium',
+        dedup_fields=['name', 'scan_history', 'subdomain', 'http_url', 'template_id'],
     )
 
 
@@ -164,7 +170,15 @@ def _run_vigolium_phase(task_instance, cmd, output_file, phase_label, save_http_
         pass
 
     findings_saved = 0
+    duplicates_skipped = 0
     endpoints_saved = 0
+
+    # In-file deduplication: track (module_id, hostname, http_url) tuples seen
+    # within this JSONL output.  This is especially important now that all 5
+    # vigolium phases (ExternalHarvest, Spidering, Discovery, KnownIssueScan,
+    # DynamicAssessment) run inside a single vigolium invocation — the same
+    # module may fire across multiple phases against the same URL.
+    seen_findings: set = set()
 
     for record in _iter_jsonl(output_file):
         record_type = record.get('type')
@@ -172,6 +186,20 @@ def _run_vigolium_phase(task_instance, cmd, output_file, phase_label, save_http_
 
         if record_type == 'finding':
             hostname = data.get('hostname', '')
+
+            # Build a fingerprint for in-file dedup
+            matched_at = data.get('matched_at') or []
+            http_url = matched_at[0] if matched_at else data.get('url', '')
+            fingerprint = (
+                data.get('module_id', '') or data.get('module_name', ''),
+                hostname,
+                http_url,
+            )
+            if fingerprint in seen_findings:
+                duplicates_skipped += 1
+                continue
+            seen_findings.add(fingerprint)
+
             subdomain = Subdomain.objects.filter(
                 scan_history=task_instance.scan, name=hostname
             ).first()
@@ -185,7 +213,10 @@ def _run_vigolium_phase(task_instance, cmd, output_file, phase_label, save_http_
             parse_vigolium_http_record(task_instance, data)
             endpoints_saved += 1
 
-    logger.info(f"Vigolium {phase_label} complete — {findings_saved} findings, {endpoints_saved} endpoints saved")
+    logger.info(
+        f"Vigolium {phase_label} complete — {findings_saved} findings saved, "
+        f"{duplicates_skipped} in-file duplicates skipped, {endpoints_saved} endpoints saved"
+    )
 
 
 def vigolium_scan(self, urls=None, ctx={}, description=None):
@@ -507,6 +538,12 @@ def _parse_vigolium_audit_finding(task_instance, data: dict) -> None:
 
     snippet = data.get('snippet') or data.get('request') or ''
 
+    # Deduplicate on (name, scan_history, http_url, template_id) — subdomain may
+    # be absent for code-scan findings, so we use the tightest key available.
+    dedup = ['name', 'scan_history', 'http_url', 'template_id']
+    if subdomain:
+        dedup.append('subdomain')
+
     save_vulnerability(
         target_domain=task_instance.domain,
         http_url=http_url,
@@ -526,6 +563,7 @@ def _parse_vigolium_audit_finding(task_instance, data: dict) -> None:
         cve_ids=[],
         references=[],
         source='VigoliumAudit',
+        dedup_fields=dedup,
     )
 
 
@@ -577,7 +615,6 @@ def vigolium_audit_scan(self, code_path=None, ctx={}, description=None):
         '--skip-dependency-check',
         '--no-preflight',
         '--no-stream',
-        '--no-dedup',
         '--soft-fail',
     ]
 
