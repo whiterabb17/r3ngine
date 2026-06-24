@@ -90,6 +90,7 @@
         threads: 20
         wordlist_name: dicc
         use_api_wordlist: false
+        max_repeat_by_signature: 10
       http_crawl: {}
       param_discovery:
         enabled: true

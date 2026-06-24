@@ -62,9 +62,60 @@ def _fuzz_target_marker(results_dir, target_url):
 	return os.path.join(results_dir, f'fuzz_done_{digest}.marker')
 
 
-def _flush_ffuf_batch(batch, dirscan, ctx, scan):
+def filter_fuzz_batch_with_redis(batch, scan_history_id, subdomain_id, max_repeat, tool_name):
+	"""Filters out duplicate fuzzing responses based on response signatures using Redis."""
+	if not batch or max_repeat <= 0:
+		return batch
+
+	redis_url = os.environ.get('REDIS_URL', 'redis://redis:6379/0')
+	try:
+		redis_client = Redis.from_url(redis_url)
+		pipeline = redis_client.pipeline()
+		
+		# Build the signature keys and queue INCR and EXPIRE operations
+		keys = []
+		for item in batch:
+			status = item.get('status') or item.get('http_status') or 0
+			length = item.get('length') or item.get('content_length') or item.get('content-length') or 0
+			words = item.get('words') or item.get('word_count') or 0
+			lines = item.get('lines') or item.get('line_count') or 0
+			
+			sig_key = f"fuzz:sig:{scan_history_id}:{subdomain_id}:{status}:{length}:{words}:{lines}"
+			keys.append(sig_key)
+			pipeline.incr(sig_key)
+			pipeline.expire(sig_key, 86400)  # 24 hour TTL
+
+		results = pipeline.execute()
+		filtered_batch = []
+		
+		# Pipeline returns [INCR_result1, EXPIRE_result1, INCR_result2, EXPIRE_result2, ...]
+		for i, item in enumerate(batch):
+			incr_val = results[i * 2]
+			if incr_val <= max_repeat:
+				filtered_batch.append(item)
+				
+		return filtered_batch
+	except Exception as e:
+		logger.warning(f'Redis signature filtering failed for {tool_name} batch (fail-open): {e}')
+		return batch
+
+
+
+
+def _flush_ffuf_batch(batch, dirscan, ctx, scan, subdomain_id=0, max_repeat=10):
 	"""Persist a batch of ffuf JSON result dicts with batched DB writes."""
 	if not batch or not scan:
+		return
+
+	batch = filter_fuzz_batch_with_redis(
+		batch,
+		scan.id,
+		subdomain_id,
+		max_repeat,
+		tool_name='ffuf'
+	)
+
+	if not batch:
 		return
 
 	rows = []
@@ -134,9 +185,20 @@ def _flush_ffuf_batch(batch, dirscan, ctx, scan):
 		dirscan.directory_files.add(*dfiles)
 
 
-def _flush_ds_batch(batch, dirscan_ds, ctx, scan):
+def _flush_ds_batch(batch, dirscan_ds, ctx, scan, subdomain_id=0, max_repeat=10):
 	"""Persist a batch of dirsearch result dicts with batched DB writes."""
 	if not batch or not scan:
+		return
+
+	batch = filter_fuzz_batch_with_redis(
+		batch,
+		scan.id,
+		subdomain_id,
+		max_repeat,
+		tool_name='dirsearch'
+	)
+
+	if not batch:
 		return
 
 	rows = []
@@ -200,9 +262,20 @@ def _flush_ds_batch(batch, dirscan_ds, ctx, scan):
 		dirscan_ds.directory_files.add(*dfiles)
 
 
-def _flush_ferox_batch(batch, dirscan, ctx, scan):
+def _flush_ferox_batch(batch, dirscan, ctx, scan, subdomain_id=0, max_repeat=10):
 	"""Persist a batch of feroxbuster NDJSON result dicts with batched DB writes."""
 	if not batch or not scan:
+		return
+
+	batch = filter_fuzz_batch_with_redis(
+		batch,
+		scan.id,
+		subdomain_id,
+		max_repeat,
+		tool_name='feroxbuster'
+	)
+
+	if not batch:
 		return
 
 	rows = []
@@ -294,6 +367,7 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 		from reNgine.tasks import http_crawl
 
 		config = self.yaml_configuration.get(DIR_FILE_FUZZ) or {}
+		max_repeat = config.get('max_repeat_by_signature', 10)
 		enable_http_crawl = config.get(ENABLE_HTTP_CRAWL, DEFAULT_ENABLE_HTTP_CRAWL)
 		rate_limit = config.get(RATE_LIMIT) or self.yaml_configuration.get(RATE_LIMIT, DEFAULT_RATE_LIMIT)
 		extensions = config.get(EXTENSIONS, DEFAULT_DIR_FILE_FUZZ_EXTENSIONS)
@@ -530,7 +604,8 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 								except Exception:
 									pass
 								if len(batch) >= _FUZZ_BATCH_SIZE:
-									_flush_ffuf_batch(batch, dirscan, ctx, scan)
+									subdomain_id = subdomain.id if subdomain else 0
+									_flush_ffuf_batch(batch, dirscan, ctx, scan, subdomain_id=subdomain_id, max_repeat=max_repeat)
 									batch = []
 						else:
 							for line in stream_command(
@@ -545,11 +620,13 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 								batch.append(line)
 								ffuf_results_local.append(line)
 								if len(batch) >= _FUZZ_BATCH_SIZE:
-									_flush_ffuf_batch(batch, dirscan, ctx, scan)
+									subdomain_id = subdomain.id if subdomain else 0
+									_flush_ffuf_batch(batch, dirscan, ctx, scan, subdomain_id=subdomain_id, max_repeat=max_repeat)
 									batch = []
 									activity_heartbeat_safe(f'ffuf {target_url} {len(ffuf_results_local)} hits')
 
-						_flush_ffuf_batch(batch, dirscan, ctx, scan)
+						subdomain_id = subdomain.id if subdomain else 0
+						_flush_ffuf_batch(batch, dirscan, ctx, scan, subdomain_id=subdomain_id, max_repeat=max_repeat)
 
 						if self.subscan:
 							from startScan.models import SubScan
@@ -637,11 +714,14 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 									results_list = json.load(f).get('results', [])
 								logger.info(f'dirsearch collected {len(results_list)} results for {target_url}')
 								for i in range(0, len(results_list), _FUZZ_BATCH_SIZE):
+									subdomain_id = subdomain.id if subdomain else 0
 									_flush_ds_batch(
 										results_list[i:i + _FUZZ_BATCH_SIZE],
 										dirscan_ds,
 										ctx,
 										scan,
+										subdomain_id=subdomain_id,
+										max_repeat=max_repeat,
 									)
 							except Exception as e:
 								logger.error(f'Error parsing dirsearch output for {base_url}: {e}')
@@ -688,7 +768,8 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 									ferox_batch.append(entry)
 							except Exception:
 								pass
-						_flush_ferox_batch(ferox_batch, dirscan_ferox, ctx, scan)
+						subdomain_id = subdomain.id if subdomain else 0
+						_flush_ferox_batch(ferox_batch, dirscan_ferox, ctx, scan, subdomain_id=subdomain_id, max_repeat=max_repeat)
 					else:
 						run_command(
 							fcmd,
@@ -711,13 +792,15 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 												ferox_batch.append(entry)
 												ferox_total += 1
 												if len(ferox_batch) >= _FUZZ_BATCH_SIZE:
-													_flush_ferox_batch(ferox_batch, dirscan_ferox, ctx, scan)
+													subdomain_id = subdomain.id if subdomain else 0
+													_flush_ferox_batch(ferox_batch, dirscan_ferox, ctx, scan, subdomain_id=subdomain_id, max_repeat=max_repeat)
 													activity_heartbeat_safe(f'feroxbuster {target_url} {ferox_total} hits')
 													ferox_batch = []
 										except Exception:
 											pass
 								if ferox_batch:
-									_flush_ferox_batch(ferox_batch, dirscan_ferox, ctx, scan)
+									subdomain_id = subdomain.id if subdomain else 0
+									_flush_ferox_batch(ferox_batch, dirscan_ferox, ctx, scan, subdomain_id=subdomain_id, max_repeat=max_repeat)
 								logger.info(f'feroxbuster collected {ferox_total} results for {target_url}')
 							except Exception as e:
 								logger.error('Error parsing feroxbuster output for %s: %s', target_url, e)
