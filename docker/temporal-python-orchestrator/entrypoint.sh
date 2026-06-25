@@ -33,8 +33,10 @@ fi
 
 # Temporary fix for ctfr invalid escape sequences in Python 3.12
 if [ -f "/usr/src/github/ctfr/ctfr.py" ]; then
-  sed -i "s/b = '''/b = r'''/g" /usr/src/github/ctfr/ctfr.py
-  sed -i "s/'.*www\\\\.'/r'.*www\\\\.'/g" /usr/src/github/ctfr/ctfr.py
+  grep -qF "b = r'''" /usr/src/github/ctfr/ctfr.py || \
+    sed -i "s/b = '''/b = r'''/g" /usr/src/github/ctfr/ctfr.py
+  grep -qF "r'.*www\\.'" /usr/src/github/ctfr/ctfr.py || \
+    sed -i "s/'.*www\\\\.'/r'.*www\\\\.'/g" /usr/src/github/ctfr/ctfr.py
 fi
 
 

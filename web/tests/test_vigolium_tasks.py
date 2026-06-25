@@ -159,6 +159,74 @@ class VigoliumParserTest(TestCase):
             parse_vigolium_http_record(task, {'method': 'GET'})
             mock_save.assert_not_called()
 
+    @patch('reNgine.tasks.stream_command', return_value=iter([]))
+    @patch('reNgine.vigolium_tasks._iter_jsonl')
+    @patch('reNgine.vigolium_tasks.parse_vigolium_finding')
+    @patch('reNgine.vigolium_tasks.Subdomain.objects.filter')
+    def test_run_vigolium_phase_in_file_deduplication(self, mock_subdomain_filter, mock_parse_finding, mock_iter_jsonl, mock_stream_command):
+        """_run_vigolium_phase deduplicates findings with the same module, hostname, and URL."""
+        from reNgine.vigolium_tasks import _run_vigolium_phase
+
+        # Mock the JSONL records returned
+        mock_iter_jsonl.return_value = [
+            {
+                'type': 'finding',
+                'data': {
+                    'hostname': 'target.com',
+                    'module_id': 'xss',
+                    'url': 'https://target.com/a',
+                }
+            },
+            {
+                'type': 'finding',
+                'data': {
+                    'hostname': 'target.com',
+                    'module_id': 'xss',
+                    'url': 'https://target.com/a', # Duplicate finding
+                }
+            },
+            {
+                'type': 'finding',
+                'data': {
+                    'hostname': 'target.com',
+                    'module_name': 'xss', # using module_name fallback
+                    'url': 'https://target.com/a', # Duplicate finding
+                }
+            },
+            {
+                'type': 'finding',
+                'data': {
+                    'hostname': 'target.com',
+                    'module_id': 'sqli',
+                    'url': 'https://target.com/a', # Different module
+                }
+            },
+            {
+                'type': 'finding',
+                'data': {
+                    'hostname': 'target.com',
+                    'module_id': 'xss',
+                    'url': 'https://target.com/b', # Different URL
+                }
+            }
+        ]
+
+        task = self._make_task()
+        subdomain = MagicMock()
+        mock_subdomain_filter.return_value.first.return_value = subdomain
+
+        _run_vigolium_phase(task, cmd='fake', output_file='/tmp/fake.jsonl', phase_label='Test')
+
+        # Should only parse the unique findings (3 calls out of 5 records)
+        self.assertEqual(mock_parse_finding.call_count, 3)
+
+        # Verify the modules of unique calls
+        called_modules = [
+            (call[0][1]['module_id'] if call[0][1].get('module_id') else call[0][1]['module_name'])
+            for call in mock_parse_finding.call_args_list
+        ]
+        self.assertEqual(called_modules, ['xss', 'sqli', 'xss'])
+
 
 class VigoliumTaskGatingTest(TestCase):
     def _make_task(self, vuln_enabled=True, discovery_enabled=True, analysis_enabled=True):
@@ -415,7 +483,7 @@ class VigoliumAuditApiKeyMaskTest(TestCase):
     """API key must never appear in log output."""
 
     @patch('reNgine.vigolium_tasks.subprocess.run')
-    @patch('reNgine.vigolium_tasks.LLMConfig')
+    @patch('dashboard.models.LLMConfig')
     def test_api_key_not_logged(self, mock_llm_cls, mock_run):
         """Confirm the real API key does not appear in any log record."""
         from reNgine.vigolium_tasks import vigolium_audit_scan
@@ -455,7 +523,7 @@ class VigoliumAuditApiKeyEnvTest(TestCase):
     """API key must be passed via env var, never as a CLI argument."""
 
     @patch('reNgine.vigolium_tasks.subprocess.run')
-    @patch('reNgine.vigolium_tasks.LLMConfig')
+    @patch('dashboard.models.LLMConfig')
     def test_api_key_not_in_cmd_args(self, mock_llm_cls, mock_run):
         from reNgine.vigolium_tasks import vigolium_audit_scan
 
@@ -485,11 +553,11 @@ class VigoliumAuditApiKeyEnvTest(TestCase):
             pass
 
         self.assertTrue(mock_run.called, "subprocess.run must have been called")
-        call_kwargs = mock_run.call_args
-        cmd_args = call_kwargs[0][0] if call_kwargs[0] else []
+        first_call = mock_run.call_args_list[0]
+        cmd_args = first_call[0][0] if first_call[0] else []
         self.assertNotIn('sk-SUPERSECRET', cmd_args,
                          "API key must not appear in subprocess arg list")
-        env_passed = call_kwargs[1].get('env', {}) if call_kwargs[1] else {}
+        env_passed = first_call[1].get('env', {}) if first_call[1] else {}
         self.assertIn('VIGOLIUM_API_KEY', env_passed,
                       "API key should be in env dict passed to subprocess")
         self.assertEqual(env_passed['VIGOLIUM_API_KEY'], 'sk-SUPERSECRET')
@@ -537,7 +605,7 @@ class VigoliumAuditIntensityValidationTest(TestCase):
             pass
 
         self.assertTrue(mock_run.called, "subprocess.run must have been called")
-        call_args = mock_run.call_args[0][0]
+        call_args = mock_run.call_args_list[0][0][0]
         idx = call_args.index('--intensity')
         self.assertEqual(call_args[idx + 1], 'balanced',
                          "Invalid intensity must be coerced to 'balanced'")

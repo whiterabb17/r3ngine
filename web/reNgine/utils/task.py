@@ -669,11 +669,15 @@ def save_endpoint(
     created = False
     
     if ctx.get('domain_id'):
-        domain = Domain.objects.filter(id=ctx.get('domain_id')).first()
+        # Cache resolved Domain in ctx to avoid repeated SELECT per save_endpoint() call.
+        domain = ctx.get('_domain_obj')
+        if domain is None:
+            domain = Domain.objects.filter(id=ctx.get('domain_id')).first()
+            ctx['_domain_obj'] = domain
         if domain and domain.name not in http_url:
             logger.error(f"{http_url} is not a URL of domain {domain.name}. Skipping.")
             return None, False
-            
+
     if crawl:
         # Avoid circular import by importing here
         from reNgine.tasks import http_crawl
@@ -694,8 +698,18 @@ def save_endpoint(
     elif not scheme:
         return None, False
     else:
-        scan = ScanHistory.objects.filter(pk=ctx.get('scan_history_id')).first()
-        domain = Domain.objects.filter(pk=ctx.get('domain_id')).first()
+        # Cache resolved ORM objects in ctx to avoid repeated queries within
+        # the same scan context (e.g., once per port in port_scan's hot loop).
+        scan = ctx.get('_scan_obj')
+        if scan is None:
+            scan = ScanHistory.objects.filter(pk=ctx.get('scan_history_id')).first()
+            ctx['_scan_obj'] = scan
+
+        domain = ctx.get('_domain_obj')
+        if domain is None:
+            domain = Domain.objects.filter(pk=ctx.get('domain_id')).first()
+            ctx['_domain_obj'] = domain
+
         if not validators.url(http_url):
             return None, False
         http_url = sanitize_url(http_url)
@@ -728,7 +742,7 @@ def save_endpoint(
             from startScan.models import SubScan
             if SubScan.objects.filter(pk=subscan_id).exists():
                 endpoint.endpoint_subscan_ids.add(subscan_id)
-            endpoint.save()
+            # No second save() — M2M add() writes directly to the join table
 
     return endpoint, created
 
@@ -1430,6 +1444,65 @@ def bulk_apply_gf_pattern_from_file(gf_output_file, gf_pattern, ctx, batch_size=
 	if url_batch:
 		_flush_url_batch(url_batch)
 
+	return updated
+
+
+def bulk_apply_gf_pattern_from_urls(urls, gf_pattern, ctx, batch_size=500):
+	"""Apply a GF pattern match to endpoints given a list of matched URL strings.
+
+	Mirrors bulk_apply_gf_pattern_from_file but accepts an in-memory list instead of a file,
+	so callers that already hold matched URLs (e.g. RunGFOnAllEndpointsActivity) avoid a
+	round-trip through disk.
+	"""
+	scan_id = ctx.get('scan_history_id')
+	domain_id = ctx.get('domain_id')
+	scan = ScanHistory.objects.filter(pk=scan_id).first()
+	domain = Domain.objects.filter(pk=domain_id).first()
+	if not scan or not domain or not urls:
+		return 0
+
+	updated = 0
+
+	def _flush(batch):
+		nonlocal updated
+		if not batch:
+			return
+		sanitized = [sanitize_url(u) for u in batch if u and validators.url(sanitize_url(u))]
+		if not sanitized:
+			return
+		bulk_persist_fetch_urls(sanitized, ctx, batch_size=len(sanitized))
+		endpoints = EndPoint.objects.filter(
+			scan_history=scan,
+			target_domain=domain,
+			http_url__in=sanitized,
+		)
+		to_update = []
+		for ep in endpoints:
+			earlier = ep.matched_gf_patterns or ''
+			if earlier:
+				if gf_pattern in {p.strip() for p in earlier.split(',') if p.strip()}:
+					continue
+				ep.matched_gf_patterns = f'{earlier},{gf_pattern}'
+			else:
+				ep.matched_gf_patterns = gf_pattern
+			to_update.append(ep)
+		if to_update:
+			EndPoint.objects.bulk_update(to_update, ['matched_gf_patterns'], batch_size=batch_size)
+			updated += len(to_update)
+
+	url_batch = []
+	for i, url in enumerate(urls):
+		url = url.strip() if url else ''
+		if not url:
+			continue
+		url_batch.append(url)
+		if len(url_batch) >= batch_size:
+			_flush(url_batch)
+			url_batch = []
+		if i % 5000 == 0 and i > 0:
+			activity_heartbeat_safe(f'gf pattern {gf_pattern} url {i}')
+
+	_flush(url_batch)
 	return updated
 
 

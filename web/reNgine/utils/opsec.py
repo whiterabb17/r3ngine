@@ -5,6 +5,8 @@ import re
 import tempfile
 import subprocess
 import json
+import threading
+import time
 from urllib.parse import urlparse
 from django.conf import settings
 from scanEngine.models import OpSec, Proxy
@@ -306,6 +308,8 @@ class ProxychainsWrapper:
             scheme = 'http' if p_type in ['http', 'https'] else p_type
             proxy_url = f'{scheme}://{p_host}:{p_port}'
             if check_proxy_robust(proxy_url, timeout=10):
+                from reNgine.common_func import mark_proxy_used
+                mark_proxy_used(proxy_url)
                 return proxy_str
             _log.error('Proxychains proxy %s validation failed.', proxy_url)
             from reNgine.common_func import remove_proxy_from_pool
@@ -354,10 +358,42 @@ class ProxychainsWrapper:
         """
         if not proxy:
             proxy = self.get_random_proxy()
-        
+
         if proxy and self.should_wrap():
             conf_path = self.write_temp_config(proxy)
             return f"{PROXYCHAINS_EXEC_PATH} -f {conf_path} {cmd}", conf_path
         return cmd, None
 
+
+# Module-level singleton for OpSecManager with TTL-based expiry.
+# Fires 2 DB queries on first call; re-fetched after _OPSEC_MANAGER_TTL seconds.
+# Call get_opsec_manager(refresh=True) to force an immediate re-fetch.
+_opsec_manager_instance: 'OpSecManager | None' = None
+_opsec_manager_fetched_at: float = 0.0
+_OPSEC_MANAGER_TTL: float = 300.0  # 5 minutes; settings changes propagate within one TTL window
+_opsec_manager_lock = threading.Lock()
+
+
+def get_opsec_manager(refresh: bool = False) -> 'OpSecManager':
+    """Return a cached OpSecManager, re-fetching after TTL or on explicit refresh.
+
+    The Temporal worker runs in a separate process; Django signals do not cross
+    process boundaries. The TTL ensures settings changes take effect within
+    _OPSEC_MANAGER_TTL seconds without requiring a worker restart.
+    """
+    global _opsec_manager_instance, _opsec_manager_fetched_at
+    now = time.monotonic()
+    if (not refresh
+            and _opsec_manager_instance is not None
+            and now - _opsec_manager_fetched_at < _OPSEC_MANAGER_TTL):
+        return _opsec_manager_instance
+    with _opsec_manager_lock:
+        now = time.monotonic()  # re-read inside the lock
+        if (not refresh
+                and _opsec_manager_instance is not None
+                and now - _opsec_manager_fetched_at < _OPSEC_MANAGER_TTL):
+            return _opsec_manager_instance
+        _opsec_manager_instance = OpSecManager()
+        _opsec_manager_fetched_at = now
+    return _opsec_manager_instance
 

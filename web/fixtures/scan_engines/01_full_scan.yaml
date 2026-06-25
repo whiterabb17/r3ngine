@@ -120,6 +120,7 @@
         threads: 30
         wordlist_name: dicc
         use_api_wordlist: false
+        max_repeat_by_signature: 10
       param_discovery:
         enabled: true
         min_confidence: 50

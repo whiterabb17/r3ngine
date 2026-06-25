@@ -107,6 +107,7 @@
         threads: 20
         wordlist_name: dicc
         use_api_wordlist: false
+        max_repeat_by_signature: 10
       fetch_url:
         uses_tools:
           - gospider

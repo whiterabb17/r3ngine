@@ -346,6 +346,36 @@ class MasterScanWorkflow:
                     )
                 )
 
+            # Vigolium harvest (passive ingestion) and discovery (active probing) both
+            # run at Tier 1 alongside subdomain enumeration.  Harvest seeds the DB with
+            # passively gathered endpoints early; discovery actively probes targets with
+            # a robust config so results are available before http_crawl in Tier 2.
+            vigolium_harvest_config = yaml_config.get('vigolium_harvest', {})
+            if vigolium_harvest_config.get('run_vigolium_harvest', True):
+                discovery_futures.append(
+                    workflow.execute_activity(
+                        "RunVigoliumHarvestActivity",
+                        ctx,
+                        start_to_close_timeout=timedelta(hours=3),
+                        heartbeat_timeout=timedelta(minutes=10),
+                        retry_policy=_RETRY_LONG_SCAN,
+                        task_queue="python-orchestrator-queue"
+                    )
+                )
+
+            vigolium_discovery_config = yaml_config.get('vigolium_discovery', {})
+            if vigolium_discovery_config.get('run_vigolium_discovery', True):
+                discovery_futures.append(
+                    workflow.execute_activity(
+                        "RunVigoliumDiscoveryActivity",
+                        ctx,
+                        start_to_close_timeout=timedelta(hours=4),
+                        heartbeat_timeout=timedelta(minutes=10),
+                        retry_policy=_RETRY_LONG_SCAN,
+                        task_queue="python-orchestrator-queue"
+                    )
+                )
+
             if discovery_futures:
                 await asyncio.gather(*discovery_futures)
                 # Verify / log discovery results persisted to DB
@@ -406,19 +436,6 @@ class MasterScanWorkflow:
                         "RunPortScanActivity",
                         ctx,
                         start_to_close_timeout=timedelta(hours=6),
-                        heartbeat_timeout=timedelta(minutes=5),
-                        retry_policy=_RETRY_LONG_SCAN,
-                        task_queue="python-orchestrator-queue"
-                    )
-                )
-
-            vigolium_discovery_config = yaml_config.get('vigolium_discovery', {})
-            if vigolium_discovery_config.get('run_vigolium_discovery', True):
-                tier2_futures.append(
-                    workflow.execute_activity(
-                        "RunVigoliumDiscoveryActivity",
-                        ctx,
-                        start_to_close_timeout=timedelta(hours=4),
                         heartbeat_timeout=timedelta(minutes=5),
                         retry_policy=_RETRY_LONG_SCAN,
                         task_queue="python-orchestrator-queue"
@@ -555,6 +572,17 @@ class MasterScanWorkflow:
                     retry_policy=_RETRY_INTERNAL,
                     task_queue="python-orchestrator-queue"
                 )
+
+            # Run gf patterns against every endpoint accumulated up to this point
+            # (covers fetch_url + http_crawl + dir_file_fuzz results).
+            await workflow.execute_activity(
+                "RunGFOnAllEndpointsActivity",
+                ctx,
+                start_to_close_timeout=timedelta(minutes=30),
+                heartbeat_timeout=timedelta(minutes=10),
+                retry_policy=_RETRY_INTERNAL,
+                task_queue="python-orchestrator-queue"
+            )
 
             # Consolidation: log total endpoint count after Tiers 2-4 complete
             await workflow.execute_activity(
@@ -1310,9 +1338,14 @@ _SUBSCAN_DISPATCH = {
         "timeout": timedelta(minutes=30),
         "args_builder": lambda ctx: [ctx, "run_apme", "Attack Path Modeling Engine", {"scan_history_id": ctx.get("scan_history_id")}],
     },
+    "vigolium_harvest": {
+        "activity": "RunVigoliumHarvestActivity",
+        "timeout": timedelta(hours=3),
+        "args_builder": lambda ctx: [ctx],
+    },
     "vigolium_discovery": {
         "activity": "RunVigoliumDiscoveryActivity",
-        "timeout": timedelta(hours=2),
+        "timeout": timedelta(hours=4),
         "args_builder": lambda ctx: [ctx],
     },
     "vigolium_analysis": {
@@ -1333,7 +1366,42 @@ _SUBSCAN_DISPATCH = {
     # Special cases — handled with inline logic in SubScanWorkflow.run():
     "vulnerability_scan": None,  # Has Tier 7 post-steps (correlation, risk, APME)
     "baddns": None,              # Modifies ctx before dispatch
+    "url_vuln": None,            # Dispatched as URLVulnWorkflow child workflow
+    "url_crawl": None,           # Dispatched as URLCrawlWorkflow child workflow
+    "url_fuzz": None,            # Dispatched as URLFuzzWorkflow child workflow
+    "url_dirsearch": None,       # Dispatched as URLDirSearchWorkflow child workflow
+    "url_params_fuzz": None,     # Dispatched as URLParamsFuzzWorkflow child workflow
+    "subdomain_recon": None,     # Dispatched as SubdomainReconWorkflow child workflow
+    "domain_recon": None,        # Dispatched as DomainReconWorkflow child workflow
+    "host_recon": None,          # Dispatched as HostReconWorkflow child workflow
+    "cidr_recon": None,          # Dispatched as CIDRReconWorkflow child workflow
+    "code_scan": None,           # Dispatched as CodeScanWorkflow child workflow
+    "vigolium_audit": None,      # Dispatched as CodeScanWorkflow child workflow (vigolium_audit config section)
+    # stress_test is triggered independently via StressTestControlAPI — not via SubScanWorkflow
 }
+
+# Standalone child-workflow subscan types.
+# These are NOT placed into any execution tier in SubScanWorkflow because each
+# standalone workflow manages its own internal pipeline sequencing (HTTP probe,
+# port scan, crawl, etc.).  They are recognised by the validator (present in
+# _SUBSCAN_DISPATCH) but stripped from `active_tasks` before tier construction
+# and executed as a single concurrent gather AFTER the main tier pipeline.
+# They can be triggered individually from the scan-start modal or the subscans
+# tab without any dependency on the main scan's tier ordering.
+_STANDALONE_SUBSCAN_WORKFLOWS: frozenset = frozenset({
+    "url_crawl",
+    "url_fuzz",
+    "url_dirsearch",
+    "url_params_fuzz",
+    "url_vuln",
+    "subdomain_recon",
+    "domain_recon",
+    "host_recon",
+    "cidr_recon",
+    "code_scan",
+    "vigolium_audit",
+})
+
 
 
 @workflow.defn(name="SubScanWorkflow")
@@ -1539,6 +1607,106 @@ class SubScanWorkflow:
                         run_timeout=timedelta(hours=12),
                         retry_policy=RetryPolicy(maximum_attempts=1),
                     )
+                elif t == "url_vuln":
+                    await workflow.execute_child_workflow(
+                        "URLVulnWorkflow",
+                        ctx_task,
+                        id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-urlvuln",
+                        task_queue="python-orchestrator-queue",
+                        execution_timeout=timedelta(hours=4),
+                        run_timeout=timedelta(hours=4),
+                        retry_policy=RetryPolicy(maximum_attempts=1),
+                    )
+                elif t == "url_crawl":
+                    await workflow.execute_child_workflow(
+                        "URLCrawlWorkflow",
+                        ctx_task,
+                        id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-urlcrawl",
+                        task_queue="python-orchestrator-queue",
+                        execution_timeout=timedelta(hours=4),
+                        run_timeout=timedelta(hours=4),
+                        retry_policy=RetryPolicy(maximum_attempts=1),
+                    )
+                elif t == "url_fuzz":
+                    await workflow.execute_child_workflow(
+                        "URLFuzzWorkflow",
+                        ctx_task,
+                        id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-urlfuzz",
+                        task_queue="python-orchestrator-queue",
+                        execution_timeout=timedelta(hours=6),
+                        run_timeout=timedelta(hours=6),
+                        retry_policy=RetryPolicy(maximum_attempts=1),
+                    )
+                elif t == "url_dirsearch":
+                    await workflow.execute_child_workflow(
+                        "URLDirSearchWorkflow",
+                        ctx_task,
+                        id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-urldirsearch",
+                        task_queue="python-orchestrator-queue",
+                        execution_timeout=timedelta(hours=4),
+                        run_timeout=timedelta(hours=4),
+                        retry_policy=RetryPolicy(maximum_attempts=1),
+                    )
+                elif t == "url_params_fuzz":
+                    await workflow.execute_child_workflow(
+                        "URLParamsFuzzWorkflow",
+                        ctx_task,
+                        id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-urlparamsfuzz",
+                        task_queue="python-orchestrator-queue",
+                        execution_timeout=timedelta(hours=4),
+                        run_timeout=timedelta(hours=4),
+                        retry_policy=RetryPolicy(maximum_attempts=1),
+                    )
+                elif t == "subdomain_recon":
+                    await workflow.execute_child_workflow(
+                        "SubdomainReconWorkflow",
+                        ctx_task,
+                        id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-subdomainrecon",
+                        task_queue="python-orchestrator-queue",
+                        execution_timeout=timedelta(hours=4),
+                        run_timeout=timedelta(hours=4),
+                        retry_policy=RetryPolicy(maximum_attempts=1),
+                    )
+                elif t == "domain_recon":
+                    await workflow.execute_child_workflow(
+                        "DomainReconWorkflow",
+                        ctx_task,
+                        id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-domainrecon",
+                        task_queue="python-orchestrator-queue",
+                        execution_timeout=timedelta(hours=2),
+                        run_timeout=timedelta(hours=2),
+                        retry_policy=RetryPolicy(maximum_attempts=1),
+                    )
+                elif t == "host_recon":
+                    await workflow.execute_child_workflow(
+                        "HostReconWorkflow",
+                        ctx_task,
+                        id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-hostrecon",
+                        task_queue="python-orchestrator-queue",
+                        execution_timeout=timedelta(hours=2),
+                        run_timeout=timedelta(hours=2),
+                        retry_policy=RetryPolicy(maximum_attempts=1),
+                    )
+                elif t == "cidr_recon":
+                    await workflow.execute_child_workflow(
+                        "CIDRReconWorkflow",
+                        ctx_task,
+                        id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-cidrrecon",
+                        task_queue="python-orchestrator-queue",
+                        execution_timeout=timedelta(hours=3),
+                        run_timeout=timedelta(hours=3),
+                        retry_policy=RetryPolicy(maximum_attempts=1),
+                    )
+                elif t in ("code_scan", "vigolium_audit"):
+                    await workflow.execute_child_workflow(
+                        "CodeScanWorkflow",
+                        ctx_task,
+                        id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-codescan",
+                        task_queue="python-orchestrator-queue",
+                        execution_timeout=timedelta(hours=4),
+                        run_timeout=timedelta(hours=4),
+                        retry_policy=RetryPolicy(maximum_attempts=1),
+                    )
                 elif dispatch is not None:
                     args = dispatch["args_builder"](ctx_task)
                     await workflow.execute_activity(
@@ -1573,24 +1741,32 @@ class SubScanWorkflow:
                     task_success[t] = False
                     raise task_err
 
-            # Group active tasks by sequence-enforced execution tiers
+            # Group active tasks by sequence-enforced execution tiers.
+            # Standalone child-workflow tasks are stripped out here — they run
+            # independently after the tier pipeline (see standalone block below).
             active_tasks = [t for t in tasks if t not in {
                 "correlate_vulnerabilities", "calculate_risk_scores",
                 "generate_impact_assessment", "sync_graph", "run_apme", "attack_path_modeling"
-            }]
+            } and t not in _STANDALONE_SUBSCAN_WORKFLOWS]
+
+            # Standalone tasks: extracted before tier calculation.
+            # Each standalone workflow is self-sequencing, so no ordering is needed.
+            standalone_tasks = [t for t in tasks if t in _STANDALONE_SUBSCAN_WORKFLOWS]
 
             tiers = [
                 # TIER 1: Discovery — all discovery tools run concurrently.
-                # All must complete before Tier 2 (subdomains must be in DB).
+                # vigolium_harvest and vigolium_discovery also run here: harvest seeds
+                # passive endpoints early; discovery actively probes with robust config.
                 [t for t in active_tasks if t in {
                     "subdomain_discovery", "amass_intel_discovery", "firewall_vpn_scan",
-                    "dns_security", "osint", "spiderfoot_scan", "baddns"
+                    "dns_security", "osint", "spiderfoot_scan", "baddns",
+                    "vigolium_harvest", "vigolium_discovery",
                 }],
                 # TIER 2: HTTP Crawl & Port Scan — populates endpoint DB for Tiers 3+.
-                # vigolium_discovery runs alongside http_crawl to seed endpoints concurrently.
-                [t for t in active_tasks if t in {"http_crawl", "port_scan", "vigolium_discovery"}],
+                [t for t in active_tasks if t in {"http_crawl", "port_scan"}],
                 # TIER 3: URL Fetching + Screenshot — both depend only on Tier 2 http_crawl;
                 # screenshot does NOT depend on fetch_url output so they run concurrently.
+                # vigolium spidering runs as part of fetch_url (uses_tools: [vigolium]).
                 [t for t in active_tasks if t in {"fetch_url", "screenshot"}],
                 # TIER 3a: HTTP Crawl Bridge — crawls new/dead endpoints from fetch_url
                 [t for t in active_tasks if t == "http_crawl_bridge"],
@@ -1605,17 +1781,20 @@ class SubScanWorkflow:
                 # TIER 6: Security Assessment — explicit inclusion, mirrors MasterScanWorkflow Tier 6.
                 # vigolium_scan runs alongside vulnerability_scan at Tier 6.
                 [t for t in active_tasks if t in {
-                    "vulnerability_scan", "waf_bypass", "vigolium_scan", "run_acunetix"
+                    "vulnerability_scan", "waf_bypass", "vigolium_scan", "run_acunetix",
                 }],
-                # TIER 6b: Fallback for any task not classified in Tiers 1-6.
-                # Handles future tasks added to _SUBSCAN_DISPATCH without breaking existing tiers.
+                # TIER 6b: Fallback for any pipeline task not classified in Tiers 1-6.
+                # Handles future tasks added to _SUBSCAN_DISPATCH without explicit tier placement.
+                # Standalone workflow types are excluded here — they are handled separately.
                 [t for t in active_tasks if t not in {
                     "subdomain_discovery", "amass_intel_discovery", "firewall_vpn_scan",
-                    "dns_security", "osint", "spiderfoot_scan", "baddns", "http_crawl", "port_scan",
+                    "dns_security", "osint", "spiderfoot_scan", "baddns",
+                    "vigolium_harvest", "vigolium_discovery",
+                    "http_crawl", "port_scan",
                     "fetch_url", "screenshot", "dir_file_fuzz", "web_api_discovery", "waf_detection",
                     "secret_scanning", "vulnerability_scan", "waf_bypass",
-                    "vigolium_discovery", "vigolium_analysis", "vigolium_scan", "param_discovery",
-                    "http_crawl_bridge", "run_acunetix"
+                    "vigolium_analysis", "vigolium_scan", "param_discovery",
+                    "http_crawl_bridge", "run_acunetix",
                 }],
             ]
 
@@ -1732,6 +1911,16 @@ class SubScanWorkflow:
                         task_queue="python-orchestrator-queue"
                     )
                     await self._check_paused()
+                    # Run gf patterns against every endpoint accumulated up to this point.
+                    await workflow.execute_activity(
+                        "RunGFOnAllEndpointsActivity",
+                        ctx,
+                        start_to_close_timeout=timedelta(minutes=30),
+                        heartbeat_timeout=timedelta(minutes=10),
+                        retry_policy=_RETRY_INTERNAL,
+                        task_queue="python-orchestrator-queue"
+                    )
+                    await self._check_paused()
                     await _dispatch_tier_plugins(
                         ctx, "tier_4",
                         str(ctx.get('subscan_id') or ctx.get('scan_history_id', 'scan')),
@@ -1779,6 +1968,22 @@ class SubScanWorkflow:
                 retry_policy=_RETRY_INTERNAL,
                 task_queue="python-orchestrator-queue"
             )
+
+            # -------------------------------------------------------------------
+            # STANDALONE CHILD WORKFLOWS
+            # Triggered individually (from scan-start modal or subscans tab).
+            # Each manages its own internal pipeline sequencing, so no tier
+            # ordering is required.  They run concurrently as a flat gather
+            # AFTER the main tier pipeline so that base scan context (endpoints,
+            # subdomains) is available, but before Tier 7 post-processing.
+            # -------------------------------------------------------------------
+            if standalone_tasks:
+                workflow.logger.info(
+                    f"[SubScanWorkflow] Executing standalone workflows: {standalone_tasks}"
+                )
+                await asyncio.gather(*[
+                    run_and_track_task(t) for t in standalone_tasks
+                ])
 
             success = True
         except asyncio.CancelledError:
@@ -3257,8 +3462,10 @@ class SingleTaskRetryWorkflow:
             elif task_name == "port_scan":
                 await workflow.execute_activity("RunPortScanActivity", ctx, start_to_close_timeout=timedelta(hours=6), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("ParseEnumerationResultsActivity", ctx, start_to_close_timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
+            elif task_name == "vigolium_harvest":
+                await workflow.execute_activity("RunVigoliumHarvestActivity", ctx, start_to_close_timeout=timedelta(hours=3), heartbeat_timeout=timedelta(minutes=10), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
             elif task_name == "vigolium_discovery":
-                await workflow.execute_activity("RunVigoliumDiscoveryActivity", ctx, start_to_close_timeout=timedelta(hours=4), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
+                await workflow.execute_activity("RunVigoliumDiscoveryActivity", ctx, start_to_close_timeout=timedelta(hours=4), heartbeat_timeout=timedelta(minutes=10), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
             elif task_name == "fetch_url":
                 await workflow.execute_activity("RunFetchURLActivity", ctx, start_to_close_timeout=timedelta(hours=8), heartbeat_timeout=timedelta(minutes=15), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("RunHTTPCrawlBridgeActivity", ctx, start_to_close_timeout=timedelta(hours=3), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
@@ -3271,6 +3478,7 @@ class SingleTaskRetryWorkflow:
             elif task_name == "dir_file_fuzz":
                 await workflow.execute_activity("RunDirFileFuzzActivity", ctx, start_to_close_timeout=timedelta(hours=8), heartbeat_timeout=timedelta(minutes=15), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("ParseFuzzResultsActivity", ctx, start_to_close_timeout=timedelta(minutes=15), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
+                await workflow.execute_activity("RunGFOnAllEndpointsActivity", ctx, start_to_close_timeout=timedelta(minutes=30), heartbeat_timeout=timedelta(minutes=10), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
             elif task_name == "waf_detection":
                 await workflow.execute_activity("RunWAFDetectionActivity", ctx, start_to_close_timeout=timedelta(minutes=30), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_NETWORK_SCAN, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("ParseAnalysisResultsActivity", ctx, start_to_close_timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")

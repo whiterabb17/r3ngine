@@ -87,7 +87,8 @@ dir_file_fuzz: {
   'stop_on_error': false,
   'timeout': 5,
   'threads': 30,
-  'wordlist_name': 'dicc'
+  'wordlist_name': 'dicc',
+  'max_repeat_by_signature': 10
 }
 fetch_url: {
   'uses_tools': ['gospider', 'hakrawler', 'waybackurls', 'katana', 'gau'],

@@ -125,6 +125,7 @@ from reNgine.temporal_activities import (
     # Tier 3/4: Fuzzing
     run_dir_file_fuzz_activity,
     parse_fuzz_results_activity,
+    run_gf_on_all_endpoints_activity,
 
     # Tier 5: Analysis
     run_web_api_discovery_activity,
@@ -143,6 +144,7 @@ from reNgine.temporal_activities import (
     run_react2shell_activity,
     run_wpscan_activity,
     run_semgrep_activity,
+    run_vigolium_harvest_activity,
     run_vigolium_scan_activity,
     run_vigolium_discovery_activity,
     run_vigolium_analysis_activity,
@@ -500,6 +502,7 @@ class Command(BaseCommand):
                 run_param_discovery_activity,
                 run_dir_file_fuzz_activity,
                 parse_fuzz_results_activity,
+                run_gf_on_all_endpoints_activity,
 
                 # Tier 5
                 run_web_api_discovery_activity,
@@ -519,6 +522,7 @@ class Command(BaseCommand):
                 run_wpscan_activity,
                 run_semgrep_activity,
                 run_wptaint_scan_activity,
+                run_vigolium_harvest_activity,
                 run_vigolium_scan_activity,
                 run_vigolium_discovery_activity,
                 run_vigolium_analysis_activity,

@@ -79,6 +79,7 @@
         threads: 30
         wordlist_name: dicc
         use_api_wordlist: true
+        max_repeat_by_signature: 10
       vulnerability_scan:
         run_acunetix: true
         run_wpscan: true

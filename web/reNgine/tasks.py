@@ -42,7 +42,7 @@ from reNgine.definitions import *
 from reNgine.settings import *
 from reNgine.llm import *
 from reNgine.utilities import *
-from reNgine.utils.opsec import OpSecManager, ProxychainsWrapper
+from reNgine.utils.opsec import ProxychainsWrapper, get_opsec_manager
 from reNgine.utils.waf import OriginDiscoveryManager, WafBypassOrchestrator
 from scanEngine.models import (EngineType, InstalledExternalTool, Notification, Proxy, OpSec)
 from startScan.models import *
@@ -162,8 +162,7 @@ def finish_osint(results, scan_history_id):
 
 def finish_osint_discovery(results, results_dir):
     """Callback for OSINT discovery tasks. Strips metadata from results."""
-    from reNgine.utils.opsec import OpSecManager
-    opsec = OpSecManager()
+    opsec = get_opsec_manager()
     opsec.strip_directory(results_dir)
     logger.info(f"OSINT discovery completed and cleaned up in {results_dir}")
     return results
@@ -862,10 +861,7 @@ def amass_intel_discovery(self, host, ctx={}, description=None):
 	#proxy = get_random_proxy()
 	#if proxy:
 	#	cmd = f"export HTTP_PROXY='{proxy}' HTTPS_PROXY='{proxy}' && {cmd}"
-		
-	#opsec = OpSecManager()
-	#cmd = opsec.apply_stealth('amass', cmd, proxy=proxy)
-	
+
 	run_command(
 		cmd,
 		shell=True,
@@ -938,7 +934,7 @@ def subdomain_discovery(
 	default_subdomain_tools.append('baddns')
 
 	# Run tools
-	opsec = OpSecManager()
+	opsec = get_opsec_manager()
 	existing_subs = set(Subdomain.objects.filter(scan_history=self.scan).values_list('name', flat=True))
 	new_discoveries = []
 
@@ -1439,8 +1435,7 @@ def osint_discovery(self, config, host, scan_history_id, activity_id, results_di
 	finish_osint_discovery([results], results_dir=results_dir)
 
 	# Strip metadata from OSINT results
-	from reNgine.utils.opsec import OpSecManager
-	opsec = OpSecManager()
+	opsec = get_opsec_manager()
 	opsec.strip_directory(results_dir)
 
 	return results
@@ -2512,6 +2507,8 @@ def port_scan(self, hosts=[], ctx={}, description=None, prepare_only=False, pars
 			scan_id=self.scan_id,
 			activity_id=self.activity_id)
 
+	# One SELECT per unique host instead of one per port (N+1 fix).
+	_subdomain_cache: dict = {}
 	for line in line_source:
 		if not isinstance(line, dict):
 			continue
@@ -2522,20 +2519,18 @@ def port_scan(self, hosts=[], ctx={}, description=None, prepare_only=False, pars
 		if port_number == 0:
 			continue
 
-		# Grab subdomain
-		subdomain = Subdomain.objects.filter(
-			name=host,
-			target_domain=self.domain,
-			scan_history=self.scan
-		).first()
+		# Grab subdomain — lazy per-host cache; one DB hit per unique host, not per port.
+		if host not in _subdomain_cache:
+			_subdomain_cache[host] = Subdomain.objects.filter(
+				name=host,
+				target_domain=self.domain,
+				scan_history=self.scan,
+			).first()
+		subdomain = _subdomain_cache[host]
 
-		# Add IP DB
+		# Add IP DB — save_ip_address() already handles ip_subscan_ids.add(subscan)
+		# when subscan= is passed, so no redundant M2M add needed here.
 		ip, _ = save_ip_address(ip_address, subdomain, subscan=self.subscan, scan_id=self.scan_id, activity_id=self.activity_id)
-		if self.subscan:
-			from startScan.models import SubScan
-			if SubScan.objects.filter(pk=self.subscan.pk).exists():
-				ip.ip_subscan_ids.add(self.subscan)
-			ip.save()
 
 		# Add endpoint to DB
 		# port 80 and 443 not needed as http crawl already does that.
@@ -2588,8 +2583,8 @@ def port_scan(self, hosts=[], ctx={}, description=None, prepare_only=False, pars
 		if port_number in UNCOMMON_WEB_PORTS:
 			port.is_uncommon = True
 			port.save()
+		# M2M .add() writes directly to the join table — no parent ip.save() needed.
 		ip.ports.add(port)
-		ip.save()
 		if host in ports_data:
 			ports_data[host].append(port_number)
 		else:
@@ -2713,7 +2708,7 @@ def nmap(
 
 	# Apply OpSec stealth
 	proxy = get_random_proxy()
-	opsec = OpSecManager()
+	opsec = get_opsec_manager()
 	nmap_cmd = opsec.apply_stealth('nmap', nmap_cmd, proxy=proxy)
 
 	# Run cmd
@@ -3074,9 +3069,9 @@ def fetch_url(self, urls=[], ctx={}, description=None):
 		vigolium_urls_file = f'{self.results_dir}/urls_vigolium.txt'
 
 		vig_spider_config = config.get('vigolium_spider', {})
-		vig_concurrency = vig_spider_config.get(VIGOLIUM_CONCURRENCY, 20)
-		vig_rate_limit = vig_spider_config.get(VIGOLIUM_RATE_LIMIT, 50)
-		vig_timeout = _ensure_vigolium_duration(vig_spider_config.get(VIGOLIUM_TIMEOUT, '10s'))
+		vig_concurrency = vig_spider_config.get(VIGOLIUM_CONCURRENCY, 30)
+		vig_rate_limit = vig_spider_config.get(VIGOLIUM_RATE_LIMIT, 80)
+		vig_timeout = _ensure_vigolium_duration(vig_spider_config.get(VIGOLIUM_TIMEOUT, '20s'))
 		vig_strategy = vig_spider_config.get(VIGOLIUM_STRATEGY, 'balanced')
 
 		vig_cmd = (
@@ -4109,7 +4104,7 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 
 	# Apply OpSec stealth
 	proxy = get_random_proxy()
-	opsec = OpSecManager()
+	opsec = get_opsec_manager()
 	cmd = opsec.apply_stealth('nuclei', cmd, proxy=proxy)
 	formatted_headers = ' '.join(f'-H "{header}"' for header in custom_headers)
 	if formatted_headers:
@@ -4378,7 +4373,7 @@ def dalfox_xss_scan(self, urls=[], ctx={}, description=None):
 
 	# command builder
 	proxy = get_random_proxy()
-	opsec = OpSecManager()
+	opsec = get_opsec_manager()
 	cmd = 'dalfox scan --no-color'
 	cmd += f' --only-poc v,r'
 	cmd += f' --ignore-return 302,404,403'
@@ -4736,7 +4731,7 @@ def http_crawl(
 		cmd += ' --follow-redirects'
 	
 	# Apply OpSec stealth
-	opsec = OpSecManager()
+	opsec = get_opsec_manager()
 	cmd = opsec.apply_stealth('httpx', cmd, proxy=proxy)
 
 	results = []
@@ -6755,7 +6750,7 @@ def fetch_proxies_task(limit=1000, job_id=None):
     # Capture job_id here so inner threads can report progress without accessing self
     _job_id = job_id
 
-    MAX_WORKERS = min(1000, max(1, total))
+    MAX_WORKERS = min(32, max(1, total))  # 32 concurrent HTTP checks saturates bandwidth while leaving ~68 connections free for the main Django/Temporal/worker pool.
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         future_map = {pool.submit(check_proxy_robust, p, 10): p for p in unique_proxies}
@@ -6791,9 +6786,21 @@ def fetch_proxies_task(limit=1000, job_id=None):
     proxy_str = "\n".join(final_list)
     try:
         from scanEngine.models import Proxy
+        from reNgine.common_func import is_proxy_recently_used
         proxy_obj = Proxy.objects.first()
         if not proxy_obj:
             proxy_obj = Proxy.objects.create()
+
+        # Preserve proxies that were successfully used within the last 24 hours
+        # and are absent from the newly fetched batch (e.g. user-added proxies).
+        existing_proxies = [p.strip() for p in (proxy_obj.proxies or '').splitlines() if p.strip()]
+        final_set = set(final_list)
+        preserved = [p for p in existing_proxies if is_proxy_recently_used(p) and p not in final_set]
+        if preserved:
+            logger.info('Preserving %d recently-used proxies during pool refresh.', len(preserved))
+            final_list = final_list + preserved
+            proxy_str = "\n".join(final_list)
+
         proxy_obj.proxies = proxy_str
         proxy_obj.use_proxy = True
         # Record the timestamp of this batch verification so that get_random_proxy()

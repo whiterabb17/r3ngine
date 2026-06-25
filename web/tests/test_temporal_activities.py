@@ -87,10 +87,22 @@ class TestScanContext(TestCase):
 class TestSubScanDispatchRegistry(TestCase):
     def test_all_known_scan_types_in_registry(self):
         from reNgine.temporal_workflows import _SUBSCAN_DISPATCH
+        # All top-level YAML keys that can appear in any scan engine fixture or
+        # default_yaml_config.yaml must be registered here so SubScanWorkflow's
+        # ValueError guard is never triggered by a valid scan type.
         required = {
+            # Standard pipeline tasks
             "osint", "subdomain_discovery", "port_scan", "fetch_url",
             "dir_file_fuzz", "screenshot", "waf_detection",
-            "vulnerability_scan", "baddns",
+            "vulnerability_scan", "baddns", "http_crawl", "web_api_discovery",
+            "param_discovery", "waf_bypass", "firewall_vpn_scan",
+            "spiderfoot_scan", "secret_scanning", "attack_path_modeling",
+            "vigolium_harvest", "vigolium_discovery", "vigolium_analysis",
+            "vigolium_scan", "dns_security",
+            # Standalone workflows dispatched as child workflows
+            "url_vuln", "url_crawl", "url_fuzz", "url_dirsearch", "url_params_fuzz",
+            "subdomain_recon", "domain_recon", "host_recon", "cidr_recon",
+            "code_scan", "vigolium_audit",
         }
         for t in required:
             self.assertIn(t, _SUBSCAN_DISPATCH, f"'{t}' is missing from _SUBSCAN_DISPATCH")

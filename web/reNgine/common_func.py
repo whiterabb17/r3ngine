@@ -5,6 +5,7 @@ import glob
 import os
 import pickle
 import subprocess
+import threading
 from reNgine.validators import validate_external_url
 import random
 import shutil
@@ -778,43 +779,47 @@ def save_vulnerability(vuln_data=None, scan_history=None, target_domain=None, de
 		vuln.exploit_url = exploit_url
 		vuln.save()
 
-	# Save vuln tags
-	for tag_name in tags or []:
-		tag, created = VulnerabilityTags.objects.get_or_create(name=tag_name)
-		if tag:
-			vuln.tags.add(tag)
-			vuln.save()
+	# Save vuln tags — collect then add in one call; no save() needed after M2M add
+	if tags:
+		tag_objs = []
+		for tag_name in tags:
+			tag, _ = VulnerabilityTags.objects.get_or_create(name=tag_name)
+			tag_objs.append(tag)
+		vuln.tags.add(*tag_objs)
 
 	# Save CVEs
-	for cve_id in cve_ids or []:
-		# Ignore empty/null CVE IDs
-		if not cve_id or not str(cve_id).strip():
-			continue
-		normalized = str(cve_id).strip().upper()
-		# Accept bare YYYY-NNNNN values (missing the CVE- prefix)
-		if re.match(r'^\d{4}-\d+$', normalized):
-			normalized = 'CVE-' + normalized
-		cve, created = CveId.objects.get_or_create(name=normalized)
-		if cve:
-			vuln.cve_ids.add(cve)
-			vuln.save()
+	if cve_ids:
+		cve_objs = []
+		for cve_id in cve_ids:
+			if not cve_id or not str(cve_id).strip():
+				continue
+			normalized = str(cve_id).strip().upper()
+			# Accept bare YYYY-NNNNN values (missing the CVE- prefix)
+			if re.match(r'^\d{4}-\d+$', normalized):
+				normalized = 'CVE-' + normalized
+			cve, _ = CveId.objects.get_or_create(name=normalized)
+			cve_objs.append(cve)
+		if cve_objs:
+			vuln.cve_ids.add(*cve_objs)
 
 	# Save CWEs
-	for cwe_id in cwe_ids or []:
-		# Ignore empty/null CWE IDs
-		if not cwe_id or not str(cwe_id).strip():
-			continue
-		cwe, created = CweId.objects.get_or_create(name=str(cwe_id).strip())
-		if cwe:
-			vuln.cwe_ids.add(cwe)
-			vuln.save()
+	if cwe_ids:
+		cwe_objs = []
+		for cwe_id in cwe_ids:
+			if not cwe_id or not str(cwe_id).strip():
+				continue
+			cwe, _ = CweId.objects.get_or_create(name=str(cwe_id).strip())
+			cwe_objs.append(cwe)
+		if cwe_objs:
+			vuln.cwe_ids.add(*cwe_objs)
 
-	# Save vuln reference
-	for url in references or []:
-		ref, created = VulnerabilityReference.objects.get_or_create(url=url)
-		if ref:
-			vuln.references.add(ref)
-			vuln.save()
+	# Save vuln references
+	if references:
+		ref_objs = []
+		for url in references:
+			ref, _ = VulnerabilityReference.objects.get_or_create(url=url)
+			ref_objs.append(ref)
+		vuln.references.add(*ref_objs)
 
 	# Save subscan id in vuln object
 	if subscan:
@@ -822,7 +827,7 @@ def save_vulnerability(vuln_data=None, scan_history=None, target_domain=None, de
 		subscan_pk = subscan.pk if hasattr(subscan, 'pk') else subscan
 		if SubScan.objects.filter(pk=subscan_pk).exists():
 			vuln.vuln_subscan_ids.add(subscan)
-			vuln.save()
+			# No vuln.save() needed — M2M add writes directly to the join table
 
 	return vuln, created
 
@@ -886,6 +891,15 @@ ALL_PROXY_CHECKERS = [
 _failed_proxy_cache: dict = {}
 _FAILED_PROXY_TTL = 1800  # 30 minutes
 
+# Cache of proxies successfully validated and used, mapping proxy_url -> epoch timestamp.
+# Protects proxies from DB removal for 24 hours after last successful use.
+_used_proxy_cache: dict = {}
+_USED_PROXY_TTL = 86400  # 24 hours
+
+# Serialises read-modify-write operations on Proxy.proxies within this process.
+# select_for_update() handles cross-process serialisation at the DB level.
+_proxy_pool_lock = threading.Lock()
+
 # Standard exceptions suggesting proxy itself is down/unreachable (connection phase)
 _PROXY_DEAD_EXCEPTIONS = (
 	requests.exceptions.ProxyError,
@@ -913,6 +927,27 @@ def _detect_server_ip(timeout: int = 5) -> str:
 	except Exception:
 		pass
 	return ''
+
+
+def mark_proxy_used(proxy_url: str) -> None:
+	"""Record that a proxy was successfully validated and used.
+
+	Proxies in this cache are shielded from remove_proxy_from_pool for
+	_USED_PROXY_TTL seconds (24 h) after last successful use, preventing
+	transient failures from evicting known-good proxies.
+	"""
+	normalized = _normalize_proxy_pool_line(proxy_url)
+	if normalized:
+		_used_proxy_cache[normalized] = time.time()
+
+
+def is_proxy_recently_used(proxy_url: str) -> bool:
+	"""Return True if the proxy was successfully used within the last 24 hours."""
+	normalized = _normalize_proxy_pool_line(proxy_url)
+	if not normalized:
+		return False
+	last_used = _used_proxy_cache.get(normalized)
+	return last_used is not None and (time.time() - last_used) < _USED_PROXY_TTL
 
 
 def check_proxy_robust(proxy_url, timeout=PROXY_VALIDATION_TIMEOUT, server_ip=''):
@@ -1072,29 +1107,51 @@ def get_valid_proxy_count(proxy_obj=None):
 
 
 def remove_proxy_from_pool(proxy_value, proxy_obj=None):
-	"""Remove a proxy from the persisted pool safely and idempotently."""
-	proxy_obj = proxy_obj or Proxy.objects.first()
-	if not proxy_obj or not proxy_obj.proxies:
+	"""Remove a proxy from the persisted pool safely and idempotently.
+
+	Proxies that were successfully used within the last 24 hours are protected
+	from removal even if they temporarily fail a liveness check.
+	"""
+	if is_proxy_recently_used(proxy_value):
+		logger.info(
+			'Proxy %s was recently used — skipping removal to honour 24-hour retention.',
+			proxy_value,
+		)
 		return False
 
 	target = _normalize_proxy_pool_line(proxy_value)
 	if not target:
 		return False
 
-	remaining_lines = []
-	removed = False
-	for line in proxy_obj.proxies.splitlines():
-		stripped = line.strip()
-		if not stripped:
-			continue
-		if not removed and _normalize_proxy_pool_line(stripped) == target:
-			removed = True
-			continue
-		remaining_lines.append(stripped)
+	from django.db import transaction
 
-	if removed:
-		proxy_obj.proxies = '\n'.join(remaining_lines)
-		proxy_obj.save(update_fields=['proxies'])
+	with _proxy_pool_lock:
+		with transaction.atomic():
+			# Re-fetch inside lock+transaction; select_for_update prevents
+			# concurrent DB transactions from reading a stale pool simultaneously.
+			if proxy_obj is None:
+				locked_obj = Proxy.objects.select_for_update().first()
+			else:
+				locked_obj = Proxy.objects.select_for_update().filter(pk=proxy_obj.pk).first()
+
+			if not locked_obj or not locked_obj.proxies:
+				return False
+
+			remaining_lines = []
+			removed = False
+			for line in locked_obj.proxies.splitlines():
+				stripped = line.strip()
+				if not stripped:
+					continue
+				if not removed and _normalize_proxy_pool_line(stripped) == target:
+					removed = True
+					continue
+				remaining_lines.append(stripped)
+
+			if removed:
+				locked_obj.proxies = '\n'.join(remaining_lines)
+				locked_obj.save(update_fields=['proxies'])
+
 	return removed
 
 
@@ -1198,6 +1255,7 @@ def get_random_proxy(http_only=False):
 		age_minutes = (now_utc - verified_at).total_seconds() / 60
 		if age_minutes <= ttl_minutes:
 			chosen = random.choice(candidates)
+			mark_proxy_used(chosen)
 			logger.info(
 				'Proxy list is fresh (%.1f min old, TTL %d min). '
 				'Returning %s without re-validation.',
@@ -1260,6 +1318,7 @@ def get_random_proxy(http_only=False):
 				break
 
 	if result_holder[0]:
+		mark_proxy_used(result_holder[0])
 		logger.info('Using valid proxy (parallel validation): %s', result_holder[0])
 		return result_holder[0]
 

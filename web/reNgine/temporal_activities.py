@@ -207,6 +207,7 @@ class TemporalTaskProxy:
             error_message (str, optional): Error message if the task failed.
         """
         from startScan.models import ScanActivity
+        from reNgine.definitions import SUCCESS_TASK
         try:
             if getattr(self, 'activity', None):
                 now = timezone.now()
@@ -217,6 +218,10 @@ class TemporalTaskProxy:
                 }
                 if error_message is not None:
                     update_kwargs['error_message'] = str(error_message)[:300]
+                elif status == SUCCESS_TASK:
+                    # Clear stale error fields from any previous failed attempt on this record
+                    update_kwargs['error_message'] = ''
+                    update_kwargs['traceback'] = ''
                 ScanActivity.objects.filter(pk=self.activity.pk).update(**update_kwargs)
         except Exception as e:
             logger.warning(f"Could not update ScanActivity for {self.task_name}: {e}")
@@ -1564,12 +1569,27 @@ def run_vigolium_scan_activity(ctx: dict) -> bool:
     return _run_task(vigolium_scan, ctx, task_name='vigolium_scan', description='Vigolium Vulnerability Scan')
 
 
+@activity.defn(name="RunVigoliumHarvestActivity")
+def run_vigolium_harvest_activity(ctx: dict) -> bool:
+    """Run Vigolium passive ingestion harvest at Tier 1.
+
+    Collects passively harvested endpoints (wayback, CT logs, passive DNS) before
+    active crawling begins. Works with just the root domain — falls back gracefully
+    when no subdomains have been enumerated yet.
+    Controlled by vigolium_harvest.run_vigolium_harvest in engine YAML.
+    """
+    from reNgine.vigolium_tasks import vigolium_harvest
+    activity.logger.info(f"[RunVigoliumHarvestActivity] scan_id={ctx.get('scan_history_id')}")
+    return _run_task(vigolium_harvest, ctx, task_name='vigolium_harvest', description='Vigolium Passive Harvest')
+
+
 @activity.defn(name="RunVigoliumDiscoveryActivity")
 def run_vigolium_discovery_activity(ctx: dict) -> bool:
-    """Run Vigolium discovery phase to seed the endpoint DB.
+    """Run Vigolium active discovery phase at Tier 1.
 
-    Runs at Tier 2 in parallel with http_crawl. Populates EndPoint records
-    with URLs discovered by vigolium's ingestion + discovery phases.
+    Runs in parallel with subdomain enumeration. Populates EndPoint records
+    via vigolium's active discovery phase; falls back to the root domain when
+    no subdomains are in the DB yet.
     Controlled by vigolium_discovery.run_vigolium_discovery in engine YAML.
     """
     from reNgine.vigolium_tasks import vigolium_discovery
@@ -3291,6 +3311,76 @@ def run_gf_activity(ctx: dict) -> list:
     )
     logger.log_line("[TEMPORAL]", "COMPLETE", "task=gf_scan pattern=%s scan_id=%s matches=%d" % (ctx.get('pattern', 'xss'), scan_id, len(result) if isinstance(result, list) else 0))
     return result
+
+
+@activity.defn(name="RunGFOnAllEndpointsActivity")
+def run_gf_on_all_endpoints_activity(ctx: dict) -> dict:
+    """Run gf patterns against every endpoint persisted for this scan.
+
+    Called at the end of Tier 4 in both MasterScanWorkflow and SubScanWorkflow so
+    that URLs discovered by dir_file_fuzz (ffuf / dirsearch / feroxbuster) receive
+    the same gf-pattern tagging that fetch_url applies to its own URL set.
+
+    Returns a dict mapping pattern → number of endpoints updated.
+    """
+    from reNgine.definitions import DEFAULT_GF_PATTERNS, GF_PATTERNS
+    from reNgine.crawl_tasks import gf_scan
+    from reNgine.utils.task import bulk_apply_gf_pattern_from_urls
+    from startScan.models import EndPoint, ScanHistory
+
+    scan_id = ctx.get('scan_history_id')
+    logger.log_line("[GF]", "START", "task=gf_all_endpoints scan_id=%s" % scan_id)
+    activity.logger.info("[RunGFOnAllEndpointsActivity] scan_id=%s", scan_id)
+
+    yaml_config = ctx.get('yaml_configuration') or {}
+    fetch_url_config = yaml_config.get('fetch_url', {})
+    gf_patterns = fetch_url_config.get(GF_PATTERNS, DEFAULT_GF_PATTERNS)
+
+    if not gf_patterns:
+        logger.log_line("[GF]", "COMPLETE", "task=gf_all_endpoints scan_id=%s patterns=none skipped" % scan_id)
+        return {}
+
+    all_urls = list(
+        EndPoint.objects.filter(scan_history_id=scan_id, http_url__isnull=False)
+        .exclude(http_url='')
+        .values_list('http_url', flat=True)
+        .distinct()
+    )
+
+    if not all_urls:
+        logger.log_line("[GF]", "COMPLETE", "task=gf_all_endpoints scan_id=%s urls=0 skipped" % scan_id)
+        return {}
+
+    logger.log_line("[GF]", "INFO", "task=gf_all_endpoints scan_id=%s urls=%d patterns=%s" % (
+        scan_id, len(all_urls), ','.join(gf_patterns)
+    ))
+
+    scan = ScanHistory.objects.filter(pk=scan_id).first()
+    proxy = TemporalTaskProxy(ctx, task_name='gf_all_endpoints', description='GF Pattern Match (all endpoints)')
+    results = {}
+
+    for pattern in gf_patterns:
+        if pattern == 'jsvar':
+            continue
+        matched = gf_scan(proxy, scan_history_id=scan_id, pattern=pattern, urls=all_urls)
+        count = len(matched) if isinstance(matched, list) else 0
+        if matched:
+            updated = bulk_apply_gf_pattern_from_urls(matched, pattern, ctx)
+            results[pattern] = updated
+            logger.log_line("[GF]", "RESULT", "pattern=%s matched=%d updated=%d" % (pattern, count, updated))
+        else:
+            results[pattern] = 0
+        activity_heartbeat_safe(f'gf pattern {pattern} done ({count} matches)')
+
+    if scan and results:
+        existing = set(filter(None, (scan.used_gf_patterns or '').split(',')))
+        existing.update(p for p, c in results.items() if c > 0)
+        scan.used_gf_patterns = ','.join(sorted(existing))
+        scan.save(update_fields=['used_gf_patterns'])
+
+    logger.log_line("[GF]", "COMPLETE", "task=gf_all_endpoints scan_id=%s results=%s" % (scan_id, results))
+    return results
+
 
 @activity.defn(name="GetDiscoveredIPsActivity")
 def get_discovered_ips_activity(ctx: dict) -> list:

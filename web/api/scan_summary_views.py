@@ -17,7 +17,7 @@ from startScan.models import (
 )
 from recon_note.models import TodoNote
 from reNgine.utilities import get_screenshot_path
-from reNgine.definitions import RUNNING_TASK
+from reNgine.definitions import RUNNING_TASK, INITIATED_TASK
 from reNgine.exporters.ai_bundle import AiExportOptions, FORMAT_VERSION, build_ai_export_zip
 from api.scan_task_counts import get_task_counts
 
@@ -175,10 +175,12 @@ class ScanSummaryAPIView(APIView):
                 scan_data['subdomain_diff'] = 0
             recent_scans_data.append(scan_data)
 
-        # Timeline/Activities — ordered by tier then time_started, PENDING rows last within tier
-        activities = ScanActivity.objects.filter(scan_of=scan).order_by(
-            'tier', 'time_started', 'time'
-        )
+        # Timeline/Activities — ordered by tier then time_started, PENDING rows last within tier.
+        # Exclude ghost INITIATED rows (time_started=None) left over from a previous failed
+        # workflow run that were never claimed; a successful re-run creates fresh records.
+        activities = ScanActivity.objects.filter(scan_of=scan).exclude(
+            status=INITIATED_TASK, time_started__isnull=True
+        ).order_by('tier', 'time_started', 'time')
         timeline_data = []
         _STATUS_MAP = {
             2: 'SUCCESS',
