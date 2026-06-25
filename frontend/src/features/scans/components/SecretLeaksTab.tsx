@@ -1,13 +1,14 @@
 import React from 'react';
-import { 
-  Box, 
-  Typography, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow, 
+import {
+  Box,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
   Chip,
   CircularProgress,
   Stack,
@@ -38,6 +39,8 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
 
   const [manualEmail, setManualEmail] = React.useState('');
   const [checkingEmails, setCheckingEmails] = React.useState<Record<string, boolean>>({});
+  const [leaksPage, setLeaksPage] = React.useState(0);
+  const [leaksRowsPerPage, setLeaksRowsPerPage] = React.useState(10);
 
   const emails = summary?.emails || [];
 
@@ -110,7 +113,7 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
               </TableRow>
             </TableHead>
             <TableBody>
-              {leaks?.map((leak: any) => (
+              {leaks?.slice(leaksPage * leaksRowsPerPage, leaksPage * leaksRowsPerPage + leaksRowsPerPage).map((leak: any) => (
                 <TableRow key={leak.id} sx={{ '& td': { borderBottom: 1, borderColor: 'divider', py: 2 } }}>
                   <TableCell>
                     <Chip 
@@ -197,6 +200,32 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
             </TableBody>
           </Table>
         </TableContainer>
+        {leaks && leaks.length > 0 && (
+          <TablePagination
+            component="div"
+            count={leaks.length}
+            page={leaksPage}
+            rowsPerPage={leaksRowsPerPage}
+            rowsPerPageOptions={[10, 25, 50]}
+            onPageChange={(_e, newPage) => setLeaksPage(newPage)}
+            onRowsPerPageChange={(e) => {
+              setLeaksRowsPerPage(parseInt(e.target.value, 10));
+              setLeaksPage(0);
+            }}
+            sx={{
+              borderTop: '1px solid',
+              borderColor: 'divider',
+              color: 'text.secondary',
+              fontSize: '0.7rem',
+              '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+                fontSize: '0.7rem',
+              },
+              '& .MuiTablePagination-select': {
+                fontSize: '0.7rem',
+              },
+            }}
+          />
+        )}
       </TacticalPanel>
 
       <Box sx={{ mt: 4 }}>

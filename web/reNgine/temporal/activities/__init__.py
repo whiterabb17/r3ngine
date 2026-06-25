@@ -1967,6 +1967,31 @@ def send_scan_notification_activity(ctx: dict) -> bool:
         te.ended_at = scan.stop_scan_date
         te.save()
 
+    # Clean up orphaned RUNNING rows left by crashed worker first attempts.
+    # When a Temporal activity worker crashes mid-execution, its ScanActivity row
+    # stays at RUNNING_TASK (time_started set, time_ended None). The retry creates
+    # a new row and completes it. Reconcile these orphans against their later SUCCESS
+    # counterparts so the timeline shows only clean state.
+    if status == SUCCESS_TASK:
+        from reNgine.definitions import RUNNING_TASK as _RUNNING
+        success_row_ids = dict(
+            ScanActivity.objects.filter(scan_of=scan, status=SUCCESS_TASK)
+            .values_list('name', 'id')
+        )
+        orphans = ScanActivity.objects.filter(
+            scan_of=scan, status=_RUNNING, time_started__isnull=False
+        )
+        orphan_ids = [
+            r.id for r in orphans
+            if r.name in success_row_ids and r.id < success_row_ids[r.name]
+        ]
+        if orphan_ids:
+            ScanActivity.objects.filter(id__in=orphan_ids).update(status=SUCCESS_TASK)
+            activity.logger.warning(
+                "[SCAN_COMPLETE] Reconciled %d orphaned RUNNING rows to SUCCESS | scan_id=%s ids=%s",
+                len(orphan_ids), scan_id, orphan_ids,
+            )
+
     # Log scan summary stats
     try:
         from startScan.models import Subdomain, EndPoint, Vulnerability
@@ -3359,27 +3384,33 @@ def run_gf_on_all_endpoints_activity(ctx: dict) -> dict:
     proxy = TemporalTaskProxy(ctx, task_name='gf_all_endpoints', description='GF Pattern Match (all endpoints)')
     results = {}
 
-    for pattern in gf_patterns:
-        if pattern == 'jsvar':
-            continue
-        matched = gf_scan(proxy, scan_history_id=scan_id, pattern=pattern, urls=all_urls)
-        count = len(matched) if isinstance(matched, list) else 0
-        if matched:
-            updated = bulk_apply_gf_pattern_from_urls(matched, pattern, ctx)
-            results[pattern] = updated
-            logger.log_line("[GF]", "RESULT", "pattern=%s matched=%d updated=%d" % (pattern, count, updated))
-        else:
-            results[pattern] = 0
-        activity_heartbeat_safe(f'gf pattern {pattern} done ({count} matches)')
+    try:
+        for pattern in gf_patterns:
+            if pattern == 'jsvar':
+                continue
+            matched = gf_scan(proxy, scan_history_id=scan_id, pattern=pattern, urls=all_urls)
+            count = len(matched) if isinstance(matched, list) else 0
+            if matched:
+                updated = bulk_apply_gf_pattern_from_urls(matched, pattern, ctx)
+                results[pattern] = updated
+                logger.log_line("[GF]", "RESULT", "pattern=%s matched=%d updated=%d" % (pattern, count, updated))
+            else:
+                results[pattern] = 0
+            activity_heartbeat_safe(f'gf pattern {pattern} done ({count} matches)')
 
-    if scan and results:
-        existing = set(filter(None, (scan.used_gf_patterns or '').split(',')))
-        existing.update(p for p, c in results.items() if c > 0)
-        scan.used_gf_patterns = ','.join(sorted(existing))
-        scan.save(update_fields=['used_gf_patterns'])
+        if scan and results:
+            existing = set(filter(None, (scan.used_gf_patterns or '').split(',')))
+            existing.update(p for p, c in results.items() if c > 0)
+            scan.used_gf_patterns = ','.join(sorted(existing))
+            scan.save(update_fields=['used_gf_patterns'])
 
-    logger.log_line("[GF]", "COMPLETE", "task=gf_all_endpoints scan_id=%s results=%s" % (scan_id, results))
-    return results
+        proxy.update_scan_activity(SUCCESS_TASK)
+        logger.log_line("[GF]", "COMPLETE", "task=gf_all_endpoints scan_id=%s results=%s" % (scan_id, results))
+        return results
+    except Exception as exc:
+        proxy.update_scan_activity(FAILED_TASK, error_message=repr(exc))
+        logger.log_line("[GF]", "ERROR", "task=gf_all_endpoints scan_id=%s error=%s" % (scan_id, format_exception_for_log(exc)), level="error", exc_info=True)
+        raise
 
 
 @activity.defn(name="GetDiscoveredIPsActivity")
