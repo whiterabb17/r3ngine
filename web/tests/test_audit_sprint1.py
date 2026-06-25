@@ -1,14 +1,14 @@
-import ast
+﻿import ast
 import os
 import unittest
 
 
 WORKFLOWS_FILE = os.path.join(
-    os.path.dirname(__file__), '..', 'reNgine', 'temporal_workflows.py'
+    os.path.dirname(__file__), '..', 'reNgine', 'temporal', 'workflows', '__init__.py'
 )
 
 ACTIVITIES_FILE = os.path.join(
-    os.path.dirname(__file__), '..', 'reNgine', 'temporal_activities.py'
+    os.path.dirname(__file__), '..', 'reNgine', 'temporal', 'activities', '__init__.py'
 )
 
 
@@ -109,7 +109,7 @@ class TestAUD005NucleiRetryPolicy(unittest.TestCase):
 
         self.assertGreater(
             len(all_nuclei_calls), 0,
-            "No RunNucleiActivity calls found in temporal_workflows.py — is the file correct?"
+            "No RunNucleiActivity calls found in temporal/workflows/__init__.py — is the file correct?"
         )
         self.assertEqual(
             missing_retry, [],

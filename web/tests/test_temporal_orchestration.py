@@ -1,4 +1,4 @@
-import os
+﻿import os
 import django
 from django.test import TestCase
 from unittest.mock import patch, MagicMock, AsyncMock
@@ -371,7 +371,7 @@ class TestWorkflowStructuralInvariants(TestCase):
     No Temporal server or Django ORM is required — they inspect source only.
     """
 
-    _SOURCE_PATH = "reNgine/temporal_workflows.py"
+    _SOURCE_PATH = "reNgine/temporal/workflows/__init__.py"
 
     @classmethod
     def _source(cls):
@@ -402,7 +402,7 @@ class TestWorkflowStructuralInvariants(TestCase):
                             "before the concurrent gather of other T6 activities."
                         )
                         return
-        self.fail("MasterScanWorkflow.run() not found in temporal_workflows.py")
+        self.fail("MasterScanWorkflow.run() not found in temporal/workflows/__init__.py")
 
     def test_subscan_nuclei_future_variable_present(self):
         """SubScanWorkflow tier loop must declare 'nuclei_future' to separate
@@ -424,7 +424,7 @@ class TestWorkflowStructuralInvariants(TestCase):
         nuclei_idx = source.find("await nuclei_future")
         gather_idx = source.find("await asyncio.gather(*tier_futures)")
         self.assertGreater(nuclei_idx, 0,
-                           "'await nuclei_future' not found in temporal_workflows.py")
+                           "'await nuclei_future' not found in temporal/workflows/__init__.py")
         self.assertGreater(gather_idx, 0,
                            "'await asyncio.gather(*tier_futures)' not found")
         self.assertLess(
@@ -448,7 +448,7 @@ class TestWorkflowStructuralInvariants(TestCase):
                         self.assertIn("success = False", method_src,
                                       "MasterScanWorkflow.run() must initialise 'success = False'")
                         return
-        self.fail("MasterScanWorkflow.run() not found in temporal_workflows.py")
+        self.fail("MasterScanWorkflow.run() not found in temporal/workflows/__init__.py")
 
     def test_masterscan_correlate_activity_in_finally_block(self):
         """CorrelateVulnerabilitiesActivity must appear inside a finally: block
@@ -478,19 +478,19 @@ class TestWorkflowStructuralInvariants(TestCase):
                         "in MasterScanWorkflow.run(), not inline in the try: body. "
                         "It must be guarded by 'if success:' so it only runs on clean completion."
                     )
-        self.fail("MasterScanWorkflow.run() not found in temporal_workflows.py")
+        self.fail("MasterScanWorkflow.run() not found in temporal/workflows/__init__.py")
 
     def test_masterscan_nuclei_failure_does_not_raise(self):
         """NucleiPlannerWorkflow failure must be caught so Tier 7 still runs.
 
-        Reads temporal_workflows.py source and asserts the execute_child_workflow
+        Reads temporal/workflows/__init__.py source and asserts the execute_child_workflow
         call for NucleiPlannerWorkflow is wrapped in a try-except block,
         confirming Tier 7 correlation/risk/Neo4j activities are not gated on it.
         """
         import ast
 
         src_path = os.path.join(
-            os.path.dirname(__file__), '..', 'reNgine', 'temporal_workflows.py'
+            os.path.dirname(__file__), '..', 'reNgine', 'temporal', 'workflows', '__init__.py'
         )
         with open(src_path) as f:
             source = f.read()
