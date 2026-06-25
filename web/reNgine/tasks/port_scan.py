@@ -10,6 +10,7 @@ from reNgine.definitions import *
 from reNgine.utils.opsec import OpSecManager, ProxychainsWrapper, get_opsec_manager
 from reNgine.utils.task import run_command, run_command_with_retry, stream_command, save_endpoint
 from reNgine.tasks.persistence import save_ip_address
+from pycvesearch import CVESearch
 from startScan.models import *
 from scanEngine.models import Notification, Proxy
 

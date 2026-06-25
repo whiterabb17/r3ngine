@@ -9,6 +9,7 @@ from reNgine.definitions import *
 from reNgine.utils.opsec import OpSecManager, ProxychainsWrapper, get_opsec_manager
 from reNgine.utils.task import run_command, run_command_with_retry, stream_command, save_subdomain, save_endpoint, save_subdomain_metadata
 from reNgine.tasks.persistence import create_scan_activity
+from api.serializers import SubdomainSerializer
 from startScan.models import *
 from targetApp.models import Domain
 

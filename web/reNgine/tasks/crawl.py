@@ -15,6 +15,10 @@ from reNgine.utils.task import (
     save_endpoint, save_parameter,
 )
 from reNgine.tasks.persistence import process_httpx_response, extract_httpx_url, remove_duplicate_endpoints, save_ip_address
+from reNgine.utils.graph import Neo4jManager
+from reNgine.api_tasks import run_jwt_scan, run_graphql_cop
+from reNgine.auth_discovery_tasks import extract_auth_candidates
+from reNgine.cpde.graphql_enricher import enrich_graphql_params
 from startScan.models import *
 
 logger = logging.getLogger(__name__)

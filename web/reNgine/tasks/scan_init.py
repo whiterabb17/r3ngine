@@ -10,6 +10,7 @@ from pathlib import Path
 from reNgine.common_func import *
 from reNgine.definitions import *
 from reNgine.utils.graph import Neo4jManager
+from reNgine.utils.opsec import get_opsec_manager
 from reNgine.utils.task import save_endpoint, save_subdomain
 from reNgine.tasks.notifications import send_scan_notif
 from reNgine.tasks.persistence import create_scan_activity
