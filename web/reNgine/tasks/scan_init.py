@@ -49,40 +49,54 @@ def _make_json_safe(value):
 
 SCAN_PIPELINE_DEFINITION = [
     {
+        'tier': 0,
+        'name': 'Profiling',
+        'type': 'SEQUENTIAL',
+        'tasks': ['target_profiling']
+    },
+    {
         'tier': 1,
         'name': 'Discovery',
         'type': 'CONCURRENT',
-        'tasks': ['amass_intel_discovery', 'subdomain_discovery', 'osint', 'spiderfoot_scan', 'firewall_vpn_scan']
+        'tasks': [
+            'subdomain_discovery', 'amass_intel_discovery', 'firewall_vpn_scan',
+            'dns_security', 'osint', 'spiderfoot_scan', 'baddns',
+            'vigolium_harvest', 'vigolium_discovery',
+        ]
     },
     {
         'tier': 2,
         'name': 'Enumeration',
         'type': 'CONCURRENT',
-        'tasks': ['http_crawl', 'port_scan', 'screenshot']
+        'tasks': ['http_crawl', 'port_scan']
     },
     {
         'tier': 3,
+        'name': 'URL & API Extraction',
+        'type': 'SEQUENTIAL',
+        'tasks': ['fetch_url', 'http_crawl_bridge', 'screenshot', 'param_discovery', 'web_api_discovery']
+    },
+    {
+        'tier': 4,
         'name': 'Fuzzing',
         'type': 'SEQUENTIAL',
         'tasks': ['dir_file_fuzz']
     },
     {
-        'tier': 4,
-        'name': 'URL Extraction',
-        'type': 'SEQUENTIAL',
-        'tasks': ['fetch_url']
-    },
-    {
         'tier': 5,
         'name': 'Analysis',
         'type': 'CONCURRENT',
-        'tasks': ['web_api_discovery', 'waf_detection']
+        'tasks': ['waf_detection', 'secret_scanning', 'vigolium_analysis']
     },
     {
         'tier': 6,
         'name': 'Security Assessment',
         'type': 'CONCURRENT',
-        'tasks': ['waf_bypass', 'vulnerability_scan']
+        'tasks': [
+            'vulnerability_scan', 'nuclei_scan', 'dalfox_xss_scan', 'crlfuzz_scan',
+            's3scanner', 'waf_bypass', 'acunetix_scan', 'wpscan_scan',
+            'vigolium_scan', 'cpanel_scan', 'react2shell_scan',
+        ]
     },
     {
         'tier': 7,
@@ -90,11 +104,11 @@ SCAN_PIPELINE_DEFINITION = [
         'type': 'SEQUENTIAL',
         'tasks': [
             'correlate_vulnerabilities',
-            'enrich_scan_cves',
             'calculate_risk_scores',
             'generate_impact_assessment',
-            'stress_test',
-            'run_apme'
+            'sync_graph',
+            'run_apme',
+            'scan_notification',
         ]
     }
 ]
