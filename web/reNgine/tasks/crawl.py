@@ -10,7 +10,7 @@ from reNgine.common_func import *
 from reNgine.definitions import *
 from reNgine.utils.opsec import OpSecManager, ProxychainsWrapper, get_opsec_manager
 from reNgine.utils.task import (
-    run_command, run_command_with_retry, stream_command,
+    run_command, run_command_with_retry, stream_command, activity_heartbeat_safe,
     bulk_persist_fetch_urls, bulk_apply_gf_pattern_from_file,
     save_endpoint, save_parameter,
 )

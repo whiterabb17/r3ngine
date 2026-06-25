@@ -8,7 +8,7 @@ from pathlib import Path
 from reNgine.common_func import *
 from reNgine.definitions import *
 from reNgine.utils.opsec import OpSecManager, ProxychainsWrapper, get_opsec_manager
-from reNgine.utils.task import run_command, run_command_with_retry, stream_command, activity_heartbeat_safe, save_endpoint
+from reNgine.utils.task import run_command, run_command_with_retry, stream_command, activity_heartbeat_safe, save_endpoint, save_subdomain
 from reNgine.tech_mapping import get_nuclei_tags_from_techs
 from reNgine.tasks.parsers import parse_nuclei_result, parse_dalfox_result, parse_crlfuzz_result
 from reNgine.tasks.llm import get_vulnerability_gpt_report, add_gpt_description_db

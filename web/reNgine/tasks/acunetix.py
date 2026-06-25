@@ -4,6 +4,8 @@ import requests
 import validators
 from urllib.parse import urlparse
 
+from django.conf import settings
+
 from reNgine.common_func import *
 from reNgine.definitions import *
 from startScan.models import ScanHistory, Subdomain
