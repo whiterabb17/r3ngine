@@ -671,7 +671,7 @@ class Command(BaseCommand):
     def _recover_wafs(self, scan_dir, scan_id, subdomain_map):
         """
         Parse #{scan_id}_waf_detection.txt lines like:
-            https://www.defijn.io   Cloudflare (Cloudflare Inc.)
+            https://www.example.com   Cloudflare (Cloudflare Inc.)
         """
         waf_file = os.path.join(scan_dir, f"#{scan_id}_waf_detection.txt")
         if not os.path.isfile(waf_file):
