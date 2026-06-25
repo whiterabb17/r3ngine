@@ -3600,7 +3600,10 @@ def extract_auth_for_url_activity(ctx: dict) -> dict:
     logger.log_line("[AUTH_EXTRACT]", "START", "extracting auth from %s (scan %s)" % (url, scan_id))
 
     try:
-        scan = ScanHistory.objects.get(id=scan_id)
+        scan = ScanHistory.objects.filter(id=scan_id).first()
+        if scan is None:
+            logger.log_line("[AUTH_EXTRACT]", "COMPLETE", "scan %s not found — skipping" % scan_id)
+            return {'found': 0}
 
         current_proxy = get_random_proxy(http_only=True)
 
