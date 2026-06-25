@@ -460,6 +460,10 @@ class ExposureViewSet(
 	queryset = Exposure.objects.none()
 
 	def get_queryset(self):
+		# Detail actions (retrieve, patch) look up by PK directly — no filter params required
+		if self.action in ('retrieve', 'partial_update', 'update'):
+			return Exposure.objects.all()
+
 		req = self.request
 		project = req.query_params.get('project')
 		target_id = req.query_params.get('target_id')
