@@ -1,5 +1,5 @@
 # CLAUDE.md
-## Current version: 3.6.2
+## Current version: 3.6.3
 
 Start with:
 1. `README.md`
@@ -16,10 +16,10 @@ Build a fast, accurate mental model without rescanning the whole repository.
 
 ## Key Facts
 - `frontend/`: UI
-- `web/api/`: HTTP API
-- `web/reNgine/temporal_workflows.py`: orchestration
-- `web/reNgine/temporal_activities.py`: workflow bridge
-- `web/reNgine/tasks.py`: task execution and parsing
+- `web/api/`: HTTP API; views split into `web/api/views/` domain modules (scan, targets, vulns, recon, llm, tools, settings, etc.)
+- `web/reNgine/temporal/workflows/__init__.py`: orchestration (shim: `web/reNgine/temporal_workflows.py`)
+- `web/reNgine/temporal/activities/__init__.py`: workflow bridge (shim: `web/reNgine/temporal_activities.py`)
+- `web/reNgine/tasks/`: task execution package — domain modules: `scan_init`, `subdomain`, `crawl`, `vuln`, `osint`, `port_scan`, `persistence`, `notifications`, `geo`, `llm`, `waf`, `screenshot`, `parsers`, `acunetix`, `proxies` (shim: `web/reNgine/tasks/__init__.py`)
 - `web/startScan/`: persistence
 - `web/apme/`: graph and attack-path logic
 

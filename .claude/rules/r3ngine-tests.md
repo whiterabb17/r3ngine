@@ -48,15 +48,18 @@ class TestMyActivity(TestCase):
 
 ```python
 from unittest.mock import patch
-from reNgine.temporal_activities import run_port_scan_activity
+from reNgine.temporal.activities import run_port_scan_activity
 
 class TestPortScanActivity(TestCase):
-    @patch('reNgine.temporal_activities.subprocess.run')
+    # Patch at the module where the function is defined (temporal/activities/__init__.py)
+    @patch('reNgine.temporal.activities.subprocess.run')
     def test_port_scan_parses_output(self, mock_run):
         mock_run.return_value.stdout = b'...'
         result = run_port_scan_activity(scan_id=1, target='192.0.2.1')
         self.assertIn('ports', result)
 ```
+
+**Patch target rule**: always patch where the name is looked up, not where it is defined. After the modular refactor, functions extracted to domain modules (e.g. `reNgine.tasks.vuln`, `reNgine.tasks.scan_init`, `reNgine.temporal.activities`) must be patched at their new location, not via the shim path.
 
 ## Determinism and isolation
 
@@ -70,19 +73,18 @@ class TestPortScanActivity(TestCase):
 All `manage.py` test commands must be run **inside the Docker container**:
 
 ```bash
-# Run full test suite
-docker exec -it r3ngine-web-1 bash -c "cd /usr/src/app && python3 manage.py test"
+# Run full test suite — always use --keepdb and --verbosity=2
+docker exec r3ngine-web-1 bash -c "cd /usr/src/app && python3 manage.py test --keepdb --verbosity=2 2>&1 | tail -20"
 
 # Run a specific test module
-docker exec -it r3ngine-web-1 bash -c "cd /usr/src/app && python3 manage.py test tests.test_fuzzing_tasks"
-
-# Run with verbose output
-docker exec -it r3ngine-web-1 bash -c "cd /usr/src/app && python3 manage.py test --verbosity=2"
+docker exec r3ngine-web-1 bash -c "cd /usr/src/app && python3 manage.py test tests.test_fuzzing_tasks --keepdb --verbosity=2"
 
 # Run with coverage (if coverage is installed)
-docker exec -it r3ngine-web-1 bash -c \
-  "cd /usr/src/app && coverage run --source='.' manage.py test && coverage report"
+docker exec r3ngine-web-1 bash -c \
+  "cd /usr/src/app && coverage run --source='.' manage.py test --keepdb && coverage report"
 ```
+
+**`--keepdb` is mandatory** — it prevents Django from dropping the test database between runs. **`--verbosity=2`** ensures error tracebacks and test names are captured in the first pass. Remove `-it` (TTY flag) when running inside scripts or Claude Code.
 
 ## Temporary test files
 

@@ -43,13 +43,15 @@ Django REST API
 temporal_client.py (start / cancel)
     ↓
 Temporal Server
-    ├─ Python orchestrator worker  →  temporal_workflows.py
-    │                              →  temporal_activities.py (DB, Neo4j, HTTP)
+    ├─ Python orchestrator worker  →  reNgine/temporal/workflows/__init__.py
+    │                              →  reNgine/temporal/activities/__init__.py (DB, Neo4j, HTTP)
     └─ Go executor worker          →  executor/main.go (subprocess tools)
 ```
 
-- **Workflows** (`temporal_workflows.py`): deterministic orchestrators; no I/O
-- **Activities** (`temporal_activities.py`): 30+ activities; DB, Neo4j, HTTP, LLM calls
+- **Workflows** (`reNgine/temporal/workflows/__init__.py`): deterministic orchestrators; no I/O
+  - Shim: `temporal_workflows.py` re-exports everything for backward compatibility
+- **Activities** (`reNgine/temporal/activities/__init__.py`): 30+ activities; DB, Neo4j, HTTP, LLM calls
+  - Shim: `temporal_activities.py` re-exports everything for backward compatibility
 - **Go executor** (`executor/main.go`): subprocess management for 30+ security tools
 - **Temporal UI**: `http://localhost:8080`
 
@@ -62,9 +64,11 @@ Temporal Server
 - **scanEngine**:
   - `scanEngine/models.py`: `EngineType` (YAML scan config templates), `InstalledExternalTool`
 - **reNgine app** (shared logic):
-  - `reNgine/tasks.py`: legacy task entry points (no `@app.task` decorators); called by activities
-  - `reNgine/temporal_workflows.py`: `MasterScanWorkflow`, `SubScanWorkflow`, `CodeScanWorkflow`, `URLAuthExtractWorkflow`, plus tier-specific child workflows
-  - `reNgine/temporal_activities.py`: 30+ `@activity.defn` functions
+  - `reNgine/tasks/`: task package — domain modules (scan_init, subdomain, crawl, vuln, osint, port_scan, persistence, notifications, geo, llm, waf, screenshot, parsers, proxies, acunetix); shim: `tasks/__init__.py`
+  - `reNgine/temporal/workflows/__init__.py`: `MasterScanWorkflow`, `SubScanWorkflow`, `CodeScanWorkflow`, `URLAuthExtractWorkflow`, plus tier-specific child workflows
+  - `reNgine/temporal/activities/__init__.py`: 30+ `@activity.defn` functions
+  - `reNgine/temporal_workflows.py`: backward-compatible shim
+  - `reNgine/temporal_activities.py`: backward-compatible shim
   - `reNgine/temporal_client.py`: `TemporalClientProvider` (sync/async bridge)
   - `reNgine/temporal_schedule_utils.py`: scheduled scan helpers
   - `reNgine/graph_utils.py`: `Neo4jManager` for APME Cypher queries
@@ -104,7 +108,7 @@ Temporal Server
   - `apme/output/`: formats attack paths for the frontend
   - `apme/llm_orchestrator.py`: LLM-assisted attack path analysis
 - **api app**:
-  - `api/views.py`: additional REST endpoints (subdomains, endpoints, vulnerabilities, directory file dispatch)
+  - `api/views/`: REST endpoint package — domain modules (scan, targets, vulns, recon, llm, tools, settings, notifications, hackerone, workers, misc); shim: `api/views/__init__.py`
   - `api/urls.py`: URL routing for the API
 - **plugins app**:
   - `plugins/views.py`: plugin management endpoints

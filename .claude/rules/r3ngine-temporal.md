@@ -17,8 +17,10 @@ Use this rule when working on features that interact with Temporal:
 
 | File | Role |
 |------|------|
-| `web/reNgine/temporal_workflows.py` | Workflow definitions (deterministic orchestrators only) |
-| `web/reNgine/temporal_activities.py` | Activity definitions (all side-effecting work) |
+| `web/reNgine/temporal/workflows/__init__.py` | Workflow definitions (deterministic orchestrators only) |
+| `web/reNgine/temporal/activities/__init__.py` | Activity definitions (all side-effecting work) |
+| `web/reNgine/temporal_workflows.py` | Backward-compatible shim → re-exports from `temporal/workflows/` |
+| `web/reNgine/temporal_activities.py` | Backward-compatible shim → re-exports from `temporal/activities/` |
 | `web/reNgine/temporal_client.py` | Client for starting and cancelling workflows from Django |
 | `web/executor/main.go` | Go executor — handles subprocess-based tool execution |
 | `web/scanEngine/management/commands/run_temporal_orchestrator.py` | Worker startup command |
@@ -38,7 +40,7 @@ Use this rule when working on features that interact with Temporal:
 ## Determinism violations — never do these in a workflow
 
 ```python
-# ❌ All forbidden in temporal_workflows.py
+# ❌ All forbidden in temporal/workflows/__init__.py
 import datetime
 datetime.datetime.now()          # use workflow.now() instead
 random.choice(items)             # non-deterministic
@@ -76,7 +78,8 @@ docker compose logs temporal-go-executor
 
 ## Starting a scan workflow (from Django)
 
-Entry point in `web/reNgine/tasks.py` → `initiate_scan_temporal()` → starts `MasterScanWorkflow`.
+Entry point in `web/reNgine/tasks/scan_init.py` → `initiate_scan_temporal()` → starts `MasterScanWorkflow`.
+Import via the shim: `from reNgine.tasks import initiate_scan_temporal`.
 
 ```python
 # Pattern for starting a workflow from a Django view
@@ -104,10 +107,12 @@ Cancel is tracked via `TemporalWorkflowExecution` FK on `ScanHistory`.
 
 ## Adding a new scanning activity
 
-1. Add the activity function to `web/reNgine/temporal_activities.py` (decorate with `@activity.defn`).
+1. Add the activity function to `web/reNgine/temporal/activities/__init__.py` (decorate with `@activity.defn`).
 2. Register it in the worker in `run_temporal_orchestrator.py` (add to `activities=[]`).
-3. Call it from the appropriate tier in `MasterScanWorkflow` or `SubScanWorkflow` in `temporal_workflows.py`.
+3. Call it from the appropriate tier in `MasterScanWorkflow` or `SubScanWorkflow` in `temporal/workflows/__init__.py`.
 4. If the activity shells out to a tool, consider using the Go executor (`go-executor-queue`) for subprocess management.
+
+**Note**: Existing imports via `from reNgine.temporal_activities import X` continue to work through the compatibility shim. New code should import directly: `from reNgine.temporal.activities import X`.
 
 ## Go executor activities
 
@@ -159,6 +164,6 @@ Scan task helpers called from activities (`tasks.py`, `common_func.py`, `*_tasks
 
 - Orchestrate scans from `temporal_client.py`; avoid mixing workflow start logic directly into views.
 - Validate all user input before passing it into workflow arguments (target URLs, scan config).
-- Do not duplicate activity logic — reuse shared helpers in `tasks.py` and `common_func.py`.
+- Do not duplicate activity logic — reuse shared helpers in the `tasks/` package and `common_func.py`.
 - All activities must be idempotent by design (Temporal may retry them).
 - All activities must log START and COMPLETE/ERROR — see logging section above.

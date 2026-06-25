@@ -49,7 +49,8 @@ Project context and technology stack for the r3ngine v3 web reconnaissance and v
 | 6 | Vulnerability scanning (Nuclei), WAF bypass, credential brute force |
 | 7 | Vulnerability correlation, risk scoring, Neo4j/APME sync, reporting |
 
-Scan entry point: `initiate_scan_temporal()` in `tasks.py` → starts `MasterScanWorkflow`.
+Scan entry point: `initiate_scan_temporal()` in `tasks/scan_init.py` → starts `MasterScanWorkflow`.
+Import: `from reNgine.tasks import initiate_scan_temporal` (shim) or `from reNgine.tasks.scan_init import initiate_scan_temporal` (direct).
 
 ## Key Intelligence Engines
 
@@ -66,16 +67,50 @@ Scan entry point: `initiate_scan_temporal()` in `tasks.py` → starts `MasterSca
 - Private methods at the bottom of the file.
 - No path constructed from user input without validation (resolve + bounds-check).
 - No raw exception messages returned to the client.
-- `temporal_workflows.py` must stay deterministic — no DB calls, no I/O, no `datetime.now()`.
-- All scanning logic belongs in `temporal_activities.py` or the Go executor.
-- Run tests inside Docker: `docker exec -it r3ngine-web-1 bash -c "cd /usr/src/app && python3 manage.py test"`
+- `temporal/workflows/__init__.py` must stay deterministic — no DB calls, no I/O, no `datetime.now()`.
+- All scanning logic belongs in `temporal/activities/__init__.py` or the Go executor.
+- When mocking extracted modules, patch at the **new module path** (e.g. `reNgine.tasks.vuln.stream_command`), not the shim.
+- Run tests inside Docker: `docker exec r3ngine-web-1 bash -c "cd /usr/src/app && python3 manage.py test --keepdb --verbosity=2 2>&1 | tail -20"`
 
 ## Temporal Quick Reference
 
-- Workflows (deterministic): `web/reNgine/temporal_workflows.py`
-- Activities (side-effecting): `web/reNgine/temporal_activities.py`
+- Workflows (deterministic): `web/reNgine/temporal/workflows/__init__.py`
+- Activities (side-effecting): `web/reNgine/temporal/activities/__init__.py`
+- Shims (backward-compatible): `temporal_workflows.py`, `temporal_activities.py` — re-export from packages above
 - Client (start/cancel from Django): `web/reNgine/temporal_client.py`
 - Go executor (subprocess tools): `web/executor/main.go` on `go-executor-queue`
+
+## Tasks Package Quick Reference
+
+`from reNgine.tasks import X` works for all names (shim). Direct imports:
+- Scan init / scan lifecycle: `reNgine.tasks.scan_init`
+- Subdomain discovery: `reNgine.tasks.subdomain`
+- HTTP crawl / URL fetch / web API: `reNgine.tasks.crawl`
+- Vulnerability scanning (nuclei/dalfox/crlfuzz): `reNgine.tasks.vuln`
+- OSINT / dorking / spiderfoot: `reNgine.tasks.osint`
+- Port scan / nmap / SSL: `reNgine.tasks.port_scan`
+- Endpoint / IP persistence: `reNgine.tasks.persistence`
+- Notifications: `reNgine.tasks.notifications`
+- Geo / WHOIS: `reNgine.tasks.geo`
+- LLM / GPT reports: `reNgine.tasks.llm`
+- WAF detection/bypass: `reNgine.tasks.waf`
+- Screenshot: `reNgine.tasks.screenshot`
+- Result parsers: `reNgine.tasks.parsers`
+- Proxy fetch: `reNgine.tasks.proxies`
+- Acunetix integration: `reNgine.tasks.acunetix`
+
+## API Views Quick Reference
+
+`from api.views import X` works for all names (shim). Direct imports:
+- Scan actions (InitiateScan, StopScan, etc.): `api.views.scan`
+- Target management: `api.views.targets`
+- Vulnerabilities: `api.views.vulns`
+- Recon / OSINT: `api.views.recon`
+- LLM endpoints: `api.views.llm`
+- Tool management: `api.views.tools`
+- Settings / proxy / SOC: `api.views.settings`
+- Notifications: `api.views.notifications`
+- Workers: `api.views.workers`
 
 ## Additional Reference
 
