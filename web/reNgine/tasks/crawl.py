@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 from reNgine.common_func import *
 from reNgine.definitions import *
-from reNgine.utils.opsec import OpSecManager, ProxychainsWrapper
+from reNgine.utils.opsec import OpSecManager, ProxychainsWrapper, get_opsec_manager
 from reNgine.utils.task import (
     run_command, run_command_with_retry, stream_command,
     bulk_persist_fetch_urls, bulk_apply_gf_pattern_from_file,
