@@ -65,8 +65,8 @@ class VigoliumParserTest(TestCase):
 
         # Real schema from live vigolium output
         finding_data = {
-            'url': 'https://www.defijn.io/',
-            'hostname': 'www.defijn.io',
+            'url': 'https://www.example.com/',
+            'hostname': 'www.example.com',
             'module_id': 'xss-reflected',
             'module_name': 'Reflected XSS',
             'module_type': 'active',
@@ -77,17 +77,17 @@ class VigoliumParserTest(TestCase):
             'confidence': 'firm',
             'status': 'triaged',
             'cvss_score': 6.1,
-            'matched_at': ['https://www.defijn.io/search?q=test'],
+            'matched_at': ['https://www.example.com/search?q=test'],
             'extracted_results': ['<script>alert(1)</script>'],
             'tags': ['xss', 'injection'],
-            'request': 'GET /search?q=test HTTP/1.1\nHost: www.defijn.io\n',
+            'request': 'GET /search?q=test HTTP/1.1\nHost: www.example.com\n',
             'response': '',
             'finding_hash': 'abc123',
             'found_at': '2026-05-28T07:36:53Z',
         }
         task = self._make_task()
         subdomain = MagicMock()
-        subdomain.name = 'www.defijn.io'
+        subdomain.name = 'www.example.com'
 
         with patch('reNgine.vigolium_tasks.save_vulnerability') as mock_save:
             parse_vigolium_finding(task, finding_data, subdomain)
@@ -97,7 +97,7 @@ class VigoliumParserTest(TestCase):
             self.assertEqual(kwargs['severity'], 3)   # 'high' → 3
             self.assertEqual(kwargs['type'], 'Vigolium')
             self.assertEqual(kwargs['template_id'], 'xss-reflected')
-            self.assertEqual(kwargs['http_url'], 'https://www.defijn.io/search?q=test')
+            self.assertEqual(kwargs['http_url'], 'https://www.example.com/search?q=test')
             self.assertEqual(kwargs['description'], 'User input is reflected unescaped in the response.')
 
     def test_parse_finding_uses_url_when_matched_at_empty(self):
@@ -105,8 +105,8 @@ class VigoliumParserTest(TestCase):
         from reNgine.vigolium_tasks import parse_vigolium_finding
 
         finding_data = {
-            'url': 'https://www.defijn.io/',
-            'hostname': 'www.defijn.io',
+            'url': 'https://www.example.com/',
+            'hostname': 'www.example.com',
             'module_id': 'headers-missing',
             'module_name': 'Security Headers Missing',
             'severity': 'info',
@@ -120,7 +120,7 @@ class VigoliumParserTest(TestCase):
             parse_vigolium_finding(task, finding_data, subdomain)
             mock_save.assert_called_once()
             kwargs = mock_save.call_args[1]
-            self.assertEqual(kwargs['http_url'], 'https://www.defijn.io/')
+            self.assertEqual(kwargs['http_url'], 'https://www.example.com/')
             self.assertEqual(kwargs['severity'], 0)  # 'info' → 0
 
     def test_parse_finding_skips_missing_name(self):
@@ -138,8 +138,8 @@ class VigoliumParserTest(TestCase):
         from reNgine.vigolium_tasks import parse_vigolium_http_record
 
         record_data = {
-            'url': 'https://www.defijn.io/login',
-            'hostname': 'www.defijn.io',
+            'url': 'https://www.example.com/login',
+            'hostname': 'www.example.com',
             'method': 'GET',
             'status_code': 200,
         }
@@ -148,7 +148,7 @@ class VigoliumParserTest(TestCase):
             parse_vigolium_http_record(task, record_data)
             mock_save.assert_called_once()
             kwargs = mock_save.call_args[1]
-            self.assertEqual(kwargs['http_url'], 'https://www.defijn.io/login')
+            self.assertEqual(kwargs['http_url'], 'https://www.example.com/login')
 
     def test_parse_http_record_skips_missing_url(self):
         """parse_vigolium_http_record skips records with no url field."""
