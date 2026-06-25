@@ -492,7 +492,7 @@ class ScanHistorySerializer(serializers.ModelSerializer):
 		active_tier = 1
 		uncompleted_started = [t for t in started_tiers if t not in completed_tiers]
 		if uncompleted_started:
-			active_tier = min(uncompleted_started)
+			active_tier = max(uncompleted_started)
 		elif completed_tiers:
 			active_tier = min(max(completed_tiers) + 1, total_tiers)
 		elif obj.scan_status == RUNNING_TASK:
