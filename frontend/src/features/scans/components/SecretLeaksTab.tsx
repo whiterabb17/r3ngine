@@ -20,7 +20,7 @@ import {
   Card,
   CardContent
 } from '@mui/material';
-import { Shield, ExternalLink, Copy, AlertTriangle, Play, Mail, ShieldAlert } from 'lucide-react';
+import { Shield, ExternalLink, Copy, AlertTriangle, Fingerprint, Mail, ShieldAlert } from 'lucide-react';
 import { useSecretLeaks, useScanSummary, useEmailBreaches, useCheckEmailBreach } from '../api';
 import { TacticalPanel } from '../../../components/TacticalPanel';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
@@ -331,7 +331,7 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
                                 onClick={() => handleManualCheck(email.address)}
                                 sx={{ color: tokens.accent.primary }}
                               >
-                                <Play size={12} />
+                                <Fingerprint size={12} />
                               </IconButton>
                             </Tooltip>
                           </TableCell>
