@@ -737,6 +737,27 @@ def save_endpoint(
         endpoint.is_default = is_default
         endpoint.discovered_date = timezone.now()
         endpoint.save()
+
+        # Centralized Brute-Force Candidate Registration
+        auth_keywords = ['login', 'admin', 'auth', 'portal', 'controlpanel', 'signin', 'manage']
+        if any(k in http_url.lower() for k in auth_keywords):
+            from reNgine.utilities import save_auth_candidate
+            try:
+                parsed = urlparse(http_url)
+                port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+                save_auth_candidate(
+                    scan_history=endpoint.scan_history,
+                    subdomain=endpoint.subdomain,
+                    endpoint=endpoint,
+                    target=parsed.hostname,
+                    protocol='http',
+                    port=port,
+                    source_tool=endpoint_data.get('source_tool', 'discovery_engine'),
+                    tech_hint=f"Discovered URL: {http_url}"
+                )
+            except Exception as e:
+                logger.error(f"Error registering AuthCandidate from endpoint {http_url}: {e}")
+
         subscan_id = ctx.get('subscan_id')
         if subscan_id:
             from startScan.models import SubScan
