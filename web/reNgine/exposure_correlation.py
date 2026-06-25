@@ -100,9 +100,10 @@ class ExposureCorrelationEngine:
                     target_domain=subdomain.target_domain,
                     defaults={
                         'type': exposure_type,
-                        'status': 'open',
                     }
                 )
+                if created:
+                    Exposure.objects.filter(pk=exposure.pk).update(status='open')
 
                 risk = self._calculate_risk_score(exposure, subdomain, vulns)
                 Exposure.objects.filter(pk=exposure.pk).update(risk_score=risk)

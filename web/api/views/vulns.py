@@ -499,7 +499,7 @@ class ExposureViewSet(
 		write_ser = ExposureStatusUpdateSerializer(instance, data=request.data, partial=True)
 		write_ser.is_valid(raise_exception=True)
 		instance = write_ser.save()
-		return Response(ExposureSerializer(instance).data)
+		return Response(ExposureSerializer(instance, context={'request': request}).data)
 
 class CVEDetails(APIView):
 	"""
