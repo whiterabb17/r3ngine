@@ -168,11 +168,11 @@ class PortScanSubdomainCacheTest(TestCase):
         mock_port = MagicMock()
         mock_port.is_uncommon = False
 
-        with patch('reNgine.tasks.save_ip_address', return_value=(mock_ip, True)), \
-             patch('reNgine.tasks.save_endpoint', return_value=(None, False)), \
-             patch('reNgine.tasks.update_or_create_port', return_value=(mock_port, False)), \
-             patch('reNgine.tasks.get_port_service_description', return_value={}), \
-             patch('reNgine.tasks.save_auth_candidate', return_value=None):
+        with patch('reNgine.tasks.port_scan.save_ip_address', return_value=(mock_ip, True)), \
+             patch('reNgine.tasks.port_scan.save_endpoint', return_value=(None, False)), \
+             patch('reNgine.tasks.port_scan.update_or_create_port', return_value=(mock_port, False)), \
+             patch('reNgine.tasks.port_scan.get_port_service_description', return_value={}), \
+             patch('reNgine.utilities.save_auth_candidate', return_value=None):
 
             with CaptureQueriesContext(connection) as ctx:
                 port_scan(proxy, hosts=['192.0.2.1'], ctx={
