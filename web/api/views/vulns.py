@@ -495,7 +495,11 @@ class ExposureViewSet(
 				{'detail': 'Only status updates are allowed.'},
 				status=status.HTTP_400_BAD_REQUEST,
 			)
-		return super().partial_update(request, *args, **kwargs)
+		instance = self.get_object()
+		write_ser = ExposureStatusUpdateSerializer(instance, data=request.data, partial=True)
+		write_ser.is_valid(raise_exception=True)
+		instance = write_ser.save()
+		return Response(ExposureSerializer(instance).data)
 
 class CVEDetails(APIView):
 	"""

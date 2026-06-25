@@ -1575,6 +1575,13 @@ class ExposureEvidenceSerializer(serializers.ModelSerializer):
 		fields = '__all__'
 
 
+class ExposureStatusUpdateSerializer(serializers.ModelSerializer):
+	"""Write-only serializer for status transitions on an Exposure."""
+	class Meta:
+		model = Exposure
+		fields = ['status']
+
+
 class ExposureSerializer(serializers.ModelSerializer):
 	evidence = ExposureEvidenceSerializer(many=True, read_only=True)
 	scan_history = serializers.SerializerMethodField()
