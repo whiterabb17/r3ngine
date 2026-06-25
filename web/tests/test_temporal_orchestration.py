@@ -49,8 +49,8 @@ class TestTemporalOrchestration(TestCase):
         self.domain.delete()
 
     @patch('reNgine.temporal_client.TemporalClientProvider.get_client', new_callable=AsyncMock)
-    @patch('reNgine.tasks.save_endpoint')
-    @patch('reNgine.tasks.send_scan_notif')
+    @patch('reNgine.tasks.scan_init.save_endpoint')
+    @patch('reNgine.tasks.scan_init.send_scan_notif')
     def test_initiate_scan_temporal(self, mock_send_notif, mock_save_endpoint, mock_get_client):
         """Test that initiate_scan_temporal correctly sets up scan history and starts the MasterScanWorkflow."""
         from reNgine.tasks import initiate_scan_temporal
@@ -97,8 +97,8 @@ class TestTemporalOrchestration(TestCase):
         self.assertEqual(temporal_ctx['engine_id'], self.engine.id)
 
     @patch('reNgine.temporal_client.TemporalClientProvider.get_client', new_callable=AsyncMock)
-    @patch('reNgine.tasks.save_endpoint')
-    @patch('reNgine.tasks.send_scan_notif')
+    @patch('reNgine.tasks.scan_init.save_endpoint')
+    @patch('reNgine.tasks.scan_init.send_scan_notif')
     def test_initiate_subscan_temporal(self, mock_send_notif, mock_save_endpoint, mock_get_client):
         """Test that initiate_subscan_temporal sets up subscan record and triggers SubScanWorkflow on Temporal."""
         from reNgine.tasks import initiate_subscan_temporal
@@ -159,8 +159,8 @@ class TestTemporalOrchestration(TestCase):
         self.assertEqual(subscan.workflow_ids, ['mock-subscan-workflow-id'])
 
     @patch('reNgine.temporal_client.TemporalClientProvider.get_client', new_callable=AsyncMock)
-    @patch('reNgine.tasks.save_endpoint')
-    @patch('reNgine.tasks.send_scan_notif')
+    @patch('reNgine.tasks.scan_init.save_endpoint')
+    @patch('reNgine.tasks.scan_init.send_scan_notif')
     def test_initiate_multiple_subscans_temporal(self, mock_send_notif, mock_save_endpoint, mock_get_client):
         """Test that initiating subscans with multiple tasks creates multiple SubScan records
 
@@ -229,8 +229,8 @@ class TestTemporalOrchestration(TestCase):
             self.assertEqual(subscan.workflow_ids, ['mock-multi-subscan-workflow-id'])
 
     @patch('reNgine.temporal_client.TemporalClientProvider.get_client', new_callable=AsyncMock)
-    @patch('reNgine.tasks.save_endpoint')
-    @patch('reNgine.tasks.send_scan_notif')
+    @patch('reNgine.tasks.scan_init.save_endpoint')
+    @patch('reNgine.tasks.scan_init.send_scan_notif')
     def test_initiate_subscan_temporal_skips_duplicate_active_type(self, mock_send_notif, mock_save_endpoint, mock_get_client):
         """Duplicate subscan launches for the same subdomain/type should reuse the active run."""
         from reNgine.tasks import initiate_subscan_temporal
@@ -269,7 +269,7 @@ class TestTemporalOrchestration(TestCase):
         mock_save_endpoint.assert_not_called()
         mock_send_notif.assert_not_called()
 
-    @patch('reNgine.tasks.resume_scan_temporal')
+    @patch('reNgine.tasks.scan_init.resume_scan_temporal')
     @patch('reNgine.temporal_client.TemporalClientProvider.get_client', new_callable=AsyncMock)
     def test_recover_stuck_scans_restarts_running_and_failed(self, mock_get_client, mock_resume_scan):
         """Verify recover_stuck_scans recovers both RUNNING_TASK and FAILED_TASK scans with dead workflows, but not ABORTED ones."""
