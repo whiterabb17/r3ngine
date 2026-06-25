@@ -147,7 +147,7 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
   const [lightboxLabel, setLightboxLabel] = useState<string>('');
   
   const openLightbox = (src: string, label: string = '') => {
-    setLightboxSrc(src);
+    setLightboxSrc(`/media/${src}`);
     setLightboxLabel(label);
   };
   const closeLightbox = () => {
