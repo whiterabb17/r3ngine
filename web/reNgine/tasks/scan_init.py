@@ -2,6 +2,8 @@
 import os
 import json
 import yaml
+import uuid
+import asyncio
 from datetime import datetime
 from pathlib import Path
 
@@ -17,6 +19,34 @@ from targetApp.models import Domain
 from scanEngine.models import EngineType
 
 logger = logging.getLogger(__name__)
+
+
+def _make_json_safe(value):
+    """Recursively ensure a value is JSON-serializable for Temporal workflow args.
+
+    Converts Django model instances to their PKs, datetimes to ISO strings,
+    and any other non-primitive to its string representation so Temporal's
+    data converter never hits a TypeError.
+    """
+    from django.db.models import Model
+    from datetime import datetime, date
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, Model):
+        return value.pk
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {k: _make_json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_make_json_safe(v) for v in value]
+    try:
+        json.dumps(value)
+        return value
+    except (TypeError, ValueError):
+        return str(value)
+
+
 SCAN_PIPELINE_DEFINITION = [
     {
         'tier': 1,
@@ -339,7 +369,7 @@ def initiate_scan_temporal(
 					)
 					handle = await client.start_workflow(
 						"MasterScanWorkflow",
-						args=[temporal_ctx],
+						args=[_make_json_safe(temporal_ctx)],
 						id=workflow_id,
 						task_queue=task_queue or "python-orchestrator-queue",
 						execution_timeout=timedelta(days=30),
@@ -648,7 +678,7 @@ def initiate_subscan_temporal(
 					)
 					handle = await client.start_workflow(
 						"SubScanWorkflow",
-						args=[temporal_ctx, pending_scan_types],
+						args=[_make_json_safe(temporal_ctx), pending_scan_types],
 						id=workflow_id,
 						task_queue=task_queue or "python-orchestrator-queue",
 						execution_timeout=timedelta(days=7),

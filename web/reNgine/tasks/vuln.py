@@ -2,6 +2,7 @@
 import os
 import json
 import yaml
+import concurrent.futures
 from pathlib import Path
 
 from reNgine.common_func import *
@@ -471,7 +472,6 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 
 		unique_vulns = list(unique_vulns)
 
-		import concurrent.futures
 		with concurrent.futures.ThreadPoolExecutor(max_workers=DEFAULT_THREADS) as executor:
 			future_to_gpt = {executor.submit(get_vulnerability_gpt_report, vuln): vuln for vuln in unique_vulns}
 			for future in concurrent.futures.as_completed(future_to_gpt):

@@ -3,13 +3,14 @@ import os
 from urllib.parse import urlparse
 
 import validators
+import asyncio
 from django.db.models import Count
 from django.utils import timezone
 from metafinder.extractor import extract_metadata_from_google_search
 
 from reNgine.common_func import *
 from reNgine.definitions import *
-from reNgine.utils.task import run_command, save_subdomain
+from reNgine.utils.task import run_command, save_subdomain, save_endpoint
 from startScan.models import (
     EndPoint, IpAddress, ScanHistory, ScanActivity, Subdomain,
     MetaFinderDocument, SecretLeak,

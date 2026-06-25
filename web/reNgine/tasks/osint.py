@@ -4,6 +4,7 @@ import json
 import requests
 import base64
 import os
+import yaml
 from pathlib import Path
 
 from reNgine.common_func import *
@@ -11,7 +12,7 @@ from reNgine.definitions import *
 from reNgine.parsers import SpiderFootBatchParser
 from reNgine.utils.task import run_command, stream_command, save_email, save_employee, save_subdomain
 from reNgine.utils.opsec import get_opsec_manager
-from reNgine.tasks.persistence import save_metadata_info
+from reNgine.tasks.persistence import save_metadata_info, save_ip_address
 from reNgine.tasks.geo import query_whois
 from startScan.models import *
 from targetApp.models import Domain

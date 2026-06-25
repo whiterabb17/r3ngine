@@ -2,6 +2,7 @@
 import os
 import json
 import requests
+import validators
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -13,7 +14,7 @@ from reNgine.utils.task import (
     bulk_persist_fetch_urls, bulk_apply_gf_pattern_from_file,
     save_endpoint, save_parameter,
 )
-from reNgine.tasks.persistence import process_httpx_response, extract_httpx_url, remove_duplicate_endpoints
+from reNgine.tasks.persistence import process_httpx_response, extract_httpx_url, remove_duplicate_endpoints, save_ip_address
 from startScan.models import *
 
 logger = logging.getLogger(__name__)
