@@ -17,7 +17,7 @@ from reNgine.utils.task import save_email
 from reNgine.osint.hunter_lookup import run_hunter_lookup, HunterQuotaExhausted
 from dashboard.models import HunterIOAPIKey
 from startScan.models import ScanHistory
-from startScan.models import EndPoint as Endpoint
+from startScan.models import Screenshot
 from startScan.models import Employee
 
 logger = logging.getLogger(__name__)
@@ -92,14 +92,6 @@ def _clear_active(scan_id: int) -> None:
 
 def run_email_discovery(scan_id: int, domain: str, job_id: str) -> None:
     """Run all email discovery tools sequentially, pushing progress to scan log stream."""
-    from reNgine.tasks.email_discovery import (
-        run_hunter_discovery,
-        run_harvester_discovery,
-        run_phonebook_discovery,
-        run_pattern_inference,
-        run_crawled_extraction,
-    )
-
     tool_fns: dict[str, Callable] = {
         'hunter':    run_hunter_discovery,
         'harvester': run_harvester_discovery,
@@ -200,7 +192,7 @@ def run_harvester_discovery(scan_id: int, domain: str) -> int:
             cmd,
             cwd=theHarvester_dir,
             capture_output=True,
-            timeout=120,
+            timeout=300,
         )
 
         output_file = f'{output_json}.json'
@@ -233,8 +225,7 @@ def run_phonebook_discovery(scan_id: int, domain: str) -> int:
         raise
 
     if resp.status_code != 200:
-        logger.warning('[EMAIL_DISCOVERY] phonebook.cz returned %d for %s', resp.status_code, domain)
-        return 0
+        raise RuntimeError('phonebook.cz HTTP %d' % resp.status_code)
 
     found_addresses = set(EMAIL_PATTERN.findall(resp.text))
     domain_addresses = {a for a in found_addresses if a.lower().endswith(f'@{domain}')}
@@ -250,24 +241,32 @@ def run_phonebook_discovery(scan_id: int, domain: str) -> int:
 # ── Crawled URL email extraction ──────────────────────────────────────────────
 
 def run_crawled_extraction(scan_id: int, domain: str) -> int:
-    """Extract emails from page content already stored in EndPoint records for this scan."""
+    """Extract emails from saved HTML files recorded in Screenshot records for this scan."""
     scan_history = ScanHistory.objects.get(pk=scan_id)
-    bodies = (
-        Endpoint.objects
+    html_paths = (
+        Screenshot.objects
         .filter(scan_history=scan_history)
-        .exclude(page_title='')
-        .values_list('page_title')
+        .exclude(html_path='')
+        .exclude(html_path__isnull=True)
+        .values_list('html_path', flat=True)
     )
 
     count = 0
     seen: set[str] = set()
-    for (body,) in bodies:
-        for address in EMAIL_PATTERN.findall(body or ''):
+    for html_path in html_paths:
+        try:
+            with open(html_path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+        except OSError:
+            logger.debug('[EMAIL_DISCOVERY] crawled: cannot read %s', html_path)
+            continue
+
+        for address in EMAIL_PATTERN.findall(content):
             address_lower = address.lower()
             if address_lower in seen:
                 continue
             seen.add(address_lower)
-            if not address_lower.endswith(f'@{domain}'):
+            if not address_lower.endswith('@%s' % domain):
                 continue
             email, created = save_email(address_lower, scan_history=scan_history, source='crawled')
             if email and created:

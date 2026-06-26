@@ -179,25 +179,37 @@ class TestPhonebookDiscovery(TestCase):
 
     @patch('reNgine.tasks.email_discovery.requests.get')
     @patch('reNgine.tasks.email_discovery.ScanHistory')
-    def test_phonebook_non_200_returns_zero(self, mock_sh, mock_get):
+    def test_phonebook_non_200_raises(self, mock_sh, mock_get):
         mock_get.return_value = MagicMock(status_code=429, text='')
         from reNgine.tasks.email_discovery import run_phonebook_discovery
-        count = run_phonebook_discovery(1, 'example.com')
-        self.assertEqual(count, 0)
+        with self.assertRaises(RuntimeError):
+            run_phonebook_discovery(1, 'example.com')
 
 
 class TestCrawledExtraction(TestCase):
-    @patch('reNgine.tasks.email_discovery.Endpoint')
+    @patch('reNgine.tasks.email_discovery.Screenshot')
     @patch('reNgine.tasks.email_discovery.save_email')
     @patch('reNgine.tasks.email_discovery.ScanHistory')
-    def test_crawled_extracts_emails_from_body(self, mock_sh, mock_save, mock_ep):
-        mock_ep.objects.filter.return_value.exclude.return_value.values_list.return_value = [
-            ('Page body containing admin@example.com and support@example.com',),
+    @patch('builtins.open', new_callable=MagicMock)
+    def test_crawled_extracts_emails_from_html_files(self, mock_open, mock_sh, mock_save, mock_screenshot):
+        mock_screenshot.objects.filter.return_value.exclude.return_value.exclude.return_value.values_list.return_value = [
+            '/tmp/scan_42/html/sub.example.com.html',
         ]
+        mock_open.return_value.__enter__.return_value.read.return_value = (
+            '<html><body>Contact: admin@example.com and support@example.com</body></html>'
+        )
         mock_save.return_value = (MagicMock(), True)
         from reNgine.tasks.email_discovery import run_crawled_extraction
         count = run_crawled_extraction(1, 'example.com')
         self.assertEqual(count, 2)
+
+    @patch('reNgine.tasks.email_discovery.Screenshot')
+    @patch('reNgine.tasks.email_discovery.ScanHistory')
+    def test_crawled_no_html_files_returns_zero(self, mock_sh, mock_screenshot):
+        mock_screenshot.objects.filter.return_value.exclude.return_value.exclude.return_value.values_list.return_value = []
+        from reNgine.tasks.email_discovery import run_crawled_extraction
+        count = run_crawled_extraction(1, 'example.com')
+        self.assertEqual(count, 0)
 
 
 # ── Pattern inference tests (Task 6) ─────────────────────────────────────────
