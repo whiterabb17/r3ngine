@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import type { SelectChangeEvent } from '@mui/material';
 import {
   Box,
   Typography,
@@ -18,7 +19,10 @@ import {
   CircularProgress,
   Collapse,
   Alert,
-  TablePagination
+  TablePagination,
+  Select,
+  MenuItem,
+  FormControl
 } from '@mui/material';
 import { 
   Search, 
@@ -56,11 +60,13 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selected, setSelected] = useState<number[]>([]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [typeFilter, setTypeFilter] = useState<string>('');
 
-  const { data, isLoading, refetch } = useOsintStaging({ 
-    scan_id: scanId, 
+  const { data, isLoading, refetch } = useOsintStaging({
+    scan_id: scanId,
     search: search,
-    page: page + 1 
+    page: page + 1,
+    osint_type: typeFilter || undefined
   });
 
   const discardMutation = useBulkDiscardOsint();
@@ -80,6 +86,11 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
     } else {
       setSelected([...selected, id]);
     }
+  };
+
+  const handleTypeFilterChange = (event: SelectChangeEvent) => {
+    setTypeFilter(event.target.value);
+    setPage(0);
   };
 
   const handleBulkDiscard = async () => {
@@ -144,8 +155,8 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
                     </IconButton>
                   </InputAdornment>
                 ),
-                sx: { 
-                  fontSize: '0.75rem', 
+                sx: {
+                  fontSize: '0.75rem',
                   bgcolor: 'rgba(255,255,255,0.03)',
                   border: 1, borderColor: 'divider',
                   '&:hover': { border: '1px solid rgba(255,255,255,0.2)' }
@@ -154,6 +165,25 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
             }}
             sx={{ width: 250 }}
           />
+          <FormControl size="small" sx={{ minWidth: 130 }}>
+            <Select
+              displayEmpty
+              value={typeFilter}
+              onChange={handleTypeFilterChange}
+              sx={{
+                fontSize: '0.72rem',
+                bgcolor: 'rgba(255,255,255,0.03)',
+                border: 1, borderColor: 'divider',
+                '& .MuiSelect-select': { py: 0.75 },
+              }}
+            >
+              <MenuItem value=""><em>All Types</em></MenuItem>
+              {['SSL', 'DNS', 'Email', 'Employee', 'Phone', 'Social', 'IP', 'Port',
+                'Tech', 'OS', 'Leak', 'Crypto', 'Hosting', 'Subdomain'].map(t => (
+                <MenuItem key={t} value={t} sx={{ fontSize: '0.72rem' }}>{t}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           {selected.length > 0 && (
             <Stack direction="row" spacing={1}>
               <Button
