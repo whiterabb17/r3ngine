@@ -98,6 +98,8 @@ class EmailDiscoveryAPITestCase(TestCase):
     @patch('api.views.recon._email_redis')
     def test_stop_discovery_sets_stop_key(self, mock_redis_fn):
         mock_r = MagicMock()
+        # Return None for job→scan_id lookup so scan-existence check is skipped
+        mock_r.get.return_value = None
         mock_redis_fn.return_value = mock_r
         job_id = str(uuid.uuid4())
         resp = self.client.post(

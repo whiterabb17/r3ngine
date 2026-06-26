@@ -444,7 +444,14 @@ class StopEmailDiscoveryView(APIView):
         if not job_id:
             return Response({'error': 'job_id is required'}, status=400)
 
+        # Resolve scan_id from job and confirm the user can access it
         r = _email_redis()
+        scan_id = r.get(f'email_discovery:job:{job_id}:scan_id')
+        if scan_id:
+            from startScan.models import ScanHistory
+            if not ScanHistory.objects.filter(pk=scan_id).exists():
+                return Response({'error': 'job not found'}, status=404)
+
         r.set(f'email_discovery:{job_id}:stop', '1', ex=3600)
         return Response({'status': 'stopping'})
 
@@ -457,6 +464,11 @@ class EmailDiscoveryReplayView(APIView):
         r = _email_redis()
         scan_id: str | None = r.get(f'email_discovery:job:{job_id}:scan_id')
         if not scan_id:
+            return Response({'events': [], 'complete': False})
+
+        # Confirm the scan exists before streaming its log events
+        from startScan.models import ScanHistory
+        if not ScanHistory.objects.filter(pk=scan_id).exists():
             return Response({'events': [], 'complete': False})
 
         stream_data = r.xread({f'scan:logs:{scan_id}': '0'}, count=1000)
