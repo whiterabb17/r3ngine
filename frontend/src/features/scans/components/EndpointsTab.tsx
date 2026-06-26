@@ -107,12 +107,10 @@ export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId,
       });
       if (response && response.workflow_id) {
         setExtractAuthWorkflowId(response.workflow_id);
+      } else {
+        setExtractAuthStatus('error');
+        showNotification('Workflow dispatched but no workflow_id returned', 'error');
       }
-      // Wait for a few seconds before completing to allow logs to be viewed? 
-      // Actually, since Temporal workflow might take longer, we should ideally poll Temporal status.
-      // For now, we will mark as completed after 5 seconds of extracting if it succeeds, but wait, the endpoint returns instantly.
-      // We will let the user close it, and maybe we don't know when it's done unless we poll workflow status.
-      // But we can check if logs contain "[COMPLETE]"!
     } catch (error: any) {
       showNotification(error.message || 'Failed to dispatch auth extraction', 'error');
       setExtractAuthStatus('error');
@@ -815,6 +813,7 @@ export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId,
         url={extractAuthUrl}
         workflowId={extractAuthWorkflowId}
         status={extractAuthStatus}
+        onComplete={(result) => setExtractAuthStatus(result)}
       />
 
       <Snackbar

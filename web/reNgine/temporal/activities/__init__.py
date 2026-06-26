@@ -3636,7 +3636,7 @@ def extract_auth_for_url_activity(ctx: dict) -> dict:
         logger.log_line("[AUTH_EXTRACT]", level, msg)
         if workflow_id:
             try:
-                redis_url = getattr(settings, 'CELERY_BROKER_URL', 'redis://redis:6379/0')
+                redis_url = getattr(settings, 'REDIS_URL', 'redis://redis:6379/0')
                 client = redis.StrictRedis.from_url(redis_url)
                 client.xadd(f"auth:logs:{workflow_id}", {"data": json.dumps({"line": f"[{level}] {msg}"})})
             except Exception:

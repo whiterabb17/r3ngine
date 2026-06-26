@@ -886,13 +886,11 @@ class ExtractAuthLogsView(APIView):
             from django.conf import settings
             import json
             
-            # Match the CELERY_BROKER_URL or REDIS setup
-            redis_url = getattr(settings, 'CELERY_BROKER_URL', 'redis://redis:6379/0')
+            redis_url = getattr(settings, 'REDIS_URL', 'redis://redis:6379/0')
             client = redis.StrictRedis.from_url(redis_url, decode_responses=True)
             
             stream_key = f"auth:logs:{workflow_id}"
             
-            # Fetch all logs in the stream
             raw_logs = client.xrange(stream_key, min='-', max='+')
             logs = []
             for _, fields in raw_logs:

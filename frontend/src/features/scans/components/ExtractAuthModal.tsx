@@ -23,56 +23,98 @@ interface ExtractAuthModalProps {
   url: string;
   workflowId: string | null;
   status: 'idle' | 'extracting' | 'completed' | 'error';
+  onComplete?: (status: 'completed' | 'error') => void;
 }
 
-const fetchAuthLogs = async (workflowId: string) => {
+const fetchAuthLogs = async (workflowId: string): Promise<string[]> => {
   const { data } = await axios.get(`/api/action/directory-file/auth-logs/?workflow_id=${workflowId}`);
-  return data.logs || [];
+  return (data.logs ?? []) as string[];
 };
+
+// Returns true when the log stream has reached a terminal state.
+const isTerminalLogs = (logs: string[]) =>
+  logs.some(l => l.includes('[COMPLETE]') || l.includes('[ERROR]'));
+
+// 3-minute timeout — lets the user close if Redis log writes silently failed.
+const POLL_TIMEOUT_MS = 3 * 60 * 1000;
 
 export const ExtractAuthModal: React.FC<ExtractAuthModalProps> = ({
   open,
   onClose,
   url,
   workflowId,
-  status: initialStatus
+  status: initialStatus,
+  onComplete,
 }) => {
   const { tokens } = useThemeTokens();
   const theme = useTheme();
   const isLight = tokens.mode === 'light';
   const logsEndRef = useRef<HTMLDivElement>(null);
-  const [internalStatus, setInternalStatus] = React.useState(initialStatus);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [internalStatus, setInternalStatus] = React.useState<'idle' | 'extracting' | 'completed' | 'error'>(initialStatus);
+  const [timedOut, setTimedOut] = React.useState(false);
+
+  // Sync when the parent resets state (new extraction or prop-driven error).
+  // Guarded: once we've locally completed/errored, don't revert to 'extracting'.
   React.useEffect(() => {
-    setInternalStatus(initialStatus);
-  }, [initialStatus, workflowId]);
+    if (initialStatus !== 'extracting') {
+      setInternalStatus(initialStatus);
+    } else if (internalStatus === 'idle') {
+      setInternalStatus('extracting');
+    }
+    // Reset timeout flag on each new workflow run.
+    if (workflowId) setTimedOut(false);
+  }, [initialStatus, workflowId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { data: logs = [] } = useQuery({
+  // Start a safety-valve timeout once we have a workflowId and are extracting.
+  useEffect(() => {
+    if (workflowId && open && internalStatus === 'extracting') {
+      timeoutRef.current = setTimeout(() => setTimedOut(true), POLL_TIMEOUT_MS);
+    }
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, [workflowId, open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Poll logs from Redis stream.  Stop as soon as data contains a terminal marker
+  // so that the interval is driven by the query's own data, not external React state.
+  const { data: logs = [] } = useQuery<string[]>({
     queryKey: ['auth-logs', workflowId],
     queryFn: () => fetchAuthLogs(workflowId as string),
     enabled: !!workflowId && open,
-    refetchInterval: (query) => (internalStatus === 'extracting' ? 1000 : false),
+    refetchInterval: (_query) => {
+      const current = (_query.state.data as string[] | undefined) ?? [];
+      return isTerminalLogs(current) ? false : 1000;
+    },
   });
 
+  // Derive completion from the full log list — not just the last entry — to
+  // handle the case where an INFO line follows the first [COMPLETE] marker.
   useEffect(() => {
     if (logsEndRef.current) {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-    // Check if finished
     if (logs.length > 0 && internalStatus === 'extracting') {
-      const lastLog = logs[logs.length - 1] || '';
-      if (lastLog.includes('[COMPLETE]')) {
+      if (logs.some(l => l.includes('[COMPLETE]'))) {
         setInternalStatus('completed');
-      } else if (lastLog.includes('[ERROR]')) {
+        onComplete?.('completed');
+      } else if (logs.some(l => l.includes('[ERROR]'))) {
         setInternalStatus('error');
+        onComplete?.('error');
       }
     }
-  }, [logs]);
+  }, [logs, internalStatus, onComplete]);
+
+  const canClose = internalStatus !== 'extracting' || timedOut;
 
   return (
     <Dialog
       open={open}
-      onClose={internalStatus === 'extracting' ? undefined : onClose}
+      onClose={canClose ? onClose : undefined}
       maxWidth="md"
       fullWidth
       slotProps={{
@@ -86,10 +128,10 @@ export const ExtractAuthModal: React.FC<ExtractAuthModalProps> = ({
         }
       }}
     >
-      <DialogTitle sx={{ 
-        color: tokens.accent.primary, 
-        fontFamily: 'Orbitron', 
-        fontSize: '0.9rem', 
+      <DialogTitle sx={{
+        color: tokens.accent.primary,
+        fontFamily: 'Orbitron',
+        fontSize: '0.9rem',
         letterSpacing: 2,
         display: 'flex',
         alignItems: 'center',
@@ -99,16 +141,16 @@ export const ExtractAuthModal: React.FC<ExtractAuthModalProps> = ({
           <Terminal size={18} />
           Auth Extraction
         </Box>
-        {internalStatus !== 'extracting' && (
+        {canClose && (
           <IconButton onClick={onClose} size="small" sx={{ color: tokens.text.secondary }}>
             <X size={18} />
           </IconButton>
         )}
       </DialogTitle>
       <DialogContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 0 }}>
-        <Box sx={{ 
-          p: 2, 
-          borderBottom: '1px solid', 
+        <Box sx={{
+          p: 2,
+          borderBottom: '1px solid',
           borderColor: 'divider',
           bgcolor: tokens.surface.elevated
         }}>
@@ -117,22 +159,25 @@ export const ExtractAuthModal: React.FC<ExtractAuthModalProps> = ({
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
             <Typography variant="body2" sx={{ color: tokens.text.secondary }}>
-              Status: 
+              Status:
             </Typography>
-            {internalStatus === 'extracting' && (
+            {internalStatus === 'extracting' && !timedOut && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: tokens.accent.primary }}>
                 <CircularProgress size={12} thickness={5} sx={{ color: 'inherit' }} />
                 <Typography variant="caption" sx={{ fontWeight: 600 }}>Extracting...</Typography>
               </Box>
+            )}
+            {internalStatus === 'extracting' && timedOut && (
+              <Typography variant="caption" sx={{ color: '#ffbb33' }}>Timed out — no log data received</Typography>
             )}
             {internalStatus === 'completed' && <Typography variant="caption" sx={{ color: '#00C851' }}>Completed</Typography>}
             {internalStatus === 'error' && <Typography variant="caption" sx={{ color: '#ff4444' }}>Failed</Typography>}
           </Box>
         </Box>
 
-        <Box sx={{ 
-          flex: 1, 
-          bgcolor: isLight ? '#1e1e1e' : '#000000', 
+        <Box sx={{
+          flex: 1,
+          bgcolor: isLight ? '#1e1e1e' : '#000000',
           color: '#00ff00',
           fontFamily: 'monospace',
           p: 2,
@@ -140,8 +185,13 @@ export const ExtractAuthModal: React.FC<ExtractAuthModalProps> = ({
           fontSize: '0.85rem',
           lineHeight: 1.5
         }}>
-          {logs.length === 0 && internalStatus === 'extracting' && (
+          {logs.length === 0 && internalStatus === 'extracting' && !timedOut && (
             <Typography variant="body2" sx={{ color: '#888' }}>Initializing...</Typography>
+          )}
+          {logs.length === 0 && timedOut && (
+            <Typography variant="body2" sx={{ color: '#888' }}>
+              No log data was received. The extraction may have completed without writing logs (check the Auth Candidates tab), or an error occurred on the backend.
+            </Typography>
           )}
           {logs.map((log: string, idx: number) => {
             let color = '#00ff00';
@@ -149,7 +199,7 @@ export const ExtractAuthModal: React.FC<ExtractAuthModalProps> = ({
             if (log.includes('[WARNING]')) color = '#ffbb33';
             if (log.includes('[INFO]')) color = '#33b5e5';
             if (log.includes('[COMPLETE]')) color = '#00C851';
-            
+
             return (
               <Box key={idx} sx={{ color }}>
                 {log}
@@ -160,12 +210,12 @@ export const ExtractAuthModal: React.FC<ExtractAuthModalProps> = ({
         </Box>
       </DialogContent>
       <DialogActions sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-        <Button 
-          onClick={onClose} 
-          disabled={internalStatus === 'extracting'}
+        <Button
+          onClick={onClose}
+          disabled={!canClose}
           sx={{ color: tokens.text.secondary }}
         >
-          {internalStatus === 'extracting' ? 'Please Wait' : 'Close'}
+          {!canClose ? 'Please Wait' : 'Close'}
         </Button>
       </DialogActions>
     </Dialog>
