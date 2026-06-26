@@ -244,7 +244,15 @@ fi
 # httpx alias
 echo 'alias httpx="/usr/local/bin/httpx"' >> ~/.bashrc
 
-
+# Install spiderfoot packages
+if [ -d '/usr/src/github/spiderfoot' ]; then
+  echo "Installing Spiderfoot dependencies..."
+  pip3 install -r /usr/src/github/spiderfoot/requirements.txt
+  # Python 3.12 removed the 'imp' module. SpiderFoot's sfp_whois uses python-whois
+  # which depends on the 'future' package — old versions of future still import imp.
+  # Upgrade future and python-whois to Python 3.12-compatible releases.
+  pip3 install 'future>=1.0.0' 'python-whois>=0.9.4' --upgrade
+fi
 
 vulnx update
 

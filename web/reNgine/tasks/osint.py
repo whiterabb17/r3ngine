@@ -953,7 +953,18 @@ def spiderfoot_scan(self, host=None, ctx={}, description=None):
 	logger.warning(f"[SPIDERFOOT] Starting scan for target: {host} (Scan ID: {self.scan_id}, Subscan ID: {self.subscan_id})")
 	
 	if not self.yaml_configuration:
-		logger.error("[SPIDERFOOT] yaml_configuration is empty! Check engine config.")
+		# yaml_configuration may be empty when the engine YAML was not correctly passed
+		# through ctx (e.g. Temporal replay edge-case, or test proxy with empty dict).
+		# Fall back to loading the engine YAML directly from the DB via self.engine.
+		if self.engine:
+			import yaml as _yaml
+			_raw = self.engine.yaml_configuration or ''
+			self.yaml_configuration = _yaml.safe_load(_raw) or {}
+			logger.warning(
+				f"[SPIDERFOOT] yaml_configuration was empty — reloaded from engine '{self.engine.engine_name}' (id={self.engine.id})"
+			)
+		else:
+			logger.error("[SPIDERFOOT] yaml_configuration is empty and no engine found! Check engine config.")
 	
 	config = self.yaml_configuration.get(SPIDERFOOT_SCAN) or {}
 	modules = config.get('modules', 'all')
@@ -987,6 +998,45 @@ def spiderfoot_scan(self, host=None, ctx={}, description=None):
 	cmd = f"python3 {sf_exec_path} -s {host} {profile_cmd} -max-threads {threads} -o csv -r -n"
 	logger.warning(f"[SPIDERFOOT] Executing command: {cmd}")
 	
+	# Check for custom spiderfoot keys and write to spiderfoot.cfg
+	try:
+		from dashboard.models import SpiderfootAPIKey
+		sf_keys = SpiderfootAPIKey.objects.all()
+		if sf_keys.exists() and os.path.exists(sf_config_path):
+			with open(sf_config_path, 'r') as f:
+				original_lines = f.readlines()
+			
+			key_dict = {f"{k.module_name}:{k.key_name}": k.key_value for k in sf_keys if k.key_value}
+			new_lines = []
+			changed = False
+			
+			for line in original_lines:
+				if '=' in line:
+					prefix = line.split('=')[0].strip()
+					if prefix in key_dict:
+						new_val = key_dict.pop(prefix)
+						expected_line = f"{prefix}={new_val}\n"
+						if line != expected_line:
+							new_lines.append(expected_line)
+							changed = True
+						else:
+							new_lines.append(line)
+					else:
+						new_lines.append(line)
+				else:
+					new_lines.append(line)
+					
+			if key_dict:
+				changed = True
+				for k, v in key_dict.items():
+					new_lines.append(f"{k}={v}\n")
+					
+			if changed:
+				with open(sf_config_path, 'w') as f:
+					f.writelines(new_lines)
+	except Exception as e:
+		logger.error(f"[SPIDERFOOT] Failed to write API keys: {e}")
+
 	# Initialize stateful parser with Redis dedup
 	from django.conf import settings
 	redis_client = Redis(
@@ -997,28 +1047,44 @@ def spiderfoot_scan(self, host=None, ctx={}, description=None):
 	)
 	parser = SpiderFootBatchParser(dedup_backend=redis_client, scan_id=self.scan_id, target_domain=self.domain.name)
 	
+	# Proxy List Integration
+	proxy_str = None
+	try:
+		proxies = get_proxy_list()
+		if proxies:
+			proxy_str = '\n'.join(proxies)
+	except Exception as e:
+		logger.debug(f"[SPIDERFOOT] Failed to fetch proxy list: {e}")
+
 	batch = []
 	batch_size = 100
 	
-	for line in stream_command(
-		cmd,
-		shell=True,
-		scan_id=self.scan_id,
-		activity_id=self.activity_id):
+	try:
+		return_code, output = run_command(
+			cmd,
+			shell=True,
+			scan_id=self.scan_id,
+			activity_id=self.activity_id,
+			proxy=proxy_str
+		)
 		
-		event = parser.parse_line(line)
-		if not event:
-			continue
+		for line in output.splitlines():
+			event = parser.parse_line(line)
+			if not event:
+				continue
+				
+			batch.append(event)
 			
-		batch.append(event)
-		
-		if len(batch) >= batch_size:
+			if len(batch) >= batch_size:
+				_process_spiderfoot_batch(self, batch, ctx, host)
+				batch = []
+				
+		# Process remaining
+		if batch:
 			_process_spiderfoot_batch(self, batch, ctx, host)
-			batch = []
-	
-	# Process remaining
-	if batch:
-		_process_spiderfoot_batch(self, batch, ctx, host)
+			
+	except Exception as e:
+		logger.error(f"[SPIDERFOOT] Execution failed: {e}")
 		
 	# Sync to Neo4j
 	graph = Neo4jManager()

@@ -2059,7 +2059,27 @@ export const ScanDetailPage = () => {
           }}
         >
           <Box sx={{ mt: 0.5 }}>
-            <Typography variant="h5" sx={{ fontWeight: 900, fontFamily: 'Orbitron', color: 'text.primary', letterSpacing: 2 }}>SCAN DETAIL</Typography>
+            <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', fontWeight: 900, fontFamily: 'Orbitron', color: 'text.primary', letterSpacing: 2 }}>
+              SCAN DETAIL
+              {data.scan_info?.is_spiderfoot_running && (
+                <MuiTooltip title="SpiderFoot OSINT Scan is currently running..." placement="right">
+                  <Box component="span" sx={{
+                    ml: 2,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    color: tokens.accent.primary,
+                    '@keyframes spiderPulse': {
+                      '0%': { transform: 'scale(1)', opacity: 0.6 },
+                      '50%': { transform: 'scale(1.15)', opacity: 1, filter: `drop-shadow(0 0 6px ${tokens.accent.primary})` },
+                      '100%': { transform: 'scale(1)', opacity: 0.6 },
+                    },
+                    animation: 'spiderPulse 2s infinite ease-in-out'
+                  }}>
+                    <Bug size={20} />
+                  </Box>
+                </MuiTooltip>
+              )}
+            </Typography>
             <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', fontWeight: 600 }}>
               IDENTIFIER: <Box component="span" sx={{
                 color: tokens.accent.secondary
