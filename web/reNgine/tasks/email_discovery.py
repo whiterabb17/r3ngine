@@ -178,7 +178,6 @@ def run_hunter_discovery(scan_id: int, domain: str) -> int:
 def run_harvester_discovery(scan_id: int, domain: str) -> int:
     """Run theHarvester and return count of newly saved emails."""
     theHarvester_dir = '/usr/src/github/theHarvester'
-    scan_history = ScanHistory.objects.get(pk=scan_id)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         output_json = os.path.join(tmpdir, 'harvester_out')
@@ -199,6 +198,7 @@ def run_harvester_discovery(scan_id: int, domain: str) -> int:
         with open(output_file, 'r') as f:
             data = json.load(f)
 
+    scan_history = ScanHistory.objects.get(pk=scan_id)
     count = 0
     for address in data.get('emails', []):
         email, created = save_email(address, scan_history=scan_history, source='harvester')
