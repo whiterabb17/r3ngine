@@ -674,7 +674,7 @@ def save_endpoint(
     if ctx.get('domain_id'):
         # Cache resolved Domain in ctx to avoid repeated SELECT per save_endpoint() call.
         domain = ctx.get('_domain_obj')
-        if domain is None:
+        if domain is None or isinstance(domain, int):
             domain = Domain.objects.filter(id=ctx.get('domain_id')).first()
             ctx['_domain_obj'] = domain
         if domain and domain.name not in http_url:
@@ -704,12 +704,12 @@ def save_endpoint(
         # Cache resolved ORM objects in ctx to avoid repeated queries within
         # the same scan context (e.g., once per port in port_scan's hot loop).
         scan = ctx.get('_scan_obj')
-        if scan is None:
+        if scan is None or isinstance(scan, int):
             scan = ScanHistory.objects.filter(pk=ctx.get('scan_history_id')).first()
             ctx['_scan_obj'] = scan
 
         domain = ctx.get('_domain_obj')
-        if domain is None:
+        if domain is None or isinstance(domain, int):
             domain = Domain.objects.filter(pk=ctx.get('domain_id')).first()
             ctx['_domain_obj'] = domain
 
