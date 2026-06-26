@@ -379,3 +379,68 @@ class TestHandleOs(TestCase):
         )
         tech = Technology.objects.get(name='CentOS 7')
         self.assertIn(tech, sub.technologies.all())
+
+
+class TestHandleCrypto(TestCase):
+
+    def setUp(self):
+        from scanEngine.models import EngineType
+        self.domain = Domain.objects.create(name='crypto-test.com')
+        engine = EngineType.objects.create(engine_name='Crypto Test Engine')
+        self.scan = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_status=0,
+            start_scan_date=timezone.now(),
+            scan_type=engine,
+        )
+
+    def test_crypto_does_not_raise(self):
+        try:
+            persist_osint_item(
+                self.scan, self.domain, 'Crypto',
+                '1A1zP1eP5QGefi2DMPTfTL5SLmv7Divf', 75,
+                metadata={'address_type': 'BTC', 'address': '1A1zP1eP5QGefi2DMPTfTL5SLmv7Divf'},
+            )
+        except Exception as exc:
+            self.fail(f"Crypto handler raised: {exc}")
+
+    def test_crypto_creates_no_model_objects(self):
+        before_employees = Employee.objects.count()
+        persist_osint_item(
+            self.scan, self.domain, 'Crypto',
+            '0xdeadbeef', 75,
+            metadata={'address_type': 'ETH', 'address': '0xdeadbeef'},
+        )
+        self.assertEqual(Employee.objects.count(), before_employees)
+
+
+class TestHandleHosting(TestCase):
+
+    def setUp(self):
+        from scanEngine.models import EngineType
+        self.domain = Domain.objects.create(name='hosting-test.com')
+        engine = EngineType.objects.create(engine_name='Hosting Test Engine')
+        self.scan = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_status=0,
+            start_scan_date=timezone.now(),
+            scan_type=engine,
+        )
+
+    @patch('reNgine.tasks.osint.save_subdomain')
+    def test_hosting_calls_save_subdomain(self, mock_save):
+        persist_osint_item(
+            self.scan, self.domain, 'Hosting',
+            'co-tenant.hosting-test.com', 60,
+            metadata={'co_hosted_domain': 'co-tenant.hosting-test.com'},
+        )
+        mock_save.assert_called_once_with('co-tenant.hosting-test.com', ctx=None)
+
+    @patch('reNgine.tasks.osint.save_subdomain')
+    def test_hosting_falls_back_to_e_data_when_metadata_missing(self, mock_save):
+        persist_osint_item(
+            self.scan, self.domain, 'Hosting',
+            'fallback.hosting-test.com', 60,
+            metadata={},
+        )
+        mock_save.assert_called_once_with('fallback.hosting-test.com', ctx=None)

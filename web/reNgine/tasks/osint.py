@@ -1265,6 +1265,16 @@ def _handle_os(scan_history, domain, e_data: str, source_data: str, ctx, activit
 			logger.debug("[OSINT] OS handler: no subdomain found for host %s", source_host)
 
 
+def _handle_crypto(scan_history, domain, e_data: str, source_data: str, ctx, activity_id, metadata: dict) -> None:
+	address_type = metadata.get('address_type', 'Unknown')
+	logger.info("[OSINT] Validated crypto address: %s %s (scan=%s)", address_type, e_data, scan_history.id)
+
+
+def _handle_hosting(scan_history, domain, e_data: str, source_data: str, ctx, activity_id, metadata: dict) -> None:
+	co_domain = (metadata.get('co_hosted_domain') or e_data).lower()
+	save_subdomain(co_domain, ctx=ctx)
+
+
 # Populated with new handlers after Tasks 4-6; entries added incrementally.
 TYPE_ROUTER: dict = {
 	'Subdomain': _handle_subdomain,
@@ -1280,6 +1290,8 @@ TYPE_ROUTER: dict = {
 	'Phone':     _handle_phone,
 	'Social':    _handle_social,
 	'OS':        _handle_os,
+	'Crypto':    _handle_crypto,
+	'Hosting':   _handle_hosting,
 }
 
 
