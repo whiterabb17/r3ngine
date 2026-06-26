@@ -1142,6 +1142,96 @@ def persist_osint_item(scan_history, domain, osint_type, e_data, confidence, sou
 			match_content=e_data
 		)
 
+_DNS_SF_TYPE_TO_RECORD = {
+    'DNS_TXT_RECORD': 'TXT',
+    'DNS_MX_RECORD': 'MX',
+    'DNS_NS_RECORD': 'NS',
+    'NAME_SERVER_(DNS_NS_RECORDS)': 'NS',
+    'EMAIL_GATEWAY_(DNS_MX_RECORDS)': 'MX',
+    'RAW_DNS_RECORDS': 'TXT',
+    'PROVIDER_DNS': 'NS',
+}
+
+
+def _enrich_metadata(event: dict, base_metadata: dict) -> dict:
+    """Add type-specific structured keys to OsintStaging metadata for frontend rendering."""
+    osint_type = event.get('osint_type', '')
+    e_data = event.get('data', '')
+    source_data = event.get('source_data', '')
+    sf_type = event.get('type', '')
+
+    extra: dict = {}
+
+    if osint_type == 'SSL':
+        subject_cn = None
+        issuer = None
+        if 'CN=' in e_data:
+            parts = {}
+            for segment in e_data.split(','):
+                segment = segment.strip()
+                if '=' in segment:
+                    k, _, v = segment.partition('=')
+                    parts[k.strip()] = v.strip()
+            subject_cn = parts.get('CN')
+            issuer = parts.get('O')
+        extra = {
+            'host': subject_cn or source_data or '',
+            'subject_cn': subject_cn,
+            'issuer': issuer,
+        }
+
+    elif osint_type == 'DNS':
+        extra = {
+            'record_type': _DNS_SF_TYPE_TO_RECORD.get(sf_type, 'TXT'),
+            'hostname': source_data or '',
+            'value': e_data,
+        }
+
+    elif osint_type == 'Phone':
+        extra = {
+            'phone_number': e_data,
+            'source_url': source_data or '',
+        }
+
+    elif osint_type == 'Social':
+        url_lower = e_data.lower()
+        if 'linkedin.com' in url_lower:
+            platform = 'LinkedIn'
+        elif 'twitter.com' in url_lower or 'x.com' in url_lower:
+            platform = 'Twitter/X'
+        elif 'facebook.com' in url_lower:
+            platform = 'Facebook'
+        elif 'instagram.com' in url_lower:
+            platform = 'Instagram'
+        elif 'github.com' in url_lower:
+            platform = 'GitHub'
+        else:
+            platform = 'Unknown'
+        extra = {
+            'platform': platform,
+            'profile_url': e_data,
+        }
+
+    elif osint_type == 'OS':
+        extra = {
+            'os_name': e_data,
+            'source_host': source_data or '',
+        }
+
+    elif osint_type == 'Crypto':
+        extra = {
+            'address_type': 'ETH' if e_data.startswith('0x') else 'BTC',
+            'address': e_data,
+        }
+
+    elif osint_type == 'Hosting':
+        extra = {
+            'co_hosted_domain': e_data,
+        }
+
+    return {**base_metadata, **extra}
+
+
 def _process_spiderfoot_batch(self, batch, ctx, host):
 	"""Internal helper to process a batch of SpiderFoot findings with tiered validation."""
 	try:
@@ -1157,6 +1247,11 @@ def _process_spiderfoot_batch(self, batch, ctx, host):
 
 				# Automated Persistence (High Confidence)
 				if confidence > 80:
+					auto_meta = _enrich_metadata(event, {
+						'sf_type': e_type,
+						'source_data': event.get('source_data'),
+						'iocs': event.get('iocs'),
+					})
 					persist_osint_item(
 						scan_history=self.scan,
 						domain=self.domain,
@@ -1168,9 +1263,15 @@ def _process_spiderfoot_batch(self, batch, ctx, host):
 						ctx=ctx,
 						activity_id=self.activity_id
 					)
-				
+
 				# Staging Area (Moderate Confidence: 50% -> 80%)
 				elif 50 <= confidence <= 80:
+					base_meta = {
+						'sf_type': e_type,
+						'source_data': event.get('source_data'),
+						'iocs': event.get('iocs'),
+					}
+					enriched_meta = _enrich_metadata(event, base_meta)
 					OsintStaging.objects.update_or_create(
 						scan_history=self.scan,
 						target_domain=self.domain,
@@ -1179,12 +1280,8 @@ def _process_spiderfoot_batch(self, batch, ctx, host):
 						defaults={
 							'source': event.get('source', 'SpiderFoot'),
 							'confidence': confidence,
-							'metadata': {
-								'sf_type': e_type,
-								'source_data': event.get('source_data'),
-								'iocs': event.get('iocs')
-							},
-							'status': 'pending'
+							'metadata': enriched_meta,
+							'status': 'pending',
 						}
 					)
 				else:
