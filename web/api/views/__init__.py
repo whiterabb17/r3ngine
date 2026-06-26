@@ -1897,8 +1897,15 @@ class ListEndpoints(APIView):
 		return Response({'endpoints': endpoints_serializer.data})
 
 
+class EndpointPagination(PageNumberPagination):
+	page_size = 25
+	page_size_query_param = 'length'
+	max_page_size = 200
+
+
 class EndPointViewSet(viewsets.ModelViewSet):
 	permission_classes = [IsPenetrationTester]
+	pagination_class = EndpointPagination
 	queryset = EndPoint.objects.none()
 	serializer_class = EndpointSerializer
 
