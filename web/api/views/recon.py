@@ -125,7 +125,8 @@ class OsintStagingViewSet(viewsets.ModelViewSet):
 				confidence=item.confidence,
 				source_data=item.metadata.get('source_data'),
 				event_type=item.metadata.get('sf_type'),
-				ctx=ctx
+				ctx=ctx,
+				metadata=item.metadata,
 			)
 			item.status = 'validated'
 			item.save()
@@ -150,7 +151,8 @@ class OsintStagingViewSet(viewsets.ModelViewSet):
 			confidence=item.confidence,
 			source_data=item.metadata.get('source_data'),
 			event_type=item.metadata.get('sf_type'),
-			ctx=ctx
+			ctx=ctx,
+			metadata=item.metadata,
 		)
 		item.status = 'validated'
 		item.save()
