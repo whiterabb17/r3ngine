@@ -1124,32 +1124,42 @@ def spiderfoot_scan(self, host=None, ctx={}, description=None):
     except Exception as e:
         logger.debug("[SPIDERFOOT] Failed to fetch proxy list: %s", e)
 
-    batch = []
-    batch_size = 100
+    batch: list = []
+    batch_size = 50  # keep transactions small for large scans
 
+    # Stream output line-by-line via Popen — run_command buffers ALL stdout into a
+    # DB field before returning, which causes a PostgreSQL allocation error when
+    # SpiderFoot produces >~100 MB of CSV output.
     try:
-        return_code, output = run_command(
+        proc = subprocess.Popen(
             cmd,
             shell=True,
-            scan_id=self.scan_id,
-            activity_id=self.activity_id,
-            proxy=proxy_str,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
         )
+        try:
+            for raw_line in proc.stdout:
+                event = parser.parse_line(raw_line.rstrip("\n\r"))
+                if not event:
+                    continue
+                batch.append(event)
+                if len(batch) >= batch_size:
+                    _process_spiderfoot_batch(self, batch, ctx, host)
+                    batch = []
 
-        for line in output.splitlines():
-            event = parser.parse_line(line)
-            if not event:
-                continue
-
-            batch.append(event)
-
-            if len(batch) >= batch_size:
+            if batch:
                 _process_spiderfoot_batch(self, batch, ctx, host)
-                batch = []
 
-        # Process remaining
-        if batch:
-            _process_spiderfoot_batch(self, batch, ctx, host)
+        finally:
+            proc.stdout.close()
+            return_code = proc.wait()
+            if return_code != 0:
+                stderr_tail = proc.stderr.read(2000)
+                if stderr_tail:
+                    logger.warning("[SPIDERFOOT] Process exited %s: %s", return_code, stderr_tail)
+            proc.stderr.close()
 
     except Exception as e:
         logger.error("[SPIDERFOOT] Execution failed: %s", e)
