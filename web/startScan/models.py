@@ -1436,6 +1436,30 @@ class ScanReport(models.Model):
 	def __str__(self):
 		return f"Report for {self.scan_history.domain.name} ({self.report_type})"
 
+
+class DnsRecord(models.Model):
+	scan_history = models.ForeignKey(
+		ScanHistory, on_delete=models.CASCADE, related_name='dns_records'
+	)
+	target_domain = models.ForeignKey(
+		'targetApp.Domain', on_delete=models.CASCADE
+	)
+	subdomain = models.ForeignKey(
+		'Subdomain', on_delete=models.SET_NULL, null=True, blank=True,
+		related_name='dns_records',
+	)
+	record_type = models.CharField(max_length=10)  # TXT, MX, NS, A, CNAME
+	value = models.TextField()
+	source = models.CharField(max_length=200, blank=True)
+	raw_metadata = models.JSONField(default=dict, blank=True)
+
+	class Meta:
+		unique_together = [['scan_history', 'record_type', 'value']]
+
+	def __str__(self) -> str:
+		return f"{self.record_type}: {self.value[:50]}"
+
+
 class OsintStaging(models.Model):
 	id = models.AutoField(primary_key=True)
 	scan_history = models.ForeignKey(ScanHistory, on_delete=models.CASCADE)
