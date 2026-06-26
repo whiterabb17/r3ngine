@@ -6,6 +6,7 @@ import base64
 import os
 import yaml
 from pathlib import Path
+from django.db import transaction
 
 from reNgine.common_func import *
 from reNgine.definitions import *
