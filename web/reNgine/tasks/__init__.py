@@ -1,4 +1,4 @@
-﻿import os
+import os
 import django
 from django.apps import apps
 if not apps.ready and not apps.loading:
@@ -349,7 +349,8 @@ def generate_impact_assessment(self, scan_history_id=None, vulnerability_id=None
 	logger.warning("[TIER7][IMPACT] Beginning per-vulnerability LLM loop | total=%d | scan_id=%s", total, scan_history_id)
 
 	for idx, vuln in enumerate(vuln_list, start=1):
-		if vuln.is_suppressed:
+		# Skip suppressed vulnerabilities during bulk scan, but process them if specifically requested by user.
+		if vuln.is_suppressed and not vulnerability_id:
 			suppressed_count += 1
 			logger.warning("[TIER7][IMPACT] [%d/%d] Skipping suppressed vuln_id=%s", idx, total, vuln.id)
 			continue
