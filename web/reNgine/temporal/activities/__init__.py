@@ -3898,12 +3898,13 @@ def get_scan_final_status_activity(scan_id: int, task_succeeded: bool) -> int:
 async def run_email_security_activity(ctx: dict) -> dict:
     """Perform email/SMTP security checks (SPF, DMARC, DKIM, relay, STARTTLS, user enum)."""
     import asyncio
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _run_email_security_sync, ctx)
 
 
 def _run_email_security_sync(ctx: dict) -> dict:
     """Synchronous implementation of email security checks, run via executor."""
+    from temporalio import activity
     from reNgine.common_func import save_vulnerability
     from startScan.models import ScanHistory, Subdomain
     from reNgine.tasks.email_security import (
@@ -3967,6 +3968,9 @@ def _run_email_security_sync(ctx: dict) -> dict:
     for spoof in assess_spoofability(spf, dmarc):
         _vuln(spoof['name'], spoof['severity'], spoof['description'])
 
+    # Heartbeat after DNS checks block
+    activity.heartbeat()
+
     # SMTP tool checks — only run if SMTP ports were found during port scan
     try:
         smtp_hosts = list(
@@ -4004,6 +4008,9 @@ def _run_email_security_sync(ctx: dict) -> dict:
             if not tls['starttls_supported']:
                 _vuln('STARTTLS Not Supported', 3,
                       'SMTP at %s:%s did not advertise STARTTLS.' % (host, port), host_url)
+
+        # Heartbeat after processing each SMTP host
+        activity.heartbeat()
 
     enum_targets = list(checked_pairs)
     if enum_targets:

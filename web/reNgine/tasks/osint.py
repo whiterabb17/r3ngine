@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import subprocess
 import json
 import requests
@@ -51,8 +51,16 @@ def osint(self, host=None, ctx={}, description=None):
 		hunter_key_obj = HunterIOAPIKey.objects.first()
 		if hunter_key_obj and hunter_key_obj.key and os.path.exists(target_api_keys):
 			with open(target_api_keys, 'r') as _f:
-				_yaml_data = yaml.safe_load(_f) or {}
-			_yaml_data.setdefault('apikeys', {}).setdefault('hunter', {})['key'] = hunter_key_obj.key
+				_yaml_data = yaml.safe_load(_f)
+			if not isinstance(_yaml_data, dict):
+				_yaml_data = {}
+			if not isinstance(_yaml_data.get('apikeys'), dict):
+				_yaml_data['apikeys'] = {}
+			if not isinstance(_yaml_data['apikeys'].get('hunter'), dict):
+				_yaml_data['apikeys']['hunter'] = {}
+			
+			_yaml_data['apikeys']['hunter']['key'] = hunter_key_obj.key
+			
 			with open(target_api_keys, 'w') as _f:
 				yaml.dump(_yaml_data, _f)
 			logger.info('[HUNTER] Injected Hunter API key into theHarvester api-keys.yaml')
