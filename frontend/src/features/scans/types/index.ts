@@ -125,7 +125,7 @@ export interface OsintStaging {
   content: string;
   source: string;
   confidence: number;
-  metadata: string;
+  metadata: Record<string, unknown>;
   discovered_date: string;
   discovered_date_humanized: string;
   target_domain_name: string;

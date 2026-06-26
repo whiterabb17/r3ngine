@@ -1,20 +1,19 @@
 import React, { useState } from 'react';
-import { 
-  Box, 
-  Typography, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow, 
-  IconButton, 
+import {
+  Box,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton,
   Tooltip,
   TextField,
   InputAdornment,
   Checkbox,
   Button,
-  Chip,
   Paper,
   Stack,
   CircularProgress,
@@ -44,6 +43,7 @@ import {
 } from '../../api';
 import type { OsintStaging } from '../../types';
 import { useThemeTokens } from '../../../../theme/useThemeTokens';
+import { StagingTypeBadge } from './StagingTypeBadge';
 
 interface OsintStagingSectionProps {
   scanId: number;
@@ -240,19 +240,7 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
                         />
                       </TableCell>
                       <TableCell>
-                        <Chip 
-                          label={item.osint_type.replace(/_/g, ' ')} 
-                          size="small" 
-                          sx={{ 
-                            fontSize: '10px', 
-                            height: 18, 
-                            fontWeight: 800,
-                            bgcolor: 'action.hover',
-                            color: 'rgba(255,255,255,0.7)',
-                            border: '1px solid rgba(255,255,255,0.1)',
-                            textTransform: 'uppercase'
-                          }} 
-                        />
+                        <StagingTypeBadge osintType={item.osint_type} />
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -329,7 +317,9 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
                             </Typography>
                             <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover', borderColor: 'rgba(255,255,255,0.05)' }}>
                               <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)', whiteSpace: 'pre-wrap' }}>
-                                {item.metadata || 'No extended metadata available.'}
+                                {typeof item.metadata === 'object' && item.metadata !== null
+                                  ? JSON.stringify(item.metadata, null, 2)
+                                  : String(item.metadata || 'No extended metadata available.')}
                               </Typography>
                             </Paper>
                           </Box>
