@@ -3626,38 +3626,63 @@ def extract_auth_for_url_activity(ctx: dict) -> dict:
 
     url = ctx.get('url')
     scan_id = ctx.get('scan_id')
+    workflow_id = ctx.get('workflow_id')
+
+    import json
+    import redis
+    from django.conf import settings
+    
+    def push_auth_log(level, msg):
+        logger.log_line("[AUTH_EXTRACT]", level, msg)
+        if workflow_id:
+            try:
+                redis_url = getattr(settings, 'CELERY_BROKER_URL', 'redis://redis:6379/0')
+                client = redis.StrictRedis.from_url(redis_url)
+                client.xadd(f"auth:logs:{workflow_id}", {"data": json.dumps({"line": f"[{level}] {msg}"})})
+            except Exception:
+                pass
 
     activity_heartbeat_safe("ExtractAuthForURLActivity starting for %s" % url)
-    logger.log_line("[AUTH_EXTRACT]", "START", "extracting auth from %s (scan %s)" % (url, scan_id))
+    push_auth_log("START", "extracting auth from %s (scan %s)" % (url, scan_id))
 
     try:
         scan = ScanHistory.objects.filter(id=scan_id).first()
         if scan is None:
-            logger.log_line("[AUTH_EXTRACT]", "COMPLETE", "scan %s not found — skipping" % scan_id)
+            push_auth_log("COMPLETE", "scan %s not found — skipping" % scan_id)
             return {'found': 0}
 
         current_proxy = get_random_proxy(http_only=True)
+        if current_proxy:
+            push_auth_log("INFO", "Retrieving proxy: %s" % current_proxy)
 
         parsed_url = urlparse(url)
         if parsed_url.scheme not in ('http', 'https'):
-            logger.log_line("[AUTH_EXTRACT]", "COMPLETE", "skipped non-HTTP URL %s" % url)
+            push_auth_log("COMPLETE", "skipped non-HTTP URL %s" % url)
             return {'found': 0}
 
         response = None
         try:
+            push_auth_log("INFO", "Attempting extraction via %s" % (current_proxy if current_proxy else "direct fetch"))
             response, _ = _fetch_with_proxy_retry(url, [current_proxy] if current_proxy else [])
         except Exception as exc:
             if current_proxy:
-                logger.log_line("[AUTH_EXTRACT]", "WARNING", "Proxy %s failed. Cycling for a valid proxy..." % current_proxy)
+                push_auth_log("WARNING", "Proxy %s failed. Cycling for a valid proxy..." % current_proxy)
                 _failed_proxy_cache[current_proxy] = time.time()
                 current_proxy = get_random_proxy(http_only=True)
+                push_auth_log("INFO", "Getting new proxy: %s" % current_proxy)
                 try:
+                    push_auth_log("INFO", "Trying extraction again...")
                     response, _ = _fetch_with_proxy_retry(url, [current_proxy] if current_proxy else [])
                 except Exception as retry_exc:
-                    logger.log_line("[AUTH_EXTRACT]", "ERROR", "Retry failed for %s: %s" % (url, str(retry_exc)), level="error")
-                    raise retry_exc
+                    push_auth_log("ERROR", "Retry failed for %s: %s" % (url, str(retry_exc)))
+                    push_auth_log("INFO", "Trying without proxy...")
+                    try:
+                        response, _ = _fetch_with_proxy_retry(url, [])
+                    except Exception as final_exc:
+                        push_auth_log("ERROR", "Direct fetch failed after proxy retry: %s" % str(final_exc))
+                        raise final_exc
             else:
-                logger.log_line("[AUTH_EXTRACT]", "ERROR", "Direct fetch failed for %s: %s" % (url, str(exc)), level="error")
+                push_auth_log("ERROR", "Direct fetch failed for %s: %s" % (url, str(exc)))
                 raise exc
 
         if response is None:
@@ -3672,15 +3697,18 @@ def extract_auth_for_url_activity(ctx: dict) -> dict:
                 ep.http_status = response.status_code
                 ep.save()
                 endpoint_updated = True
-                logger.log_line("[AUTH_EXTRACT]", "INFO", "Updated http_status to %d for auth endpoint %s" % (response.status_code, url))
+                push_auth_log("INFO", "Updated http_status to %d for auth endpoint %s" % (response.status_code, url))
         except Exception as e:
-            logger.log_line("[AUTH_EXTRACT]", "WARNING", "Could not update http_status for %s: %s" % (url, str(e)))
+            push_auth_log("WARNING", "Could not update http_status for %s: %s" % (url, str(e)))
 
+        push_auth_log("INFO", "Extracting forms....")
         forms = _extract_login_forms(response.text, url)
 
         if not forms:
-            logger.log_line("[AUTH_EXTRACT]", "COMPLETE", "no auth forms found at %s" % url)
+            push_auth_log("COMPLETE", "no auth forms found at %s" % url)
             return {'found': 0}
+        
+        push_auth_log("COMPLETE", "Extraction complete.... Extracted inputs: %d forms found" % len(forms))
 
         raw_scheme = parsed_url.scheme.lower()
         protocol = raw_scheme
@@ -3721,7 +3749,7 @@ def extract_auth_for_url_activity(ctx: dict) -> dict:
         # Trigger http_crawl again if it was status 0/None and forms were found
         if saved > 0 and endpoint_updated:
             from reNgine.tasks import http_crawl
-            logger.log_line("[AUTH_EXTRACT]", "INFO", "Running http_crawl for newly identified auth endpoint %s" % url)
+            push_auth_log("INFO", "Running http_crawl for newly identified auth endpoint %s" % url)
             try:
                 _run_task(
                     http_crawl,
@@ -3731,16 +3759,14 @@ def extract_auth_for_url_activity(ctx: dict) -> dict:
                     urls=[url],
                     recrawl=True
                 )
-            except Exception as e:
-                logger.log_line("[AUTH_EXTRACT]", "ERROR", "Failed to run http_crawl for auth endpoint: %s" % str(e), level="error")
+            except Exception as crawl_exc:
+                push_auth_log("WARNING", "http_crawl submission failed for %s: %s" % (url, str(crawl_exc)))
 
-        logger.log_line("[AUTH_EXTRACT]", "COMPLETE",
-                        "found %d new auth candidates from %s" % (saved, url))
+        push_auth_log("COMPLETE", "saved %d candidate(s) for %s" % (saved, url))
         return {'found': saved}
 
     except Exception as exc:
-        logger.log_line("[AUTH_EXTRACT]", "ERROR", format_exception_for_log(exc),
-                        level="error", exc_info=True)
+        push_auth_log("ERROR", "Unhandled exception in extract_auth_for_url_activity: %s" % str(exc))
         raise
 
 

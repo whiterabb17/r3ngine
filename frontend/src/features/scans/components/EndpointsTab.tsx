@@ -37,6 +37,7 @@ import { TacticalPanel } from '../../../components/TacticalPanel';
 import { copyToClipboard } from '../../endpoints/utils/copy';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { ExtractAuthModal } from './ExtractAuthModal';
 
 interface EndpointsTabProps {
   projectSlug: string;
@@ -68,6 +69,11 @@ export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId,
   const [bruteEndpoint, setBruteEndpoint] = useState<{ id: number; url: string } | null>(null);
   const [pendingActionId, setPendingActionId] = useState<{ id: number; action: string } | null>(null);
 
+  const [extractAuthModalOpen, setExtractAuthModalOpen] = useState(false);
+  const [extractAuthUrl, setExtractAuthUrl] = useState('');
+  const [extractAuthWorkflowId, setExtractAuthWorkflowId] = useState<string | null>(null);
+  const [extractAuthStatus, setExtractAuthStatus] = useState<'idle' | 'extracting' | 'completed' | 'error'>('idle');
+
   const [selectedEndpoints, setSelectedEndpoints] = useState<number[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState({
@@ -89,15 +95,27 @@ export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId,
   const handleExtractAuth = async (id: number, url: string) => {
     if (!scanId) return;
     setPendingActionId({ id, action: 'extract_auth' });
+    setExtractAuthUrl(url);
+    setExtractAuthModalOpen(true);
+    setExtractAuthStatus('extracting');
+    setExtractAuthWorkflowId(null);
     try {
-      await dispatchMutation.mutateAsync({
+      const response = await dispatchMutation.mutateAsync({
         url,
         action: 'extract_auth',
         scan_id: scanId
       });
-      showNotification('Auth extraction dispatched successfully', 'success');
+      if (response && response.workflow_id) {
+        setExtractAuthWorkflowId(response.workflow_id);
+      }
+      // Wait for a few seconds before completing to allow logs to be viewed? 
+      // Actually, since Temporal workflow might take longer, we should ideally poll Temporal status.
+      // For now, we will mark as completed after 5 seconds of extracting if it succeeds, but wait, the endpoint returns instantly.
+      // We will let the user close it, and maybe we don't know when it's done unless we poll workflow status.
+      // But we can check if logs contain "[COMPLETE]"!
     } catch (error: any) {
       showNotification(error.message || 'Failed to dispatch auth extraction', 'error');
+      setExtractAuthStatus('error');
     } finally {
       setPendingActionId(null);
     }
@@ -783,13 +801,20 @@ export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId,
       <ConfirmDialog
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
-        onConfirm={() => {
-          confirmConfig.onConfirm();
-          setConfirmOpen(false);
-        }}
+        onConfirm={confirmConfig.onConfirm}
+        type={confirmConfig.type}
         title={confirmConfig.title}
         message={confirmConfig.message}
-        type={confirmConfig.type}
+        confirmText="Confirm"
+        cancelText="Cancel"
+      />
+
+      <ExtractAuthModal
+        open={extractAuthModalOpen}
+        onClose={() => setExtractAuthModalOpen(false)}
+        url={extractAuthUrl}
+        workflowId={extractAuthWorkflowId}
+        status={extractAuthStatus}
       />
 
       <Snackbar

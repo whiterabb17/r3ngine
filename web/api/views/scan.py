@@ -1,4 +1,4 @@
-﻿import json
+import json
 import re
 import socket
 import logging
@@ -760,7 +760,7 @@ class DirectoryFileDispatchView(APIView):
             }
         elif action == 'extract_auth':
             workflow_name = self._AUTH_WORKFLOW
-            ctx = {'url': url, 'scan_id': scan_id}
+            ctx = {'url': url, 'scan_id': scan_id, 'workflow_id': wf_id}
         elif action == 'brute_test':
             from plugins.models import Plugin
             plugin = Plugin.objects.filter(
@@ -863,6 +863,50 @@ class DirectoryFileDeleteView(APIView):
         deleted_count, _ = DirectoryFile.objects.filter(id__in=ids).delete()
         return Response({'deleted': deleted_count}, status=status.HTTP_200_OK)
 
+
+class ExtractAuthLogsView(APIView):
+    """Fetch logs from Redis for an authentication extraction workflow.
+
+    GET /api/action/directory-file/auth-logs/?workflow_id=...
+    Returns: { status: True, logs: [str] }
+    """
+    permission_classes = [HasPermission]
+    permission_required = PERM_MODIFY_SCAN_RESULTS
+
+    def get(self, request) -> Response:
+        workflow_id = request.query_params.get('workflow_id')
+        if not workflow_id:
+            return Response(
+                {'error': 'workflow_id is required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            import redis
+            from django.conf import settings
+            import json
+            
+            # Match the CELERY_BROKER_URL or REDIS setup
+            redis_url = getattr(settings, 'CELERY_BROKER_URL', 'redis://redis:6379/0')
+            client = redis.StrictRedis.from_url(redis_url, decode_responses=True)
+            
+            stream_key = f"auth:logs:{workflow_id}"
+            
+            # Fetch all logs in the stream
+            raw_logs = client.xrange(stream_key, min='-', max='+')
+            logs = []
+            for _, fields in raw_logs:
+                if 'data' in fields:
+                    try:
+                        logs.append(json.loads(fields['data'])['line'])
+                    except (json.JSONDecodeError, KeyError):
+                        logs.append(fields['data'])
+
+            return Response({'status': True, 'logs': logs}, status=status.HTTP_200_OK)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to fetch auth logs for {workflow_id}: {exc}")
+            return Response({'error': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # ---------------------------------------------------------------------------
 # Phase 4 — ScanProfile CRUD API

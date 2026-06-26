@@ -1,4 +1,4 @@
-﻿import json
+import json
 import re
 import socket
 import logging
@@ -72,7 +72,7 @@ from reNgine.temporal_client import TemporalClientProvider, run_and_close
 from api.views.scan import (
     InitiateScan, InitiateSubTask, StopScan, ResumeScan, PauseScan, UnpauseScan,
     FetchSubscanResults, ListSubScans, StartWorkflowView, ScanActivityRetryAPIView,
-    DirectoryFileDispatchView, DirectoryFileDeleteView,
+    DirectoryFileDispatchView, DirectoryFileDeleteView, ExtractAuthLogsView,
 )
 from api.views.targets import (
     AddTarget, UpdateTarget, ListTargetsDatatableViewSet, AddManualSubdomain,

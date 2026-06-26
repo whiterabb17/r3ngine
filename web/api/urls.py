@@ -341,6 +341,11 @@ urlpatterns = [
         name='directory-file-delete',
     ),
     path(
+        'action/directory-file/auth-logs/',
+        ExtractAuthLogsView.as_view(),
+        name='directory-file-auth-logs',
+    ),
+    path(
         'action/subdomain/add/',
         AddManualSubdomain.as_view(),
         name='add_manual_subdomain'),
