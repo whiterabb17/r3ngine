@@ -1218,6 +1218,19 @@ class NucleiPlannerWorkflow:
                     heartbeat_timeout=timedelta(minutes=5),
                     task_queue="python-orchestrator-queue"
                 )
+
+            # --- Post-scan processing: dedup + OpenAPI extraction + GraphQL dispatch ---
+            # Runs after all Tier 6 tools so it can act on Vigolium/Nuclei findings.
+            # Controlled by vulnerability_scan.run_post_scan_processing (default True).
+            if vuln_config.get('run_post_scan_processing', True):
+                await workflow.execute_activity(
+                    "PostScanProcessingActivity",
+                    ctx,
+                    start_to_close_timeout=timedelta(hours=2),
+                    heartbeat_timeout=timedelta(minutes=5),
+                    task_queue="python-orchestrator-queue",
+                )
+
         except Exception as _stage2_exc:
             # A Stage 2 tool failed. The individual activity already wrote FAILED_TASK
             # to its ScanActivity row via _run_task. Log and fall through so

@@ -292,6 +292,9 @@ VIGOLIUM_DEFAULT_AUDIT_CONFIG = {
     'timeout': 3600,
 }
 
+# ─── Post-Scan Processing ──────────────────────────────────────────────────────
+RUN_POST_SCAN_PROCESSING = 'run_post_scan_processing'
+
 ATTACK_PATH_MODELING = 'attack_path_modeling'
 ATTACK_PATH_MODELING_DEFAULT_CONFIG = {
     'enabled': True,

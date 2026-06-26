@@ -148,6 +148,7 @@ from reNgine.temporal_activities import (
     run_vigolium_scan_activity,
     run_vigolium_discovery_activity,
     run_vigolium_analysis_activity,
+    post_scan_processing_activity,
     mark_vulnerability_scan_complete_activity,
     run_waf_bypass_activity,
 
@@ -529,6 +530,7 @@ class Command(BaseCommand):
                 run_vigolium_scan_activity,
                 run_vigolium_discovery_activity,
                 run_vigolium_analysis_activity,
+                post_scan_processing_activity,
                 mark_vulnerability_scan_complete_activity,
                 run_waf_bypass_activity,
 

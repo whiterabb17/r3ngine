@@ -1610,6 +1610,26 @@ def run_vigolium_analysis_activity(ctx: dict) -> bool:
     return _run_task(vigolium_analysis, ctx, task_name='vigolium_analysis', description='Vigolium Dynamic Analysis')
 
 
+@activity.defn(name="PostScanProcessingActivity")
+def post_scan_processing_activity(ctx: dict) -> bool:
+    """Run post-scan processing after all Tier 6 tools complete.
+
+    Performs endpoint deduplication, OpenAPI spec extraction from
+    Vigolium/Nuclei-discovered swagger endpoints (including Swagger UI HTML
+    page scraping to resolve embedded spec URLs), and GraphQL tool dispatch
+    for any GraphQL endpoints found after web_api_discovery ran.
+
+    Controlled by vulnerability_scan.run_post_scan_processing (default True).
+    """
+    from reNgine.post_scan_processing import post_scan_processing
+    activity.logger.info(f"[PostScanProcessingActivity] scan_id={ctx.get('scan_history_id')}")
+    return _run_task(
+        post_scan_processing, ctx,
+        task_name='post_scan_processing',
+        description='Post-Scan Processing (dedup, OpenAPI, GraphQL)',
+    )
+
+
 @activity.defn(name="MarkVulnerabilityScanCompleteActivity")
 def mark_vulnerability_scan_complete_activity(ctx: dict) -> None:
     """Write a SUCCESS ScanActivity with name='vulnerability_scan'.
