@@ -2,7 +2,9 @@ from django.test import TestCase
 from django.utils import timezone
 from unittest.mock import patch
 from reNgine.tasks.osint import _enrich_metadata, persist_osint_item
-from startScan.models import DnsRecord, CertificateIntelligence
+from startScan.models import DnsRecord, CertificateIntelligence, Employee
+from targetApp.models import Domain
+from startScan.models import ScanHistory
 
 
 class TestEnrichMetadata(TestCase):
@@ -281,3 +283,99 @@ class TestHandleDns(TestCase):
         self.assertEqual(
             DnsRecord.objects.filter(scan_history=self.scan, record_type='MX').count(), 1
         )
+
+
+class TestHandlePhone(TestCase):
+
+    def setUp(self):
+        from scanEngine.models import EngineType
+        self.domain = Domain.objects.create(name='phone-test.com')
+        engine = EngineType.objects.create(engine_name='Phone Test Engine')
+        self.scan = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_status=0,
+            start_scan_date=timezone.now(),
+            scan_type=engine,
+        )
+
+    def test_phone_creates_employee_with_metadata(self):
+        persist_osint_item(
+            self.scan, self.domain, 'Phone',
+            '+1-555-867-5309', 75,
+            source_data='https://phone-test.com/contact',
+            metadata={'phone_number': '+1-555-867-5309', 'source_url': 'https://phone-test.com/contact'},
+        )
+        emp = Employee.objects.filter(metadata__type='phone').first()
+        self.assertIsNotNone(emp)
+        self.assertEqual(emp.metadata['phone'], '+1-555-867-5309')
+        self.assertIn(emp, self.scan.employees.all())
+
+    def test_phone_name_is_none(self):
+        persist_osint_item(
+            self.scan, self.domain, 'Phone',
+            '+44-20-1234-5678', 75,
+            metadata={'phone_number': '+44-20-1234-5678', 'source_url': ''},
+        )
+        emp = Employee.objects.filter(metadata__type='phone').first()
+        self.assertIsNone(emp.name)
+
+
+class TestHandleSocial(TestCase):
+
+    def setUp(self):
+        from scanEngine.models import EngineType
+        self.domain = Domain.objects.create(name='social-test.com')
+        engine = EngineType.objects.create(engine_name='Social Test Engine')
+        self.scan = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_status=0,
+            start_scan_date=timezone.now(),
+            scan_type=engine,
+        )
+
+    def test_social_creates_employee_with_platform(self):
+        persist_osint_item(
+            self.scan, self.domain, 'Social',
+            'https://linkedin.com/in/jane-doe', 75,
+            metadata={'platform': 'LinkedIn', 'profile_url': 'https://linkedin.com/in/jane-doe'},
+        )
+        emp = Employee.objects.filter(metadata__type='social').first()
+        self.assertIsNotNone(emp)
+        self.assertEqual(emp.metadata['platform'], 'LinkedIn')
+        self.assertIn(emp, self.scan.employees.all())
+
+
+class TestHandleOs(TestCase):
+
+    def setUp(self):
+        from scanEngine.models import EngineType
+        self.domain = Domain.objects.create(name='os-test.com')
+        engine = EngineType.objects.create(engine_name='OS Test Engine')
+        self.scan = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_status=0,
+            start_scan_date=timezone.now(),
+            scan_type=engine,
+        )
+
+    def test_os_creates_technology(self):
+        from startScan.models import Technology
+        persist_osint_item(
+            self.scan, self.domain, 'OS',
+            'Ubuntu 22.04', 80,
+            source_data='192.0.2.1',
+            metadata={'os_name': 'Ubuntu 22.04', 'source_host': '192.0.2.1'},
+        )
+        self.assertTrue(Technology.objects.filter(name='Ubuntu 22.04').exists())
+
+    def test_os_links_technology_to_subdomain(self):
+        from startScan.models import Technology, Subdomain
+        sub = Subdomain.objects.create(name='192.0.2.1', scan_history=self.scan, target_domain=self.domain)
+        persist_osint_item(
+            self.scan, self.domain, 'OS',
+            'CentOS 7', 80,
+            source_data='192.0.2.1',
+            metadata={'os_name': 'CentOS 7', 'source_host': '192.0.2.1'},
+        )
+        tech = Technology.objects.get(name='CentOS 7')
+        self.assertIn(tech, sub.technologies.all())

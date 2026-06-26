@@ -1211,6 +1211,60 @@ def _handle_dns(scan_history, domain, e_data: str, source_data: str, ctx, activi
 	)
 
 
+def _handle_phone(scan_history, domain, e_data: str, source_data: str, ctx, activity_id, metadata: dict) -> None:
+	from startScan.models import Employee
+
+	employee = Employee.objects.create(
+		name=None,
+		metadata={
+			'type': 'phone',
+			'phone': metadata.get('phone_number') or e_data,
+			'source_url': source_data or '',
+			'discovered_by': 'SpiderFoot',
+		},
+	)
+	if scan_history:
+		scan_history.employees.add(employee)
+
+
+def _handle_social(scan_history, domain, e_data: str, source_data: str, ctx, activity_id, metadata: dict) -> None:
+	from startScan.models import Employee
+
+	employee = Employee.objects.create(
+		name=None,
+		metadata={
+			'type': 'social',
+			'social_url': metadata.get('profile_url') or e_data,
+			'platform': metadata.get('platform', 'Unknown'),
+			'source': source_data or '',
+			'discovered_by': 'SpiderFoot',
+		},
+	)
+	if scan_history:
+		scan_history.employees.add(employee)
+
+
+def _handle_os(scan_history, domain, e_data: str, source_data: str, ctx, activity_id, metadata: dict) -> None:
+	from django.core.exceptions import MultipleObjectsReturned
+
+	os_name = metadata.get('os_name') or e_data
+	source_host = metadata.get('source_host') or source_data or ''
+
+	try:
+		tech_obj, _ = Technology.objects.get_or_create(name=os_name)
+	except MultipleObjectsReturned:
+		tech_obj = Technology.objects.filter(name=os_name).first()
+
+	if source_host:
+		subdomain = Subdomain.objects.filter(
+			name=source_host, scan_history=scan_history
+		).first()
+		if subdomain:
+			subdomain.technologies.add(tech_obj)
+		else:
+			logger.debug("[OSINT] OS handler: no subdomain found for host %s", source_host)
+
+
 # Populated with new handlers after Tasks 4-6; entries added incrementally.
 TYPE_ROUTER: dict = {
 	'Subdomain': _handle_subdomain,
@@ -1223,6 +1277,9 @@ TYPE_ROUTER: dict = {
 	'Leak':      _handle_leak,
 	'SSL':       _handle_ssl,
 	'DNS':       _handle_dns,
+	'Phone':     _handle_phone,
+	'Social':    _handle_social,
+	'OS':        _handle_os,
 }
 
 
