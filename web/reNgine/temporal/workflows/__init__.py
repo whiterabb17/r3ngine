@@ -460,6 +460,16 @@ class MasterScanWorkflow:
             # Post-Tier-2: dispatch any enabled "run after tier_2" plugins
             await _dispatch_tier_plugins(ctx, "tier_2", str(ctx.get('scan_history_id', 'scan')))
 
+            # Email security checks — run after Tier 2 (requires port scan results)
+            if "port_scan" in tasks:
+                await workflow.execute_activity(
+                    "RunEmailSecurityActivity",
+                    ctx,
+                    start_to_close_timeout=timedelta(minutes=30),
+                    heartbeat_timeout=timedelta(minutes=10),
+                    task_queue="python-orchestrator-queue",
+                )
+
             await self._check_paused()
             # ------------------------------------------------------------------
             # TIER 3: URL Fetching + Screenshot (parallel — both depend only on

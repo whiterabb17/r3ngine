@@ -222,6 +222,9 @@ from reNgine.temporal_activities import (
     # Plugin lifecycle
     log_plugin_start_activity,
     log_plugin_end_activity,
+
+    # Email security (internal module — Tier 2 post-scan)
+    run_email_security_activity,
 )
 
 
@@ -601,6 +604,9 @@ class Command(BaseCommand):
                 # Plugin lifecycle
                 log_plugin_start_activity,
                 log_plugin_end_activity,
+
+                # Email security (internal module — Tier 2 post-scan)
+                run_email_security_activity,
             ]
 
             # -------------------------------------------------------------------

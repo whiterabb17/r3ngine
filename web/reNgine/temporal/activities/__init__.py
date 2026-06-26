@@ -3888,3 +3888,132 @@ def get_scan_final_status_activity(scan_id: int, task_succeeded: bool) -> int:
     )
     true_failures = failed_names - success_names
     return FAILED_TASK if true_failures else SUCCESS_TASK
+
+
+# ---------------------------------------------------------------------------
+# Email Security Activity
+# ---------------------------------------------------------------------------
+
+@activity.defn(name="RunEmailSecurityActivity")
+async def run_email_security_activity(ctx: dict) -> dict:
+    """Perform email/SMTP security checks (SPF, DMARC, DKIM, relay, STARTTLS, user enum)."""
+    import asyncio
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _run_email_security_sync, ctx)
+
+
+def _run_email_security_sync(ctx: dict) -> dict:
+    """Synchronous implementation of email security checks, run via executor."""
+    from reNgine.common_func import save_vulnerability
+    from startScan.models import ScanHistory, Subdomain
+    from reNgine.tasks.email_security import (
+        check_spf, check_dmarc, check_dkim, assess_spoofability,
+        swaks_relay_test, swaks_starttls_check, smtp_user_enum,
+        SMTP_PORTS,
+    )
+    from django.db.models import Q
+
+    scan_id: int = ctx.get('scan_history_id')
+    domain_name: str = ctx.get('domain_name') or ctx.get('domain', '')
+    logger.info('[EMAIL_SECURITY] START scan_id=%s domain=%s', scan_id, domain_name)
+
+    scan = ScanHistory.objects.select_related('domain').get(pk=scan_id)
+    if not domain_name:
+        domain_name = scan.domain.name
+
+    findings_count: int = 0
+
+    def _vuln(name: str, severity: int, description: str, url: str = None) -> None:
+        nonlocal findings_count
+        try:
+            save_vulnerability(
+                target_domain=scan.domain,
+                scan_history=scan,
+                name=name,
+                severity=severity,
+                description=description,
+                http_url=url or 'smtp://%s' % domain_name,
+                type='SMTP',
+                source='email_security',
+                dedup_fields=['name', 'http_url', 'scan_history'],
+            )
+            findings_count += 1
+        except Exception as exc:
+            logger.error('[EMAIL_SECURITY] save_vulnerability failed for %s: %s', name, exc)
+
+    # DNS checks (always run against the root domain)
+    spf = check_spf(domain_name)
+    dmarc = check_dmarc(domain_name)
+    dkim = check_dkim(domain_name)
+
+    if not spf['found']:
+        _vuln('SPF Record Missing', 3,
+              'No SPF TXT record found for %s.' % domain_name)
+    elif spf['weak']:
+        _vuln('SPF Weak Policy', 2,
+              'SPF record for %s uses +all or ~all: %s' % (domain_name, spf['record']))
+
+    if not dmarc['found']:
+        _vuln('DMARC Record Missing', 3,
+              'No DMARC record found at _dmarc.%s.' % domain_name)
+    elif dmarc['policy'] == 'none':
+        _vuln('DMARC Policy Not Enforced (p=none)', 2,
+              'DMARC for %s uses p=none — monitoring only.' % domain_name)
+
+    if not dkim['found']:
+        _vuln('DKIM Record Missing', 2,
+              'No DKIM record found for %s across common selectors.' % domain_name)
+
+    for spoof in assess_spoofability(spf, dmarc):
+        _vuln(spoof['name'], spoof['severity'], spoof['description'])
+
+    # SMTP tool checks — only run if SMTP ports were found during port scan
+    try:
+        smtp_hosts = list(
+            Subdomain.objects.filter(scan_history_id=scan_id).filter(
+                Q(ip_addresses__ports__number__in=SMTP_PORTS) |
+                Q(ip_addresses__ports__service_name__icontains='smtp')
+            ).values_list('name', 'ip_addresses__address', 'ip_addresses__ports__number')
+            .distinct()
+        )
+    except Exception as exc:
+        logger.error('[EMAIL_SECURITY] DB query failed scan_id=%s: %s', scan_id, exc)
+        raise
+
+    checked_pairs: set = set()
+    for (subdomain_name, ip_address, port) in smtp_hosts:
+        host = subdomain_name or ip_address
+        if not host:
+            continue
+        pair = (host, port)
+        if pair in checked_pairs:
+            continue
+        checked_pairs.add(pair)
+        host_url = 'smtp://%s:%s' % (host, port)
+
+        relay = swaks_relay_test(host, port, domain_name)
+        if relay.get('banner'):
+            _vuln('SMTP Service Banner Disclosure', 0,
+                  'SMTP banner on %s:%s: %s' % (host, port, relay['banner']), host_url)
+        if relay['open_relay']:
+            _vuln('SMTP Open Relay', 4,
+                  'SMTP server at %s:%s accepted a relay attempt.' % (host, port), host_url)
+
+        if port in (25, 587):
+            tls = swaks_starttls_check(host, port)
+            if not tls['starttls_supported']:
+                _vuln('STARTTLS Not Supported', 3,
+                      'SMTP at %s:%s did not advertise STARTTLS.' % (host, port), host_url)
+
+    enum_targets = list(checked_pairs)
+    if enum_targets:
+        enum = smtp_user_enum(enum_targets)
+        for host_port_key, users in enum['users_found'].items():
+            if users:
+                _vuln('SMTP User Enumeration (VRFY/EXPN)', 2,
+                      '%d valid usernames at %s: %s' % (
+                          len(users), host_port_key, ', '.join(users[:20])),
+                      'smtp://%s' % host_port_key)
+
+    logger.info('[EMAIL_SECURITY] COMPLETE scan_id=%s findings=%d', scan_id, findings_count)
+    return {'findings_count': findings_count, 'smtp_hosts_checked': len(checked_pairs)}
