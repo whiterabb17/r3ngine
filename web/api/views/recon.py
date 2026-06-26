@@ -356,3 +356,122 @@ class GetNodeDetails(APIView):
 		data = graph.get_node_details(node_id)
 		graph.close()
 		return Response(data)
+
+
+# ── Email discovery endpoints ─────────────────────────────────────────────────
+
+import uuid as _uuid
+
+from reNgine.utils.task import save_email
+from reNgine.tasks.email_discovery import (
+    run_email_discovery,
+    _get_active_job,
+    _set_active,
+    _redis as _email_redis,
+)
+
+
+class ManualEmailAddView(APIView):
+    """POST /api/emails/manual/ — add one or more email addresses to a scan."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: 'rest_framework.request.Request') -> Response:
+        scan_id = request.data.get('scan_id')
+        addresses = request.data.get('addresses', [])
+
+        if not scan_id:
+            return Response({'error': 'scan_id is required'}, status=400)
+
+        try:
+            scan_history = ScanHistory.objects.get(pk=scan_id)
+        except ScanHistory.DoesNotExist:
+            return Response({'error': 'scan not found'}, status=404)
+
+        added: int = 0
+        skipped: int = 0
+        for address in addresses:
+            address = (address or '').strip().lower()
+            if not address or not validators.email(address):
+                skipped += 1
+                continue
+            email_obj, created = save_email(address, scan_history=scan_history, source=Email.SOURCE_MANUAL)
+            if email_obj:
+                added += 1
+            else:
+                skipped += 1
+
+        status_code = 207 if skipped > 0 else 200
+        return Response({'added': added, 'skipped': skipped}, status=status_code)
+
+
+class StartEmailDiscoveryView(APIView):
+    """POST /api/emailDiscovery/start/ — kick off background email discovery for a scan."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: 'rest_framework.request.Request') -> Response:
+        scan_id = request.data.get('scan_id')
+        if not scan_id:
+            return Response({'error': 'scan_id is required'}, status=400)
+
+        try:
+            scan = ScanHistory.objects.select_related('domain').get(pk=scan_id)
+        except ScanHistory.DoesNotExist:
+            return Response({'error': 'scan not found'}, status=404)
+
+        existing_job: str | None = _get_active_job(scan_id)
+        if existing_job:
+            return Response({'job_id': existing_job}, status=409)
+
+        job_id: str = str(_uuid.uuid4())
+        _set_active(scan_id, job_id)
+
+        t = threading.Thread(
+            target=run_email_discovery,
+            args=[int(scan_id), scan.domain.name, job_id],
+            daemon=True,
+        )
+        t.start()
+
+        return Response({'job_id': job_id}, status=202)
+
+
+class StopEmailDiscoveryView(APIView):
+    """POST /api/emailDiscovery/stop/ — signal an active discovery job to stop."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: 'rest_framework.request.Request') -> Response:
+        job_id: str | None = request.data.get('job_id')
+        if not job_id:
+            return Response({'error': 'job_id is required'}, status=400)
+
+        r = _email_redis()
+        r.set(f'email_discovery:{job_id}:stop', '1', ex=3600)
+        return Response({'status': 'stopping'})
+
+
+class EmailDiscoveryReplayView(APIView):
+    """GET /api/emailDiscovery/<job_id>/replay/ — replay log stream events for a job."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: 'rest_framework.request.Request', job_id: str) -> Response:
+        r = _email_redis()
+        scan_id: str | None = r.get(f'email_discovery:job:{job_id}:scan_id')
+        if not scan_id:
+            return Response({'events': [], 'complete': False})
+
+        stream_data = r.xread({f'scan:logs:{scan_id}': '0'}, count=1000)
+        events: list = []
+        complete: bool = False
+        for _stream_name, messages in (stream_data or []):
+            for _msg_id, data in messages:
+                try:
+                    payload = json.loads(data['data'])
+                except (json.JSONDecodeError, KeyError):
+                    continue
+                if payload.get('job_id') != job_id:
+                    continue
+                events.append(payload)
+                if payload.get('type') == 'email_discovery_complete':
+                    complete = True
+
+        return Response({'events': events, 'complete': complete})
