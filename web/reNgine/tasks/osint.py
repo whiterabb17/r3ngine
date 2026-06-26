@@ -16,6 +16,7 @@ from reNgine.utils.opsec import get_opsec_manager
 from reNgine.tasks.persistence import save_metadata_info, save_ip_address, save_secret_leak
 from reNgine.tasks.geo import query_whois
 from reNgine.tasks.scan_init import finish_osint, finish_osint_discovery
+from reNgine.certificate_tasks import run_certificate_intel
 from reNgine.tasks.vuln import semgrep_scan
 from reNgine.osint_tasks import osint_orchestrator
 from reNgine.osint.hibp_scraper import check_hibp_for_email_task
@@ -1158,6 +1159,58 @@ def _handle_leak(scan_history, domain, e_data, source_data, ctx, activity_id, me
 	)
 
 
+def _handle_ssl(scan_history, domain, e_data: str, source_data: str, ctx, activity_id, metadata: dict) -> None:
+	from startScan.models import CertificateIntelligence
+
+	source_host = metadata.get('host') or source_data or ''
+	results_dir = getattr(scan_history, 'results_dir', None) or (ctx or {}).get('results_dir', '')
+
+	if source_host and results_dir:
+		try:
+			logger.info("[SSL] Running cert intel for scan %s via staging confirm", scan_history.id)
+			run_certificate_intel(scan_history.id, results_dir)
+			return
+		except Exception as exc:
+			logger.error("[SSL] cert intel failed for scan %s: %s", scan_history.id, exc)
+
+	# Fallback: partial record with available fields
+	logger.debug("[SSL] Creating partial cert record for host %s", source_host or e_data)
+	CertificateIntelligence.objects.get_or_create(
+		target_domain=domain,
+		host=source_host or e_data,
+		defaults={
+			'scan_history': scan_history,
+			'subject_cn': metadata.get('subject_cn'),
+			'issuer_cn': metadata.get('issuer'),
+		},
+	)
+
+
+def _handle_dns(scan_history, domain, e_data: str, source_data: str, ctx, activity_id, metadata: dict) -> None:
+	from startScan.models import DnsRecord, Subdomain
+
+	record_type = metadata.get('record_type', 'TXT')
+	hostname = metadata.get('hostname') or source_data or ''
+
+	subdomain_obj = None
+	if hostname:
+		subdomain_obj = Subdomain.objects.filter(
+			name=hostname, scan_history=scan_history
+		).first()
+
+	DnsRecord.objects.update_or_create(
+		scan_history=scan_history,
+		record_type=record_type,
+		value=e_data,
+		defaults={
+			'target_domain': domain,
+			'subdomain': subdomain_obj,
+			'source': source_data or '',
+			'raw_metadata': metadata,
+		},
+	)
+
+
 # Populated with new handlers after Tasks 4-6; entries added incrementally.
 TYPE_ROUTER: dict = {
 	'Subdomain': _handle_subdomain,
@@ -1168,6 +1221,8 @@ TYPE_ROUTER: dict = {
 	'Port':      _handle_port,
 	'Tech':      _handle_tech,
 	'Leak':      _handle_leak,
+	'SSL':       _handle_ssl,
+	'DNS':       _handle_dns,
 }
 
 

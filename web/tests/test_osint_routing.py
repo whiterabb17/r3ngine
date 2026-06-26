@@ -2,6 +2,7 @@ from django.test import TestCase
 from django.utils import timezone
 from unittest.mock import patch
 from reNgine.tasks.osint import _enrich_metadata, persist_osint_item
+from startScan.models import DnsRecord, CertificateIntelligence
 
 
 class TestEnrichMetadata(TestCase):
@@ -154,3 +155,129 @@ class TestTypeRouterDispatch(TestCase):
             )
         except Exception as exc:
             self.fail(f"persist_osint_item raised unexpectedly: {exc}")
+
+
+class TestHandleSsl(TestCase):
+
+    def setUp(self):
+        from targetApp.models import Domain
+        from startScan.models import ScanHistory
+        from scanEngine.models import EngineType
+        self.domain = Domain.objects.create(name='ssl-test.com')
+        engine = EngineType.objects.create(engine_name='SSL Test Engine')
+        self.scan = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_status=0,
+            start_scan_date=timezone.now(),
+            scan_type=engine,
+        )
+        self.scan.results_dir = '/tmp/scan_results'
+
+    @patch('reNgine.tasks.osint.run_certificate_intel')
+    def test_ssl_with_host_and_results_dir_calls_cert_intel(self, mock_run):
+        persist_osint_item(
+            self.scan, self.domain, 'SSL',
+            "CN=api.ssl-test.com, O=Let's Encrypt",
+            70,
+            source_data='api.ssl-test.com',
+            metadata={
+                'host': 'api.ssl-test.com',
+                'subject_cn': 'api.ssl-test.com',
+                'issuer': "Let's Encrypt",
+            },
+        )
+        mock_run.assert_called_once_with(self.scan.id, '/tmp/scan_results')
+
+    @patch('reNgine.tasks.osint.run_certificate_intel')
+    def test_ssl_without_host_creates_partial_cert(self, mock_run):
+        persist_osint_item(
+            self.scan, self.domain, 'SSL',
+            "CN=unknown-host.com",
+            70,
+            metadata={'host': '', 'subject_cn': 'unknown-host.com', 'issuer': None},
+        )
+        mock_run.assert_not_called()
+        self.assertTrue(
+            CertificateIntelligence.objects.filter(
+                target_domain=self.domain,
+                subject_cn='unknown-host.com',
+            ).exists()
+        )
+
+    @patch('reNgine.tasks.osint.run_certificate_intel', side_effect=Exception('tlsx error'))
+    def test_ssl_falls_back_to_partial_on_error(self, mock_run):
+        self.scan.results_dir = '/tmp/scan_results'
+        persist_osint_item(
+            self.scan, self.domain, 'SSL',
+            "CN=fallback.ssl-test.com, O=DigiCert",
+            70,
+            source_data='fallback.ssl-test.com',
+            metadata={
+                'host': 'fallback.ssl-test.com',
+                'subject_cn': 'fallback.ssl-test.com',
+                'issuer': 'DigiCert',
+            },
+        )
+        self.assertTrue(
+            CertificateIntelligence.objects.filter(
+                target_domain=self.domain,
+                host='fallback.ssl-test.com',
+            ).exists()
+        )
+
+
+class TestHandleDns(TestCase):
+
+    def setUp(self):
+        from targetApp.models import Domain
+        from startScan.models import ScanHistory
+        from scanEngine.models import EngineType
+        self.domain = Domain.objects.create(name='dns-test.com')
+        engine = EngineType.objects.create(engine_name='DNS Test Engine')
+        self.scan = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_status=0,
+            start_scan_date=timezone.now(),
+            scan_type=engine,
+        )
+
+    def test_dns_creates_txt_record(self):
+        persist_osint_item(
+            self.scan, self.domain, 'DNS',
+            'v=spf1 include:_spf.dns-test.com ~all',
+            65,
+            source_data='dns-test.com',
+            metadata={'record_type': 'TXT', 'hostname': 'dns-test.com', 'value': 'v=spf1 include:_spf.dns-test.com ~all'},
+        )
+        self.assertTrue(
+            DnsRecord.objects.filter(
+                scan_history=self.scan,
+                record_type='TXT',
+                value='v=spf1 include:_spf.dns-test.com ~all',
+            ).exists()
+        )
+
+    def test_dns_links_subdomain_when_found(self):
+        from startScan.models import Subdomain
+        sub = Subdomain.objects.create(name='dns-test.com', scan_history=self.scan, target_domain=self.domain)
+        persist_osint_item(
+            self.scan, self.domain, 'DNS',
+            'ns1.dns-test.com',
+            60,
+            source_data='dns-test.com',
+            metadata={'record_type': 'NS', 'hostname': 'dns-test.com', 'value': 'ns1.dns-test.com'},
+        )
+        record = DnsRecord.objects.get(scan_history=self.scan, record_type='NS')
+        self.assertEqual(record.subdomain, sub)
+
+    def test_dns_idempotent_on_duplicate(self):
+        for _ in range(2):
+            persist_osint_item(
+                self.scan, self.domain, 'DNS',
+                'mail.dns-test.com',
+                60,
+                metadata={'record_type': 'MX', 'hostname': 'dns-test.com', 'value': 'mail.dns-test.com'},
+            )
+        self.assertEqual(
+            DnsRecord.objects.filter(scan_history=self.scan, record_type='MX').count(), 1
+        )
