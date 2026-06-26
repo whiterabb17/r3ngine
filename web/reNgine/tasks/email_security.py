@@ -202,7 +202,7 @@ def check_ssl_cert(host: str, port: int, timeout: int = 10) -> dict:
                 not_after = cert.get('notAfter')
                 if not_after:
                     expiry = datetime.datetime.strptime(not_after, '%b %d %H:%M:%S %Y %Z')
-                    delta = expiry - datetime.datetime.utcnow()
+                    delta = expiry - datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
                     result["days_until_expiry"] = delta.days
                     result["expired"] = delta.days < 0
                 result["self_signed"] = cert.get('issuer') == cert.get('subject')

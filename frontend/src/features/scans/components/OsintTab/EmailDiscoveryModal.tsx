@@ -16,7 +16,8 @@ import {
   type ToolKey,
   type ToolStatus,
 } from '../../../../store/emailDiscoveryStore';
-import { useStartEmailDiscovery, useStopEmailDiscovery } from '../../api';
+import Alert from '@mui/material/Alert';
+import { useStartEmailDiscovery, useStopEmailDiscovery, fetchEmailDiscoveryReplay } from '../../api';
 
 interface EmailDiscoveryModalProps {
   open: boolean;
@@ -164,9 +165,8 @@ export const EmailDiscoveryModal: React.FC<EmailDiscoveryModalProps> = ({
   useEffect(() => {
     if (!open || !store.jobId) return;
     const jobId = store.jobId;
-    fetch(`/api/emailDiscovery/${jobId}/replay/`, { credentials: 'include' })
-      .then((r) => r.json())
-      .then(({ events, complete }: { events: object[]; complete: boolean }) => {
+    fetchEmailDiscoveryReplay(jobId)
+      .then(({ events, complete }) => {
         store.replayEvents(events);
         if (complete && !hasCompletedRef.current) {
           hasCompletedRef.current = true;
@@ -209,6 +209,11 @@ export const EmailDiscoveryModal: React.FC<EmailDiscoveryModalProps> = ({
         Email Discovery
       </DialogTitle>
       <DialogContent>
+        {startMutation.isError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Failed to start discovery. Check that required API keys are configured in Settings.
+          </Alert>
+        )}
         {store.complete ? (
           <Box sx={{ textAlign: 'center', py: 2 }}>
             <CheckCircle size={40} color={tokens.accent.success} />

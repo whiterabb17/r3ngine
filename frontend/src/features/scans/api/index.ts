@@ -963,3 +963,9 @@ export const useStopEmailDiscovery = () => {
     },
   });
 };
+
+export const fetchEmailDiscoveryReplay = async (jobId: string): Promise<{ events: object[]; complete: boolean }> => {
+  const resp = await fetch(`/api/emailDiscovery/${jobId}/replay/`, { credentials: 'include' });
+  if (!resp.ok) return { events: [], complete: false };
+  return resp.json();
+};

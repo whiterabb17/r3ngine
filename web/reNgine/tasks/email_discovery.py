@@ -49,6 +49,17 @@ EMAIL_PATTERN = re.compile(r'[\w.+\-]+@[\w\-]+(?:\.[\w\-]+)+')
 MAX_PATTERN_CANDIDATES = 30
 
 
+def _safe_error_message(exc: Exception) -> str:
+    """Return a sanitised, user-facing error string. Full detail logged separately."""
+    if isinstance(exc, subprocess.TimeoutExpired):
+        return 'Tool timed out'
+    if isinstance(exc, requests.RequestException):
+        return 'HTTP request failed'
+    if isinstance(exc, RuntimeError):
+        return str(exc)[:120]  # RuntimeErrors are our own controlled messages (e.g. "phonebook.cz HTTP 429")
+    return 'Internal error'
+
+
 # ── Redis helpers ─────────────────────────────────────────────────────────────
 
 def _redis() -> redis.StrictRedis:
@@ -81,8 +92,8 @@ def _get_active_job(scan_id: int) -> str | None:
 
 
 def _clear_active(scan_id: int) -> None:
-    job_id = _redis().get(f'email_discovery:{scan_id}:active')
     r = _redis()
+    job_id = r.get(f'email_discovery:{scan_id}:active')
     r.delete(f'email_discovery:{scan_id}:active')
     if job_id:
         r.delete(f'email_discovery:{job_id}:stop')
@@ -138,14 +149,14 @@ def run_email_discovery(scan_id: int, domain: str, job_id: str) -> None:
             })
         except Exception as exc:
             sources[tool_key] = 0
-            logger.error('[EMAIL_DISCOVERY] tool=%s scan_id=%s error=%s', tool_key, scan_id, exc)
+            logger.error('[EMAIL_DISCOVERY] tool=%s scan_id=%s error=%s', tool_key, scan_id, exc, exc_info=True)
             _push_to_stream(scan_id, {
                 'type': 'email_discovery_progress',
                 'job_id': job_id,
                 'tool': tool_key,
                 'status': 'error',
                 'found': 0,
-                'message': str(exc)[:200],
+                'message': _safe_error_message(exc),
             })
 
     _push_to_stream(scan_id, {
@@ -254,11 +265,12 @@ def run_crawled_extraction(scan_id: int, domain: str) -> int:
     count = 0
     seen: set[str] = set()
     for html_path in html_paths:
+        full_path = os.path.join(settings.RENGINE_RESULTS, html_path)
         try:
-            with open(html_path, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
         except OSError:
-            logger.debug('[EMAIL_DISCOVERY] crawled: cannot read %s', html_path)
+            logger.debug('[EMAIL_DISCOVERY] crawled: cannot read %s', full_path)
             continue
 
         for address in EMAIL_PATTERN.findall(content):

@@ -27,7 +27,7 @@ from django.utils import timezone
 from rest_framework import mixins, viewsets, serializers, status
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import AllowAny
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_204_NO_CONTENT, HTTP_202_ACCEPTED
@@ -373,7 +373,7 @@ from reNgine.tasks.email_discovery import (
 
 class ManualEmailAddView(APIView):
     """POST /api/emails/manual/ — add one or more email addresses to a scan."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPenetrationTester]
 
     def post(self, request: 'rest_framework.request.Request') -> Response:
         scan_id = request.data.get('scan_id')
@@ -406,7 +406,7 @@ class ManualEmailAddView(APIView):
 
 class StartEmailDiscoveryView(APIView):
     """POST /api/emailDiscovery/start/ — kick off background email discovery for a scan."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPenetrationTester]
 
     def post(self, request: 'rest_framework.request.Request') -> Response:
         scan_id = request.data.get('scan_id')
@@ -437,7 +437,7 @@ class StartEmailDiscoveryView(APIView):
 
 class StopEmailDiscoveryView(APIView):
     """POST /api/emailDiscovery/stop/ — signal an active discovery job to stop."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPenetrationTester]
 
     def post(self, request: 'rest_framework.request.Request') -> Response:
         job_id: str | None = request.data.get('job_id')
@@ -451,7 +451,7 @@ class StopEmailDiscoveryView(APIView):
 
 class EmailDiscoveryReplayView(APIView):
     """GET /api/emailDiscovery/<job_id>/replay/ — replay log stream events for a job."""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPenetrationTester]
 
     def get(self, request: 'rest_framework.request.Request', job_id: str) -> Response:
         r = _email_redis()
