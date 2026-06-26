@@ -3348,7 +3348,7 @@ def run_gf_on_all_endpoints_activity(ctx: dict) -> dict:
 
     Returns a dict mapping pattern → number of endpoints updated.
     """
-    from reNgine.definitions import DEFAULT_GF_PATTERNS, GF_PATTERNS
+    from reNgine.definitions import DEFAULT_GF_PATTERNS, GF_PATTERNS, SUCCESS_TASK, FAILED_TASK
     from reNgine.crawl_tasks import gf_scan
     from reNgine.utils.task import bulk_apply_gf_pattern_from_urls
     from startScan.models import EndPoint, ScanHistory
