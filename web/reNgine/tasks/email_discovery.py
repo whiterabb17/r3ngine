@@ -23,6 +23,20 @@ from startScan.models import Employee
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    'run_email_discovery',
+    'run_hunter_discovery',
+    'run_harvester_discovery',
+    'run_phonebook_discovery',
+    'run_pattern_inference',
+    'run_crawled_extraction',
+    '_push_to_stream',
+    '_check_stop_signal',
+    '_set_active',
+    '_get_active_job',
+    '_clear_active',
+]
+
 _TOOL_ORDER = [
     ('hunter',    'run_hunter_discovery'),
     ('harvester', 'run_harvester_discovery'),
