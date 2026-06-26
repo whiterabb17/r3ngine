@@ -14,7 +14,6 @@ import {
   InputAdornment,
   Checkbox,
   Button,
-  Paper,
   Stack,
   CircularProgress,
   Collapse,
@@ -44,6 +43,7 @@ import {
 import type { OsintStaging } from '../../types';
 import { useThemeTokens } from '../../../../theme/useThemeTokens';
 import { StagingTypeBadge } from './StagingTypeBadge';
+import { StagingMetadataPanel } from './StagingMetadataPanel';
 
 interface OsintStagingSectionProps {
   scanId: number;
@@ -311,18 +311,7 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
                     <TableRow>
                       <TableCell colSpan={6} sx={{ p: 0, border: 'none' }}>
                         <Collapse in={expandedId === item.id} timeout="auto" unmountOnExit>
-                          <Box sx={{ p: 2, bgcolor: 'rgba(0,0,0,0.2)', borderBottom: 1, borderColor: 'divider' }}>
-                            <Typography sx={{ fontSize: '0.7rem', color: tokens.accent.primary, fontWeight: 900, mb: 1, textTransform: 'uppercase' }}>
-                              Extended Metadata
-                            </Typography>
-                            <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover', borderColor: 'rgba(255,255,255,0.05)' }}>
-                              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)', whiteSpace: 'pre-wrap' }}>
-                                {typeof item.metadata === 'object' && item.metadata !== null
-                                  ? JSON.stringify(item.metadata, null, 2)
-                                  : String(item.metadata || 'No extended metadata available.')}
-                              </Typography>
-                            </Paper>
-                          </Box>
+                          <StagingMetadataPanel item={item} onPromote={handleIndividualPromote} />
                         </Collapse>
                       </TableCell>
                     </TableRow>
