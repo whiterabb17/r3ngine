@@ -918,10 +918,11 @@ export const useManualAddEmails = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ scanId, addresses }: { scanId: number; addresses: string[] }) => {
+      const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
       const resp = await fetch('/api/emails/manual/', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
         body: JSON.stringify({ scan_id: scanId, addresses }),
       });
       if (!resp.ok && resp.status !== 207) throw new Error('Failed to add emails');
@@ -936,10 +937,11 @@ export const useManualAddEmails = () => {
 export const useStartEmailDiscovery = () => {
   return useMutation({
     mutationFn: async ({ scanId }: { scanId: number }) => {
+      const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
       const resp = await fetch('/api/emailDiscovery/start/', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
         body: JSON.stringify({ scan_id: scanId }),
       });
       // 409 means already running — return existing job_id
@@ -952,10 +954,11 @@ export const useStartEmailDiscovery = () => {
 export const useStopEmailDiscovery = () => {
   return useMutation({
     mutationFn: async ({ jobId }: { jobId: string }) => {
+      const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
       const resp = await fetch('/api/emailDiscovery/stop/', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
         body: JSON.stringify({ job_id: jobId }),
       });
       if (!resp.ok) throw new Error('Failed to stop discovery');
