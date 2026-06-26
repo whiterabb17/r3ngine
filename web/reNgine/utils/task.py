@@ -537,11 +537,14 @@ def run_command_with_retry(cmd, results_file, max_retries=3, **kwargs):
     return return_code, output
 
 
-def save_email(email_address, scan_history=None):
+def save_email(email_address: str, scan_history=None, source: str = 'hunter'):
     if not validators.email(email_address):
-        logger.info(f'Email {email_address} is invalid. Skipping.')
+        logger.info('Email %s is invalid. Skipping.', email_address)
         return None, False
-    email, created = Email.objects.get_or_create(address=email_address)
+    email, created = Email.objects.get_or_create(
+        address=email_address,
+        defaults={'source': source},
+    )
 
     # Add email to ScanHistory
     if scan_history:

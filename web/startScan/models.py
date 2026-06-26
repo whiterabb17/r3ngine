@@ -1145,9 +1145,30 @@ class MetaFinderDocument(models.Model):
 
 
 class Email(models.Model):
-	id = models.AutoField(primary_key=True)
-	address = models.CharField(max_length=200, blank=True, null=True)
+	SOURCE_MANUAL    = 'manual'
+	SOURCE_HUNTER    = 'hunter'
+	SOURCE_HARVESTER = 'harvester'
+	SOURCE_PHONEBOOK = 'phonebook'
+	SOURCE_PATTERN   = 'pattern'
+	SOURCE_CRAWLED   = 'crawled'
+	SOURCE_CHOICES = [
+		(SOURCE_MANUAL,    'Manual'),
+		(SOURCE_HUNTER,    'Hunter.io'),
+		(SOURCE_HARVESTER, 'theHarvester'),
+		(SOURCE_PHONEBOOK, 'Phonebook.cz'),
+		(SOURCE_PATTERN,   'Pattern Inference'),
+		(SOURCE_CRAWLED,   'Crawled URLs'),
+	]
+
+	id       = models.AutoField(primary_key=True)
+	address  = models.CharField(max_length=200, blank=True, null=True)
 	password = models.CharField(max_length=200, blank=True, null=True)
+	source   = models.CharField(
+		max_length=50,
+		choices=SOURCE_CHOICES,
+		default=SOURCE_HUNTER,
+		blank=True,
+	)
 	metadata = models.JSONField(default=dict, blank=True)
 
 class Employee(models.Model):
