@@ -61,7 +61,6 @@ export const useEmailDiscoveryStore = create<EmailDiscoveryStore>((set, get) => 
           message: event.message,
         },
       },
-      running: event.status !== 'cancelled',
     }));
   },
 

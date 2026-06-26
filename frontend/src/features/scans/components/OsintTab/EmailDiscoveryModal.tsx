@@ -184,7 +184,11 @@ export const EmailDiscoveryModal: React.FC<EmailDiscoveryModalProps> = ({
     };
   }, []);
 
-  const handleHide = () => onClose();
+  const handleHide = () => {
+    wsRef.current?.close();
+    wsRef.current = null;
+    onClose();
+  };
 
   const handleStop = () => {
     if (!store.jobId) return;

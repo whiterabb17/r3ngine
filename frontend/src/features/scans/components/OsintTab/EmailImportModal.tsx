@@ -77,12 +77,17 @@ export const EmailImportModal: React.FC<EmailImportModalProps> = ({
 
   const handleSubmit = async () => {
     if (valid.length === 0) return;
-    await addMutation.mutateAsync({ scanId, addresses: valid });
-    onSuccess();
-    onClose();
-    setPasteText('');
-    setFileText('');
-    setFileName('');
+    try {
+      await addMutation.mutateAsync({ scanId, addresses: valid });
+      onSuccess();
+      onClose();
+      setPasteText('');
+      setFileText('');
+      setFileName('');
+    } catch {
+      // mutation.isError is now true; MUI shows error via addMutation.isError state
+      // No additional action needed — TanStack Query sets error state automatically
+    }
   };
 
   return (
@@ -142,6 +147,11 @@ export const EmailImportModal: React.FC<EmailImportModalProps> = ({
               )}
             </Typography>
           </Box>
+        )}
+        {addMutation.isError && (
+          <Alert severity="error" sx={{ mt: 1 }}>
+            Failed to add emails. Please try again.
+          </Alert>
         )}
       </DialogContent>
       <DialogActions>
