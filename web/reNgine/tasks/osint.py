@@ -278,7 +278,7 @@ def dorking(
             if isinstance(custom_dork, str):
                 # Handle simple string query from YAML
                 query = custom_dork.replace("_target_", host)
-                logger.info(f"Processing YAML custom dork: {query}")
+                logger.info("Processing YAML custom dork: %s", query)
                 get_and_save_dork_results(
                     lookup_target=host,
                     results_dir=results_dir,
@@ -311,7 +311,7 @@ def dorking(
                         activity_id=activity_id,
                     )
     except Exception as e:
-        logger.error(f"Error processing custom dorks from YAML: {str(e)}")
+        logger.error("Error processing custom dorks from YAML: %s", e)
         logger.exception(e)
 
     # Process raw custom dorks from UI/ScanHistory
@@ -344,7 +344,7 @@ def dorking(
     # default dorking
     try:
         for dork in dorks:
-            logger.info(f"Getting dork information for {dork}")
+            logger.info("Getting dork information for %s", dork)
             if dork == "stackoverflow":
                 results = get_and_save_dork_results(
                     lookup_target="stackoverflow.com",
@@ -577,7 +577,7 @@ def theHarvester(self, config, host, scan_history_id, activity_id, results_dir, 
     # Run cmd
     logger.info("theHarvester started")
     cmd = f"uv run theHarvester -d {host} -b all -f {output_path_json}"
-    logger.warning(f"TheHarvester command: {cmd}")
+    logger.warning("TheHarvester command: %s", cmd)
     run_command(
         cmd,
         shell=True,
@@ -589,7 +589,7 @@ def theHarvester(self, config, host, scan_history_id, activity_id, results_dir, 
 
     # Get file location
     if not os.path.isfile(output_path_json):
-        logger.error(f"Could not open {output_path_json}")
+        logger.error("Could not open %s", output_path_json)
         return {}
 
     # Load theHarvester results
