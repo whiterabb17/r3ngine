@@ -1,5 +1,7 @@
 from django.test import TestCase
-from reNgine.tasks.osint import _enrich_metadata
+from django.utils import timezone
+from unittest.mock import patch
+from reNgine.tasks.osint import _enrich_metadata, persist_osint_item
 
 
 class TestEnrichMetadata(TestCase):
@@ -92,3 +94,63 @@ class TestEnrichMetadata(TestCase):
         base = {'sf_type': 'SOME_TYPE', 'iocs': {}}
         result = _enrich_metadata(event, base)
         self.assertEqual(result, base)  # no extra keys added
+
+
+class TestTypeRouterDispatch(TestCase):
+
+    def setUp(self):
+        from targetApp.models import Domain
+        from startScan.models import ScanHistory
+        from scanEngine.models import EngineType
+        self.domain = Domain.objects.create(name='dispatch-test.com')
+        self.engine = EngineType.objects.create(engine_name='Dispatch Test Engine')
+        self.scan = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_status=0,
+            start_scan_date=timezone.now(),
+            scan_type=self.engine,
+        )
+
+    @patch('reNgine.tasks.osint.save_subdomain')
+    def test_subdomain_dispatches(self, mock_save):
+        persist_osint_item(
+            self.scan, self.domain, 'Subdomain', 'sub.dispatch-test.com', 90,
+        )
+        mock_save.assert_called_once()
+
+    @patch('reNgine.tasks.osint.save_email')
+    def test_email_dispatches(self, mock_save):
+        persist_osint_item(
+            self.scan, self.domain, 'Email', 'user@dispatch-test.com', 90,
+        )
+        mock_save.assert_called_once()
+
+    @patch('reNgine.tasks.osint.save_employee')
+    def test_employee_dispatches(self, mock_save):
+        persist_osint_item(
+            self.scan, self.domain, 'Employee', 'Jane Doe', 90,
+        )
+        mock_save.assert_called_once()
+
+    @patch('reNgine.tasks.osint.save_endpoint')
+    def test_url_dispatches_valid_url(self, mock_save):
+        persist_osint_item(
+            self.scan, self.domain, 'URL', 'https://dispatch-test.com/path', 90,
+        )
+        mock_save.assert_called_once()
+
+    @patch('reNgine.tasks.osint.save_endpoint')
+    def test_url_skips_invalid_url(self, mock_save):
+        persist_osint_item(
+            self.scan, self.domain, 'URL', 'not-a-url', 90,
+        )
+        mock_save.assert_not_called()
+
+    def test_unknown_type_does_not_raise(self):
+        # Should log and return silently
+        try:
+            persist_osint_item(
+                self.scan, self.domain, 'TOTALLY_UNKNOWN', 'data', 90,
+            )
+        except Exception as exc:
+            self.fail(f"persist_osint_item raised unexpectedly: {exc}")

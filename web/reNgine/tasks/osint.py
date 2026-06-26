@@ -1093,54 +1093,102 @@ def spiderfoot_scan(self, host=None, ctx={}, description=None):
 	graph.close()
 
 
-def persist_osint_item(scan_history, domain, osint_type, e_data, confidence, source_data=None, event_type=None, ctx=None, activity_id=None):
-	"""
-	Core logic to persist an OSINT item into primary tables.
-	Separated from tasks to allow manual promotion from UI.
-	"""
-	if osint_type == 'Subdomain':
-		sub_name = e_data.lower()
-		save_subdomain(sub_name, ctx=ctx)
-	elif osint_type == 'Email':
-		save_email(e_data.lower(), scan_history=scan_history)
-	elif osint_type == 'Employee':
-		save_employee(e_data, scan_history=scan_history)
-	elif osint_type == 'URL':
-		if is_valid_url(e_data):
-			save_endpoint(e_data, ctx=ctx)
-	elif osint_type == 'IP':
-		save_ip_address(e_data, scan_id=scan_history.id, activity_id=activity_id)
-	elif osint_type == 'Port':
-		if ':' in e_data:
-			ip_part, port_part = e_data.split(':', 1)
-			if port_part.isdigit():
-				port_num = int(port_part)
-				res = get_port_service_description(port_num)
-				port_obj, _ = update_or_create_port(port_num, service_name=res.get('service_name'), description=res.get('description'))
-				ip_obj, _ = save_ip_address(ip_part, scan_id=scan_history.id, activity_id=activity_id)
-				if ip_obj:
-					ip_obj.ports.add(port_obj)
-		elif e_data.isdigit():
-			port_num = int(e_data)
-			update_or_create_port(port_num)
-	elif osint_type == 'Tech':
-		from django.core.exceptions import MultipleObjectsReturned
-		try:
-			tech_obj, _ = Technology.objects.get_or_create(name=e_data)
-		except MultipleObjectsReturned:
-			tech_obj = Technology.objects.filter(name=e_data).first()
-		if source_data:
-			subdomain = Subdomain.objects.filter(name=source_data, scan_history=scan_history).first()
-			if subdomain:
-				subdomain.technologies.add(tech_obj)
-	elif osint_type == 'Leak':
-		save_secret_leak(
-			scan_history=scan_history,
-			tool_name='SpiderFoot',
-			secret_type=event_type or 'Sensitive Data',
-			source_url=source_data or 'SpiderFoot Findings',
-			match_content=e_data
-		)
+# ---------------------------------------------------------------------------
+# Per-type persistence handlers — called by TYPE_ROUTER
+# ---------------------------------------------------------------------------
+
+def _handle_subdomain(scan_history, domain, e_data, source_data, ctx, activity_id, metadata):
+	save_subdomain(e_data.lower(), ctx=ctx)
+
+
+def _handle_email(scan_history, domain, e_data, source_data, ctx, activity_id, metadata):
+	save_email(e_data.lower(), scan_history=scan_history)
+
+
+def _handle_employee(scan_history, domain, e_data, source_data, ctx, activity_id, metadata):
+	save_employee(e_data, scan_history=scan_history)
+
+
+def _handle_url(scan_history, domain, e_data, source_data, ctx, activity_id, metadata):
+	if is_valid_url(e_data):
+		save_endpoint(e_data, ctx=ctx)
+
+
+def _handle_ip(scan_history, domain, e_data, source_data, ctx, activity_id, metadata):
+	save_ip_address(e_data, scan_id=scan_history.id, activity_id=activity_id)
+
+
+def _handle_port(scan_history, domain, e_data, source_data, ctx, activity_id, metadata):
+	if ':' in e_data:
+		ip_part, port_part = e_data.split(':', 1)
+		if port_part.isdigit():
+			port_num = int(port_part)
+			res = get_port_service_description(port_num)
+			port_obj, _ = update_or_create_port(
+				port_num,
+				service_name=res.get('service_name'),
+				description=res.get('description'),
+			)
+			ip_obj, _ = save_ip_address(ip_part, scan_id=scan_history.id, activity_id=activity_id)
+			if ip_obj:
+				ip_obj.ports.add(port_obj)
+	elif e_data.isdigit():
+		update_or_create_port(int(e_data))
+
+
+def _handle_tech(scan_history, domain, e_data, source_data, ctx, activity_id, metadata):
+	from django.core.exceptions import MultipleObjectsReturned
+	try:
+		tech_obj, _ = Technology.objects.get_or_create(name=e_data)
+	except MultipleObjectsReturned:
+		tech_obj = Technology.objects.filter(name=e_data).first()
+	if source_data:
+		subdomain = Subdomain.objects.filter(name=source_data, scan_history=scan_history).first()
+		if subdomain:
+			subdomain.technologies.add(tech_obj)
+
+
+def _handle_leak(scan_history, domain, e_data, source_data, ctx, activity_id, metadata):
+	save_secret_leak(
+		scan_history=scan_history,
+		tool_name='SpiderFoot',
+		secret_type=metadata.get('sf_type') or 'Sensitive Data',
+		source_url=source_data or 'SpiderFoot Findings',
+		match_content=e_data,
+	)
+
+
+# Populated with new handlers after Tasks 4-6; entries added incrementally.
+TYPE_ROUTER: dict = {
+	'Subdomain': _handle_subdomain,
+	'Email':     _handle_email,
+	'Employee':  _handle_employee,
+	'URL':       _handle_url,
+	'IP':        _handle_ip,
+	'Port':      _handle_port,
+	'Tech':      _handle_tech,
+	'Leak':      _handle_leak,
+}
+
+
+def persist_osint_item(
+	scan_history,
+	domain,
+	osint_type: str,
+	e_data: str,
+	confidence: int,
+	source_data: str = None,
+	event_type: str = None,
+	ctx: dict = None,
+	activity_id=None,
+	metadata: dict = None,
+) -> None:
+	"""Route an OSINT item to the correct persistence handler via TYPE_ROUTER."""
+	handler = TYPE_ROUTER.get(osint_type)
+	if handler:
+		handler(scan_history, domain, e_data, source_data, ctx, activity_id, metadata or {})
+	else:
+		logger.debug("[OSINT] No handler for osint_type %s", osint_type)
 
 _DNS_SF_TYPE_TO_RECORD = {
     'DNS_TXT_RECORD': 'TXT',
@@ -1261,7 +1309,8 @@ def _process_spiderfoot_batch(self, batch, ctx, host):
 						source_data=event.get('source_data'),
 						event_type=e_type,
 						ctx=ctx,
-						activity_id=self.activity_id
+						activity_id=self.activity_id,
+						metadata=auto_meta,
 					)
 
 				# Staging Area (Moderate Confidence: 50% -> 80%)
