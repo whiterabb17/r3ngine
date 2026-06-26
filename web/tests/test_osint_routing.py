@@ -174,6 +174,7 @@ class TestHandleSsl(TestCase):
             scan_type=engine,
         )
         self.scan.results_dir = '/tmp/scan_results'
+        self.scan.save()
 
     @patch('reNgine.tasks.osint.run_certificate_intel')
     def test_ssl_with_host_and_results_dir_calls_cert_intel(self, mock_run):
@@ -224,6 +225,24 @@ class TestHandleSsl(TestCase):
             CertificateIntelligence.objects.filter(
                 target_domain=self.domain,
                 host='fallback.ssl-test.com',
+            ).exists()
+        )
+
+    @patch('reNgine.tasks.osint.run_certificate_intel')
+    def test_ssl_with_host_but_no_results_dir_creates_partial_cert(self, mock_run):
+        self.scan.results_dir = ''
+        self.scan.save()
+        persist_osint_item(
+            self.scan, self.domain, 'SSL',
+            "CN=api.ssl-test.com",
+            70,
+            source_data='api.ssl-test.com',
+            metadata={'host': 'api.ssl-test.com', 'subject_cn': 'api.ssl-test.com', 'issuer': None},
+        )
+        mock_run.assert_not_called()
+        self.assertTrue(
+            CertificateIntelligence.objects.filter(
+                target_domain=self.domain, host='api.ssl-test.com'
             ).exists()
         )
 
