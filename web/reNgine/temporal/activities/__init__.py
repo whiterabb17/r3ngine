@@ -3910,7 +3910,7 @@ def _run_email_security_sync(ctx: dict) -> dict:
     from reNgine.tasks.email_security import (
         check_spf, check_dmarc, check_dkim, assess_spoofability,
         swaks_relay_test, swaks_starttls_check, smtp_user_enum,
-        SMTP_PORTS,
+        check_ssl_cert, SMTP_PORTS,
     )
     from django.db.models import Q
 
@@ -4003,11 +4003,52 @@ def _run_email_security_sync(ctx: dict) -> dict:
             _vuln('SMTP Open Relay', 4,
                   'SMTP server at %s:%s accepted a relay attempt.' % (host, port), host_url)
 
+        # Ports 25/587 use opportunistic TLS (STARTTLS) — flag if missing
         if port in (25, 587):
             tls = swaks_starttls_check(host, port)
             if not tls['starttls_supported']:
                 _vuln('STARTTLS Not Supported', 3,
                       'SMTP at %s:%s did not advertise STARTTLS.' % (host, port), host_url)
+
+        # Ports 465/993 use implicit TLS (SMTPS/IMAPS) — verify certificate validity
+        if port in (465, 993):
+            cert = check_ssl_cert(host, port)
+            if not cert['connected']:
+                _vuln(
+                    'Port %d Not Responding to TLS Handshake' % port, 2,
+                    'Port %s on %s is expected to use implicit TLS (SMTPS/IMAPS) '
+                    'but did not complete the SSL handshake.' % (port, host),
+                    host_url,
+                )
+            else:
+                if cert['expired']:
+                    _vuln(
+                        'Expired SSL/TLS Certificate on SMTP', 3,
+                        'The SSL/TLS certificate on %s:%s has expired.' % (host, port),
+                        host_url,
+                    )
+                if cert['self_signed']:
+                    _vuln(
+                        'Self-Signed SSL/TLS Certificate on SMTP', 2,
+                        'The certificate on %s:%s is self-signed and will not be '
+                        'trusted by mail clients.' % (host, port),
+                        host_url,
+                    )
+                if cert['hostname_mismatch']:
+                    _vuln(
+                        'SSL/TLS Certificate Hostname Mismatch on SMTP', 3,
+                        'The certificate on %s:%s does not match the hostname. '
+                        'Clients may refuse the connection.' % (host, port),
+                        host_url,
+                    )
+                days = cert.get('days_until_expiry')
+                if days is not None and 0 <= days < 30 and not cert['expired']:
+                    _vuln(
+                        'SSL/TLS Certificate Expiring Soon on SMTP', 1,
+                        'The certificate on %s:%s expires in %d day(s). '
+                        'Renew before it causes delivery failures.' % (host, port, days),
+                        host_url,
+                    )
 
         # Heartbeat after processing each SMTP host
         activity.heartbeat()

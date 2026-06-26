@@ -30,3 +30,16 @@ class TestEmailSecurityImport(TestCase):
             result = check_dmarc('example.com')
         self.assertIn('found', result)
         self.assertFalse(result['found'])
+
+    def test_check_ssl_cert_importable(self):
+        from reNgine.tasks.email_security import check_ssl_cert
+        self.assertTrue(callable(check_ssl_cert))
+
+    def test_check_ssl_cert_returns_dict_on_connection_failure(self):
+        from reNgine.tasks.email_security import check_ssl_cert
+        with patch('socket.create_connection', side_effect=ConnectionRefusedError):
+            result = check_ssl_cert('mail.example.com', 465)
+        self.assertFalse(result['connected'])
+        self.assertIn('expired', result)
+        self.assertIn('self_signed', result)
+        self.assertIn('hostname_mismatch', result)

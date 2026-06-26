@@ -161,6 +161,66 @@ def swaks_relay_test(host: str, port: int, domain: str, timeout: int = 20) -> di
     return result
 
 
+def check_ssl_cert(host: str, port: int, timeout: int = 10) -> dict:
+    """Verify the SSL/TLS certificate on an implicit-TLS port (465 SMTPS, 993 IMAPS).
+
+    Returns:
+        {
+            "connected": bool,         # True if TLS handshake completed
+            "expired": bool,
+            "self_signed": bool,
+            "hostname_mismatch": bool,
+            "days_until_expiry": int | None,
+            "subject_cn": str | None,
+            "issuer": str | None,
+        }
+    """
+    import ssl
+    import socket
+    import datetime
+
+    result: dict = {
+        "connected": False,
+        "expired": False,
+        "self_signed": False,
+        "hostname_mismatch": False,
+        "days_until_expiry": None,
+        "subject_cn": None,
+        "issuer": None,
+    }
+
+    try:
+        ctx = ssl.create_default_context()
+        with socket.create_connection((host, port), timeout=timeout) as sock:
+            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
+                result["connected"] = True
+                cert = ssock.getpeercert()
+                subject = dict(x[0] for x in cert.get('subject', []))
+                result["subject_cn"] = subject.get('commonName')
+                issuer_dict = dict(x[0] for x in cert.get('issuer', []))
+                result["issuer"] = issuer_dict.get('organizationName') or issuer_dict.get('commonName')
+                not_after = cert.get('notAfter')
+                if not_after:
+                    expiry = datetime.datetime.strptime(not_after, '%b %d %H:%M:%S %Y %Z')
+                    delta = expiry - datetime.datetime.utcnow()
+                    result["days_until_expiry"] = delta.days
+                    result["expired"] = delta.days < 0
+                result["self_signed"] = cert.get('issuer') == cert.get('subject')
+    except ssl.SSLCertVerificationError as e:
+        result["connected"] = True
+        msg = str(e).lower()
+        if 'self signed' in msg or 'self-signed' in msg:
+            result["self_signed"] = True
+        elif 'hostname' in msg or "doesn't match" in msg:
+            result["hostname_mismatch"] = True
+        else:
+            result["expired"] = True
+    except Exception as e:
+        logger.debug("[check_ssl_cert] %s:%s: %s", host, port, e)
+
+    return result
+
+
 def swaks_starttls_check(host: str, port: int, timeout: int = 15) -> dict:
     """Check whether STARTTLS is advertised in SMTP EHLO response.
 
