@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 
-from reNgine.fuzzing_tasks import dir_file_fuzz
+from reNgine.tasks.fuzzing import dir_file_fuzz
 
 
 # ---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ def _prepare(yaml_config, ctx_override=None):
     def _fake_ensure(task_proxy, func, ctx, description=None):
         return func(ctx=ctx, description=description)
 
-    with patch('reNgine.fuzzing_tasks.ensure_endpoints_crawled_and_execute',
+    with patch('reNgine.tasks.fuzzing.ensure_endpoints_crawled_and_execute',
                side_effect=_fake_ensure), \
          patch('os.path.exists', return_value=True), \
          patch('reNgine.api_tasks.resolve_wordlist_path',
@@ -220,20 +220,20 @@ class TestFfufUrlAndHeaderConstruction(TestCase):
         def _fake_ensure(task_proxy, func, ctx, description=None):
             return func(ctx=ctx, description=description)
 
-        with patch('reNgine.fuzzing_tasks.ensure_endpoints_crawled_and_execute',
+        with patch('reNgine.tasks.fuzzing.ensure_endpoints_crawled_and_execute',
                    side_effect=_fake_ensure), \
              patch('os.path.exists', return_value=False), \
              patch('reNgine.api_tasks.resolve_wordlist_path',
                    side_effect=lambda cfg, path: path), \
-             patch('reNgine.fuzzing_tasks.stream_command', side_effect=fake_stream), \
-             patch('reNgine.fuzzing_tasks.run_command', return_value=None), \
-             patch('reNgine.fuzzing_tasks.DirectoryScan') as mock_ds, \
-             patch('reNgine.fuzzing_tasks.Subdomain'), \
-             patch('reNgine.fuzzing_tasks.ScanHistory'), \
-             patch('reNgine.fuzzing_tasks.Redis'), \
-             patch('reNgine.fuzzing_tasks.OpSecManager') as mock_opsec, \
-             patch('reNgine.fuzzing_tasks.get_random_proxy', return_value=None), \
-             patch('reNgine.fuzzing_tasks._fuzz_target_marker', return_value='/tmp/no_marker'), \
+             patch('reNgine.tasks.fuzzing.stream_command', side_effect=fake_stream), \
+             patch('reNgine.tasks.fuzzing.run_command', return_value=None), \
+             patch('reNgine.tasks.fuzzing.DirectoryScan') as mock_ds, \
+             patch('reNgine.tasks.fuzzing.Subdomain'), \
+             patch('reNgine.tasks.fuzzing.ScanHistory'), \
+             patch('reNgine.tasks.fuzzing.Redis'), \
+             patch('reNgine.tasks.fuzzing.OpSecManager') as mock_opsec, \
+             patch('reNgine.tasks.fuzzing.get_random_proxy', return_value=None), \
+             patch('reNgine.tasks.fuzzing._fuzz_target_marker', return_value='/tmp/no_marker'), \
              patch('reNgine.tasks.http_crawl', return_value=None), \
              patch('builtins.open', MagicMock()):
             mock_ds.objects.create.return_value = MagicMock()
@@ -524,21 +524,21 @@ class TestFfufStreamingHeartbeat(TestCase):
         # _fuzz_target_marker returns a path ending in .marker so the
         # os.path.exists patch (which returns False for .marker paths) prevents
         # the "already fuzzed" skip, while returning True for wordlist paths.
-        with patch('reNgine.fuzzing_tasks.ensure_endpoints_crawled_and_execute',
+        with patch('reNgine.tasks.fuzzing.ensure_endpoints_crawled_and_execute',
                    side_effect=_fake_ensure), \
              patch('os.path.exists', side_effect=lambda p: not p.endswith('.marker')), \
              patch('reNgine.api_tasks.resolve_wordlist_path',
                    side_effect=lambda cfg, path: path), \
-             patch('reNgine.fuzzing_tasks.stream_command', side_effect=fake_stream), \
-             patch('reNgine.fuzzing_tasks.DirectoryScan') as mock_ds, \
-             patch('reNgine.fuzzing_tasks.Subdomain'), \
-             patch('reNgine.fuzzing_tasks.ScanHistory'), \
-             patch('reNgine.fuzzing_tasks.Redis'), \
-             patch('reNgine.fuzzing_tasks.OpSecManager') as mock_opsec, \
-             patch('reNgine.fuzzing_tasks.get_random_proxy', return_value=None), \
-             patch('reNgine.fuzzing_tasks._fuzz_target_marker',
+             patch('reNgine.tasks.fuzzing.stream_command', side_effect=fake_stream), \
+             patch('reNgine.tasks.fuzzing.DirectoryScan') as mock_ds, \
+             patch('reNgine.tasks.fuzzing.Subdomain'), \
+             patch('reNgine.tasks.fuzzing.ScanHistory'), \
+             patch('reNgine.tasks.fuzzing.Redis'), \
+             patch('reNgine.tasks.fuzzing.OpSecManager') as mock_opsec, \
+             patch('reNgine.tasks.fuzzing.get_random_proxy', return_value=None), \
+             patch('reNgine.tasks.fuzzing._fuzz_target_marker',
                    return_value='/tmp/no_marker.marker'), \
-             patch('reNgine.fuzzing_tasks.run_command'), \
+             patch('reNgine.tasks.fuzzing.run_command'), \
              patch('reNgine.tasks.http_crawl'), \
              patch('builtins.open', MagicMock()):
             mock_ds.objects.create.return_value = MagicMock()
@@ -578,25 +578,25 @@ class TestFfufStreamingHeartbeat(TestCase):
         def _fake_ensure(task_proxy, func, ctx, description=None):
             return func(ctx=ctx, description=description)
 
-        with patch('reNgine.fuzzing_tasks.ensure_endpoints_crawled_and_execute',
+        with patch('reNgine.tasks.fuzzing.ensure_endpoints_crawled_and_execute',
                    side_effect=_fake_ensure), \
              patch('os.path.exists', side_effect=lambda p: not p.endswith('.marker')), \
              patch('reNgine.api_tasks.resolve_wordlist_path',
                    side_effect=lambda cfg, path: path), \
-             patch('reNgine.fuzzing_tasks.stream_command', return_value=iter(fake_results)), \
-             patch('reNgine.fuzzing_tasks.DirectoryScan') as mock_ds, \
-             patch('reNgine.fuzzing_tasks.Subdomain'), \
-             patch('reNgine.fuzzing_tasks.ScanHistory'), \
-             patch('reNgine.fuzzing_tasks.Redis'), \
-             patch('reNgine.fuzzing_tasks.OpSecManager') as mock_opsec, \
-             patch('reNgine.fuzzing_tasks.get_random_proxy', return_value=None), \
-             patch('reNgine.fuzzing_tasks._fuzz_target_marker',
+             patch('reNgine.tasks.fuzzing.stream_command', return_value=iter(fake_results)), \
+             patch('reNgine.tasks.fuzzing.DirectoryScan') as mock_ds, \
+             patch('reNgine.tasks.fuzzing.Subdomain'), \
+             patch('reNgine.tasks.fuzzing.ScanHistory'), \
+             patch('reNgine.tasks.fuzzing.Redis'), \
+             patch('reNgine.tasks.fuzzing.OpSecManager') as mock_opsec, \
+             patch('reNgine.tasks.fuzzing.get_random_proxy', return_value=None), \
+             patch('reNgine.tasks.fuzzing._fuzz_target_marker',
                    return_value='/tmp/no_marker.marker'), \
-             patch('reNgine.fuzzing_tasks.run_command'), \
+             patch('reNgine.tasks.fuzzing.run_command'), \
              patch('reNgine.tasks.http_crawl'), \
              patch('builtins.open', MagicMock()), \
-             patch('reNgine.fuzzing_tasks._flush_ffuf_batch'), \
-             patch('reNgine.fuzzing_tasks.activity_heartbeat_safe') as mock_heartbeat:
+             patch('reNgine.tasks.fuzzing._flush_ffuf_batch'), \
+             patch('reNgine.tasks.fuzzing.activity_heartbeat_safe') as mock_heartbeat:
             mock_ds.objects.create.return_value = MagicMock()
             mock_opsec.return_value.apply_stealth = MagicMock(
                 side_effect=lambda t, c, proxy=None: c)

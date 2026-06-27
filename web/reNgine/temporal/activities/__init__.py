@@ -1108,7 +1108,7 @@ def run_dir_file_fuzz_activity(ctx: dict) -> bool:
     Returns:
         bool: True on success.
     """
-    from reNgine.fuzzing_tasks import dir_file_fuzz
+    from reNgine.tasks.fuzzing import dir_file_fuzz
     activity.logger.info(f"[RunDirFileFuzzActivity] scan_id={ctx.get('scan_history_id')}")
     return _run_task(
         dir_file_fuzz,

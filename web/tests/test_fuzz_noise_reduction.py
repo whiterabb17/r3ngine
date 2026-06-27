@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 from django.test import TestCase
-from reNgine.fuzzing_tasks import filter_fuzz_batch_with_redis
+from reNgine.tasks.fuzzing import filter_fuzz_batch_with_redis
 
 class TestFuzzNoiseReduction(TestCase):
     def setUp(self):
@@ -60,7 +60,7 @@ class TestFuzzNoiseReduction(TestCase):
         self.mock_pipeline.execute.return_value = mock_pipeline_results
 
         # Call the filter function with max_repeat = 10
-        with patch('reNgine.fuzzing_tasks.Redis.from_url', return_value=self.mock_redis):
+        with patch('reNgine.tasks.fuzzing.Redis.from_url', return_value=self.mock_redis):
             filtered = filter_fuzz_batch_with_redis(
                 batch=batch,
                 scan_history_id=1,
@@ -89,7 +89,7 @@ class TestFuzzNoiseReduction(TestCase):
         # If Redis raises an exception, the function should return the original batch
         batch = [{'url': 'http://example.com/1', 'status': 200}]
         
-        with patch('reNgine.fuzzing_tasks.Redis.from_url', side_effect=Exception("Redis down")):
+        with patch('reNgine.tasks.fuzzing.Redis.from_url', side_effect=Exception("Redis down")):
             filtered = filter_fuzz_batch_with_redis(
                 batch=batch,
                 scan_history_id=1,
