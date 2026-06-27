@@ -51,3 +51,15 @@ def previous(some_list, current_index):
         return some_list[int(current_index) - 1] # access the previous element
     except:
         return '' # return empty string in case of exception
+
+
+from reNgine.common_func import categorize_secret_type as _categorize_secret_type
+
+
+@register.filter(name='categorize_secret')
+def categorize_secret(value):
+    """Return (category_name, color_key) tuple for a human-readable secret label.
+
+    Usage in template: {% with cat=leak.secret_type|categorize_secret %}{{ cat.0 }}{% endwith %}
+    """
+    return _categorize_secret_type(value)
