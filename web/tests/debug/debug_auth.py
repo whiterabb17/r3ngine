@@ -65,7 +65,7 @@ def mock_fetch(url, proxy_list, timeout=10):
 
 # Patching both the Endpoint filtering and the fetch function, and also http_crawl (to prevent background crawler calls)
 with patch.object(EndPoint.objects, 'filter', side_effect=custom_filter):
-    with patch('reNgine.auth_discovery_tasks._fetch_with_proxy_retry', side_effect=mock_fetch):
+    with patch('reNgine.tasks.auth_discovery._fetch_with_proxy_retry', side_effect=mock_fetch):
         with patch('reNgine.tasks.http_crawl') as mock_crawl:
             result = extract_auth_candidates(task, ctx={})
             print("http_crawl called:", mock_crawl.called)
