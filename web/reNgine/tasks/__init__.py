@@ -142,6 +142,8 @@ from reNgine.tasks.osint import (
     leaklookup, secret_scanning, spiderfoot_scan,
     persist_osint_item, _process_spiderfoot_batch,
     get_and_save_dork_results,
+    run_holehe, run_maigret, run_linkedint,
+    enrich_identities_task, db_conn_safe_wrapper, osint_orchestrator,
 )
 from reNgine.tasks.subdomain import (
     subdomain_discovery, amass_intel_discovery, save_imported_subdomains,
