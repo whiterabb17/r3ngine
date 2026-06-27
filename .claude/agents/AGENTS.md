@@ -24,11 +24,11 @@ Optional local aid:
 
 ## Navigation Rules
 - Prefer targeted reads over broad repo rescans.
-- For orchestration changes, start in `web/reNgine/temporal_workflows.py`.
-- For tool execution or parsing changes, inspect `web/reNgine/tasks.py` and `web/reNgine/temporal_activities.py`.
+- For orchestration changes, start in `web/reNgine/temporal/workflows/`.
+- For tool execution or parsing changes, inspect `web/reNgine/tasks/*` and `web/reNgine/temporal/activities/`.
 - For frontend changes, start in `frontend/src/features/` before shared components.
 - When tracing behavior, use:
-  `API view -> workflow starter in tasks.py -> workflow -> activity -> task function -> model write`
+  `API view -> workflow starter in tasks modules -> workflow -> activity -> task function -> model write`
 
 ## Theme Rules
 - Start theme work in `frontend/src/theme/`, `frontend/src/context/ThemeContext.tsx`, and the affected feature screen.
