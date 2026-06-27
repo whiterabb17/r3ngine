@@ -1179,12 +1179,13 @@ def save_semgrep_vulnerability_finding(result, ctx, base_dir, file_to_url_map=No
 		domain = Domain.objects.get(id=ctx.get('domain_id'))
 		
 		check_id = result.get('check_id', '')
+		# NOTE: clean_semgrep_check_id returns human-readable labels since v3.6.4; historical DB rows retain dotted-path format.
 		cleaned_check_id = clean_semgrep_check_id(check_id)
-		
+
 		source_file = path.replace(base_dir, '').lstrip('/')
 		mapped_url = file_to_url_map.get(os.path.basename(source_file)) if file_to_url_map else None
 		final_url = mapped_url if mapped_url else source_file
-		
+
 		vuln_data = {
 			'name': f"Semgrep: {cleaned_check_id}",
 			'description': extra.get('message', ''),
@@ -1216,12 +1217,13 @@ def save_semgrep_secret_finding(result, ctx, base_dir, file_to_url_map=None):
 		scan = ScanHistory.objects.get(id=ctx.get('scan_history_id'))
 		
 		check_id = result.get('check_id', '')
+		# NOTE: clean_semgrep_check_id returns human-readable labels since v3.6.4; historical DB rows retain dotted-path format.
 		cleaned_check_id = clean_semgrep_check_id(check_id)
-		
+
 		source_file = path.replace(base_dir, '').lstrip('/')
 		mapped_url = file_to_url_map.get(os.path.basename(source_file)) if file_to_url_map else None
 		final_url = mapped_url if mapped_url else source_file
-		
+
 		leak_data = {
 			'scan_history': scan,
 			'tool_name': 'Semgrep',

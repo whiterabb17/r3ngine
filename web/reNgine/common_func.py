@@ -2748,13 +2748,13 @@ def clean_semgrep_check_id(check_id: str) -> str:
 	return ' '.join(w.title() for w in words) if words else slug
 
 
-def categorize_secret_type(label: str) -> tuple:
+def categorize_secret_type(label: str) -> tuple[str, str]:
 	"""Return (category_name, color_key) for a human-readable secret label.
 
 	color_key matches the frontend colorKey: 'error' | 'warning' | 'info' | 'default'.
 	"""
 	lower = label.lower()
-	if any(kw in lower for kw in ('private key', 'rsa', 'ssh key')):
+	if any(kw in lower for kw in ('private key', 'rsa', 'ssh')):
 		return ('Private Key', 'error')
 	# Check oauth before 'auth' to avoid 'oauth' matching the credential 'auth' substring
 	if any(kw in lower for kw in ('oauth', 'access token')):
@@ -2776,6 +2776,7 @@ def parse_semgrep_result(result):
 		dict: Vulnerability data dictionary ready for saving.
 	"""
 	check_id = result.get('check_id', '')
+	# NOTE: clean_semgrep_check_id returns human-readable labels since v3.6.4; historical DB rows retain dotted-path format.
 	cleaned_check_id = clean_semgrep_check_id(check_id)
 	return {
 		'name': f"Semgrep: {cleaned_check_id}",

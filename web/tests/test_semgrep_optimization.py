@@ -150,6 +150,11 @@ class SemgrepLabelTests(TestCase):
 		self.assertEqual(cat, 'Private Key')
 		self.assertEqual(color, 'error')
 
+	def test_category_ssh_private_key(self):
+		cat, color = categorize_secret_type('SSH Private Key')
+		self.assertEqual(cat, 'Private Key')
+		self.assertEqual(color, 'error')
+
 	def test_category_fallback(self):
 		cat, color = categorize_secret_type('Something Unrecognised')
 		self.assertEqual(cat, 'Secret')
