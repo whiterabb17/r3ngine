@@ -1124,7 +1124,7 @@ def firewall_vpn_scan(self, ctx={}, description=None):
 				save_vulnerability(target_domain=self.domain, scan_history=self.scan, **vuln_data)
 	
 	# TLS deep audit (testssl.sh + crt.sh)
-	from reNgine.firewall_tasks import run_crt_sh, run_tls_deep_audit
+	from reNgine.tasks.firewall import run_crt_sh, run_tls_deep_audit
 	if config.get(ENABLE_TESTSSL, False):
 		run_tls_deep_audit(self, ctx, config)
 	if config.get(ENABLE_CRT_SH, False):
