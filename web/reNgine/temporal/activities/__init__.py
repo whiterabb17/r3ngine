@@ -2928,7 +2928,7 @@ def run_identity_infra_activity(scan_history_id: int, job_id: str = None) -> dic
     scan data. No tool subprocess — reads only from PostgreSQL.
     Must run before APME so ingest_identity_infra() has data to read.
     """
-    from reNgine.identity_tasks import run_identity_intel
+    from reNgine.tasks.identity import run_identity_intel
     from reNgine.utils.logger import format_exception_for_log
 
     logger.log_line("[SCAN]", "START", "task=identity_infra scan_id=%s" % scan_history_id)
