@@ -3589,7 +3589,7 @@ def run_bbot_activity(ctx: dict) -> bool:
 @activity.defn(name="RunParamDiscoveryActivity")
 def run_param_discovery_activity(ctx: dict) -> dict:
     """Run the Custom Parameter Discovery Engine (CPDE)."""
-    from reNgine.cpde_tasks import param_discovery
+    from reNgine.tasks.cpde import param_discovery
     from reNgine.definitions import SUCCESS_TASK
     scan_id = ctx.get('scan_history_id')
     activity.logger.info("[RunParamDiscoveryActivity] Starting CPDE for scan_id=%s", scan_id)
