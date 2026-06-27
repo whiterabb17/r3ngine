@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from startScan.models import ScanHistory, Subdomain, Technology, EndPoint
 from targetApp.models import Domain
-from scanEngine.models import EngineType
+from scanEngine.models import EngineType, Proxy
 
 
 def _make_proxy(scan, subdomain=None, subscan=None, yaml_config=None):
@@ -256,8 +256,9 @@ class TestWpscanGating(TestCase):
     # ------------------------------------------------------------------
 
     @patch('reNgine.tasks.wpscan.parse_wpscan_results')
+    @patch('reNgine.tasks.wpscan.time.sleep')
     @patch('reNgine.tasks.stream_command')
-    def test_wpscan_ssl_error_retry_and_success(self, mock_stream, mock_parse):
+    def test_wpscan_ssl_error_retry_and_success(self, mock_stream, mock_sleep, mock_parse):
         """WPScan retries on SSL metadata fetch error and then succeeds."""
         sub = self._make_subdomain('blog.wpscan-gate.example.com')
         self._add_tech(sub, 'WordPress')
@@ -305,10 +306,12 @@ class TestWpscanGating(TestCase):
         self.assertIn('https://blog.wpscan-gate.example.com', attempts[1])
 
     @patch('reNgine.tasks.wpscan.parse_wpscan_results')
+    @patch('reNgine.tasks.wpscan.time.sleep')
     @patch('reNgine.tasks.stream_command')
     @patch('reNgine.tasks.wpscan.get_random_proxy', return_value='127.0.0.1:8080')
-    def test_wpscan_ssl_error_max_retries_fail(self, mock_get_proxy, mock_stream, mock_parse):
+    def test_wpscan_ssl_error_max_retries_fail(self, mock_get_proxy, mock_stream, mock_sleep, mock_parse):
         """WPScan retries up to max attempts, and final attempt runs without proxy."""
+        Proxy.objects.create(use_proxy=True)
         sub = self._make_subdomain('blog.wpscan-gate.example.com')
         self._add_tech(sub, 'WordPress')
         proxy = _make_proxy(self.scan)
