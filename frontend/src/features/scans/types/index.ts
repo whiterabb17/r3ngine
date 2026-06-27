@@ -114,9 +114,14 @@ export interface ScanSummaryResponse {
 
 export interface SecretLeak {
   id: number;
-  leak_type: string;
-  leak_content: string;
-  found_in: string;
+  tool_name: string;
+  secret_type: string;
+  source_url: string;
+  match_content: string;
+  status: string;
+  scan_history: number;
+  subdomain: number | null;
+  discovered_date: string;
 }
 
 export interface OsintStaging {
