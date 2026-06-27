@@ -79,10 +79,9 @@ class ProxyValidationTests(TestCase):
         self.assertEqual(proxy.proxies, "http://alive.com:8080\nsocks5://foo:1080")
         self.assertFalse(remove_proxy_from_pool("http://dead.com:8080", proxy))
 
-    @patch('reNgine.common_func.remove_proxy_from_pool')
     @patch('reNgine.common_func.requests.Session')
     @patch('reNgine.common_func.random.shuffle', lambda proxies: None)
-    def test_get_random_proxy_removes_invalid_entries(self, mock_session, mock_remove):
+    def test_get_random_proxy_caches_invalid_entries(self, mock_session):
         # TestCase wraps in an uncommitted transaction, so worker-thread saves are
         # not visible in the main thread.  We verify the integration point (that
         # get_random_proxy calls remove_proxy_from_pool for dead entries) via a mock,
@@ -116,9 +115,10 @@ class ProxyValidationTests(TestCase):
         result = get_random_proxy()
 
         self.assertEqual(result, "http://work.com:8080")
-        # Verify that the dead proxy was passed to remove_proxy_from_pool
-        removed_urls = [call.args[0] for call in mock_remove.call_args_list]
-        self.assertIn("http://dead.com:8080", removed_urls)
+        
+        # Verify that the dead proxy was placed in the failure cache
+        from reNgine.common_func import _failed_proxy_cache
+        self.assertIn("http://dead.com:8080", _failed_proxy_cache)
 
     @patch('reNgine.common_func.requests.Session')
     @patch('reNgine.common_func.random.shuffle', lambda proxies: None)

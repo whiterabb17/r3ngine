@@ -1154,6 +1154,51 @@ def remove_proxy_from_pool(proxy_value, proxy_obj=None):
 
 	return removed
 
+def remove_proxies_from_pool(proxy_values, proxy_obj=None):
+	"""Remove multiple proxies from the persisted pool safely and idempotently.
+	"""
+	targets = []
+	for pv in proxy_values:
+		if is_proxy_recently_used(pv):
+			continue
+		target = _normalize_proxy_pool_line(pv)
+		if target:
+			targets.append(target)
+			
+	if not targets:
+		return False
+
+	from django.db import transaction
+
+	with _proxy_pool_lock:
+		with transaction.atomic():
+			if proxy_obj is None:
+				locked_obj = Proxy.objects.select_for_update().first()
+			else:
+				locked_obj = Proxy.objects.select_for_update().filter(pk=proxy_obj.pk).first()
+
+			if not locked_obj or not locked_obj.proxies:
+				return False
+
+			remaining_lines = []
+			removed_count = 0
+			for line in locked_obj.proxies.splitlines():
+				stripped = line.strip()
+				if not stripped:
+					continue
+				if _normalize_proxy_pool_line(stripped) in targets:
+					removed_count += 1
+					continue
+				remaining_lines.append(stripped)
+
+			if removed_count > 0:
+				locked_obj.proxies = '\n'.join(remaining_lines)
+				locked_obj.save(update_fields=['proxies'])
+				logger.warning('Removed %d invalid proxies from pool', removed_count)
+				return True
+				
+	return False
+
 
 
 
@@ -1294,16 +1339,15 @@ def get_random_proxy(http_only=False):
 	result_holder = [None]  # thread-safe single-slot via GIL
 
 	def _check(proxy_url):
-		"""Check a single proxy; mark it failed on the cache and prune from DB if dead."""
+		"""Check a single proxy; mark it failed on the cache."""
 		if check_proxy_robust(proxy_url, timeout=PROXY_VALIDATION_TIMEOUT, server_ip=server_ip):
 			return proxy_url
 		_failed_proxy_cache[proxy_url] = time.time()
-		if remove_proxy_from_pool(proxy_url, _proxy_obj):
-			logger.warning('Removed invalid proxy from pool: %s', proxy_url)
 		return None
 
 	with ThreadPoolExecutor(max_workers=max_workers) as pool:
 		future_map = {pool.submit(_check, p): p for p in candidates}
+		dead_proxies = []
 		for fut in as_completed(future_map):
 			try:
 				live = fut.result()
@@ -1316,6 +1360,11 @@ def get_random_proxy(http_only=False):
 					if other is not fut:
 						other.cancel()
 				break
+			else:
+				dead_proxies.append(future_map[fut])
+				
+	if dead_proxies:
+		remove_proxies_from_pool(dead_proxies, _proxy_obj)
 
 	if result_holder[0]:
 		mark_proxy_used(result_holder[0])
