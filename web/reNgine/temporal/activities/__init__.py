@@ -775,7 +775,7 @@ def run_dns_security_activity(ctx: dict) -> bool:
     Returns:
         bool: True on success.
     """
-    from reNgine.dns_tasks import dns_security
+    from reNgine.tasks.dns import dns_security
     activity.logger.info(f"[RunDNSSecurityActivity] scan_id={ctx.get('scan_history_id')}")
     return _run_task(
         dns_security,
