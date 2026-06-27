@@ -3211,7 +3211,7 @@ def get_enabled_plugins_for_tier_activity(params: dict) -> list:
 
 @activity.defn(name="RunDNSXActivity")
 def run_dnsx_activity(ctx: dict) -> bool:
-    from reNgine.recon_tasks import dnsx_scan
+    from reNgine.tasks.recon import dnsx_scan
     activity.logger.info("[RunDNSXActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         dnsx_scan, ctx, task_name='dnsx_scan', description='DNS Resolution (dnsx)',
@@ -3222,7 +3222,7 @@ def run_dnsx_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunWAFW00FActivity")
 def run_wafw00f_activity(ctx: dict) -> bool:
-    from reNgine.recon_tasks import wafw00f_scan
+    from reNgine.tasks.recon import wafw00f_scan
     activity.logger.info("[RunWAFW00FActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         wafw00f_scan, ctx, task_name='wafw00f_scan', description='WAF Detection (wafw00f)',
@@ -3232,7 +3232,7 @@ def run_wafw00f_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunFPingActivity")
 def run_fping_activity(ctx: dict) -> list:
-    from reNgine.recon_tasks import fping_scan
+    from reNgine.tasks.recon import fping_scan
     activity.logger.info("[RunFPingActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         fping_scan, ctx, task_name='fping_scan', description='ICMP Host Discovery (fping)',
@@ -3242,7 +3242,7 @@ def run_fping_activity(ctx: dict) -> list:
 
 @activity.defn(name="RunARPScanActivity")
 def run_arpscan_activity(ctx: dict) -> list:
-    from reNgine.recon_tasks import arpscan_scan
+    from reNgine.tasks.recon import arpscan_scan
     activity.logger.info("[RunARPScanActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         arpscan_scan, ctx, task_name='arpscan_scan', description='ARP Host Discovery (arp-scan)',
@@ -3252,7 +3252,7 @@ def run_arpscan_activity(ctx: dict) -> list:
 
 @activity.defn(name="RunMapCIDRActivity")
 def run_mapcidr_activity(ctx: dict) -> list:
-    from reNgine.recon_tasks import mapcidr_expand
+    from reNgine.tasks.recon import mapcidr_expand
     activity.logger.info("[RunMapCIDRActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         mapcidr_expand, ctx, task_name='mapcidr_expand', description='CIDR Expansion (mapcidr)',
@@ -3262,7 +3262,7 @@ def run_mapcidr_activity(ctx: dict) -> list:
 
 @activity.defn(name="RunSSHAuditActivity")
 def run_sshaudit_activity(ctx: dict) -> bool:
-    from reNgine.recon_tasks import sshaudit_scan
+    from reNgine.tasks.recon import sshaudit_scan
     activity.logger.info("[RunSSHAuditActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         sshaudit_scan, ctx, task_name='sshaudit_scan', description='SSH Audit (ssh-audit)',
@@ -3271,7 +3271,7 @@ def run_sshaudit_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunWPProbeActivity")
 def run_wpprobe_activity(ctx: dict) -> bool:
-    from reNgine.recon_tasks import wpprobe_scan
+    from reNgine.tasks.recon import wpprobe_scan
     activity.logger.info("[RunWPProbeActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         wpprobe_scan, ctx, task_name='wpprobe_scan',
@@ -3288,7 +3288,7 @@ def run_search_vulns_activity(ctx: dict) -> bool:
     from RunPortScanActivity. Called from _fan_out_search_vulns in
     MasterScanWorkflow Tier 2 after port scan returns.
     """
-    from reNgine.recon_tasks import search_vulns_scan
+    from reNgine.tasks.recon import search_vulns_scan
     activity.logger.info(
         "[RunSearchVulnsActivity] service=%s host=%s scan_id=%s",
         ctx.get('service'), ctx.get('host'), ctx.get('scan_history_id'),
@@ -3534,7 +3534,7 @@ def get_discovered_ips_activity(ctx: dict) -> list:
 
 @activity.defn(name="RunGetASNActivity")
 def run_getasn_activity(ctx: dict) -> bool:
-    from reNgine.recon_tasks import getasn_scan
+    from reNgine.tasks.recon import getasn_scan
     activity.logger.info("[RunGetASNActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         getasn_scan, ctx, task_name='getasn_scan',
@@ -3544,7 +3544,7 @@ def run_getasn_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunNetDetectActivity")
 def run_netdetect_activity(ctx: dict) -> list:
-    from reNgine.recon_tasks import netdetect_scan
+    from reNgine.tasks.recon import netdetect_scan
     scan_id = ctx.get('scan_history_id')
     logger.log_line("[TEMPORAL]", "START", "task=netdetect_scan scan_id=%s" % scan_id)
     activity.logger.info("[RunNetDetectActivity] scan_id=%s", scan_id)
@@ -3558,7 +3558,7 @@ def run_netdetect_activity(ctx: dict) -> list:
 
 @activity.defn(name="RunJsWhoisActivity")
 def run_jswhois_activity(ctx: dict) -> bool:
-    from reNgine.recon_tasks import jswhois_scan
+    from reNgine.tasks.recon import jswhois_scan
     activity.logger.info("[RunJsWhoisActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         jswhois_scan, ctx, task_name='jswhois_scan',
@@ -3568,7 +3568,7 @@ def run_jswhois_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunWhoisDomainActivity")
 def run_whoisdomain_activity(ctx: dict) -> bool:
-    from reNgine.recon_tasks import whoisdomain_scan
+    from reNgine.tasks.recon import whoisdomain_scan
     activity.logger.info("[RunWhoisDomainActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         whoisdomain_scan, ctx, task_name='whoisdomain_scan',
@@ -3578,7 +3578,7 @@ def run_whoisdomain_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunBBotActivity")
 def run_bbot_activity(ctx: dict) -> bool:
-    from reNgine.recon_tasks import bbot_scan
+    from reNgine.tasks.recon import bbot_scan
     activity.logger.info("[RunBBotActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         bbot_scan, ctx, task_name='bbot_scan',
