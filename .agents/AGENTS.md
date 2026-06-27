@@ -12,3 +12,6 @@
 ## Refactoring and Import Verification across Core and Plugins
 - When performing structural refactorings in the core `reNgine` codebase (such as splitting files, relocating modules, or renaming helper classes/functions), always search and verify imports in both the core `web/` repository and the `r3ngine-plugins/` repository.
 - Since plugins are maintained in a separate directory but run inside the core Django runtime context, outdated core imports in plugins will fail during runtime execution.
+
+## Background Tasks and Orchestration
+- **CRITICAL**: This project relies **exclusively** on Temporal for background tasks and orchestration. **Celery is NOT used anymore in this project.** Never assume, suggest, or attempt to use Celery syntax, patterns, or terminology. All task logs and statuses are managed through Temporal workers.
