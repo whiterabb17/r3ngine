@@ -1111,6 +1111,7 @@ def create_report(request, id):
     # Default True for backward-compat — older callers that don't send this param
     # should still include parameters (preserving prior behaviour).
     include_found_parameters = request.GET.get('include_found_parameters', 'True') == 'True'
+    include_secret_findings = request.GET.get('include_secret_findings', 'True') == 'True'
     comments = request.GET.get('comments', '')
 
     scan = get_object_or_404(ScanHistory, id=id)
@@ -1125,6 +1126,7 @@ def create_report(request, id):
             'include_attack_surface_map': include_attack_surface_map,
             'include_attack_paths': include_attack_paths,
             'include_found_parameters': include_found_parameters,
+            'include_secret_findings': include_secret_findings,
             'comments': comments
         }
     )

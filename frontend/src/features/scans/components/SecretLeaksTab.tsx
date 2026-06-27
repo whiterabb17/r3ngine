@@ -208,7 +208,7 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
                           <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {group.source_url}
                           </Typography>
-                          <IconButton size="small" component="a" href={group.source_url} target="_blank" sx={{ color: tokens.accent.primary, p: 0.5 }} onClick={e => e.stopPropagation()}>
+                          <IconButton size="small" component="a" href={/^https?:\/\//i.test(group.source_url) ? group.source_url : '#'} target="_blank" sx={{ color: tokens.accent.primary, p: 0.5 }} onClick={e => e.stopPropagation()}>
                             <ExternalLink size={12} />
                           </IconButton>
                         </Stack>

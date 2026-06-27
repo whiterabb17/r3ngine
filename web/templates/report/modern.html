@@ -1305,9 +1305,9 @@
                     {% if cat.1 == 'error' %}background:#fee2e2;color:#b91c1c;{% endif %}
                     {% if cat.1 == 'warning' %}background:#fef3c7;color:#92400e;{% endif %}
                     {% if cat.1 == 'info' %}background:#e0f2fe;color:#0369a1;{% endif %}
-                    {% endwith %}
                 ">
-                    {% with cat=group.display_name|categorize_secret %}{{ cat.0 }}{% endwith %}
+                    {{ cat.0 }}
+                    {% endwith %}
                 </span>
             </h4>
             <table style="width:100%; border-collapse:collapse; font-size:9pt;">
