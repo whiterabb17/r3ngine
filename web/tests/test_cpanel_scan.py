@@ -5,7 +5,7 @@ infrastructure — either by subdomain name pattern or by detected technology.
 All other subdomains must be skipped with a log message.
 
 These are unit tests; they call the task function directly with a mock
-self-proxy and patch stream_command to prevent real subprocess execution.
+self-proxy and patch run_command to prevent real subprocess execution.
 """
 
 from unittest.mock import MagicMock, patch
@@ -61,7 +61,7 @@ class TestCpanelScanGating(TestCase):
     # Skipped — no cPanel indicators
     # ------------------------------------------------------------------
 
-    @patch('reNgine.tasks.stream_command', return_value=iter([]))
+    @patch('reNgine.tasks.run_command', return_value=(0, ''))
     def test_skips_when_no_cpanel_subdomains(self, _mock_stream):
         """No cPanel-named or cPanel-tech subdomains → scan skipped without error."""
         self._make_subdomain('app.cpanel-gate.example.com')
@@ -74,7 +74,7 @@ class TestCpanelScanGating(TestCase):
         self.assertIsNone(result)
         _mock_stream.assert_not_called()
 
-    @patch('reNgine.tasks.stream_command', return_value=iter([]))
+    @patch('reNgine.tasks.run_command', return_value=(0, ''))
     def test_skips_when_disabled_in_config(self, _mock_stream):
         """run_cpanel2shell=False skips immediately regardless of subdomain names."""
         self._make_subdomain('cpanel.cpanel-gate.example.com')
@@ -93,7 +93,7 @@ class TestCpanelScanGating(TestCase):
     # ------------------------------------------------------------------
 
     @patch('reNgine.tasks.vulnerability.parse_cpanel_results')
-    @patch('reNgine.tasks.stream_command', return_value=iter([]))
+    @patch('reNgine.tasks.run_command', return_value=(0, ''))
     def test_runs_on_cpanel_subdomain_name(self, mock_stream, mock_parse):
         """Subdomain named cpanel.* triggers cPanel scan."""
         self._make_subdomain('cpanel.cpanel-gate.example.com')
@@ -104,13 +104,13 @@ class TestCpanelScanGating(TestCase):
         result = cpanel_scan(proxy)
 
         self.assertIsNotNone(result)
-        # stream_command called once — only the cpanel. subdomain
+        # run_command called once — only the cpanel. subdomain
         mock_stream.assert_called_once()
         call_args = mock_stream.call_args[0][0]
         self.assertIn('cpanel.cpanel-gate.example.com', call_args)
 
     @patch('reNgine.tasks.vulnerability.parse_cpanel_results')
-    @patch('reNgine.tasks.stream_command', return_value=iter([]))
+    @patch('reNgine.tasks.run_command', return_value=(0, ''))
     def test_runs_on_whm_subdomain_name(self, mock_stream, mock_parse):
         """Subdomain named whm.* also triggers cPanel scan."""
         self._make_subdomain('whm.cpanel-gate.example.com')
@@ -127,7 +127,7 @@ class TestCpanelScanGating(TestCase):
     # ------------------------------------------------------------------
 
     @patch('reNgine.tasks.vulnerability.parse_cpanel_results')
-    @patch('reNgine.tasks.stream_command', return_value=iter([]))
+    @patch('reNgine.tasks.run_command', return_value=(0, ''))
     def test_runs_when_cpanel_tech_detected(self, mock_stream, mock_parse):
         """Subdomain with cPanel technology triggers scan even without cpanel.* name."""
         sub = self._make_subdomain('hosting.cpanel-gate.example.com')
@@ -141,7 +141,7 @@ class TestCpanelScanGating(TestCase):
         mock_stream.assert_called_once()
 
     @patch('reNgine.tasks.vulnerability.parse_cpanel_results')
-    @patch('reNgine.tasks.stream_command', return_value=iter([]))
+    @patch('reNgine.tasks.run_command', return_value=(0, ''))
     def test_runs_when_whm_tech_detected(self, mock_stream, mock_parse):
         """Subdomain with WHM technology triggers scan."""
         sub = self._make_subdomain('manage.cpanel-gate.example.com')
@@ -158,7 +158,7 @@ class TestCpanelScanGating(TestCase):
     # Subscan mode
     # ------------------------------------------------------------------
 
-    @patch('reNgine.tasks.stream_command', return_value=iter([]))
+    @patch('reNgine.tasks.run_command', return_value=(0, ''))
     def test_subscan_non_cpanel_subdomain_skipped(self, mock_stream):
         """In subscan mode, a non-cPanel subdomain is skipped."""
         sub = self._make_subdomain('api.cpanel-gate.example.com')
@@ -172,7 +172,7 @@ class TestCpanelScanGating(TestCase):
         mock_stream.assert_not_called()
 
     @patch('reNgine.tasks.vulnerability.parse_cpanel_results')
-    @patch('reNgine.tasks.stream_command', return_value=iter([]))
+    @patch('reNgine.tasks.run_command', return_value=(0, ''))
     def test_subscan_cpanel_named_subdomain_runs(self, mock_stream, mock_parse):
         """In subscan mode, a cpanel.* named subdomain triggers the scan."""
         sub = self._make_subdomain('cpanel.cpanel-gate.example.com')
