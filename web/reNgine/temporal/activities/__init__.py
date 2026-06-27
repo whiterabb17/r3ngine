@@ -1540,7 +1540,7 @@ def run_wpscan_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunWPTaintScanActivity")
 def run_wptaint_scan_activity(ctx: dict) -> bool:
-    from reNgine.wptaint_tasks import wptaint_scan
+    from reNgine.tasks.wptaint import wptaint_scan
     activity.logger.info(f"[RunWPTaintScanActivity] scan_id={ctx.get('scan_history_id')}")
     return _run_task(wptaint_scan, ctx, task_name='wptaint_scan', description='WP Taint Scan', urls=ctx.get('urls', []))
 
