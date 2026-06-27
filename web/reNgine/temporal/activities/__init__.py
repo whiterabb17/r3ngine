@@ -3992,16 +3992,73 @@ def get_scan_final_status_activity(scan_id: int, task_succeeded: bool) -> int:
 # ---------------------------------------------------------------------------
 
 @activity.defn(name="RunEmailSecurityActivity")
-async def run_email_security_activity(ctx: dict) -> dict:
-    """Perform email/SMTP security checks (SPF, DMARC, DKIM, relay, STARTTLS, user enum)."""
-    import asyncio
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _run_email_security_sync, ctx)
+def run_email_security_activity(ctx: dict) -> dict:
+    """Perform email/SMTP security checks (SPF, DMARC, DKIM, relay, STARTTLS, user enum).
+
+    Runs as a sync activity so Temporal places it in a thread.  A background
+    heartbeat thread (copy_context pattern, same as _run_task) sends heartbeats
+    every 30 s so the heartbeat_timeout is never tripped by slow swaks / smtp-user-enum
+    subprocesses.
+    """
+    import contextvars
+    import time
+    import threading
+    from temporalio.exceptions import CancelledError as TemporalCancelledError
+
+    scan_id = ctx.get('scan_history_id')
+    try:
+        workflow_id = activity.info().workflow_id
+    except Exception:
+        workflow_id = '?'
+
+    _activity_ctx = contextvars.copy_context()
+    activity_running = True
+
+    def _heartbeat_loop():
+        def _do():
+            while activity_running:
+                try:
+                    activity.heartbeat('email_security running scan_id=%s' % scan_id)
+                    logger.log_line(
+                        "[TEMPORAL]", "HEARTBEAT",
+                        "activity_type=email_security workflow_id=%s scan_id=%s" % (workflow_id, scan_id),
+                    )
+                except TemporalCancelledError:
+                    logger.warning('[EMAIL_SECURITY] Temporal cancellation received for scan_id=%s', scan_id)
+                    return
+                except Exception as hb_err:
+                    logger.log_line(
+                        "[TEMPORAL]", "HEARTBEAT_FAIL",
+                        "activity_type=email_security workflow_id=%s scan_id=%s error=%s" % (
+                            workflow_id, scan_id, hb_err),
+                        level="warning",
+                    )
+                for _ in range(6):  # 6 × 5 s = 30 s, checks flag each tick
+                    if not activity_running:
+                        break
+                    time.sleep(5)
+        _activity_ctx.run(_do)
+
+    hb_thread = threading.Thread(target=_heartbeat_loop, daemon=True)
+    hb_thread.start()
+    try:
+        result = _run_email_security_sync(ctx)
+        logger.log_line("[TEMPORAL]", "COMPLETE", "task=email_security scan_id=%s" % scan_id)
+        return result
+    except Exception as exc:
+        logger.log_line(
+            "[TEMPORAL]", "ERROR",
+            "task=email_security scan_id=%s error=%s" % (scan_id, format_exception_for_log(exc)),
+            level="error",
+        )
+        raise
+    finally:
+        activity_running = False
+        hb_thread.join(timeout=5)
 
 
 def _run_email_security_sync(ctx: dict) -> dict:
-    """Synchronous implementation of email security checks, run via executor."""
-    from temporalio import activity
+    """Synchronous implementation of email security checks."""
     from reNgine.common_func import save_vulnerability
     from startScan.models import ScanHistory, Subdomain
     from reNgine.tasks.email_security import (
@@ -4064,9 +4121,6 @@ def _run_email_security_sync(ctx: dict) -> dict:
 
     for spoof in assess_spoofability(spf, dmarc):
         _vuln(spoof['name'], spoof['severity'], spoof['description'])
-
-    # Heartbeat after DNS checks block
-    activity.heartbeat()
 
     # SMTP tool checks — only run if SMTP ports were found during port scan
     try:
@@ -4146,9 +4200,6 @@ def _run_email_security_sync(ctx: dict) -> dict:
                         'Renew before it causes delivery failures.' % (host, port, days),
                         host_url,
                     )
-
-        # Heartbeat after processing each SMTP host
-        activity.heartbeat()
 
     enum_targets = list(checked_pairs)
     if enum_targets:

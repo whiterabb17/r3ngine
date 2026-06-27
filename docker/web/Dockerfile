@@ -268,6 +268,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     hping3 \
     wrk \
     postgresql-client-16 \
+    # Email security testing tools
+    swaks \
     # Network protocol enumeration tools
     onesixtyone \
     snmp \
@@ -485,7 +487,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install --upgrade pip setuptools wheel pyOpenSSL h8mail && \
-    pip3 install --upgrade fierce dirsearch meson ninja arjun inql netlas holehe
+    pip3 install --upgrade fierce dirsearch meson ninja arjun inql netlas holehe smtp-user-enum
 
 # Ensure pipx is available and install baddns
 RUN --mount=type=cache,target=/root/.cache/pip \
