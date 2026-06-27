@@ -60,7 +60,7 @@ def get_js_urls_from_results_dir(results_dir: str) -> list[str]:
         except OSError as exc:
             logger.error('[CPDE:js_collector] Failed to read %s: %s', filepath, exc)
 
-    logger.info(
+    logger.warning(
         '[CPDE:js_collector] Found %d unique JS URLs across %d url file(s)',
         len(js_urls), len(file_paths),
     )
@@ -114,6 +114,7 @@ def download_js_files(
     results: list[dict] = []
     
     def download_worker(url):
+        logger.warning("[CPDE:js_collector] Downloading file: %s", url)
         max_retries = min(5, len(available_proxies)) if use_proxy and available_proxies else 1
         if max_retries < 1:
             max_retries = 1
@@ -132,7 +133,7 @@ def download_js_files(
                     head = session.head(url, timeout=_JS_DOWNLOAD_TIMEOUT, proxies=proxies, allow_redirects=True, verify=False)
                     content_length = int(head.headers.get('Content-Length', 0))
                     if content_length > _MAX_JS_SIZE_BYTES:
-                        logger.info('[CPDE:js_collector] Skipping %s — too large (%d bytes)', url, content_length)
+                        logger.warning('[CPDE:js_collector] Skipping %s — too large (%d bytes)', url, content_length)
                         return None
                 except Exception:
                     pass
@@ -149,6 +150,7 @@ def download_js_files(
                     content = raw_content.decode('utf-8', errors='replace')
                     file_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()
                     
+                    logger.warning("[CPDE:js_collector] Download complete: %s", url)
                     return {
                         'url': url,
                         'content': content,
@@ -163,7 +165,8 @@ def download_js_files(
             except (requests.exceptions.ProxyError, requests.exceptions.ConnectionError, requests.exceptions.Timeout):
                 attempt += 1
                 current_proxy_index += 1
-            except Exception:
+            except Exception as e:
+                logger.debug(f"[CPDE:js_collector] JS downloader got non-network error for {url}: {e}")
                 break
         return None
 
@@ -172,7 +175,7 @@ def download_js_files(
         logger.warning("[CPDE:js_collector] Capping URLs from %d to %d to prevent stalling", len(js_urls), MAX_FILES)
         js_urls = list(js_urls)[:MAX_FILES]
 
-    logger.info("[CPDE:js_collector] Downloading %d JS files in parallel...", len(js_urls))
+    logger.warning("[CPDE:js_collector] Downloading %d JS files in parallel (max_workers=10)...", len(js_urls))
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(download_worker, url): url for url in js_urls}
         for future in as_completed(futures):
@@ -182,14 +185,13 @@ def download_js_files(
                     if res['hash'] not in seen_hashes:
                         seen_hashes.add(res['hash'])
                         results.append(res)
-                        logger.debug('[CPDE:js_collector] Downloaded %s (%d bytes)', res['url'], res['size'])
                     else:
                         logger.debug('[CPDE:js_collector] Skipping duplicate JS at %s', res['url'])
             except Exception as exc:
-                logger.warning('[CPDE:js_collector] Error in download thread: %s', exc)
+                logger.error('[CPDE:js_collector] Error in download thread: %s', exc)
 
-    logger.info(
-        '[CPDE:js_collector] Downloaded %d unique JS files from %d URLs',
+    logger.warning(
+        '[CPDE:js_collector] Download phase complete: %d / %d files downloaded successfully',
         len(results), len(js_urls),
     )
     return results
