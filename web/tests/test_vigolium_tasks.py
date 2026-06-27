@@ -61,7 +61,7 @@ class VigoliumParserTest(TestCase):
 
     def test_parse_finding_saves_vulnerability(self):
         """parse_vigolium_finding maps confirmed JSONL fields to save_vulnerability."""
-        from reNgine.vigolium_tasks import parse_vigolium_finding
+        from reNgine.tasks.vigolium import parse_vigolium_finding
 
         # Real schema from live vigolium output
         finding_data = {
@@ -89,7 +89,7 @@ class VigoliumParserTest(TestCase):
         subdomain = MagicMock()
         subdomain.name = 'www.example.com'
 
-        with patch('reNgine.vigolium_tasks.save_vulnerability') as mock_save:
+        with patch('reNgine.tasks.vigolium.save_vulnerability') as mock_save:
             parse_vigolium_finding(task, finding_data, subdomain)
             mock_save.assert_called_once()
             kwargs = mock_save.call_args[1]
@@ -102,7 +102,7 @@ class VigoliumParserTest(TestCase):
 
     def test_parse_finding_uses_url_when_matched_at_empty(self):
         """parse_vigolium_finding falls back to data.url when matched_at is empty."""
-        from reNgine.vigolium_tasks import parse_vigolium_finding
+        from reNgine.tasks.vigolium import parse_vigolium_finding
 
         finding_data = {
             'url': 'https://www.example.com/',
@@ -116,7 +116,7 @@ class VigoliumParserTest(TestCase):
         }
         task = self._make_task()
         subdomain = MagicMock()
-        with patch('reNgine.vigolium_tasks.save_vulnerability') as mock_save:
+        with patch('reNgine.tasks.vigolium.save_vulnerability') as mock_save:
             parse_vigolium_finding(task, finding_data, subdomain)
             mock_save.assert_called_once()
             kwargs = mock_save.call_args[1]
@@ -125,17 +125,17 @@ class VigoliumParserTest(TestCase):
 
     def test_parse_finding_skips_missing_name(self):
         """parse_vigolium_finding skips records with no module_name."""
-        from reNgine.vigolium_tasks import parse_vigolium_finding
+        from reNgine.tasks.vigolium import parse_vigolium_finding
 
         task = self._make_task()
         subdomain = MagicMock()
-        with patch('reNgine.vigolium_tasks.save_vulnerability') as mock_save:
+        with patch('reNgine.tasks.vigolium.save_vulnerability') as mock_save:
             parse_vigolium_finding(task, {'severity': 'high'}, subdomain)
             mock_save.assert_not_called()
 
     def test_parse_http_record_saves_endpoint(self):
         """parse_vigolium_http_record saves a discovered URL as an EndPoint."""
-        from reNgine.vigolium_tasks import parse_vigolium_http_record
+        from reNgine.tasks.vigolium import parse_vigolium_http_record
 
         record_data = {
             'url': 'https://www.example.com/login',
@@ -144,7 +144,7 @@ class VigoliumParserTest(TestCase):
             'status_code': 200,
         }
         task = self._make_task()
-        with patch('reNgine.vigolium_tasks.save_endpoint') as mock_save:
+        with patch('reNgine.tasks.vigolium.save_endpoint') as mock_save:
             parse_vigolium_http_record(task, record_data)
             mock_save.assert_called_once()
             kwargs = mock_save.call_args[1]
@@ -152,20 +152,20 @@ class VigoliumParserTest(TestCase):
 
     def test_parse_http_record_skips_missing_url(self):
         """parse_vigolium_http_record skips records with no url field."""
-        from reNgine.vigolium_tasks import parse_vigolium_http_record
+        from reNgine.tasks.vigolium import parse_vigolium_http_record
 
         task = self._make_task()
-        with patch('reNgine.vigolium_tasks.save_endpoint') as mock_save:
+        with patch('reNgine.tasks.vigolium.save_endpoint') as mock_save:
             parse_vigolium_http_record(task, {'method': 'GET'})
             mock_save.assert_not_called()
 
     @patch('reNgine.tasks.stream_command', return_value=iter([]))
-    @patch('reNgine.vigolium_tasks._iter_jsonl')
-    @patch('reNgine.vigolium_tasks.parse_vigolium_finding')
-    @patch('reNgine.vigolium_tasks.Subdomain.objects.filter')
+    @patch('reNgine.tasks.vigolium._iter_jsonl')
+    @patch('reNgine.tasks.vigolium.parse_vigolium_finding')
+    @patch('reNgine.tasks.vigolium.Subdomain.objects.filter')
     def test_run_vigolium_phase_in_file_deduplication(self, mock_subdomain_filter, mock_parse_finding, mock_iter_jsonl, mock_stream_command):
         """_run_vigolium_phase deduplicates findings with the same module, hostname, and URL."""
-        from reNgine.vigolium_tasks import _run_vigolium_phase
+        from reNgine.tasks.vigolium import _run_vigolium_phase
 
         # Mock the JSONL records returned
         mock_iter_jsonl.return_value = [
@@ -252,33 +252,33 @@ class VigoliumTaskGatingTest(TestCase):
         return task
 
     def test_vigolium_scan_skips_when_disabled(self):
-        from reNgine.vigolium_tasks import vigolium_scan
+        from reNgine.tasks.vigolium import vigolium_scan
         task = self._make_task(vuln_enabled=False)
-        with patch('reNgine.vigolium_tasks._run_vigolium_phase') as mock_run:
+        with patch('reNgine.tasks.vigolium._run_vigolium_phase') as mock_run:
             vigolium_scan(task)
             mock_run.assert_not_called()
 
     def test_vigolium_discovery_skips_when_disabled(self):
-        from reNgine.vigolium_tasks import vigolium_discovery
+        from reNgine.tasks.vigolium import vigolium_discovery
         task = self._make_task(discovery_enabled=False)
-        with patch('reNgine.vigolium_tasks._run_vigolium_phase') as mock_run:
+        with patch('reNgine.tasks.vigolium._run_vigolium_phase') as mock_run:
             vigolium_discovery(task)
             mock_run.assert_not_called()
 
     def test_vigolium_analysis_skips_when_disabled(self):
-        from reNgine.vigolium_tasks import vigolium_analysis
+        from reNgine.tasks.vigolium import vigolium_analysis
         task = self._make_task(analysis_enabled=False)
-        with patch('reNgine.vigolium_tasks._run_vigolium_phase') as mock_run:
+        with patch('reNgine.tasks.vigolium._run_vigolium_phase') as mock_run:
             vigolium_analysis(task)
             mock_run.assert_not_called()
 
     def test_vigolium_scan_calls_phase_runner(self):
-        from reNgine.vigolium_tasks import vigolium_scan
+        from reNgine.tasks.vigolium import vigolium_scan
         task = self._make_task(vuln_enabled=True)
-        with patch('reNgine.vigolium_tasks._run_vigolium_phase') as mock_run, \
+        with patch('reNgine.tasks.vigolium._run_vigolium_phase') as mock_run, \
              patch('os.makedirs'), \
              patch('builtins.open', mock_open()), \
-             patch('reNgine.vigolium_tasks.Subdomain'):
+             patch('reNgine.tasks.vigolium.Subdomain'):
             vigolium_scan(task, urls=['https://example.com'])
             mock_run.assert_called_once()
             # Verify the command includes the correct phases
@@ -338,7 +338,7 @@ class VigoliumAuditParserTest(TestCase):
 
     def test_audit_finding_saves_vulnerability(self):
         """_parse_vigolium_audit_finding saves a code finding without a subdomain."""
-        from reNgine.vigolium_tasks import _parse_vigolium_audit_finding
+        from reNgine.tasks.vigolium import _parse_vigolium_audit_finding
 
         finding_data = {
             'module_id': 'sqli-error',
@@ -352,8 +352,8 @@ class VigoliumAuditParserTest(TestCase):
             'cvss_score': 8.1,
         }
         task = self._make_task()
-        with patch('reNgine.vigolium_tasks.Subdomain') as mock_sub, \
-             patch('reNgine.vigolium_tasks.save_vulnerability') as mock_save:
+        with patch('reNgine.tasks.vigolium.Subdomain') as mock_sub, \
+             patch('reNgine.tasks.vigolium.save_vulnerability') as mock_save:
             mock_sub.objects.filter.return_value.first.return_value = None
             _parse_vigolium_audit_finding(task, finding_data)
             mock_save.assert_called_once()
@@ -366,16 +366,16 @@ class VigoliumAuditParserTest(TestCase):
 
     def test_audit_finding_skips_missing_name(self):
         """_parse_vigolium_audit_finding skips records with no module_name or name."""
-        from reNgine.vigolium_tasks import _parse_vigolium_audit_finding
+        from reNgine.tasks.vigolium import _parse_vigolium_audit_finding
 
         task = self._make_task()
-        with patch('reNgine.vigolium_tasks.save_vulnerability') as mock_save:
+        with patch('reNgine.tasks.vigolium.save_vulnerability') as mock_save:
             _parse_vigolium_audit_finding(task, {'severity': 'high'})
             mock_save.assert_not_called()
 
     def test_audit_finding_uses_matched_at_when_present(self):
         """_parse_vigolium_audit_finding uses matched_at[0] as URL when available."""
-        from reNgine.vigolium_tasks import _parse_vigolium_audit_finding
+        from reNgine.tasks.vigolium import _parse_vigolium_audit_finding
 
         finding_data = {
             'module_name': 'Hardcoded Secret',
@@ -384,8 +384,8 @@ class VigoliumAuditParserTest(TestCase):
             'hostname': '',
         }
         task = self._make_task()
-        with patch('reNgine.vigolium_tasks.Subdomain') as mock_sub, \
-             patch('reNgine.vigolium_tasks.save_vulnerability') as mock_save:
+        with patch('reNgine.tasks.vigolium.Subdomain') as mock_sub, \
+             patch('reNgine.tasks.vigolium.save_vulnerability') as mock_save:
             mock_sub.objects.filter.return_value.first.return_value = None
             _parse_vigolium_audit_finding(task, finding_data)
             mock_save.assert_called_once()
@@ -414,16 +414,16 @@ class VigoliumAuditTaskGatingTest(TestCase):
         return task
 
     def test_audit_skips_when_disabled(self):
-        from reNgine.vigolium_tasks import vigolium_audit_scan
+        from reNgine.tasks.vigolium import vigolium_audit_scan
         task = self._make_task(enabled=False)
-        with patch('reNgine.vigolium_tasks.subprocess') as mock_sp:
+        with patch('reNgine.tasks.vigolium.subprocess') as mock_sp:
             vigolium_audit_scan(task)
             mock_sp.run.assert_not_called()
 
     def test_audit_uses_piolium_driver_by_default(self):
-        from reNgine.vigolium_tasks import vigolium_audit_scan
+        from reNgine.tasks.vigolium import vigolium_audit_scan
         task = self._make_task(use_ai=False)
-        with patch('reNgine.vigolium_tasks.subprocess.run') as mock_run, \
+        with patch('reNgine.tasks.vigolium.subprocess.run') as mock_run, \
              patch('os.makedirs'), \
              patch('os.path.exists', return_value=False):
             mock_run.return_value = MagicMock(returncode=0, stderr='')
@@ -436,12 +436,12 @@ class VigoliumAuditTaskGatingTest(TestCase):
             self.assertIn('/tmp/src', cmd)
 
     def test_audit_uses_claude_when_anthropic_configured(self):
-        from reNgine.vigolium_tasks import vigolium_audit_scan
+        from reNgine.tasks.vigolium import vigolium_audit_scan
         task = self._make_task(use_ai=True)
         mock_llm = MagicMock()
         mock_llm.provider = 'anthropic'
         mock_llm.api_key = 'sk-ant-test-key'
-        with patch('reNgine.vigolium_tasks.subprocess.run') as mock_run, \
+        with patch('reNgine.tasks.vigolium.subprocess.run') as mock_run, \
              patch('os.makedirs'), \
              patch('os.path.exists', return_value=False), \
              patch('dashboard.models.LLMConfig') as mock_llm_cls:
@@ -459,9 +459,9 @@ class VigoliumAuditTaskGatingTest(TestCase):
             self.assertEqual(env_passed.get('VIGOLIUM_API_KEY'), 'sk-ant-test-key')
 
     def test_audit_falls_back_to_piolium_when_no_llm_config(self):
-        from reNgine.vigolium_tasks import vigolium_audit_scan
+        from reNgine.tasks.vigolium import vigolium_audit_scan
         task = self._make_task(use_ai=True)
-        with patch('reNgine.vigolium_tasks.subprocess.run') as mock_run, \
+        with patch('reNgine.tasks.vigolium.subprocess.run') as mock_run, \
              patch('os.makedirs'), \
              patch('os.path.exists', return_value=False), \
              patch('dashboard.models.LLMConfig') as mock_llm_cls:
@@ -482,11 +482,11 @@ class VigoliumAuditActivityTest(TestCase):
 class VigoliumAuditApiKeyMaskTest(TestCase):
     """API key must never appear in log output."""
 
-    @patch('reNgine.vigolium_tasks.subprocess.run')
+    @patch('reNgine.tasks.vigolium.subprocess.run')
     @patch('dashboard.models.LLMConfig')
     def test_api_key_not_logged(self, mock_llm_cls, mock_run):
         """Confirm the real API key does not appear in any log record."""
-        from reNgine.vigolium_tasks import vigolium_audit_scan
+        from reNgine.tasks.vigolium import vigolium_audit_scan
 
         mock_run.return_value = MagicMock(returncode=0, stderr='', stdout='')
         mock_llm = MagicMock()
@@ -509,7 +509,7 @@ class VigoliumAuditApiKeyMaskTest(TestCase):
             }
         }
 
-        with self.assertLogs('reNgine.vigolium_tasks', level='DEBUG') as log_ctx:
+        with self.assertLogs('reNgine.tasks.vigolium', level='DEBUG') as log_ctx:
             try:
                 vigolium_audit_scan(task, code_path='/tmp/fakecode', ctx={})
             except Exception:
@@ -522,10 +522,10 @@ class VigoliumAuditApiKeyMaskTest(TestCase):
 class VigoliumAuditApiKeyEnvTest(TestCase):
     """API key must be passed via env var, never as a CLI argument."""
 
-    @patch('reNgine.vigolium_tasks.subprocess.run')
+    @patch('reNgine.tasks.vigolium.subprocess.run')
     @patch('dashboard.models.LLMConfig')
     def test_api_key_not_in_cmd_args(self, mock_llm_cls, mock_run):
-        from reNgine.vigolium_tasks import vigolium_audit_scan
+        from reNgine.tasks.vigolium import vigolium_audit_scan
 
         mock_run.return_value = MagicMock(returncode=0, stderr='', stdout='')
         mock_llm = MagicMock()
@@ -581,9 +581,9 @@ class CodeScanWorkflowTimeoutCastTest(TestCase):
 class VigoliumAuditIntensityValidationTest(TestCase):
     """Unrecognised intensity values must be coerced to 'balanced'."""
 
-    @patch('reNgine.vigolium_tasks.subprocess.run')
+    @patch('reNgine.tasks.vigolium.subprocess.run')
     def test_invalid_intensity_coerced(self, mock_run):
-        from reNgine.vigolium_tasks import vigolium_audit_scan
+        from reNgine.tasks.vigolium import vigolium_audit_scan
 
         mock_run.return_value = MagicMock(returncode=0, stderr='', stdout='')
         task = MagicMock()
@@ -614,9 +614,9 @@ class VigoliumAuditIntensityValidationTest(TestCase):
 class VigoliumAuditNoSourceTest(TestCase):
     """When no source path is resolvable, must abort early — not fall back to /tmp/code."""
 
-    @patch('reNgine.vigolium_tasks.subprocess.run')
+    @patch('reNgine.tasks.vigolium.subprocess.run')
     def test_no_source_returns_early(self, mock_run):
-        from reNgine.vigolium_tasks import vigolium_audit_scan
+        from reNgine.tasks.vigolium import vigolium_audit_scan
 
         task = MagicMock()
         task.scan = MagicMock()

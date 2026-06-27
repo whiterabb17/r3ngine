@@ -1564,7 +1564,7 @@ def run_vigolium_scan_activity(ctx: dict) -> bool:
     Runs inside NucleiPlannerWorkflow at Tier 6 alongside Nuclei. Default-enabled
     via vulnerability_scan.run_vigolium: true in the engine YAML config.
     """
-    from reNgine.vigolium_tasks import vigolium_scan
+    from reNgine.tasks.vigolium import vigolium_scan
     activity.logger.info(f"[RunVigoliumScanActivity] scan_id={ctx.get('scan_history_id')}")
     return _run_task(vigolium_scan, ctx, task_name='vigolium_scan', description='Vigolium Vulnerability Scan')
 
@@ -1578,7 +1578,7 @@ def run_vigolium_harvest_activity(ctx: dict) -> bool:
     when no subdomains have been enumerated yet.
     Controlled by vigolium_harvest.run_vigolium_harvest in engine YAML.
     """
-    from reNgine.vigolium_tasks import vigolium_harvest
+    from reNgine.tasks.vigolium import vigolium_harvest
     activity.logger.info(f"[RunVigoliumHarvestActivity] scan_id={ctx.get('scan_history_id')}")
     return _run_task(vigolium_harvest, ctx, task_name='vigolium_harvest', description='Vigolium Passive Harvest')
 
@@ -1592,7 +1592,7 @@ def run_vigolium_discovery_activity(ctx: dict) -> bool:
     no subdomains are in the DB yet.
     Controlled by vigolium_discovery.run_vigolium_discovery in engine YAML.
     """
-    from reNgine.vigolium_tasks import vigolium_discovery
+    from reNgine.tasks.vigolium import vigolium_discovery
     activity.logger.info(f"[RunVigoliumDiscoveryActivity] scan_id={ctx.get('scan_history_id')}")
     return _run_task(vigolium_discovery, ctx, task_name='vigolium_discovery', description='Vigolium Endpoint Discovery')
 
@@ -1605,7 +1605,7 @@ def run_vigolium_analysis_activity(ctx: dict) -> bool:
     passive + active scanning suite and saves findings as Vulnerability records.
     Controlled by vigolium_analysis.run_vigolium_analysis in engine YAML.
     """
-    from reNgine.vigolium_tasks import vigolium_analysis
+    from reNgine.tasks.vigolium import vigolium_analysis
     activity.logger.info(f"[RunVigoliumAnalysisActivity] scan_id={ctx.get('scan_history_id')}")
     return _run_task(vigolium_analysis, ctx, task_name='vigolium_analysis', description='Vigolium Dynamic Analysis')
 
@@ -3659,7 +3659,7 @@ def run_trivy_secret_scan_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunVigoliumAuditActivity")
 def run_vigolium_audit_activity(ctx: dict) -> bool:
-    from reNgine.vigolium_tasks import vigolium_audit_scan
+    from reNgine.tasks.vigolium import vigolium_audit_scan
     activity.logger.info("[RunVigoliumAuditActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         vigolium_audit_scan, ctx, task_name='vigolium_audit_scan',
