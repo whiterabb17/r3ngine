@@ -267,7 +267,7 @@ def port_scan(self, hosts=[], ctx={}, description=None, prepare_only=False, pars
 
 	# Network protocol enumeration
 	if config.get(ENABLE_NETWORK_ENUM, False) and ports_data:
-		from reNgine.network_tasks import run_network_enum
+		from reNgine.tasks.network import run_network_enum
 		run_network_enum(self, ctx, ports_data)
 
 	return ports_data
