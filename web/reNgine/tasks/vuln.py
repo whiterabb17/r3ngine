@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import os
 import json
 import yaml
@@ -267,7 +267,8 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 	cmd += f' -irr'
 
 	# Apply OpSec stealth
-	proxy = get_random_proxy()
+	proxy_obj = Proxy.objects.first()
+	proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
 	opsec = get_opsec_manager()
 	cmd = opsec.apply_stealth('nuclei', cmd, proxy=proxy)
 	formatted_headers = ' '.join(f'-H "{header}"' for header in custom_headers)
@@ -535,7 +536,8 @@ def dalfox_xss_scan(self, urls=[], ctx={}, description=None):
 	send_status = notif.send_scan_status_notif if notif else False
 
 	# command builder
-	proxy = get_random_proxy()
+	proxy_obj = Proxy.objects.first()
+	proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
 	opsec = get_opsec_manager()
 	cmd = 'dalfox scan --no-color'
 	cmd += f' --only-poc v,r'
@@ -677,7 +679,8 @@ def crlfuzz_scan(self, urls=[], ctx={}, description=None):
 	send_status = notif.send_scan_status_notif if notif else False
 
 	# command builder
-	proxy = get_random_proxy()
+	proxy_obj = Proxy.objects.first()
+	proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
 	cmd = 'crlfuzz ' # -s
 	cmd += f' -l {input_path}'
 	cmd += f' -x {proxy}' if proxy else ''

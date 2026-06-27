@@ -11,6 +11,7 @@ from reNgine.common_func import (
     get_subdomain_from_url
 )
 from dashboard.models import WpScanAPIKey
+from scanEngine.models import Proxy
 from startScan.models import EndPoint, ScanHistory, Subdomain, Vulnerability
 
 logger = logging.getLogger(__name__)
@@ -391,7 +392,9 @@ def wpscan_scan(self, urls=[], ctx={}, description=None):
             # The final retry attempt must be executed without the proxy flag
             proxy = None
             if attempt < max_attempts - 1:
-                proxy = get_random_proxy()
+                proxy_obj = Proxy.objects.first()
+                if proxy_obj and proxy_obj.use_proxy:
+                    proxy = get_random_proxy()
             
             if proxy:
                 cmd += f" --proxy {proxy}"

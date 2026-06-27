@@ -12,6 +12,7 @@ from reNgine.common_func import (
 from reNgine.utils.task import save_email, save_employee
 from reNgine.utils.opsec import OpSecManager, ProxychainsWrapper
 from startScan.models import ScanHistory, Email, Employee
+from scanEngine.models import Proxy
 from reNgine.definitions import *
 from reNgine.osint.linkedin_intelligence import LinkedInScraper
 from dashboard.models import LinkedInCredentials, HunterIOAPIKey
@@ -25,7 +26,8 @@ def run_holehe(email_address, scan_history_id):
     """
     try:
         scan_history = ScanHistory.objects.get(pk=scan_history_id)
-        proxy = get_random_proxy()
+        proxy_obj = Proxy.objects.first()
+        proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
         
         cmd = ['holehe', email_address, '--only-used']
         
@@ -71,7 +73,8 @@ def run_maigret(username, scan_history_id):
         
         output_file = f"{results_dir}/{username}.json"
         
-        proxy = get_random_proxy()
+        proxy_obj = Proxy.objects.first()
+        proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
         
         cmd = ['maigret', username, '--json', output_file]
         
@@ -205,7 +208,8 @@ def enrich_identities_task(identity, identity_type, scan_history_id, ctx={}):
         cmd_gs = ['gosearch', '-u', username, '--no-false-positives', '-o', results_dir]
         
         # Check for proxy in ctx or global
-        proxy = get_random_proxy()
+        proxy_obj = Proxy.objects.first()
+        proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
         if proxy:
             cmd_gs = ['proxychains4', '-q'] + cmd_gs
             
