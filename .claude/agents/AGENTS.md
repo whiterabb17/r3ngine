@@ -16,9 +16,9 @@ Optional local aid:
 ## Mental Model
 - `frontend/`: React + Vite + TypeScript UI
 - `web/api/`: DRF API entrypoints
-- `web/reNgine/temporal_workflows.py`: durable orchestration
-- `web/reNgine/temporal_activities.py`: workflow-to-task bridge
-- `web/reNgine/tasks.py`: tool execution, parsing, persistence
+- `web/reNgine/temporal/workflows/`: durable orchestration
+- `web/reNgine/temporal/activities/`: workflow-to-task bridge
+- `web/reNgine/tasks/*`: tool execution, parsing, persistence
 - `web/startScan/`: scan persistence and result models
 - `web/apme/`: attack-path and graph intelligence
 
