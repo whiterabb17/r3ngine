@@ -3312,7 +3312,7 @@ def run_search_vulns_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunXURLFind3rActivity")
 def run_xurlfind3r_activity(ctx: dict) -> bool:
-    from reNgine.crawl_tasks import xurlfind3r_scan
+    from reNgine.tasks.crawl import xurlfind3r_scan
     activity.logger.info("[RunXURLFind3rActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         xurlfind3r_scan, ctx, task_name='xurlfind3r_scan',
@@ -3323,7 +3323,7 @@ def run_xurlfind3r_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunURLFinderActivity")
 def run_urlfinder_activity(ctx: dict) -> bool:
-    from reNgine.crawl_tasks import urlfinder_scan
+    from reNgine.tasks.crawl import urlfinder_scan
     activity.logger.info("[RunURLFinderActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         urlfinder_scan, ctx, task_name='urlfinder_scan',
@@ -3334,7 +3334,7 @@ def run_urlfinder_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunCariddiActivity")
 def run_cariddi_activity(ctx: dict) -> bool:
-    from reNgine.crawl_tasks import cariddi_scan
+    from reNgine.tasks.crawl import cariddi_scan
     activity.logger.info("[RunCariddiActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         cariddi_scan, ctx, task_name='cariddi_scan',
@@ -3345,7 +3345,7 @@ def run_cariddi_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunBUPActivity")
 def run_bup_activity(ctx: dict) -> bool:
-    from reNgine.crawl_tasks import bup_scan
+    from reNgine.tasks.crawl import bup_scan
     activity.logger.info("[RunBUPActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         bup_scan, ctx, task_name='bup_scan', description='4xx URL Bypass (bup)',
@@ -3355,7 +3355,7 @@ def run_bup_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunArjunActivity")
 def run_arjun_activity(ctx: dict) -> bool:
-    from reNgine.crawl_tasks import arjun_scan
+    from reNgine.tasks.crawl import arjun_scan
     activity.logger.info("[RunArjunActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         arjun_scan, ctx, task_name='arjun_scan',
@@ -3366,7 +3366,7 @@ def run_arjun_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunFeroxbusterActivity")
 def run_feroxbuster_activity(ctx: dict) -> bool:
-    from reNgine.crawl_tasks import feroxbuster_scan
+    from reNgine.tasks.crawl import feroxbuster_scan
     activity.logger.info("[RunFeroxbusterActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         feroxbuster_scan, ctx, task_name='feroxbuster_scan',
@@ -3417,7 +3417,7 @@ def get_discovered_services_activity(ctx: dict) -> list:
 @activity.defn(name="RunGFActivity")
 def run_gf_activity(ctx: dict) -> list:
     """Run gf URL pattern matching. Returns matched URL list directly (not bool)."""
-    from reNgine.crawl_tasks import gf_scan
+    from reNgine.tasks.crawl import gf_scan
     scan_id = ctx.get('scan_history_id')
     logger.log_line("[TEMPORAL]", "START", "task=gf_scan pattern=%s scan_id=%s" % (ctx.get('pattern', 'xss'), scan_id))
     activity.logger.info(
@@ -3446,7 +3446,7 @@ def run_gf_on_all_endpoints_activity(ctx: dict) -> dict:
     Returns a dict mapping pattern → number of endpoints updated.
     """
     from reNgine.definitions import DEFAULT_GF_PATTERNS, GF_PATTERNS, SUCCESS_TASK, FAILED_TASK
-    from reNgine.crawl_tasks import gf_scan
+    from reNgine.tasks.crawl import gf_scan
     from reNgine.utils.task import bulk_apply_gf_pattern_from_urls
     from startScan.models import EndPoint, ScanHistory
 
@@ -3671,7 +3671,7 @@ def run_vigolium_audit_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunURLParserActivity")
 def run_urlparser_activity(ctx: dict) -> bool:
-    from reNgine.crawl_tasks import urlparser_scan
+    from reNgine.tasks.crawl import urlparser_scan
     activity.logger.info("[RunURLParserActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         urlparser_scan, ctx, task_name='urlparser_scan',
@@ -3728,6 +3728,7 @@ def extract_auth_for_url_activity(ctx: dict) -> dict:
     import json
     import redis
     from django.conf import settings
+    from reNgine.tasks.auth_discovery import _extract_login_forms, _fetch_with_proxy_retry
     
     def push_auth_log(level, msg):
         logger.log_line("[AUTH_EXTRACT]", level, msg)

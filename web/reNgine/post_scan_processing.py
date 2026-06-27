@@ -331,7 +331,7 @@ def post_scan_processing(self, ctx: dict = {}, description: str = None):
 
     dispatched_subdomains: set = set()
     try:
-        from reNgine.api_tasks import run_graphql_cop
+        from reNgine.tasks.api import run_graphql_cop
         from reNgine.cpde.graphql_enricher import enrich_graphql_params
         from reNgine.utils.task import run_command
         from startScan.models import Subdomain, ScanActivity

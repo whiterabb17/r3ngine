@@ -23,13 +23,12 @@ class TestSpiderfootAPIKeyInjection(TestCase):
 			key_value="test_new_module"
 		)
 		
-	@patch('reNgine.tasks.osint.run_command')
+	@patch('reNgine.tasks.osint.subprocess.Popen')
 	@patch('reNgine.tasks.osint.os.path.exists')
-	def test_api_key_injection_existing_config(self, mock_exists, mock_run_command):
-		# Mock os.path.exists to return True for sf.py and spiderfoot.cfg
+	def test_api_key_injection_existing_config(self, mock_exists, mock_popen):
 		mock_exists.side_effect = lambda path: True
-		# run_command must return a (return_code, output) 2-tuple
-		mock_run_command.return_value = (0, "")
+		mock_popen.return_value.stdout = []
+		mock_popen.return_value.wait.return_value = 0
 		
 		# Define original configuration (newline separated)
 		original_config = (
@@ -47,6 +46,8 @@ class TestSpiderfootAPIKeyInjection(TestCase):
 			proxy.subscan_id = None
 			proxy.domain = MagicMock()
 			proxy.domain.name = "example.com"
+			proxy.engine = MagicMock()
+			proxy.engine.yaml_configuration = "{}"
 			
 			spiderfoot_scan(proxy, host="example.com", ctx={})
 			
@@ -64,12 +65,12 @@ class TestSpiderfootAPIKeyInjection(TestCase):
 			self.assertIn("sfp_someother:api_key=old\n", written_lines)
 			self.assertIn("sfp_abstractapi:companyenrichment_api_key=\n", written_lines)
 			
-	@patch('reNgine.tasks.osint.run_command')
+	@patch('reNgine.tasks.osint.subprocess.Popen')
 	@patch('reNgine.tasks.osint.os.path.exists')
-	def test_no_write_if_no_changes(self, mock_exists, mock_run_command):
+	def test_no_write_if_no_changes(self, mock_exists, mock_popen):
 		mock_exists.side_effect = lambda path: True
-		# run_command must return a (return_code, output) 2-tuple
-		mock_run_command.return_value = (0, "")
+		mock_popen.return_value.stdout = []
+		mock_popen.return_value.wait.return_value = 0
 		
 		original_config = (
 			"sfp_hunter:api_key=test_hunter_key_123\n"
@@ -86,6 +87,8 @@ class TestSpiderfootAPIKeyInjection(TestCase):
 			proxy.subscan_id = None
 			proxy.domain = MagicMock()
 			proxy.domain.name = "example.com"
+			proxy.engine = MagicMock()
+			proxy.engine.yaml_configuration = "{}"
 			
 			spiderfoot_scan(proxy, host="example.com", ctx={})
 			

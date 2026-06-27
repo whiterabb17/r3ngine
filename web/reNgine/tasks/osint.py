@@ -1864,7 +1864,11 @@ def enrich_identities_task(identity, identity_type, scan_history_id, ctx={}):
     identity_type: 'email' or 'employee'
     """
     from startScan.models import OsintStaging, Domain
-    scan_history = ScanHistory.objects.get(pk=scan_history_id)
+    try:
+        scan_history = ScanHistory.objects.get(pk=scan_history_id)
+    except ScanHistory.DoesNotExist:
+        logger.warning(f"ScanHistory {scan_history_id} not found in enrich_identities_task. Aborting.")
+        return
     domain = scan_history.domain
 
     results_dir = "%s/osint/gosearch" % scan_history.results_dir
