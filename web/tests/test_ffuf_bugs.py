@@ -40,7 +40,7 @@ def _prepare(yaml_config, ctx_override=None):
     with patch('reNgine.tasks.fuzzing.ensure_endpoints_crawled_and_execute',
                side_effect=_fake_ensure), \
          patch('os.path.exists', return_value=True), \
-         patch('reNgine.api_tasks.resolve_wordlist_path',
+         patch('reNgine.tasks.api.resolve_wordlist_path',
                side_effect=lambda cfg, path: path):
         return dir_file_fuzz(proxy, ctx=ctx, prepare_only=True)
 
@@ -223,7 +223,7 @@ class TestFfufUrlAndHeaderConstruction(TestCase):
         with patch('reNgine.tasks.fuzzing.ensure_endpoints_crawled_and_execute',
                    side_effect=_fake_ensure), \
              patch('os.path.exists', return_value=False), \
-             patch('reNgine.api_tasks.resolve_wordlist_path',
+             patch('reNgine.tasks.api.resolve_wordlist_path',
                    side_effect=lambda cfg, path: path), \
              patch('reNgine.tasks.fuzzing.stream_command', side_effect=fake_stream), \
              patch('reNgine.tasks.fuzzing.run_command', return_value=None), \
@@ -527,7 +527,7 @@ class TestFfufStreamingHeartbeat(TestCase):
         with patch('reNgine.tasks.fuzzing.ensure_endpoints_crawled_and_execute',
                    side_effect=_fake_ensure), \
              patch('os.path.exists', side_effect=lambda p: not p.endswith('.marker')), \
-             patch('reNgine.api_tasks.resolve_wordlist_path',
+             patch('reNgine.tasks.api.resolve_wordlist_path',
                    side_effect=lambda cfg, path: path), \
              patch('reNgine.tasks.fuzzing.stream_command', side_effect=fake_stream), \
              patch('reNgine.tasks.fuzzing.DirectoryScan') as mock_ds, \
@@ -548,14 +548,14 @@ class TestFfufStreamingHeartbeat(TestCase):
 
         return captured_kwargs
 
-    def test_stream_command_not_routed_to_executor(self):
-        """stream_command must be called with route_to_executor=False for ffuf."""
+    def test_stream_command_routed_to_executor(self):
+        """stream_command must be called with route_to_executor=True for ffuf (Go executor)."""
         captured_kwargs = self._run_with_fake_stream([])
 
         self.assertIn('route_to_executor', captured_kwargs,
                       "stream_command must receive route_to_executor kwarg")
-        self.assertFalse(captured_kwargs['route_to_executor'],
-                         "ffuf stream_command must have route_to_executor=False")
+        self.assertTrue(captured_kwargs['route_to_executor'],
+                        "ffuf stream_command must have route_to_executor=True")
 
     def test_heartbeat_fires_after_batch_fills(self):
         """activity_heartbeat_safe must be called after every 100 results."""
@@ -581,7 +581,7 @@ class TestFfufStreamingHeartbeat(TestCase):
         with patch('reNgine.tasks.fuzzing.ensure_endpoints_crawled_and_execute',
                    side_effect=_fake_ensure), \
              patch('os.path.exists', side_effect=lambda p: not p.endswith('.marker')), \
-             patch('reNgine.api_tasks.resolve_wordlist_path',
+             patch('reNgine.tasks.api.resolve_wordlist_path',
                    side_effect=lambda cfg, path: path), \
              patch('reNgine.tasks.fuzzing.stream_command', return_value=iter(fake_results)), \
              patch('reNgine.tasks.fuzzing.DirectoryScan') as mock_ds, \

@@ -96,7 +96,7 @@ def filter_fuzz_batch_with_redis(batch, scan_history_id, subdomain_id, max_repea
 				
 		return filtered_batch
 	except Exception as e:
-		logger.warning(f'Redis signature filtering failed for {tool_name} batch (fail-open): {e}')
+		logger.warning('Redis signature filtering failed for %s batch (fail-open): %s', tool_name, e)
 		return batch
 
 
@@ -429,7 +429,7 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 		for header in custom_headers_list:
 			ffuf_base_cmd += f" -H '{header}'"
 			if 'cookie' in header.lower() or 'authorization' in header.lower():
-				logger.warning(f'Authenticated FFUF fuzzing enabled via header: {header}')
+				logger.warning('Authenticated FFUF fuzzing enabled via header: %s', header)
 
 		dirsearch_base_cmd = None
 		if run_dirsearch:
@@ -452,7 +452,7 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 			for header in custom_headers_list:
 				dirsearch_base_cmd += f' -H "{header}"'
 				if 'cookie' in header.lower() or 'authorization' in header.lower():
-					logger.warning(f'Authenticated Dirsearch fuzzing enabled via header: {header}')
+					logger.warning('Authenticated Dirsearch fuzzing enabled via header: %s', header)
 		else:
 			logger.info('Dirsearch disabled via run_dirsearch config key. Only ffuf will run.')
 
@@ -515,7 +515,7 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 				for path in list(paths)[:10]:
 					urls.append(f"{base}{path}")
 
-		logger.warning(f'Fuzzing URLs: {urls}')
+		logger.warning('Fuzzing URLs: %s', urls)
 
 		if prepare_only:
 			return {
@@ -534,10 +534,10 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 		for target_url in urls:
 			done_marker = _fuzz_target_marker(self.results_dir, target_url)
 			if parse_only is None and os.path.exists(done_marker):
-				logger.info(f'Skipping already-fuzzed target (marker present): {target_url}')
+				logger.info('Skipping already-fuzzed target (marker present): %s', target_url)
 				continue
 
-			logger.warning(f'Fuzzing URL: {target_url}')
+			logger.warning('Fuzzing URL: %s', target_url)
 			url_parse = urlparse(target_url)
 			base_url = url_parse.scheme + '://' + url_parse.netloc
 			subdomain_name = get_subdomain_from_url(base_url)
@@ -587,8 +587,8 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 						if subdomain:
 							subdomain.directories.add(dirscan)
 
-						logger.info(f'Running ffuf for {base_url}')
-						logger.warning(f'ffuf command: {fcmd}')
+						logger.info('Running ffuf for %s', base_url)
+						logger.warning('ffuf command: %s', fcmd)
 
 						batch = []
 						if parse_only is not None and target_url in parse_only.get('ffuf', {}):
@@ -659,8 +659,8 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 						if subdomain:
 							subdomain.directories.add(dirscan_ds)
 
-						logger.info(f'Running dirsearch for {target_url}')
-						logger.warning(f'dirsearch command: {dcmd}')
+						logger.info('Running dirsearch for %s', target_url)
+						logger.warning('dirsearch command: %s', dcmd)
 
 						if parse_only is None:
 							_PROXY_ERROR = 'Error with the proxy:'
@@ -712,7 +712,7 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 							try:
 								with open(dirsearch_output, 'r') as f:
 									results_list = json.load(f).get('results', [])
-								logger.info(f'dirsearch collected {len(results_list)} results for {target_url}')
+								logger.info('dirsearch collected %d results for %s', len(results_list), target_url)
 								for i in range(0, len(results_list), _FUZZ_BATCH_SIZE):
 									subdomain_id = subdomain.id if subdomain else 0
 									_flush_ds_batch(
@@ -724,7 +724,7 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 										max_repeat=max_repeat,
 									)
 							except Exception as e:
-								logger.error(f'Error parsing dirsearch output for {base_url}: {e}')
+								logger.error('Error parsing dirsearch output for %s: %s', base_url, e)
 
 						if self.subscan:
 							from startScan.models import SubScan
@@ -753,8 +753,8 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 					if subdomain:
 						subdomain.directories.add(dirscan_ferox)
 
-					logger.info(f'Running feroxbuster for {target_url}')
-					logger.warning(f'feroxbuster command: {fcmd}')
+					logger.info('Running feroxbuster for %s', target_url)
+					logger.warning('feroxbuster command: %s', fcmd)
 
 					ferox_batch = []
 					if parse_only is not None and target_url in parse_only.get('ferox', {}):
@@ -801,7 +801,7 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 								if ferox_batch:
 									subdomain_id = subdomain.id if subdomain else 0
 									_flush_ferox_batch(ferox_batch, dirscan_ferox, ctx, scan, subdomain_id=subdomain_id, max_repeat=max_repeat)
-								logger.info(f'feroxbuster collected {ferox_total} results for {target_url}')
+								logger.info('feroxbuster collected %d results for %s', ferox_total, target_url)
 							except Exception as e:
 								logger.error('Error parsing feroxbuster output for %s: %s', target_url, e)
 							finally:
@@ -810,7 +810,7 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 								except FileNotFoundError:
 									pass
 						else:
-							logger.warning(f'feroxbuster output file not found for {target_url}')
+							logger.warning('feroxbuster output file not found for %s', target_url)
 
 					if self.subscan:
 						from startScan.models import SubScan
@@ -819,7 +819,7 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 					dirscan_ferox.save()
 
 				# Run ffuf first
-				logger.info(f'Starting sequential execution: ffuf first, then dirsearch for {target_url}')
+				logger.info('Starting sequential execution: ffuf first, then dirsearch for %s', target_url)
 				_run_ffuf()
 
 				if ffuf_exc[0]:
@@ -830,7 +830,7 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 					_run_dirsearch()
 
 				if ds_exc[0]:
-					logger.error(f'dirsearch failed for {target_url}: {ds_exc[0]}')
+					logger.error('dirsearch failed for %s: %s', target_url, ds_exc[0])
 
 				if run_feroxbuster and ferox_base_cmd:
 					_run_feroxbuster()
