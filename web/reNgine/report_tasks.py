@@ -18,9 +18,9 @@ from reNgine.charts import (
     generate_attack_surface_map
 )
 from reNgine.utils.graph import Neo4jManager
-from reNgine.common_func import get_interesting_subdomains
+from reNgine.common_func import get_interesting_subdomains, clean_semgrep_check_id, categorize_secret_type
 from reNgine.stress.report_builder import StressReportBuilder
-from startScan.models import ScanHistory, Subdomain, Vulnerability, IpAddress, ScanReport, StressTestResult, Parameter, EmailBreach
+from startScan.models import ScanHistory, Subdomain, Vulnerability, IpAddress, ScanReport, StressTestResult, Parameter, EmailBreach, SecretLeak
 from scanEngine.models import VulnerabilityReportSetting
 
 logger = logging.getLogger('reNgine.tasks')
@@ -215,6 +215,24 @@ def generate_report_task(report_id):
 
         email_breaches = EmailBreach.objects.filter(scan_history=scan).order_by('email_address', '-discovered_date')
 
+        include_secret_findings = params.get('include_secret_findings', True)
+
+        secret_leaks = SecretLeak.objects.none()
+        secret_findings_by_type = {}
+        if include_secret_findings:
+            secret_leaks = SecretLeak.objects.filter(scan_history=scan).order_by('secret_type', 'source_url')
+            bucket = defaultdict(list)
+            for leak in secret_leaks:
+                bucket[leak.secret_type].append(leak)
+            secret_findings_by_type = {
+                k: {
+                    'display_name': clean_semgrep_check_id(k),
+                    'category': categorize_secret_type(clean_semgrep_check_id(k)),
+                    'leaks': v,
+                }
+                for k, v in sorted(bucket.items())
+            }
+
         data = {
             'scan_object': scan,
             **vuln_ctx,
@@ -233,6 +251,9 @@ def generate_report_task(report_id):
             'parameters_count': parameters.count(),
             'email_breaches': email_breaches,
             'email_breaches_count': email_breaches.count(),
+            'secret_leaks': secret_leaks,
+            'secret_leaks_count': secret_leaks.count() if include_secret_findings else 0,
+            'secret_findings_by_type': secret_findings_by_type,
         }
 
         # Stress Test Aggregation for context

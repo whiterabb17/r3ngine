@@ -4,7 +4,7 @@ from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
 from reNgine.report_tasks import generate_report_task
-from startScan.models import Domain, ScanHistory, ScanReport, StressTestResult
+from startScan.models import Domain, ScanHistory, ScanReport, StressTestResult, SecretLeak
 from scanEngine.models import EngineType, VulnerabilityReportSetting, OpSec, Proxy
 
 class ReportGenerationTest(TransactionTestCase):
@@ -303,3 +303,56 @@ class VulnersReportGroupingTest(TestCase):
         from reNgine.report_tasks import build_vuln_context
         ctx = build_vuln_context(self.scan, ignore_info=False)
         self.assertEqual(ctx['all_vulnerabilities_count'], 4)  # 3 vulners + 1 nuclei
+
+
+class SecretLeaksReportContextTest(TransactionTestCase):
+    """Verify secret_leaks context vars are injected (or suppressed) correctly."""
+
+    def setUp(self):
+        from scanEngine.models import EngineType, OpSec, Proxy
+        OpSec.objects.get_or_create(id=1)
+        Proxy.objects.get_or_create(id=1)
+        from targetApp.models import Domain as TargetDomain
+        from dashboard.models import Project
+        self.project = Project.objects.create(
+            name='leak-rpt-proj',
+            slug='leak-rpt-proj',
+            insert_date=timezone.now(),
+        )
+        self.domain = TargetDomain.objects.create(
+            name='leaktest.example.com', project=self.project, insert_date=timezone.now()
+        )
+        self.engine = EngineType.objects.create(engine_name='Leak Test Engine')
+        self.scan = ScanHistory.objects.create(
+            domain=self.domain, scan_status=2,
+            start_scan_date=timezone.now(), scan_type=self.engine,
+        )
+        SecretLeak.objects.create(
+            scan_history=self.scan,
+            tool_name='Semgrep',
+            secret_type='AWS Access Key',
+            source_url='https://leaktest.example.com/app.js',
+            match_content='AWS_ACCESS_KEY_ID=AKIA...',
+        )
+
+    @patch('reNgine.report_tasks.HTML')
+    @patch('reNgine.report_tasks.CSS')
+    def _run_report(self, params, mock_css, mock_html):
+        mock_html.return_value.write_pdf.return_value = b'%PDF'
+        report_obj = ScanReport.objects.create(
+            scan_history=self.scan,
+            report_type='full',
+            report_template='modern',
+            params=params,
+        )
+        generate_report_task(report_obj.id)
+        report_obj.refresh_from_db()
+        return report_obj
+
+    def test_secret_leaks_included_by_default(self):
+        report = self._run_report({'include_secret_findings': True})
+        self.assertEqual(report.status, 2)
+
+    def test_secret_leaks_excluded_when_flag_false(self):
+        report = self._run_report({'include_secret_findings': False})
+        self.assertEqual(report.status, 2)
