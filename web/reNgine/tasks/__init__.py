@@ -62,7 +62,7 @@ from reNgine.utils.task import (
     bulk_persist_fetch_urls, bulk_apply_gf_pattern_from_file, activity_heartbeat_safe,
 )
 from reNgine.tasks.report import *
-from reNgine.wpscan_tasks import wpscan_scan
+from reNgine.tasks.wpscan import wpscan_scan
 from reNgine.parsers import SpiderFootBatchParser
 from reNgine.tech_mapping import get_nuclei_tags_from_techs
 try:

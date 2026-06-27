@@ -16,7 +16,7 @@ from reNgine.tasks.crawl import parse_curl_output
 from reNgine.tasks.notifications import send_hackerone_report
 from reNgine.tasks.acunetix import acunetix_scan
 from reNgine.tasks.vulnerability import cpanel_scan, react2shell_scan
-from reNgine.wpscan_tasks import wpscan_scan
+from reNgine.tasks.wpscan import wpscan_scan
 from reNgine.nuclei_batch_utils import build_tag_batches
 from startScan.models import *
 from scanEngine.models import Proxy

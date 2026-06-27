@@ -79,7 +79,7 @@ class TestWpscanGating(TestCase):
         self._make_subdomain('app.wpscan-gate.example.com')
         proxy = _make_proxy(self.scan)
 
-        from reNgine.wpscan_tasks import wpscan_scan
+        from reNgine.tasks.wpscan import wpscan_scan
         result = wpscan_scan(proxy, urls=[])
 
         self.assertIsNone(result)
@@ -94,7 +94,7 @@ class TestWpscanGating(TestCase):
             'vulnerability_scan': {'run_wpscan': False},
         })
 
-        from reNgine.wpscan_tasks import wpscan_scan
+        from reNgine.tasks.wpscan import wpscan_scan
         result = wpscan_scan(proxy, urls=[])
 
         self.assertIsNone(result)
@@ -104,7 +104,7 @@ class TestWpscanGating(TestCase):
     # Runs — WordPress detected via technology fingerprint
     # ------------------------------------------------------------------
 
-    @patch('reNgine.wpscan_tasks.parse_wpscan_results')
+    @patch('reNgine.tasks.wpscan.parse_wpscan_results')
     @patch('reNgine.tasks.stream_command', return_value=iter([]))
     def test_runs_when_wordpress_tech_detected(self, mock_stream, mock_parse):
         """Subdomain with WordPress technology triggers WPScan."""
@@ -112,7 +112,7 @@ class TestWpscanGating(TestCase):
         self._add_tech(sub, 'WordPress')
         proxy = _make_proxy(self.scan)
 
-        from reNgine.wpscan_tasks import wpscan_scan
+        from reNgine.tasks.wpscan import wpscan_scan
         result = wpscan_scan(proxy, urls=[])
 
         self.assertIsNotNone(result)
@@ -124,7 +124,7 @@ class TestWpscanGating(TestCase):
         self.assertIn('https://blog.wpscan-gate.example.com', cmd_scan)
         self.assertNotIn('https://blog.wpscan-gate.example.com/', cmd_scan)
 
-    @patch('reNgine.wpscan_tasks.parse_wpscan_results')
+    @patch('reNgine.tasks.wpscan.parse_wpscan_results')
     @patch('reNgine.tasks.stream_command', return_value=iter([]))
     def test_only_wordpress_subdomains_are_targeted(self, mock_stream, mock_parse):
         """Only WordPress-positive subdomains appear in scan targets."""
@@ -134,7 +134,7 @@ class TestWpscanGating(TestCase):
         self._make_subdomain('api.wpscan-gate.example.com')
         proxy = _make_proxy(self.scan)
 
-        from reNgine.wpscan_tasks import wpscan_scan
+        from reNgine.tasks.wpscan import wpscan_scan
         wpscan_scan(proxy, urls=[])
 
         # stream_command called 2 times (1. update, 2. target)
@@ -149,7 +149,7 @@ class TestWpscanGating(TestCase):
     # Runs — WordPress detected via wp-like paths in EndPoint
     # ------------------------------------------------------------------
 
-    @patch('reNgine.wpscan_tasks.parse_wpscan_results')
+    @patch('reNgine.tasks.wpscan.parse_wpscan_results')
     @patch('reNgine.tasks.stream_command', return_value=iter([]))
     def test_runs_when_wp_login_path_discovered(self, mock_stream, mock_parse):
         """Subdomain with /wp-login.php endpoint triggers WPScan even without tech tag."""
@@ -157,7 +157,7 @@ class TestWpscanGating(TestCase):
         self._make_endpoint(sub, 'wp-login.php')
         proxy = _make_proxy(self.scan)
 
-        from reNgine.wpscan_tasks import wpscan_scan
+        from reNgine.tasks.wpscan import wpscan_scan
         result = wpscan_scan(proxy, urls=[])
 
         self.assertIsNotNone(result)
@@ -168,7 +168,7 @@ class TestWpscanGating(TestCase):
         cmd_scan = mock_stream.call_args_list[1][0][0]
         self.assertIn('site.wpscan-gate.example.com', cmd_scan)
 
-    @patch('reNgine.wpscan_tasks.parse_wpscan_results')
+    @patch('reNgine.tasks.wpscan.parse_wpscan_results')
     @patch('reNgine.tasks.stream_command', return_value=iter([]))
     def test_runs_when_wp_admin_path_discovered(self, mock_stream, mock_parse):
         """Subdomain with /wp-admin endpoint triggers WPScan."""
@@ -176,7 +176,7 @@ class TestWpscanGating(TestCase):
         self._make_endpoint(sub, 'wp-admin/')
         proxy = _make_proxy(self.scan)
 
-        from reNgine.wpscan_tasks import wpscan_scan
+        from reNgine.tasks.wpscan import wpscan_scan
         result = wpscan_scan(proxy, urls=[])
 
         self.assertIsNotNone(result)
@@ -184,7 +184,7 @@ class TestWpscanGating(TestCase):
         cmd_scan = mock_stream.call_args_list[1][0][0]
         self.assertIn('site2.wpscan-gate.example.com', cmd_scan)
 
-    @patch('reNgine.wpscan_tasks.parse_wpscan_results')
+    @patch('reNgine.tasks.wpscan.parse_wpscan_results')
     @patch('reNgine.tasks.stream_command', return_value=iter([]))
     def test_runs_when_xmlrpc_path_discovered(self, mock_stream, mock_parse):
         """Subdomain with /xmlrpc.php endpoint triggers WPScan."""
@@ -192,7 +192,7 @@ class TestWpscanGating(TestCase):
         self._make_endpoint(sub, 'xmlrpc.php')
         proxy = _make_proxy(self.scan)
 
-        from reNgine.wpscan_tasks import wpscan_scan
+        from reNgine.tasks.wpscan import wpscan_scan
         result = wpscan_scan(proxy, urls=[])
 
         self.assertIsNotNone(result)
@@ -211,13 +211,13 @@ class TestWpscanGating(TestCase):
         subscan_mock = MagicMock()
         proxy = _make_proxy(self.scan, subdomain=sub, subscan=subscan_mock)
 
-        from reNgine.wpscan_tasks import wpscan_scan
+        from reNgine.tasks.wpscan import wpscan_scan
         result = wpscan_scan(proxy, urls=[])
 
         self.assertIsNone(result)
         mock_stream.assert_not_called()
 
-    @patch('reNgine.wpscan_tasks.parse_wpscan_results')
+    @patch('reNgine.tasks.wpscan.parse_wpscan_results')
     @patch('reNgine.tasks.stream_command', return_value=iter([]))
     def test_subscan_wordpress_subdomain_runs(self, mock_stream, mock_parse):
         """In subscan mode, a WordPress subdomain triggers the scan."""
@@ -226,7 +226,7 @@ class TestWpscanGating(TestCase):
         subscan_mock = MagicMock()
         proxy = _make_proxy(self.scan, subdomain=sub, subscan=subscan_mock)
 
-        from reNgine.wpscan_tasks import wpscan_scan
+        from reNgine.tasks.wpscan import wpscan_scan
         result = wpscan_scan(proxy, urls=[])
 
         self.assertIsNotNone(result)
@@ -234,7 +234,7 @@ class TestWpscanGating(TestCase):
         cmd_scan = mock_stream.call_args_list[1][0][0]
         self.assertIn('blog.wpscan-gate.example.com', cmd_scan)
 
-    @patch('reNgine.wpscan_tasks.parse_wpscan_results')
+    @patch('reNgine.tasks.wpscan.parse_wpscan_results')
     @patch('reNgine.tasks.stream_command', return_value=iter([]))
     def test_subscan_wp_path_endpoint_runs(self, mock_stream, mock_parse):
         """In subscan mode, a subdomain with a wp-like endpoint triggers the scan."""
@@ -243,7 +243,7 @@ class TestWpscanGating(TestCase):
         subscan_mock = MagicMock()
         proxy = _make_proxy(self.scan, subdomain=sub, subscan=subscan_mock)
 
-        from reNgine.wpscan_tasks import wpscan_scan
+        from reNgine.tasks.wpscan import wpscan_scan
         result = wpscan_scan(proxy, urls=[])
 
         self.assertIsNotNone(result)
@@ -255,7 +255,7 @@ class TestWpscanGating(TestCase):
     # WPScan Update & Retry Logic Tests
     # ------------------------------------------------------------------
 
-    @patch('reNgine.wpscan_tasks.parse_wpscan_results')
+    @patch('reNgine.tasks.wpscan.parse_wpscan_results')
     @patch('reNgine.tasks.stream_command')
     def test_wpscan_ssl_error_retry_and_success(self, mock_stream, mock_parse):
         """WPScan retries on SSL metadata fetch error and then succeeds."""
@@ -294,7 +294,7 @@ class TestWpscanGating(TestCase):
 
         mock_stream.side_effect = stream_command_side_effect
 
-        from reNgine.wpscan_tasks import wpscan_scan
+        from reNgine.tasks.wpscan import wpscan_scan
         wpscan_scan(proxy, urls=[])
 
         # Total calls to stream_command: 1 (update) + 2 (scans) = 3 calls
@@ -304,9 +304,9 @@ class TestWpscanGating(TestCase):
         self.assertNotIn('https://blog.wpscan-gate.example.com/', attempts[0])
         self.assertIn('https://blog.wpscan-gate.example.com', attempts[1])
 
-    @patch('reNgine.wpscan_tasks.parse_wpscan_results')
+    @patch('reNgine.tasks.wpscan.parse_wpscan_results')
     @patch('reNgine.tasks.stream_command')
-    @patch('reNgine.wpscan_tasks.get_random_proxy', return_value='127.0.0.1:8080')
+    @patch('reNgine.tasks.wpscan.get_random_proxy', return_value='127.0.0.1:8080')
     def test_wpscan_ssl_error_max_retries_fail(self, mock_get_proxy, mock_stream, mock_parse):
         """WPScan retries up to max attempts, and final attempt runs without proxy."""
         sub = self._make_subdomain('blog.wpscan-gate.example.com')
@@ -335,7 +335,7 @@ class TestWpscanGating(TestCase):
 
         mock_stream.side_effect = stream_command_side_effect
 
-        from reNgine.wpscan_tasks import wpscan_scan
+        from reNgine.tasks.wpscan import wpscan_scan
         wpscan_scan(proxy, urls=[])
 
         # Total calls to stream_command: 1 (update) + 4 (scans) = 5 calls
@@ -389,7 +389,7 @@ class TestWpscanParser(TestCase):
         }
         path = self._write_json(payload)
         try:
-            from reNgine.wpscan_tasks import parse_wpscan_results
+            from reNgine.tasks.wpscan import parse_wpscan_results
             parse_wpscan_results(self.proxy, path, self.subdomain)
         finally:
             os.unlink(path)
@@ -414,7 +414,7 @@ class TestWpscanParser(TestCase):
         }
         path = self._write_json(payload)
         try:
-            from reNgine.wpscan_tasks import parse_wpscan_results
+            from reNgine.tasks.wpscan import parse_wpscan_results
             parse_wpscan_results(self.proxy, path, self.subdomain)
         finally:
             os.unlink(path)
@@ -438,7 +438,7 @@ class TestWpscanParser(TestCase):
         }
         path = self._write_json(payload)
         try:
-            from reNgine.wpscan_tasks import parse_wpscan_results
+            from reNgine.tasks.wpscan import parse_wpscan_results
             parse_wpscan_results(self.proxy, path, self.subdomain)
         finally:
             os.unlink(path)
@@ -458,7 +458,7 @@ class TestWpscanParser(TestCase):
         }
         path = self._write_json(payload)
         try:
-            from reNgine.wpscan_tasks import parse_wpscan_results
+            from reNgine.tasks.wpscan import parse_wpscan_results
             parse_wpscan_results(self.proxy, path, self.subdomain)
         finally:
             os.unlink(path)
@@ -478,7 +478,7 @@ class TestWpscanParser(TestCase):
         }
         path = self._write_json(payload)
         try:
-            from reNgine.wpscan_tasks import parse_wpscan_results
+            from reNgine.tasks.wpscan import parse_wpscan_results
             parse_wpscan_results(self.proxy, path, self.subdomain)
         finally:
             os.unlink(path)
@@ -503,7 +503,7 @@ class TestWpscanParser(TestCase):
         }
         path = self._write_json(payload)
         try:
-            from reNgine.wpscan_tasks import parse_wpscan_results
+            from reNgine.tasks.wpscan import parse_wpscan_results
             parse_wpscan_results(self.proxy, path, self.subdomain)
         finally:
             os.unlink(path)
@@ -530,7 +530,7 @@ class TestWpscanParser(TestCase):
         }
         path = self._write_json(payload)
         try:
-            from reNgine.wpscan_tasks import parse_wpscan_results
+            from reNgine.tasks.wpscan import parse_wpscan_results
             parse_wpscan_results(self.proxy, path, self.subdomain)
         finally:
             os.unlink(path)
@@ -562,7 +562,7 @@ class TestWpscanParser(TestCase):
         }
         path = self._write_json(payload)
         try:
-            from reNgine.wpscan_tasks import parse_wpscan_results
+            from reNgine.tasks.wpscan import parse_wpscan_results
             parse_wpscan_results(self.proxy, path, self.subdomain)
         finally:
             os.unlink(path)
@@ -594,7 +594,7 @@ class TestWpscanParser(TestCase):
         }
         path = self._write_json(payload)
         try:
-            from reNgine.wpscan_tasks import parse_wpscan_results
+            from reNgine.tasks.wpscan import parse_wpscan_results
             parse_wpscan_results(self.proxy, path, self.subdomain)
         finally:
             os.unlink(path)
@@ -625,7 +625,7 @@ class TestWpscanParser(TestCase):
         }
         path = self._write_json(payload)
         try:
-            from reNgine.wpscan_tasks import parse_wpscan_results
+            from reNgine.tasks.wpscan import parse_wpscan_results
             parse_wpscan_results(self.proxy, path, self.subdomain)
         finally:
             os.unlink(path)
@@ -655,7 +655,7 @@ class TestWpscanParser(TestCase):
         }
         path = self._write_json(payload)
         try:
-            from reNgine.wpscan_tasks import parse_wpscan_results
+            from reNgine.tasks.wpscan import parse_wpscan_results
             parse_wpscan_results(self.proxy, path, self.subdomain)
         finally:
             os.unlink(path)
@@ -709,7 +709,7 @@ class TestWpscanParser(TestCase):
         }
         path = self._write_json(payload)
         try:
-            from reNgine.wpscan_tasks import parse_wpscan_results
+            from reNgine.tasks.wpscan import parse_wpscan_results
             parse_wpscan_results(self.proxy, path, self.subdomain)
         finally:
             os.unlink(path)

@@ -1534,7 +1534,7 @@ def run_cpanel_scan_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunWpscanActivity")
 def run_wpscan_activity(ctx: dict) -> bool:
-    from reNgine.wpscan_tasks import wpscan_scan
+    from reNgine.tasks.wpscan import wpscan_scan
     activity.logger.info(f"[RunWpscanActivity] scan_id={ctx.get('scan_history_id')}")
     return _run_task(wpscan_scan, ctx, task_name='wpscan_scan', description='WPScan', urls=ctx.get('urls', []))
 
