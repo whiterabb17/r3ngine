@@ -25,7 +25,7 @@ from django.utils import timezone
 
 from reNgine.scan_context import ScanContext
 from reNgine.utils.logger import get_module_logger, format_exception_for_log
-from reNgine.auth_discovery_tasks import (
+from reNgine.tasks.auth_discovery import (
     _fetch_with_proxy_retry,
     _extract_login_forms,
 )

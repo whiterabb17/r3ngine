@@ -17,7 +17,7 @@ from reNgine.utils.task import (
 from reNgine.tasks.persistence import process_httpx_response, extract_httpx_url, remove_duplicate_endpoints, save_ip_address
 from reNgine.utils.graph import Neo4jManager
 from reNgine.tasks.api import run_jwt_scan, run_graphql_cop
-from reNgine.auth_discovery_tasks import extract_auth_candidates
+from reNgine.tasks.auth_discovery import extract_auth_candidates
 from reNgine.cpde.graphql_enricher import enrich_graphql_params
 from startScan.models import *
 
@@ -829,7 +829,7 @@ def web_api_discovery(self, urls=[], ctx={}, description=None):
 
 	# Trigger Intelligent Auth Candidate Extraction
 	logger.warning('[WEB_API] Running auth candidate extraction...')
-	from reNgine.auth_discovery_tasks import extract_auth_candidates
+	from reNgine.tasks.auth_discovery import extract_auth_candidates
 	extract_auth_candidates(self, ctx=ctx)
 	logger.warning('[WEB_API] Web API Discovery complete | scan_id=%s', scan_id)
 

@@ -9,7 +9,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "reNgine.settings")
 django.setup()
 
 from startScan.models import ScanHistory
-from reNgine.auth_discovery_tasks import extract_auth_candidates
+from reNgine.tasks.auth_discovery import extract_auth_candidates
 
 scan = ScanHistory.objects.get(id=3)
 class MockTask:
