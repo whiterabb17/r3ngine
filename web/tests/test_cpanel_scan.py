@@ -68,7 +68,7 @@ class TestCpanelScanGating(TestCase):
         self._make_subdomain('api.cpanel-gate.example.com')
         proxy = _make_proxy(self.scan)
 
-        from reNgine.vulnerability_tasks import cpanel_scan
+        from reNgine.tasks.vulnerability import cpanel_scan
         result = cpanel_scan(proxy)
 
         self.assertIsNone(result)
@@ -82,7 +82,7 @@ class TestCpanelScanGating(TestCase):
             'vulnerability_scan': {'cpanel_scanner': {'run_cpanel2shell': False}},
         })
 
-        from reNgine.vulnerability_tasks import cpanel_scan
+        from reNgine.tasks.vulnerability import cpanel_scan
         result = cpanel_scan(proxy)
 
         self.assertIsNone(result)
@@ -92,7 +92,7 @@ class TestCpanelScanGating(TestCase):
     # Runs — cPanel detected by subdomain name
     # ------------------------------------------------------------------
 
-    @patch('reNgine.vulnerability_tasks.parse_cpanel_results')
+    @patch('reNgine.tasks.vulnerability.parse_cpanel_results')
     @patch('reNgine.tasks.stream_command', return_value=iter([]))
     def test_runs_on_cpanel_subdomain_name(self, mock_stream, mock_parse):
         """Subdomain named cpanel.* triggers cPanel scan."""
@@ -100,7 +100,7 @@ class TestCpanelScanGating(TestCase):
         self._make_subdomain('app.cpanel-gate.example.com')  # should be excluded
         proxy = _make_proxy(self.scan)
 
-        from reNgine.vulnerability_tasks import cpanel_scan
+        from reNgine.tasks.vulnerability import cpanel_scan
         result = cpanel_scan(proxy)
 
         self.assertIsNotNone(result)
@@ -109,14 +109,14 @@ class TestCpanelScanGating(TestCase):
         call_args = mock_stream.call_args[0][0]
         self.assertIn('cpanel.cpanel-gate.example.com', call_args)
 
-    @patch('reNgine.vulnerability_tasks.parse_cpanel_results')
+    @patch('reNgine.tasks.vulnerability.parse_cpanel_results')
     @patch('reNgine.tasks.stream_command', return_value=iter([]))
     def test_runs_on_whm_subdomain_name(self, mock_stream, mock_parse):
         """Subdomain named whm.* also triggers cPanel scan."""
         self._make_subdomain('whm.cpanel-gate.example.com')
         proxy = _make_proxy(self.scan)
 
-        from reNgine.vulnerability_tasks import cpanel_scan
+        from reNgine.tasks.vulnerability import cpanel_scan
         result = cpanel_scan(proxy)
 
         self.assertIsNotNone(result)
@@ -126,7 +126,7 @@ class TestCpanelScanGating(TestCase):
     # Runs — cPanel detected via technology fingerprint
     # ------------------------------------------------------------------
 
-    @patch('reNgine.vulnerability_tasks.parse_cpanel_results')
+    @patch('reNgine.tasks.vulnerability.parse_cpanel_results')
     @patch('reNgine.tasks.stream_command', return_value=iter([]))
     def test_runs_when_cpanel_tech_detected(self, mock_stream, mock_parse):
         """Subdomain with cPanel technology triggers scan even without cpanel.* name."""
@@ -134,13 +134,13 @@ class TestCpanelScanGating(TestCase):
         self._add_tech(sub, 'cPanel')
         proxy = _make_proxy(self.scan)
 
-        from reNgine.vulnerability_tasks import cpanel_scan
+        from reNgine.tasks.vulnerability import cpanel_scan
         result = cpanel_scan(proxy)
 
         self.assertIsNotNone(result)
         mock_stream.assert_called_once()
 
-    @patch('reNgine.vulnerability_tasks.parse_cpanel_results')
+    @patch('reNgine.tasks.vulnerability.parse_cpanel_results')
     @patch('reNgine.tasks.stream_command', return_value=iter([]))
     def test_runs_when_whm_tech_detected(self, mock_stream, mock_parse):
         """Subdomain with WHM technology triggers scan."""
@@ -148,7 +148,7 @@ class TestCpanelScanGating(TestCase):
         self._add_tech(sub, 'WHM')
         proxy = _make_proxy(self.scan)
 
-        from reNgine.vulnerability_tasks import cpanel_scan
+        from reNgine.tasks.vulnerability import cpanel_scan
         result = cpanel_scan(proxy)
 
         self.assertIsNotNone(result)
@@ -165,13 +165,13 @@ class TestCpanelScanGating(TestCase):
         subscan_mock = MagicMock()
         proxy = _make_proxy(self.scan, subdomain=sub, subscan=subscan_mock)
 
-        from reNgine.vulnerability_tasks import cpanel_scan
+        from reNgine.tasks.vulnerability import cpanel_scan
         result = cpanel_scan(proxy)
 
         self.assertIsNone(result)
         mock_stream.assert_not_called()
 
-    @patch('reNgine.vulnerability_tasks.parse_cpanel_results')
+    @patch('reNgine.tasks.vulnerability.parse_cpanel_results')
     @patch('reNgine.tasks.stream_command', return_value=iter([]))
     def test_subscan_cpanel_named_subdomain_runs(self, mock_stream, mock_parse):
         """In subscan mode, a cpanel.* named subdomain triggers the scan."""
@@ -179,7 +179,7 @@ class TestCpanelScanGating(TestCase):
         subscan_mock = MagicMock()
         proxy = _make_proxy(self.scan, subdomain=sub, subscan=subscan_mock)
 
-        from reNgine.vulnerability_tasks import cpanel_scan
+        from reNgine.tasks.vulnerability import cpanel_scan
         result = cpanel_scan(proxy)
 
         self.assertIsNotNone(result)

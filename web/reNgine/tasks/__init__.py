@@ -51,7 +51,7 @@ from targetApp.models import Domain, normalize_manual_subdomains
 from dashboard.models import AcunetixAPIKey, HunterIOAPIKey
 from reNgine.tasks.monitor import *
 from reNgine.utils.graph import Neo4jManager
-from reNgine.vulnerability_tasks import *
+from reNgine.tasks.vulnerability import *
 from reNgine.fuzzing_tasks import *
 from reNgine.stress.testing_tasks import run_stress_testing
 from reNgine.osint_tasks import *

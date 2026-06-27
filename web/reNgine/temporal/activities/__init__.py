@@ -1528,7 +1528,7 @@ def run_acunetix_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunCpanelScanActivity")
 def run_cpanel_scan_activity(ctx: dict) -> bool:
-    from reNgine.vulnerability_tasks import cpanel_scan
+    from reNgine.tasks.vulnerability import cpanel_scan
     activity.logger.info(f"[RunCpanelScanActivity] scan_id={ctx.get('scan_history_id')}")
     return _run_task(cpanel_scan, ctx, task_name='cpanel_scan', description='cPanel Vulnerability Scan')
 
@@ -1546,7 +1546,7 @@ def run_wptaint_scan_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunReact2ShellActivity")
 def run_react2shell_activity(ctx: dict) -> bool:
-    from reNgine.vulnerability_tasks import react2shell_scan
+    from reNgine.tasks.vulnerability import react2shell_scan
     activity.logger.info(f"[RunReact2ShellActivity] scan_id={ctx.get('scan_history_id')}")
     return _run_task(react2shell_scan, ctx, task_name='react2shell_scan', description='React Vulnerability Scan')
 
@@ -3639,7 +3639,7 @@ def run_param_discovery_activity(ctx: dict) -> dict:
 
 @activity.defn(name="RunGrypeScanActivity")
 def run_grype_scan_activity(ctx: dict) -> bool:
-    from reNgine.vulnerability_tasks import grype_scan
+    from reNgine.tasks.vulnerability import grype_scan
     activity.logger.info("[RunGrypeScanActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         grype_scan, ctx, task_name='grype_scan',
@@ -3649,7 +3649,7 @@ def run_grype_scan_activity(ctx: dict) -> bool:
 
 @activity.defn(name="RunTrivySecretScanActivity")
 def run_trivy_secret_scan_activity(ctx: dict) -> bool:
-    from reNgine.vulnerability_tasks import trivy_secret_scan
+    from reNgine.tasks.vulnerability import trivy_secret_scan
     activity.logger.info("[RunTrivySecretScanActivity] scan_id=%s", ctx.get('scan_history_id'))
     return _run_task(
         trivy_secret_scan, ctx, task_name='trivy_secret_scan',

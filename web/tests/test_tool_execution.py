@@ -8,7 +8,7 @@ from django.utils import timezone
 # Mocking Celery tasks and project imports
 from reNgine.tasks import *
 from reNgine.wpscan_tasks import *
-from reNgine.vulnerability_tasks import *
+from reNgine.tasks.vulnerability import *
 from reNgine.osint_tasks import *
 from startScan.models import *
 from targetApp.models import *
