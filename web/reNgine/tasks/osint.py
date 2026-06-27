@@ -27,7 +27,7 @@ from reNgine.tasks.persistence import (
 )
 from reNgine.tasks.geo import query_whois
 from reNgine.tasks.scan_init import finish_osint, finish_osint_discovery
-from reNgine.certificate_tasks import run_certificate_intel
+from reNgine.tasks.certificate import run_certificate_intel
 from reNgine.tasks.vuln import semgrep_scan
 from reNgine.osint_tasks import osint_orchestrator
 from reNgine.osint.hibp_scraper import check_hibp_for_email_task

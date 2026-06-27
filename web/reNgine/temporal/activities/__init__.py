@@ -2879,7 +2879,7 @@ def run_certificate_intel_activity(scan_history_id: int, job_id: str = None) -> 
     """
     import os
     import re
-    from reNgine.certificate_tasks import run_certificate_intel
+    from reNgine.tasks.certificate import run_certificate_intel
     from reNgine.settings import RENGINE_RESULTS
     from reNgine.utils.logger import format_exception_for_log
 
@@ -3875,7 +3875,7 @@ def resync_certificate_activity(cert_id: int, job_id: str = None) -> dict:
     Called by CertificateResyncWorkflow in response to mobile resync requests.
     Idempotent: re-running produces at most one DB write per tlsx result line.
     """
-    from reNgine.certificate_tasks import resync_single_certificate
+    from reNgine.tasks.certificate import resync_single_certificate
     from reNgine.utils.logger import format_exception_for_log
 
     logger.log_line("[SCAN]", "START", "task=cert_resync cert_id=%s" % cert_id)
