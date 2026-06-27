@@ -2673,43 +2673,97 @@ def is_valid_nmap_command(cmd):
 # Vulnerability Parsing Utils  #
 #------------------------------#
 
-def clean_semgrep_check_id(check_id):
-	"""Cleans and normalizes Semgrep check IDs by removing rule path prefixes
-	and deduplicating repeating suffixes.
+_SEMGREP_LABEL_MAP = {
+	'detected-facebook-oauth': 'Facebook OAuth Token',
+	'detected-github-oauth': 'GitHub OAuth Token',
+	'detected-google-oauth': 'Google OAuth Token',
+	'detected-twitter-oauth': 'Twitter OAuth Token',
+	'generic-api-key': 'Generic API Key',
+	'detected-aws-account-id': 'AWS Account ID',
+	'detected-aws-access-key': 'AWS Access Key',
+	'detected-aws-secret-key': 'AWS Secret Key',
+	'stripe-secret-key': 'Stripe Secret Key',
+	'stripe-publishable-key': 'Stripe Publishable Key',
+	'slack-api-token': 'Slack API Token',
+	'slack-webhook-url': 'Slack Webhook URL',
+	'github-personal-access-token': 'GitHub Personal Access Token',
+	'gitlab-personal-access-token': 'GitLab Personal Access Token',
+	'sendgrid-api-token': 'SendGrid API Token',
+	'twilio-api-key': 'Twilio API Key',
+	'jwt-token': 'JWT Token',
+	'private-key': 'Private Key',
+	'rsa-private-key': 'RSA Private Key',
+	'ssh-private-key': 'SSH Private Key',
+	'password-in-url': 'Password in URL',
+	'hardcoded-password': 'Hardcoded Password',
+	'hardcoded-secret': 'Hardcoded Secret',
+	'basic-auth-credentials': 'Basic Auth Credentials',
+	'firebase-api-key': 'Firebase API Key',
+	'heroku-api-key': 'Heroku API Key',
+	'mailchimp-api-key': 'Mailchimp API Key',
+	'paypal-braintree-access-token': 'PayPal Braintree Token',
+	'shopify-access-token': 'Shopify Access Token',
+	'twitch-api-key': 'Twitch API Key',
+}
 
-	Args:
-		check_id (str): The raw check ID from Semgrep results.
+_SEMGREP_STRIP_PREFIXES = {
+	'usr', 'src', 'github', 'semgrep_rules', 'rules', 'app', 'p',
+	'semgrep_vulnerability_temp', 'semgrep_secret_temp', 'temp',
+}
 
-	Returns:
-		str: The cleaned check ID.
+_SEMGREP_BOILERPLATE = {'detected', 'generic', 'security'}
+
+
+def clean_semgrep_check_id(check_id: str) -> str:
+	"""Return a human-readable label for a Semgrep check ID.
+
+	Lookup table takes priority; unknown slugs are smart-parsed.
 	"""
 	if not check_id:
 		return ""
-	
-	# Split by dots to inspect path components
+
 	parts = check_id.split('.')
-	
-	# Common prefixes or folders to discard from check IDs
-	prefixes_to_strip = {
-		'usr', 'src', 'github', 'semgrep_rules', 'rules', 'app', 'p',
-		'semgrep_vulnerability_temp', 'semgrep_secret_temp', 'temp'
-	}
-	
-	# Filter out initial path elements that match our strip list
+
+	# Strip leading path prefixes
 	start_idx = 0
-	while start_idx < len(parts) and parts[start_idx].lower() in prefixes_to_strip:
+	while start_idx < len(parts) and parts[start_idx].lower() in _SEMGREP_STRIP_PREFIXES:
 		start_idx += 1
-		
 	clean_parts = parts[start_idx:]
-	
+
 	if not clean_parts:
 		return check_id
-		
-	# Deduplicate repeating suffix (e.g. ['react-dangerouslysetinnerhtml', 'react-dangerouslysetinnerhtml'])
+
+	# Deduplicate repeating suffix
 	if len(clean_parts) >= 2 and clean_parts[-1].lower() == clean_parts[-2].lower():
 		clean_parts.pop()
-		
-	return '.'.join(clean_parts)
+
+	# Try lookup against the final dot-segment
+	slug = clean_parts[-1]
+	if slug in _SEMGREP_LABEL_MAP:
+		return _SEMGREP_LABEL_MAP[slug]
+
+	# Smart-parse fallback: title-case words, drop boilerplate
+	words = slug.replace('-', ' ').split()
+	words = [w for w in words if w.lower() not in _SEMGREP_BOILERPLATE]
+	return ' '.join(w.title() for w in words) if words else slug
+
+
+def categorize_secret_type(label: str) -> tuple:
+	"""Return (category_name, color_key) for a human-readable secret label.
+
+	color_key matches the frontend colorKey: 'error' | 'warning' | 'info' | 'default'.
+	"""
+	lower = label.lower()
+	if any(kw in lower for kw in ('private key', 'rsa', 'ssh key')):
+		return ('Private Key', 'error')
+	# Check oauth before 'auth' to avoid 'oauth' matching the credential 'auth' substring
+	if any(kw in lower for kw in ('oauth', 'access token')):
+		return ('OAuth Token', 'info')
+	if any(kw in lower for kw in ('password', 'credential', 'auth', 'login', 'hardcoded secret')):
+		return ('Credential', 'error')
+	if any(kw in lower for kw in ('api key', 'api token', 'access key')):
+		return ('API Key', 'warning')
+	return ('Secret', 'warning')
 
 
 def parse_semgrep_result(result):
