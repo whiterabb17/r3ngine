@@ -61,6 +61,7 @@ export const ScanReportModal: React.FC<ScanReportModalProps> = ({ open, onClose,
   const [includeAttackSurface, setIncludeAttackSurface] = useState(false);
   const [includeAttackPaths, setIncludeAttackPaths] = useState(false);
   const [includeFoundParameters, setIncludeFoundParameters] = useState(false);
+  const [includeSecretFindings, setIncludeSecretFindings] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<string | null>(null);
   const [reportUrl, setReportUrl] = useState<string | null>(null);
@@ -120,6 +121,7 @@ export const ScanReportModal: React.FC<ScanReportModalProps> = ({ open, onClose,
         include_attack_surface_map: includeAttackSurface ? 'True' : 'False',
         include_attack_paths: includeAttackPaths ? 'True' : 'False',
         include_found_parameters: includeFoundParameters ? 'True' : 'False',
+        include_secret_findings: includeSecretFindings ? 'True' : 'False',
         download: download ? 'True' : 'False',
         comments: comments
       });
@@ -326,6 +328,26 @@ export const ScanReportModal: React.FC<ScanReportModalProps> = ({ open, onClose,
                       />
                     }
                     label={<Typography sx={{ color: tokens.text.secondary, fontSize: '0.8rem', fontWeight: 600 }}>Ignore Information Vulnerabilities</Typography>}
+                  />
+
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={includeSecretFindings}
+                        onChange={(e) => setIncludeSecretFindings(e.target.checked)}
+                        sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography sx={{ color: tokens.text.secondary, fontSize: '0.8rem', fontWeight: 600 }}>
+                          Include Secret & Credential Findings
+                        </Typography>
+                        <Typography sx={{ color: alpha(tokens.accent.primary, 0.4), fontSize: '0.65rem' }}>
+                          Semgrep static analysis results
+                        </Typography>
+                      </Box>
+                    }
                   />
 
                   <FormControlLabel
