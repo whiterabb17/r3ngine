@@ -3047,7 +3047,7 @@ def fetch_proxies_activity(limit: int, job_id: str) -> None:
 
 
 @activity.defn(name="CheckScanQueueStatusActivity")
-def check_scan_queue_status_activity(scan_id: int, queue_type: str) -> bool:
+async def check_scan_queue_status_activity(scan_id: int, queue_type: str) -> bool:
     """Check if the given scan is allowed to proceed based on the queue settings.
     
     Args:
@@ -3058,16 +3058,76 @@ def check_scan_queue_status_activity(scan_id: int, queue_type: str) -> bool:
         bool: True if it is allowed to proceed (queueing is off, or it's first in line).
     """
     from dashboard.models import UserPreferences
-    from startScan.models import ScanHistory, SubScan
+    from startScan.models import ScanHistory, SubScan, TemporalWorkflowExecution
     from reNgine.definitions import RUNNING_TASK
+    from reNgine.temporal_client import TemporalClientProvider
+    from temporalio.client import WorkflowExecutionStatus
+    from temporalio.service import RPCError, RPCStatusCode
 
     logger.log_line("[TEMPORAL]", "START", "task=check_scan_queue_status scan_id=%s queue_type=%s" % (scan_id, queue_type))
     activity.logger.info(f"[CheckScanQueueStatusActivity] scan_id={scan_id} queue_type={queue_type}")
+    
     # Get the global queuing setting. If there are multiple preferences, just grab the first.
     prefs = UserPreferences.objects.first()
     if not prefs or not getattr(prefs, 'enable_scan_queueing', False):
         logger.log_line("[TEMPORAL]", "COMPLETE", "task=check_scan_queue_status scan_id=%s result=allowed_queueing_off" % scan_id)
         return True
+
+    client = await TemporalClientProvider.get_client()
+
+    async def is_workflow_active(sid, qtype):
+        """Check if scan sid is actually running in Temporal."""
+        if qtype == "main":
+            scan_obj = ScanHistory.objects.filter(id=sid).first()
+            if not scan_obj:
+                return False
+            latest_exec = (
+                TemporalWorkflowExecution.objects
+                .filter(scan_history=scan_obj, status='RUNNING')
+                .order_by('-started_at')
+                .first()
+            )
+            workflow_id = latest_exec.workflow_id if latest_exec else (scan_obj.workflow_ids[-1] if scan_obj.workflow_ids else None)
+        else:
+            scan_obj = SubScan.objects.filter(id=sid).first()
+            if not scan_obj:
+                return False
+            latest_exec = (
+                TemporalWorkflowExecution.objects
+                .filter(subscan=scan_obj, status='RUNNING')
+                .order_by('-started_at')
+                .first()
+            )
+            workflow_id = latest_exec.workflow_id if latest_exec else (scan_obj.workflow_ids[-1] if getattr(scan_obj, 'workflow_ids', None) else None)
+            
+        if not workflow_id:
+            return False
+
+        try:
+            handle = client.get_workflow_handle(workflow_id)
+            desc = await handle.describe()
+            if desc.status == WorkflowExecutionStatus.RUNNING:
+                return True
+            
+            # Master finished — check whether its nuclei child is still running (for main scans)
+            if qtype == "main":
+                nuclei_id = f"{workflow_id}-nuclei"
+                try:
+                    nuclei_handle = client.get_workflow_handle(nuclei_id)
+                    nuclei_desc = await nuclei_handle.describe()
+                    if nuclei_desc.status == WorkflowExecutionStatus.RUNNING:
+                        return True
+                except RPCError as e:
+                    if e.status != RPCStatusCode.NOT_FOUND:
+                        return True  # server error — assume running
+            return False
+        except RPCError as e:
+            if e.status == RPCStatusCode.NOT_FOUND:
+                return False  # workflow genuinely absent
+            return True  # Any other RPC error means Temporal itself is unavailable — assume running
+        except Exception as e:
+            activity.logger.warning(f"[CheckScanQueueStatusActivity] Unexpected error checking workflow '{workflow_id}': {e}")
+            return True
 
     result = True
     if queue_type == "main":
@@ -3075,13 +3135,29 @@ def check_scan_queue_status_activity(scan_id: int, queue_type: str) -> bool:
         running_scans = list(ScanHistory.objects.filter(
             scan_status=RUNNING_TASK
         ).order_by('start_scan_date').values_list('id', flat=True))
-        result = not running_scans or running_scans[0] == scan_id
+        
+        active_scans = []
+        for sid in running_scans:
+            if await is_workflow_active(sid, "main"):
+                active_scans.append(sid)
+            else:
+                activity.logger.warning(f"[CheckScanQueueStatusActivity] Ignoring DEAD scan {sid} blocking queue.")
+        
+        result = not active_scans or active_scans[0] == scan_id
 
     elif queue_type == "subscan":
         running_subscans = list(SubScan.objects.filter(
             status=RUNNING_TASK
         ).order_by('start_scan_date').values_list('id', flat=True))
-        result = not running_subscans or running_subscans[0] == scan_id
+        
+        active_subscans = []
+        for sid in running_subscans:
+            if await is_workflow_active(sid, "subscan"):
+                active_subscans.append(sid)
+            else:
+                activity.logger.warning(f"[CheckScanQueueStatusActivity] Ignoring DEAD subscan {sid} blocking queue.")
+
+        result = not active_subscans or active_subscans[0] == scan_id
 
     logger.log_line("[TEMPORAL]", "COMPLETE", "task=check_scan_queue_status scan_id=%s queue_type=%s allowed=%s" % (scan_id, queue_type, result))
     return result
