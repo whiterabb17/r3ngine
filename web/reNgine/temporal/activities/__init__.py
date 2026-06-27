@@ -3000,7 +3000,7 @@ def run_llm_apme_activity(scan_history_id: int, job_id: str = None) -> dict:
 
 @activity.defn(name="EnrichIdentitiesActivity")
 def enrich_identities_activity(identity: str, identity_type: str, scan_history_id: int, ctx: dict) -> str:
-    from reNgine.osint_tasks import enrich_identities_task
+    from reNgine.tasks.osint import enrich_identities_task
     logger.log_line("[TEMPORAL]", "START", "task=enrich_identities type=%s scan_id=%s" % (identity_type, scan_history_id))
     activity.logger.info(f"[EnrichIdentitiesActivity] identity_type={identity_type} scan_id={scan_history_id}")
     # Run synchronously inside the Django threadpool executor worker

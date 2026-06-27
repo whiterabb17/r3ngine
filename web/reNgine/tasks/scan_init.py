@@ -137,7 +137,7 @@ def finish_osint(results, scan_history_id):
     activity's heartbeat thread (started by _run_task) keeps Temporal alive
     during the pipeline run.
     """
-    from reNgine.osint_tasks import osint_orchestrator
+    from reNgine.tasks.osint import osint_orchestrator
     logger.info(f"[finish_osint] Starting Deep Pursuit pipeline for scan {scan_history_id}")
     osint_orchestrator(scan_history_id=scan_history_id)
     return results

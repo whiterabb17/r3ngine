@@ -550,7 +550,7 @@ def save_email(email_address: str, scan_history=None, source: str = 'hunter'):
     if scan_history:
         scan_history.emails.add(email)
         scan_history.save()
-        from reNgine.osint_tasks import enrich_identities_task
+        from reNgine.tasks.osint import enrich_identities_task
         threading.Thread(
             target=enrich_identities_task,
             kwargs={'identity': email_address, 'identity_type': 'email', 'scan_history_id': scan_history.id},
@@ -568,7 +568,7 @@ def save_employee(name, designation='', scan_history=None):
     if scan_history:
         scan_history.employees.add(employee)
         scan_history.save()
-        from reNgine.osint_tasks import enrich_identities_task
+        from reNgine.tasks.osint import enrich_identities_task
         threading.Thread(
             target=enrich_identities_task,
             kwargs={'identity': name, 'identity_type': 'employee', 'scan_history_id': scan_history.id},

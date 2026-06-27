@@ -54,7 +54,6 @@ from reNgine.utils.graph import Neo4jManager
 from reNgine.tasks.vulnerability import *
 from reNgine.tasks.fuzzing import *
 from reNgine.stress.testing_tasks import run_stress_testing
-from reNgine.osint_tasks import *
 from reNgine.utils.task import (
     run_command, run_command_with_retry, stream_command, save_email, save_employee, save_subdomain, save_endpoint, save_parameter,
     sanitize_command_for_db, get_tool_color, ensure_endpoints_crawled_and_execute, save_fuzzing_file,
