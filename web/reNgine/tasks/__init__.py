@@ -49,7 +49,7 @@ from startScan.models import *
 from startScan.models import EndPoint, Subdomain, Vulnerability, Parameter
 from targetApp.models import Domain, normalize_manual_subdomains
 from dashboard.models import AcunetixAPIKey, HunterIOAPIKey
-from reNgine.monitor_tasks import *
+from reNgine.tasks.monitor import *
 from reNgine.utils.graph import Neo4jManager
 from reNgine.vulnerability_tasks import *
 from reNgine.fuzzing_tasks import *

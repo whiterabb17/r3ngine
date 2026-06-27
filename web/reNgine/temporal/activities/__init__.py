@@ -2621,7 +2621,7 @@ def run_monitoring_check_activity(domain_id: int) -> None:
     """
     logger.log_line("[TEMPORAL]", "START", "task=run_monitoring_check domain_id=%s" % domain_id)
     activity.logger.info(f"[RunMonitoringCheckActivity] Checking domain_id={domain_id}")
-    from reNgine.monitor_tasks import monitor_target_task
+    from reNgine.tasks.monitor import monitor_target_task
     monitor_target_task(domain_id)
     activity.logger.info(f"[RunMonitoringCheckActivity] Completed domain_id={domain_id}")
     logger.log_line("[TEMPORAL]", "COMPLETE", "task=run_monitoring_check domain_id=%s" % domain_id)
