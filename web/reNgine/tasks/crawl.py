@@ -16,7 +16,7 @@ from reNgine.utils.task import (
 )
 from reNgine.tasks.persistence import process_httpx_response, extract_httpx_url, remove_duplicate_endpoints, save_ip_address
 from reNgine.utils.graph import Neo4jManager
-from reNgine.api_tasks import run_jwt_scan, run_graphql_cop
+from reNgine.tasks.api import run_jwt_scan, run_graphql_cop
 from reNgine.auth_discovery_tasks import extract_auth_candidates
 from reNgine.cpde.graphql_enricher import enrich_graphql_params
 from startScan.models import *
@@ -713,7 +713,7 @@ def web_api_discovery(self, urls=[], ctx={}, description=None):
 				_jwt_gate_cache[subdomain_name] = has_jwt_tokens(self.scan_id, subdomain=subdomain)
 			if _jwt_gate_cache[subdomain_name]:
 				logger.warning('[WEB_API] jwt_tool: JWT tokens found, running on %s', subdomain_name)
-				from reNgine.api_tasks import run_jwt_scan
+				from reNgine.tasks.api import run_jwt_scan
 				run_jwt_scan(self, ctx, url, subdomain, results_dir)
 				logger.warning('[WEB_API] jwt_tool: finished on %s', subdomain_name)
 			else:
@@ -729,7 +729,7 @@ def web_api_discovery(self, urls=[], ctx={}, description=None):
 				logger.warning('[WEB_API] graphql-cop: no GraphQL endpoint detected, skipping %s', subdomain_name)
 			else:
 				logger.warning('[WEB_API] graphql-cop: running on %s', subdomain_name)
-				from reNgine.api_tasks import run_graphql_cop
+				from reNgine.tasks.api import run_graphql_cop
 				run_graphql_cop(self, ctx, url, subdomain)
 				logger.warning('[WEB_API] graphql-cop: finished on %s', subdomain_name)
 
