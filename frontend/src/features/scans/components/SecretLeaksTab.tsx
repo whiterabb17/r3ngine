@@ -46,7 +46,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   error: '#ff003c',
   warning: '#ff9f00',
   info: '#00d4ff',
-  default: 'text.secondary',
+  default: '#6b7280',
 };
 
 function groupLeaks(leaks: SecretLeak[]): LeakGroup[] {
