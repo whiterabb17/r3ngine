@@ -118,7 +118,7 @@ async def _dispatch_tier_plugins(ctx: dict, tier: str, wf_id_prefix: str) -> Non
                 ctx,
                 id=f"{wf_id_prefix}-plugin-{slug}",
                 task_queue="python-orchestrator-queue",
-                execution_timeout=timedelta(hours=2),
+                execution_timeout=timedelta(days=7),
             )
             await workflow.execute_activity(
                 "LogPluginEndActivity",
@@ -706,8 +706,8 @@ class MasterScanWorkflow:
                     ctx,
                     id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-nuclei",
                     task_queue="python-orchestrator-queue",
-                    execution_timeout=timedelta(hours=24),
-                    run_timeout=timedelta(hours=24),
+                    execution_timeout=timedelta(days=7),
+                    run_timeout=timedelta(days=7),
                     retry_policy=RetryPolicy(maximum_attempts=1),
                 )
 
@@ -1147,6 +1147,33 @@ class NucleiPlannerWorkflow:
                     "RunS3ScannerActivity",
                     ctx,
                     start_to_close_timeout=timedelta(hours=2),
+                    heartbeat_timeout=timedelta(minutes=5),
+                    task_queue="python-orchestrator-queue"
+                )
+
+            if vuln_config.get('run_smugglex', False):
+                await workflow.execute_activity(
+                    "RunSmugglexActivity",
+                    ctx,
+                    start_to_close_timeout=timedelta(hours=2),
+                    heartbeat_timeout=timedelta(minutes=5),
+                    task_queue="python-orchestrator-queue"
+                )
+
+            if vuln_config.get('run_second_order', False):
+                await workflow.execute_activity(
+                    "RunSecondOrderActivity",
+                    ctx,
+                    start_to_close_timeout=timedelta(hours=2),
+                    heartbeat_timeout=timedelta(minutes=5),
+                    task_queue="python-orchestrator-queue"
+                )
+
+            if vuln_config.get('run_nuclei_dast', False):
+                await workflow.execute_activity(
+                    "RunNucleiDASTActivity",
+                    ctx,
+                    start_to_close_timeout=timedelta(hours=4),
                     heartbeat_timeout=timedelta(minutes=5),
                     task_queue="python-orchestrator-queue"
                 )
@@ -1626,8 +1653,8 @@ class SubScanWorkflow:
                         ctx_task,
                         id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-nuclei",
                         task_queue="python-orchestrator-queue",
-                        execution_timeout=timedelta(hours=12),
-                        run_timeout=timedelta(hours=12),
+                        execution_timeout=timedelta(days=7),
+                        run_timeout=timedelta(days=7),
                         retry_policy=RetryPolicy(maximum_attempts=1),
                     )
                 elif t == "url_vuln":
@@ -1636,8 +1663,8 @@ class SubScanWorkflow:
                         ctx_task,
                         id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-urlvuln",
                         task_queue="python-orchestrator-queue",
-                        execution_timeout=timedelta(hours=4),
-                        run_timeout=timedelta(hours=4),
+                        execution_timeout=timedelta(days=7),
+                        run_timeout=timedelta(days=7),
                         retry_policy=RetryPolicy(maximum_attempts=1),
                     )
                 elif t == "url_crawl":
@@ -1646,8 +1673,8 @@ class SubScanWorkflow:
                         ctx_task,
                         id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-urlcrawl",
                         task_queue="python-orchestrator-queue",
-                        execution_timeout=timedelta(hours=4),
-                        run_timeout=timedelta(hours=4),
+                        execution_timeout=timedelta(days=7),
+                        run_timeout=timedelta(days=7),
                         retry_policy=RetryPolicy(maximum_attempts=1),
                     )
                 elif t == "url_fuzz":
@@ -1656,8 +1683,8 @@ class SubScanWorkflow:
                         ctx_task,
                         id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-urlfuzz",
                         task_queue="python-orchestrator-queue",
-                        execution_timeout=timedelta(hours=6),
-                        run_timeout=timedelta(hours=6),
+                        execution_timeout=timedelta(days=7),
+                        run_timeout=timedelta(days=7),
                         retry_policy=RetryPolicy(maximum_attempts=1),
                     )
                 elif t == "url_dirsearch":
@@ -1666,8 +1693,8 @@ class SubScanWorkflow:
                         ctx_task,
                         id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-urldirsearch",
                         task_queue="python-orchestrator-queue",
-                        execution_timeout=timedelta(hours=4),
-                        run_timeout=timedelta(hours=4),
+                        execution_timeout=timedelta(days=7),
+                        run_timeout=timedelta(days=7),
                         retry_policy=RetryPolicy(maximum_attempts=1),
                     )
                 elif t == "url_params_fuzz":
@@ -1676,8 +1703,8 @@ class SubScanWorkflow:
                         ctx_task,
                         id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-urlparamsfuzz",
                         task_queue="python-orchestrator-queue",
-                        execution_timeout=timedelta(hours=4),
-                        run_timeout=timedelta(hours=4),
+                        execution_timeout=timedelta(days=7),
+                        run_timeout=timedelta(days=7),
                         retry_policy=RetryPolicy(maximum_attempts=1),
                     )
                 elif t == "subdomain_recon":
@@ -1686,8 +1713,8 @@ class SubScanWorkflow:
                         ctx_task,
                         id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-subdomainrecon",
                         task_queue="python-orchestrator-queue",
-                        execution_timeout=timedelta(hours=4),
-                        run_timeout=timedelta(hours=4),
+                        execution_timeout=timedelta(days=7),
+                        run_timeout=timedelta(days=7),
                         retry_policy=RetryPolicy(maximum_attempts=1),
                     )
                 elif t == "domain_recon":
@@ -1696,8 +1723,8 @@ class SubScanWorkflow:
                         ctx_task,
                         id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-domainrecon",
                         task_queue="python-orchestrator-queue",
-                        execution_timeout=timedelta(hours=2),
-                        run_timeout=timedelta(hours=2),
+                        execution_timeout=timedelta(days=7),
+                        run_timeout=timedelta(days=7),
                         retry_policy=RetryPolicy(maximum_attempts=1),
                     )
                 elif t == "host_recon":
@@ -1706,8 +1733,8 @@ class SubScanWorkflow:
                         ctx_task,
                         id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-hostrecon",
                         task_queue="python-orchestrator-queue",
-                        execution_timeout=timedelta(hours=2),
-                        run_timeout=timedelta(hours=2),
+                        execution_timeout=timedelta(days=7),
+                        run_timeout=timedelta(days=7),
                         retry_policy=RetryPolicy(maximum_attempts=1),
                     )
                 elif t == "cidr_recon":
@@ -1716,8 +1743,8 @@ class SubScanWorkflow:
                         ctx_task,
                         id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-cidrrecon",
                         task_queue="python-orchestrator-queue",
-                        execution_timeout=timedelta(hours=3),
-                        run_timeout=timedelta(hours=3),
+                        execution_timeout=timedelta(days=7),
+                        run_timeout=timedelta(days=7),
                         retry_policy=RetryPolicy(maximum_attempts=1),
                     )
                 elif t in ("code_scan", "vigolium_audit"):
@@ -1726,8 +1753,8 @@ class SubScanWorkflow:
                         ctx_task,
                         id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-codescan",
                         task_queue="python-orchestrator-queue",
-                        execution_timeout=timedelta(hours=4),
-                        run_timeout=timedelta(hours=4),
+                        execution_timeout=timedelta(days=7),
+                        run_timeout=timedelta(days=7),
                         retry_policy=RetryPolicy(maximum_attempts=1),
                     )
                 elif dispatch is not None:
@@ -3512,7 +3539,7 @@ class SingleTaskRetryWorkflow:
                 await workflow.execute_activity("RunVigoliumAnalysisActivity", ctx, start_to_close_timeout=timedelta(hours=8), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("ParseAnalysisResultsActivity", ctx, start_to_close_timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
             elif task_name == "vulnerability_scan":
-                await workflow.execute_child_workflow("NucleiPlannerWorkflow", ctx, id=f"{workflow.info().workflow_id}-nuclei", task_queue="python-orchestrator-queue", execution_timeout=timedelta(hours=24), run_timeout=timedelta(hours=24), retry_policy=RetryPolicy(maximum_attempts=1))
+                await workflow.execute_child_workflow("NucleiPlannerWorkflow", ctx, id=f"{workflow.info().workflow_id}-nuclei", task_queue="python-orchestrator-queue", execution_timeout=timedelta(days=7), run_timeout=timedelta(days=7), retry_policy=RetryPolicy(maximum_attempts=1))
                 await workflow.execute_activity("ParseAssessmentResultsActivity", ctx, start_to_close_timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("CorrelateVulnerabilitiesActivity", ctx, start_to_close_timeout=timedelta(minutes=90), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("CorrelateExposuresActivity", ctx, start_to_close_timeout=timedelta(minutes=30), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")

@@ -1492,6 +1492,25 @@ def run_nuclei_activity(ctx: dict, severity: str = None, tag_batch: list = None)
         proxies_file_path=proxies_file_path,
     )
 
+@activity.defn(name="RunSmugglexActivity")
+def run_smugglex_activity(ctx: dict) -> bool:
+    from reNgine.tasks import smugglex_scan
+    activity.logger.info(f"[RunSmugglexActivity] scan_id={ctx.get('scan_history_id')}")
+    return _run_task(smugglex_scan, ctx, task_name='smugglex_scan', description='Smugglex Scan', urls=ctx.get('urls', []))
+
+@activity.defn(name="RunSecondOrderActivity")
+def run_second_order_activity(ctx: dict) -> bool:
+    from reNgine.tasks import second_order_scan
+    activity.logger.info(f"[RunSecondOrderActivity] scan_id={ctx.get('scan_history_id')}")
+    return _run_task(second_order_scan, ctx, task_name='second_order_scan', description='Second Order Scan', urls=ctx.get('urls', []))
+
+@activity.defn(name="RunNucleiDASTActivity")
+def run_nuclei_dast_activity(ctx: dict) -> bool:
+    from reNgine.tasks import nuclei_dast_scan
+    activity.logger.info(f"[RunNucleiDASTActivity] scan_id={ctx.get('scan_history_id')}")
+    return _run_task(nuclei_dast_scan, ctx, task_name='nuclei_dast_scan', description='Nuclei DAST Scan', urls=ctx.get('urls', []))
+
+
 @activity.defn(name="RunCRLFuzzActivity")
 def run_crlfuzz_activity(ctx: dict) -> bool:
     from reNgine.tasks import crlfuzz_scan

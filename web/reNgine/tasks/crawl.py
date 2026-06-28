@@ -808,6 +808,53 @@ def web_api_discovery(self, urls=[], ctx={}, description=None):
 	else:
 		logger.warning('[WEB_API] Retire.js: skipped (not in uses_tools)')
 
+	# Favirecon
+	if 'favirecon' in uses_tools and urls:
+		favirecon_out = f"{results_dir}/favirecon_out.txt"
+		targets_file = f"{results_dir}/targets.txt"
+		with open(targets_file, 'w') as _f:
+			_f.write('\n'.join(urls))
+		cmd = f"favirecon -l {targets_file} -o {favirecon_out}"
+		logger.warning('[WEB_API] Favirecon: running on %d URLs | cmd: %s', len(urls), cmd)
+		run_command(cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
+		logger.warning('[WEB_API] Favirecon: finished')
+
+	# Sourcemapper
+	if 'sourcemapper' in uses_tools and urls:
+		logger.warning('[WEB_API] Sourcemapper: running on %d URLs', len(urls))
+		for url in urls:
+			cmd = f"sourcemapper -url {url}"
+			run_command(cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
+		logger.warning('[WEB_API] Sourcemapper: finished')
+
+	# GQLSpection
+	if 'gqlspection' in uses_tools and urls:
+		logger.warning('[WEB_API] GQLSpection: running on %d URLs', len(urls))
+		for url in urls:
+			cmd = f"GQLSpection -e {url}"
+			run_command(cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
+		logger.warning('[WEB_API] GQLSpection: finished')
+
+	# grpcurl
+	if 'grpcurl' in uses_tools and urls:
+		logger.warning('[WEB_API] grpcurl: running on %d URLs', len(urls))
+		for url in urls:
+			parsed = urlparse(url)
+			target = f"{parsed.hostname}:{parsed.port or (443 if parsed.scheme == 'https' else 80)}"
+			cmd = f"grpcurl -plaintext {target} list"
+			run_command(cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
+		logger.warning('[WEB_API] grpcurl: finished')
+
+	# Julius (LLM scanner)
+	if 'julius' in uses_tools and urls:
+		logger.warning('[WEB_API] Julius: running on %d URLs', len(urls))
+		targets_file = f"{results_dir}/targets.txt"
+		with open(targets_file, 'w') as _f:
+			_f.write('\n'.join(urls))
+		cmd = f"julius -urls {targets_file}"
+		run_command(cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
+		logger.warning('[WEB_API] Julius: finished')
+
 	# Aquatone - visual inspection of discovered URLs
 	if 'aquatone' in uses_tools and urls:
 		aquatone_out = f"{results_dir}/aquatone"

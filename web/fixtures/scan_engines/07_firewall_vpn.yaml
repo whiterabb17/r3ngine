@@ -35,6 +35,9 @@
         enable_network_enum: false
       vulnerability_scan:
         run_nuclei: true
+        run_smugglex: true
+        run_second_order: true
+        run_nuclei_dast: true
         run_dalfox: false
         run_crlfuzz: false
         run_s3scanner: false

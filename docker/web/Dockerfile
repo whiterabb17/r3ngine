@@ -41,6 +41,11 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go install -ldflags="-s -w" -v github.com/tomnomnom/unfurl@latest && \
     go install -ldflags="-s -w" -v github.com/tomnomnom/waybackurls@latest && \
     go install -ldflags="-s -w" -v github.com/projectdiscovery/httpx/cmd/httpx@latest && \
+    go install -ldflags="-s -w" -v github.com/edoardottt/favirecon/cmd/favirecon@latest && \
+    go install -ldflags="-s -w" -v github.com/fullstorydev/grpcurl/cmd/grpcurl@latest && \
+    go install -ldflags="-s -w" -v github.com/mhmdiaa/second-order@latest && \
+    go install -ldflags="-s -w" -v github.com/praetorian-inc/julius/cmd/julius@latest && \
+    go install -ldflags="-s -w" -v github.com/denandz/sourcemapper@latest && \
     go install -ldflags="-s -w" -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest && \
     go install -ldflags="-s -w" -v github.com/projectdiscovery/chaos-client/cmd/chaos@latest && \
     go install -ldflags="-s -w" -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@v3.9.0 && \
@@ -158,6 +163,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/tmp/dalfox/target \
     cargo build --release && \
     cp target/release/dalfox /usr/local/bin/dalfox
+
+RUN cargo install --git https://github.com/hahwul/smugglex.git --root /usr/local
 
 
 # ===========================================================================
@@ -359,6 +366,9 @@ RUN ARCH=$(dpkg --print-architecture) && \
 # Dalfox v3 — XSS scanner (Rust rewrite; built from source in dalfox-builder stage)
 COPY --from=dalfox-builder /usr/local/bin/dalfox /usr/local/bin/dalfox
 
+# Smugglex — Request Smuggling scanner (built from source in dalfox-builder stage)
+COPY --from=dalfox-builder /usr/local/bin/smugglex /usr/local/bin/smugglex
+
 # Aquatone — visual recon / screenshot tool (needs Chromium at runtime)
 RUN ARCH=$(dpkg --print-architecture) && \
     wget -q "https://github.com/michenriksen/aquatone/releases/download/v1.7.0/aquatone_linux_${ARCH}_1.7.0.zip" && \
@@ -509,7 +519,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pipx install whoisdomain --force && \
     pipx install "bypass-url-parser" --force && \
     pipx install bbot --force && \
-    pipx install sploitscan --force
+    pipx install sploitscan --force && \
+    pipx install git+https://github.com/doyensec/GQLSpection --force
 
 # grype — Anchore filesystem CVE scanner
 # PINNED to v0.114.0 — downloaded directly from GitHub Releases (NOT install.sh)

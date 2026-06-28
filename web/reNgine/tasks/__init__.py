@@ -136,6 +136,7 @@ from reNgine.tasks.vuln import (
     vulnerability_scan, nuclei_scan, dalfox_xss_scan, crlfuzz_scan, s3scanner,
     sync_cisa_kev_catalog, sync_semgrep_rules, clean_and_validate_url,
     semgrep_scan, save_semgrep_vulnerability_finding, save_semgrep_secret_finding,
+    smugglex_scan, second_order_scan, nuclei_dast_scan
 )
 from reNgine.tasks.osint import (
     osint, osint_discovery, dorking, theHarvester, h8mail,
