@@ -1260,9 +1260,9 @@ def save_semgrep_secret_finding(result, ctx, base_dir, file_to_url_map=None):
 
 def smugglex_scan(self, urls=[], ctx={}, description=None):
 	"""Smugglex Scan"""
-	from reNgine.common_func import save_vulnerability, save_subdomain, save_endpoint
-	from reNgine.utilities import get_http_urls, sanitize_url, get_subdomain_from_url
-	from reNgine.utils.task import stream_command
+	from reNgine.common_func import save_vulnerability, get_http_urls, sanitize_url, get_subdomain_from_url
+	from reNgine.utils.task import stream_command, run_command, save_subdomain, save_endpoint
+	from reNgine.tasks.parsers import parse_smugglex_result
 	import json
 	import os
 
@@ -1278,54 +1278,75 @@ def smugglex_scan(self, urls=[], ctx={}, description=None):
 		logger.warning('smugglex: no endpoints to scan, skipping.')
 		return
 
-	cmd = f"cat {input_path} | smugglex"
+	output_json = f"{self.results_dir}/smugglex_output.json"
+	cmd = f"cat {input_path} | smugglex --json -o {output_json}"
+	run_command(cmd, shell=True, scan_id=self.scan_id, activity_id=self.activity_id)
 	
-	for line in stream_command(
-			cmd,
-			history_file=self.history_file,
-			scan_id=self.scan_id,
-			activity_id=self.activity_id):
-		if 'VULNERABLE' in line or 'smuggling' in line.lower():
-			vuln_data = {
-				'name': 'HTTP Request Smuggling',
-				'severity': 3,
-				'description': 'Potential HTTP Request Smuggling identified by smugglex',
-				'source': 'Smugglex',
-				'extracted_results': line
-			}
-			# Just assigning it to domain for now, since smugglex output parsing is basic
-			save_vulnerability(
-				target_domain=self.domain,
-				scan_history=self.scan,
-				subscan=self.subscan,
-				**vuln_data)
+	if os.path.exists(output_json):
+		try:
+			with open(output_json, 'r') as f:
+				for line in f:
+					if not line.strip(): continue
+					try:
+						finding = json.loads(line)
+						vuln_data = parse_smugglex_result(finding)
+						save_vulnerability(
+							target_domain=self.domain,
+							scan_history=self.scan,
+							subscan=self.subscan,
+							**vuln_data)
+					except json.JSONDecodeError:
+						pass
+		except Exception as e:
+			logger.error(f"Smugglex parse error: {e}")
 
 def second_order_scan(self, urls=[], ctx={}, description=None):
 	"""Second Order Scan"""
-	from reNgine.common_func import save_vulnerability
-	from reNgine.utilities import get_http_urls
+	from reNgine.common_func import save_vulnerability, get_http_urls
 	from reNgine.utils.task import run_command
+	from reNgine.tasks.parsers import parse_second_order_result
 	import os
+	import json
 	
 	logger.info('Second Order scan started')
 	
+	config_path = "/usr/local/config/takeover.json"
+	if not os.path.exists(config_path):
+		os.makedirs("/usr/local/config", exist_ok=True)
+		run_command(f"curl -sL https://raw.githubusercontent.com/mhmdiaa/second-order/master/takeover.json -o {config_path}", shell=True)
+
 	targets = urls or []
 	if not targets:
 		# Could just use the main domain
 		targets = [f"https://{self.domain.name}"]
 	
+	out_dir = f"{self.results_dir}/second_order_out"
+	os.makedirs(out_dir, exist_ok=True)
+	
 	for target in targets:
-		cmd = f"second-order -target {target} -config /usr/local/config/takeover.json"
-		return_code, output = run_command(cmd, scan_id=self.scan_id)
-		# output goes to default output folder inside container.
-		# A complete implementation would parse the second-order JSON output folder.
-		# For this implementation stub, we assume we just ran it successfully.
+		cmd = f"second-order -target {target} -config {config_path} -output {out_dir}"
+		run_command(cmd, shell=True, scan_id=self.scan_id, activity_id=self.activity_id)
+
+	for fname in os.listdir(out_dir):
+		if fname.endswith(".json"):
+			fpath = os.path.join(out_dir, fname)
+			try:
+				with open(fpath, 'r') as f:
+					data = json.load(f)
+					for finding in data:
+						vuln_data = parse_second_order_result(finding)
+						save_vulnerability(
+							target_domain=self.domain,
+							scan_history=self.scan,
+							subscan=self.subscan,
+							**vuln_data)
+			except Exception as e:
+				logger.error(f"Second Order parse error on {fname}: {e}")
 
 def nuclei_dast_scan(self, urls=[], ctx={}, description=None):
 	"""Nuclei DAST Scan"""
-	from reNgine.common_func import save_vulnerability, save_subdomain, save_endpoint
-	from reNgine.utilities import get_http_urls, sanitize_url, get_subdomain_from_url
-	from reNgine.utils.task import stream_command
+	from reNgine.common_func import save_vulnerability, get_http_urls, sanitize_url, get_subdomain_from_url
+	from reNgine.utils.task import stream_command, save_subdomain, save_endpoint
 	from reNgine.tasks.parsers import parse_nuclei_result
 	import os
 
@@ -1341,7 +1362,20 @@ def nuclei_dast_scan(self, urls=[], ctx={}, description=None):
 		logger.warning('nuclei_dast: no endpoints to scan, skipping.')
 		return
 
-	cmd = f"nuclei -tags dast -l {input_path} -json"
+	config = self.yaml_configuration.get(VULNERABILITY_SCAN) or {}
+	rate_limit = config.get(RATE_LIMIT) or self.yaml_configuration.get(RATE_LIMIT, DEFAULT_RATE_LIMIT)
+	retries = config.get(RETRIES) or self.yaml_configuration.get(RETRIES, DEFAULT_RETRIES)
+	timeout = config.get(TIMEOUT) or self.yaml_configuration.get(TIMEOUT, DEFAULT_HTTP_TIMEOUT)
+	proxy_obj = Proxy.objects.first()
+	proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
+
+	cmd = f"nuclei -dast -headless -l {input_path} -j"
+	if rate_limit:
+		cmd += f" -rl {rate_limit}"
+	if retries:
+		cmd += f" -retries {retries}"
+	if proxy:
+		cmd += f" -proxy {proxy}"
 
 	for line in stream_command(
 			cmd,

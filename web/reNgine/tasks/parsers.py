@@ -106,3 +106,72 @@ def parse_crlfuzz_result(url):
 		'description': 'A CRLF (HTTP Response Splitting) vulnerability has been discovered.',
 		'source': CRLFUZZ,
 	}
+
+def parse_smugglex_result(finding):
+	return {
+		'name': 'HTTP Request Smuggling',
+		'type': 'HTTP Request Smuggling',
+		'severity': 3,
+		'description': f"Check Type: {finding.get('check_type')}\nMethod: {finding.get('method')}\nPayloads: {finding.get('payloads')}\nEndpoint: {finding.get('endpoint')}",
+		'source': 'Smugglex',
+		'extracted_results': str(finding)
+	}
+
+def parse_second_order_result(finding):
+	return {
+		'name': 'Subdomain Takeover (Second Order)',
+		'type': 'Subdomain Takeover',
+		'severity': 3,
+		'description': f"Vulnerable URL: {finding.get('url', 'N/A')}\nParameter/Link: {finding.get('parameter', finding.get('link', 'N/A'))}\nTakeover: {finding.get('takeover', 'N/A')}",
+		'source': 'Second-Order',
+		'extracted_results': str(finding)
+	}
+
+def parse_favirecon_result(finding):
+	return {
+		'name': 'Favicon Discovered',
+		'type': 'Info',
+		'severity': 0,
+		'description': f"Hash: {finding.get('hash', 'N/A')}",
+		'source': 'Favirecon'
+	}
+
+def parse_sourcemapper_result(url, directory):
+	return {
+		'name': 'Exposed Source Maps',
+		'type': 'Information Disclosure',
+		'severity': 2,
+		'description': f"Source maps extracted into {directory}",
+		'http_url': url,
+		'source': 'Sourcemapper'
+	}
+
+def parse_grpcurl_result(url, output):
+	return {
+		'name': 'gRPC Server Reflection Enabled',
+		'type': 'Information Disclosure',
+		'severity': 2,
+		'description': f"Services:\n{output}",
+		'http_url': url,
+		'source': 'gRPCurl'
+	}
+
+def parse_julius_result(finding):
+	return {
+		'name': 'LLM Platform Exposed',
+		'type': 'Information Disclosure',
+		'severity': 2,
+		'description': str(finding),
+		'http_url': finding.get('url', ''),
+		'source': 'Julius'
+	}
+
+def parse_gqlspection_result(url, output):
+	return {
+		'name': 'GraphQL Introspection Enabled',
+		'type': 'Information Disclosure',
+		'severity': 2,
+		'description': "GraphQL introspection is enabled.",
+		'http_url': url,
+		'source': 'GQLSpection'
+	}
