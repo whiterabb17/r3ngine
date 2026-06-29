@@ -20,7 +20,7 @@ from reNgine.charts import (
 from reNgine.utils.graph import Neo4jManager
 from reNgine.common_func import get_interesting_subdomains, clean_semgrep_check_id, categorize_secret_type
 from reNgine.stress.report_builder import StressReportBuilder
-from startScan.models import ScanHistory, Subdomain, Vulnerability, IpAddress, ScanReport, StressTestResult, Parameter, EmailBreach, SecretLeak
+from startScan.models import ScanHistory, Subdomain, Vulnerability, IpAddress, ScanReport, StressTestResult, Parameter, EmailBreach, SecretLeak, EndPoint, DirectoryScan, DirectoryFile, S3Bucket, Waf, Technology, IdentityInfraDiscovery, APIIntelligenceProfile, Exposure, MetaFinderDocument, Dork, CertificateIntelligence, Employee
 from scanEngine.models import VulnerabilityReportSetting
 
 logger = logging.getLogger('reNgine.tasks')
@@ -88,11 +88,26 @@ def generate_report_task(report_id):
         report_type = report_obj.report_type
         report_template = report_obj.report_template
         params = report_obj.params
-        is_ignore_info_vuln = params.get('ignore_info_vuln', False)
-        include_attack_surface_map = params.get('include_attack_surface_map', False)
-        include_attack_paths = params.get('include_attack_paths', False)
-        # Default True for backward-compat with reports created before this flag was stored.
+        is_ignore_info_vuln = params.get('ignore_info_vuln') in [True, 'True', 'true']
+        include_attack_surface_map = params.get('include_attack_surface_map') in [True, 'True', 'true']
+        include_attack_paths = params.get('include_attack_paths') in [True, 'True', 'true']
+        
         include_found_parameters = params.get('include_found_parameters', True)
+        if isinstance(include_found_parameters, str):
+            include_found_parameters = include_found_parameters.lower() == 'true'
+            
+        include_endpoints = params.get('include_endpoints') in [True, 'True', 'true']
+        include_directories = params.get('include_directories') in [True, 'True', 'true']
+        include_s3_buckets = params.get('include_s3_buckets') in [True, 'True', 'true']
+        include_waf = params.get('include_waf') in [True, 'True', 'true']
+        include_technologies = params.get('include_technologies') in [True, 'True', 'true']
+        include_api_intelligence = params.get('include_api_intelligence') in [True, 'True', 'true']
+        include_identity = params.get('include_identity') in [True, 'True', 'true']
+        include_exposures = params.get('include_exposures') in [True, 'True', 'true']
+        include_dorks_metadata = params.get('include_dorks_metadata') in [True, 'True', 'true']
+        include_certificates = params.get('include_certificates') in [True, 'True', 'true']
+        include_employees = params.get('include_employees') in [True, 'True', 'true']
+
         comments = params.get('comments', '')
 
         show_recon = True
@@ -216,6 +231,8 @@ def generate_report_task(report_id):
         email_breaches = EmailBreach.objects.filter(scan_history=scan).order_by('email_address', '-discovered_date')
 
         include_secret_findings = params.get('include_secret_findings', True)
+        if isinstance(include_secret_findings, str):
+            include_secret_findings = include_secret_findings.lower() == 'true'
 
         secret_leaks = SecretLeak.objects.none()
         secret_findings_by_type = {}
@@ -232,6 +249,52 @@ def generate_report_task(report_id):
                 }
                 for k, v in sorted(bucket.items())
             }
+
+        endpoints_data = EndPoint.objects.none()
+        if include_endpoints:
+            endpoints_data = EndPoint.objects.filter(scan_history=scan).order_by('http_url')
+        
+        directories_data = DirectoryFile.objects.none()
+        if include_directories:
+            directories_data = DirectoryFile.objects.filter(directory_files__directories__in=subdomains).distinct().order_by('url')
+            
+        s3_buckets_data = S3Bucket.objects.none()
+        if include_s3_buckets:
+            s3_buckets_data = scan.buckets.all().order_by('name')
+            
+        waf_data = Waf.objects.none()
+        if include_waf:
+            waf_data = Waf.objects.filter(waf__in=subdomains).distinct().order_by('manufacturer')
+            
+        technologies_data = Technology.objects.none()
+        if include_technologies:
+            technologies_data = Technology.objects.filter(technologies__in=subdomains).distinct().order_by('name')
+            
+        api_intel = APIIntelligenceProfile.objects.none()
+        if include_api_intelligence:
+            api_intel = APIIntelligenceProfile.objects.filter(scan_history=scan)
+            
+        identity_intel = IdentityInfraDiscovery.objects.none()
+        if include_identity:
+            identity_intel = IdentityInfraDiscovery.objects.filter(scan_history=scan)
+            
+        exposures_data = Exposure.objects.none()
+        if include_exposures:
+            exposures_data = Exposure.objects.filter(scan_history=scan)
+            
+        metadata_docs = MetaFinderDocument.objects.none()
+        dorks_data = Dork.objects.none()
+        if include_dorks_metadata:
+            metadata_docs = MetaFinderDocument.objects.filter(scan_history=scan)
+            dorks_data = scan.dorks.all()
+            
+        certificates_data = CertificateIntelligence.objects.none()
+        if include_certificates:
+            certificates_data = CertificateIntelligence.objects.filter(scan_history=scan)
+            
+        employees_data = Employee.objects.none()
+        if include_employees:
+            employees_data = scan.employees.all()
 
         data = {
             'scan_object': scan,
@@ -254,6 +317,30 @@ def generate_report_task(report_id):
             'secret_leaks': secret_leaks,
             'secret_leaks_count': secret_leaks.count() if include_secret_findings else 0,
             'secret_findings_by_type': secret_findings_by_type,
+            'endpoints_data': endpoints_data,
+            'endpoints_count': endpoints_data.count() if include_endpoints else 0,
+            'directories_data': directories_data,
+            'directories_count': directories_data.count() if include_directories else 0,
+            's3_buckets_data': s3_buckets_data,
+            's3_buckets_count': s3_buckets_data.count() if include_s3_buckets else 0,
+            'waf_data': waf_data,
+            'waf_count': waf_data.count() if include_waf else 0,
+            'technologies_data': technologies_data,
+            'technologies_count': technologies_data.count() if include_technologies else 0,
+            'api_intel': api_intel,
+            'api_intel_count': api_intel.count() if include_api_intelligence else 0,
+            'identity_intel': identity_intel,
+            'identity_intel_count': identity_intel.count() if include_identity else 0,
+            'exposures_data': exposures_data,
+            'exposures_count': exposures_data.count() if include_exposures else 0,
+            'metadata_docs': metadata_docs,
+            'metadata_docs_count': metadata_docs.count() if include_dorks_metadata else 0,
+            'dorks_data': dorks_data,
+            'dorks_count': dorks_data.count() if include_dorks_metadata else 0,
+            'certificates_data': certificates_data,
+            'certificates_count': certificates_data.count() if include_certificates else 0,
+            'employees_data': employees_data,
+            'employees_count': employees_data.count() if include_employees else 0,
         }
 
         # Stress Test Aggregation for context

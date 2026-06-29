@@ -1,0 +1,203 @@
+{% if endpoints_data %}
+<div class="report-section" style="margin-bottom: 8mm; page-break-inside: avoid;">
+    <h3 style="color: {{ primary_color|default:'#0d6efd' }}; margin-bottom: 2mm; border-bottom: 1px solid #ccc; padding-bottom: 1mm;">Endpoints Discovered</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.85em; text-align: left;">
+        <thead>
+            <tr style="background-color: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                <th style="padding: 2mm;">Method</th>
+                <th style="padding: 2mm;">URL</th>
+                <th style="padding: 2mm;">Status Code</th>
+                <th style="padding: 2mm;">Content Length</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ep in endpoints_data %}
+            <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 2mm;">{{ ep.http_method|default:"GET" }}</td>
+                <td style="padding: 2mm; word-break: break-all;">{{ ep.http_url }}</td>
+                <td style="padding: 2mm;">{{ ep.status_code|default:"-" }}</td>
+                <td style="padding: 2mm;">{{ ep.content_length|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if s3_buckets_data %}
+<div class="report-section" style="margin-bottom: 8mm; page-break-inside: avoid;">
+    <h3 style="color: {{ primary_color|default:'#0d6efd' }}; margin-bottom: 2mm; border-bottom: 1px solid #ccc; padding-bottom: 1mm;">Cloud / S3 Buckets</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.85em; text-align: left;">
+        <thead>
+            <tr style="background-color: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                <th style="padding: 2mm;">Bucket Name / URL</th>
+                <th style="padding: 2mm;">Region</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for bucket in s3_buckets_data %}
+            <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 2mm; word-break: break-all;">{{ bucket.url }}</td>
+                <td style="padding: 2mm;">{{ bucket.region|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if waf_data %}
+<div class="report-section" style="margin-bottom: 8mm; page-break-inside: avoid;">
+    <h3 style="color: {{ primary_color|default:'#0d6efd' }}; margin-bottom: 2mm; border-bottom: 1px solid #ccc; padding-bottom: 1mm;">WAF Detection</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.85em; text-align: left;">
+        <thead>
+            <tr style="background-color: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                <th style="padding: 2mm;">WAF Manufacturer</th>
+                <th style="padding: 2mm;">Target URL</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for waf in waf_data %}
+            <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 2mm;">{{ waf.manufacturer }}</td>
+                <td style="padding: 2mm; word-break: break-all;">{{ waf.url|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if directories_data %}
+<div class="report-section" style="margin-bottom: 8mm; page-break-inside: avoid;">
+    <h3 style="color: {{ primary_color|default:'#0d6efd' }}; margin-bottom: 2mm; border-bottom: 1px solid #ccc; padding-bottom: 1mm;">Directory Enumeration</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.85em; text-align: left;">
+        <thead>
+            <tr style="background-color: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                <th style="padding: 2mm;">Directory URL</th>
+                <th style="padding: 2mm;">Status Code</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for dir in directories_data %}
+            <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 2mm; word-break: break-all;">{{ dir.directory_name|default:dir.url|default:dir.name|default:"-" }}</td>
+                <td style="padding: 2mm;">{{ dir.scanned_status|default:dir.http_status|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if technologies_data %}
+<div class="report-section" style="margin-bottom: 8mm; page-break-inside: avoid;">
+    <h3 style="color: {{ primary_color|default:'#0d6efd' }}; margin-bottom: 2mm; border-bottom: 1px solid #ccc; padding-bottom: 1mm;">Technologies Detected</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.85em; text-align: left;">
+        <thead>
+            <tr style="background-color: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                <th style="padding: 2mm;">Technology</th>
+                <th style="padding: 2mm;">Target</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tech in technologies_data %}
+            <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 2mm;">{{ tech.name }}</td>
+                <td style="padding: 2mm; word-break: break-all;">{{ tech.subdomain.name|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if exposures_data %}
+<div class="report-section" style="margin-bottom: 8mm; page-break-inside: avoid;">
+    <h3 style="color: {{ primary_color|default:'#0d6efd' }}; margin-bottom: 2mm; border-bottom: 1px solid #ccc; padding-bottom: 1mm;">Exposures</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.85em; text-align: left;">
+        <thead>
+            <tr style="background-color: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                <th style="padding: 2mm;">URL</th>
+                <th style="padding: 2mm;">Component/Source</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for exp in exposures_data %}
+            <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 2mm; word-break: break-all;">{{ exp.url }}</td>
+                <td style="padding: 2mm;">{{ exp.source|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if dorks_data %}
+<div class="report-section" style="margin-bottom: 8mm; page-break-inside: avoid;">
+    <h3 style="color: {{ primary_color|default:'#0d6efd' }}; margin-bottom: 2mm; border-bottom: 1px solid #ccc; padding-bottom: 1mm;">Dorks / Metadata</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.85em; text-align: left;">
+        <thead>
+            <tr style="background-color: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                <th style="padding: 2mm;">Type</th>
+                <th style="padding: 2mm;">URL</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for dork in dorks_data %}
+            <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 2mm;">{{ dork.type|default:"-" }}</td>
+                <td style="padding: 2mm; word-break: break-all;">{{ dork.url|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if certificates_data %}
+<div class="report-section" style="margin-bottom: 8mm; page-break-inside: avoid;">
+    <h3 style="color: {{ primary_color|default:'#0d6efd' }}; margin-bottom: 2mm; border-bottom: 1px solid #ccc; padding-bottom: 1mm;">Certificates</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.85em; text-align: left;">
+        <thead>
+            <tr style="background-color: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                <th style="padding: 2mm;">Subject</th>
+                <th style="padding: 2mm;">Issuer</th>
+                <th style="padding: 2mm;">Validity</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cert in certificates_data %}
+            <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 2mm; word-break: break-all;">{{ cert.subject_cn|default:"-" }}</td>
+                <td style="padding: 2mm;">{{ cert.issuer_cn|default:"-" }}</td>
+                <td style="padding: 2mm;">{{ cert.valid_from|date:"Y-m-d" }} to {{ cert.valid_to|date:"Y-m-d" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if employees_data %}
+<div class="report-section" style="margin-bottom: 8mm; page-break-inside: avoid;">
+    <h3 style="color: {{ primary_color|default:'#0d6efd' }}; margin-bottom: 2mm; border-bottom: 1px solid #ccc; padding-bottom: 1mm;">Employees / Key Personnel</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.85em; text-align: left;">
+        <thead>
+            <tr style="background-color: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                <th style="padding: 2mm;">Name</th>
+                <th style="padding: 2mm;">Designation</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for emp in employees_data %}
+            <tr style="border-bottom: 1px solid #dee2e6;">
+                <td style="padding: 2mm;">{{ emp.name|default:"-" }}</td>
+                <td style="padding: 2mm;">{{ emp.designation|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}

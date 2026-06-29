@@ -39,6 +39,7 @@ class ScanHistory(models.Model):
 	results_dir = models.CharField(max_length=100, blank=True)
 	domain = models.ForeignKey(Domain, on_delete=models.CASCADE)
 	scan_type = models.ForeignKey(EngineType, on_delete=models.CASCADE)
+	assessment = models.ForeignKey('engagements.Assessment', on_delete=models.SET_NULL, null=True, blank=True, related_name='scan_histories')
 	hardware_profile = models.ForeignKey(HardwareProfile, on_delete=models.SET_NULL, null=True, blank=True)
 
 	workflow_ids = ArrayField(models.CharField(max_length=100), blank=True, default=list)
@@ -381,6 +382,7 @@ class SubScan(models.Model):
 	status = models.IntegerField()
 	workflow_ids = ArrayField(models.CharField(max_length=100), blank=True, default=list)
 	scan_history = models.ForeignKey(ScanHistory, on_delete=models.CASCADE)
+	assessment = models.ForeignKey('engagements.Assessment', on_delete=models.SET_NULL, null=True, blank=True, related_name='sub_scans')
 	subdomain = models.ForeignKey(Subdomain, on_delete=models.CASCADE)
 	stop_scan_date = models.DateTimeField(null=True, blank=True)
 	error_message = models.CharField(max_length=300, blank=True, null=True)

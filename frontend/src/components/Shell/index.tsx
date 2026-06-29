@@ -141,6 +141,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const navItems: NavItem[] = [
     { title: 'Dashboard', icon: <Home size={20} />, path: `/${projectSlug}/dashboard`, color: theme.palette.primary.main },
     { title: 'Projects', icon: <Folder size={20} />, path: `/${projectSlug}/projects`, color: theme.palette.primary.main },
+    { title: 'Assessments', icon: <Briefcase size={20} />, path: `/${projectSlug}/assessments`, color: theme.palette.primary.main },
     { title: 'Targets', icon: <Target size={20} />, path: `/${projectSlug}/targets`, color: theme.palette.primary.main },
     { title: 'Monitoring', icon: <Monitor size={20} />, path: `/${projectSlug}/monitoring`, color: theme.palette.primary.main },
     {
