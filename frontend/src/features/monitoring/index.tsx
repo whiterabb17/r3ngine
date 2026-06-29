@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { 
   Activity, 
@@ -19,11 +19,13 @@ import { Grid, Container, Box, Typography, alpha, useTheme } from '@mui/material
 import { formatDiscoveryContent } from './utils/formatters';
 import { Target, Shield } from 'lucide-react';
 import { useThemeTokens } from '../../theme/useThemeTokens';
+import { AddMonitoringTargetModal } from './components/AddMonitoringTargetModal';
 
 export const MonitoringPage: React.FC = () => {
   const { tokens, isLight } = useThemeTokens();
   const theme = useTheme();
   const { projectSlug } = useParams({ from: '/$projectSlug/monitoring' });
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const { data: stats, isLoading: statsLoading } = useMonitoringStats(projectSlug);
   const { data: discoveries, isLoading: discoveriesLoading } = useMonitoringDiscoveries(projectSlug);
@@ -73,10 +75,29 @@ export const MonitoringPage: React.FC = () => {
             Continuous Monitoring Dashboard
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography sx={{ fontSize: '10px', fontWeight: 800, color: 'text.secondary', letterSpacing: 2 }}>DASHBOARD</Typography>
-          <ChevronRight size={12} style={{ color: tokens.accent.secondary }} />
-          <Typography sx={{ fontSize: '10px', fontWeight: 800, color: 'text.primary', letterSpacing: 2 }}>MONITORING</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Button
+            variant="contained"
+            onClick={() => setIsAddModalOpen(true)}
+            sx={{
+              bgcolor: tokens.accent.primary,
+              color: isLight ? '#fff' : '#000',
+              fontWeight: 800,
+              fontFamily: 'Orbitron',
+              letterSpacing: 1,
+              px: 3,
+              py: 0.5,
+              fontSize: '0.75rem',
+              '&:hover': { bgcolor: alpha(tokens.accent.primary, 0.8) }
+            }}
+          >
+            ADD TARGET
+          </Button>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography sx={{ fontSize: '10px', fontWeight: 800, color: 'text.secondary', letterSpacing: 2 }}>DASHBOARD</Typography>
+            <ChevronRight size={12} style={{ color: tokens.accent.secondary }} />
+            <Typography sx={{ fontSize: '10px', fontWeight: 800, color: 'text.primary', letterSpacing: 2 }}>MONITORING</Typography>
+          </Box>
         </Box>
       </Box>
 
@@ -313,7 +334,12 @@ export const MonitoringPage: React.FC = () => {
           </Box>
         </Box>
       </TacticalPanel>
+
+      <AddMonitoringTargetModal 
+        open={isAddModalOpen} 
+        onClose={() => setIsAddModalOpen(false)} 
+        projectSlug={projectSlug} 
+      />
     </Container>
   );
 };
-
