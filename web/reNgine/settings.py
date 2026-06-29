@@ -132,6 +132,7 @@ INSTALLED_APPS = [
     'rolepermissions',
     'plugins.apps.PluginsConfig',
     'apme.apps.ApmeConfig',
+    'engagements.apps.EngagementsConfig',
     'channels',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',

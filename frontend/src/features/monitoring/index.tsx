@@ -15,7 +15,7 @@ import {
 import { KpiCard } from '../../components/KpiCard';
 import { TacticalPanel } from '../../components/TacticalPanel';
 import { useMonitoringDiscoveries, useMonitoringStats } from './api/index';
-import { Grid, Container, Box, Typography, alpha, useTheme } from '@mui/material';
+import { Grid, Container, Box, Typography, alpha, useTheme, Button } from '@mui/material';
 import { formatDiscoveryContent } from './utils/formatters';
 import { Target, Shield } from 'lucide-react';
 import { useThemeTokens } from '../../theme/useThemeTokens';

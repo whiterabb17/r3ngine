@@ -87,6 +87,8 @@ from reNgine.temporal_workflows import (
     URLAuthExtractWorkflow,
 )
 
+from reNgine.temporal.workflows.assessment_workflow import AssessmentWorkflow
+
 # Activities (all Python-side activities are registered here)
 from reNgine.temporal_activities import (
     run_generic_task_activity,
@@ -626,7 +628,7 @@ class Command(BaseCommand):
                                  HostReconWorkflow, CIDRReconWorkflow, CodeScanWorkflow,
                                  DomainReconWorkflow, SubdomainReconWorkflow, URLCrawlWorkflow,
                                  URLDirSearchWorkflow, URLFuzzWorkflow, URLParamsFuzzWorkflow,
-                                 URLVulnWorkflow, URLAuthExtractWorkflow]
+                                 URLVulnWorkflow, URLAuthExtractWorkflow, AssessmentWorkflow]
                 all_workflows = [MasterScanWorkflow, NucleiPlannerWorkflow, SubScanWorkflow, StressTestWorkflow, StartupSyncWorkflow, ScheduledScanWorkflow, MonitoringWorkflow, GoExecutorTaskWorkflow, ApmeTaskWorkflow, RecalculateApmeWorkflow, CertificateResyncWorkflow, IdentityEnrichmentWorkflow, GeoLocalizeWorkflow, HackerOneImportWorkflow, HackerOneSyncBookmarkedWorkflow, ProxyFetchWorkflow, SingleTaskRetryWorkflow] + _p2_workflows + plugin_workflows
                 all_activities.extend(plugin_activities)
             except Exception as e:
@@ -635,7 +637,7 @@ class Command(BaseCommand):
                                  HostReconWorkflow, CIDRReconWorkflow, CodeScanWorkflow,
                                  DomainReconWorkflow, SubdomainReconWorkflow, URLCrawlWorkflow,
                                  URLDirSearchWorkflow, URLFuzzWorkflow, URLParamsFuzzWorkflow,
-                                 URLVulnWorkflow, URLAuthExtractWorkflow]
+                                 URLVulnWorkflow, URLAuthExtractWorkflow, AssessmentWorkflow]
                 all_workflows = [MasterScanWorkflow, NucleiPlannerWorkflow, SubScanWorkflow, StressTestWorkflow, StartupSyncWorkflow, ScheduledScanWorkflow, MonitoringWorkflow, GoExecutorTaskWorkflow, ApmeTaskWorkflow, RecalculateApmeWorkflow, CertificateResyncWorkflow, IdentityEnrichmentWorkflow, GeoLocalizeWorkflow, HackerOneImportWorkflow, HackerOneSyncBookmarkedWorkflow, ProxyFetchWorkflow, SingleTaskRetryWorkflow] + _p2_workflows
 
             # -------------------------------------------------------------------

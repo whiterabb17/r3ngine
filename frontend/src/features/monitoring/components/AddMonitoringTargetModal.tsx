@@ -170,7 +170,7 @@ export const AddMonitoringTargetModal: React.FC<AddMonitoringTargetModalProps> =
             >
               {unmonitoredDomains.map((domain) => (
                 <MenuItem key={domain.id} value={domain.id}>
-                  {domain.domain_name}
+                  {domain.name}
                 </MenuItem>
               ))}
               {unmonitoredDomains.length === 0 && (
