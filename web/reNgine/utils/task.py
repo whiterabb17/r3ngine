@@ -1133,7 +1133,13 @@ def stream_command(
 	import time
 
 	def watchdog(proc, limit_sec):
-		time.sleep(limit_sec)
+		deadline = time.monotonic() + limit_sec
+		while time.monotonic() < deadline:
+			if proc.poll() is not None:
+				return  # Process finished normally before timeout
+			time.sleep(2)
+			
+		# If we reach here, it timed out
 		if proc.poll() is None:
 			logger.error(f"Watchdog: Command timed out after {limit_sec} seconds. Killing process: {cmd}")
 			try:
@@ -1142,6 +1148,13 @@ def stream_command(
 				pass
 			except Exception as ex:
 				logger.error(f"Watchdog: Failed to kill process: {ex}")
+			
+			# Force close stdout to break the blocked readline() in the main thread
+			if proc.stdout:
+				try:
+					proc.stdout.close()
+				except Exception:
+					pass
 
 	watchdog_thread = threading.Thread(
 		target=watchdog,
