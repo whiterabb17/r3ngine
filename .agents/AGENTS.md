@@ -91,3 +91,8 @@ pm run build.
 ## Reporting & Data Models
 - **Directory Scans**: The `DirectoryScan` model does not contain file or URL details directly. It links to `DirectoryFile` objects via the `directory_files` ManyToMany field. When querying for actual discovered directory URLs on a subdomain, you must query the `DirectoryFile` model (e.g., `DirectoryFile.objects.filter(directory_files__directories__in=subdomains)`).
 - **Report Generation Tasks**: `generate_report_task` in `reNgine.tasks.report` is a synchronous background task that expects a `report_id` (the ID of a `ScanReport` instance), NOT a `scan_id`. It is not a Temporal Activity.
+
+## Local Execution & manage.py
+- **CRITICAL**: Never run `python manage.py` (or any other Python backend script) directly on the local Windows host. 
+- All Django utility commands (e.g., `check`, `flake8`, `makemigrations`, `migrate`, `dumpdata`, `test`) MUST be executed inside the `web` container using `docker compose exec web python manage.py <command>`.
+- The local environment does not have the required Python dependencies, environment variables, or paths configured; all backend code evaluation must happen within the container context.
