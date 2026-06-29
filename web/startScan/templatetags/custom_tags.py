@@ -1,8 +1,16 @@
 from urllib.parse import urlparse
 
+import markdown
 from django import template
+from django.utils.safestring import mark_safe
 
 register = template.Library()
+
+@register.filter(name='render_markdown')
+def render_markdown(text):
+    if not text:
+        return ""
+    return mark_safe(markdown.markdown(text))
 
 
 @register.filter(name='split')

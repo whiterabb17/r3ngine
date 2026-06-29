@@ -1335,6 +1335,7 @@
         {% endfor %}
     </article>
     {% endif %}
+    {% include 'report/technical_data_sections.html' %}
 
     {% if show_vuln %}
     <article id="vulnerabilities-discovered" style="page-break-before: always">
@@ -1419,7 +1420,7 @@
                 {% if vulnerability.remediation %}
                 <div class="vuln-section">
                     <p class="section-title">Remediation</p>
-                    <p>{{vulnerability.remediation|linebreaks}}</p>
+                    <div>{{vulnerability.remediation|render_markdown}}</div>
                 </div>
                 {% endif %}
                 <div class="vuln-section">

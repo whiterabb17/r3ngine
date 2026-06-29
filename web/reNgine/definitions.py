@@ -795,7 +795,11 @@ Impact:
 A thorough assessment of the vulnerability's potential impact on web applications, including: Data confidentiality breaches, System integrity compromises, Service availability disruptions, Potential for further exploitation
 
 Remediation:
-A prioritized list of specific, actionable steps to address the vulnerability, such as: Code modifications, Configuration changes, Security patch applications, Implementation of security controls
+A detailed playbook containing prioritized, actionable steps to address the vulnerability. It MUST include the following sub-sections:
+- Short-Term Strategy: Immediate mitigations and workarounds.
+- Long-Term Strategy: Permanent fixes, architectural changes, or codebase refactors.
+- Verification: How to test and ensure the vulnerability is properly remediated.
+- Risk/Rollback: Potential side effects of the remediation and rollback procedures if issues occur.
 
 References:
 Relevant, authoritative sources supporting your analysis, such as: Official CVE database entries, Vendor security advisories, Respected security research publications, Applicable industry standards or guidelines
@@ -805,7 +809,7 @@ Ensure that:
 1. Each section (Description, Impact, Remediation, References) is separated by ONLY ONE blank line and no multiple new lines. The content must be immediately after the section title.
 2. Do not make title as bold, italic or underline. It must be Title ending with a colon. Example: Description:
 3. All URLs in the 'references' section begin with 'http://' or 'https://'.
-4. Remediation steps should be specific and actionable and should not contain any ambiguous or general recommendations.
+4. Remediation steps should be specific and actionable and should not contain any ambiguous or general recommendations. Format the remediation sub-sections clearly using bold text (e.g. **Short-Term Strategy:**) and bullet points.
 5. Refrain from including any personal opinions or subjective assessments in your report.
 """
 

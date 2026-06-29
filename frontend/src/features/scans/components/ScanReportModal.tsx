@@ -22,7 +22,7 @@ import {
   useTheme,
   alpha
 } from '@mui/material';
-import { X, FileText, Shield, FileSearch, Download, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, FileText, Shield, FileSearch, Download, MessageSquare, ChevronDown, ChevronUp, Sliders, Briefcase, Terminal } from 'lucide-react';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 import { getDialogPaperSx, getFieldSx } from '../../../theme/semanticColors';
 
@@ -57,16 +57,69 @@ export const ScanReportModal: React.FC<ScanReportModalProps> = ({ open, onClose,
 
   const [reportType, setReportType] = useState('full');
   const [reportTemplate, setReportTemplate] = useState('modern');
-  const [ignoreInfoVuln, setIgnoreInfoVuln] = useState(false);
-  const [includeAttackSurface, setIncludeAttackSurface] = useState(false);
-  const [includeAttackPaths, setIncludeAttackPaths] = useState(false);
-  const [includeFoundParameters, setIncludeFoundParameters] = useState(false);
-  const [includeSecretFindings, setIncludeSecretFindings] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<string | null>(null);
   const [reportUrl, setReportUrl] = useState<string | null>(null);
   const [comments, setComments] = useState('');
   const [commentsExpanded, setCommentsExpanded] = useState(false);
+
+  // Executive Settings
+  const [execSettings, setExecSettings] = useState({
+    attackSurface: false,
+    attackPaths: false,
+  });
+
+  // Technical Settings
+  const [techSettings, setTechSettings] = useState({
+    ignoreInfoVuln: false,
+    secretFindings: true,
+    parameters: false,
+    endpoints: false,
+    directories: false,
+    s3Buckets: false,
+    wafInfo: false,
+    technologies: false,
+    apiIntelligence: false,
+    identityIntelligence: false,
+    exposures: false,
+    metadataDorks: false,
+    certificates: false,
+    employees: false,
+  });
+
+  const handleTechSettingChange = (field: keyof typeof techSettings) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTechSettings(prev => ({ ...prev, [field]: e.target.checked }));
+  };
+
+  const handleExecSettingChange = (field: keyof typeof execSettings) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setExecSettings(prev => ({ ...prev, [field]: e.target.checked }));
+  };
+
+  const handleMasterTechToggle = (checked: boolean) => {
+    setTechSettings({
+      ignoreInfoVuln: checked,
+      secretFindings: checked,
+      parameters: checked,
+      endpoints: checked,
+      directories: checked,
+      s3Buckets: checked,
+      wafInfo: checked,
+      technologies: checked,
+      apiIntelligence: checked,
+      identityIntelligence: checked,
+      exposures: checked,
+      metadataDorks: checked,
+      certificates: checked,
+      employees: checked,
+    });
+  };
+
+  const handleMasterExecToggle = (checked: boolean) => {
+    setExecSettings({
+      attackSurface: checked,
+      attackPaths: checked,
+    });
+  };
 
   const pollReportStatus = async (reportId: number) => {
     setIsGenerating(true);
@@ -117,11 +170,22 @@ export const ScanReportModal: React.FC<ScanReportModalProps> = ({ open, onClose,
       const params = new URLSearchParams({
         report_type: reportType,
         report_template: reportTemplate,
-        ignore_info_vuln: ignoreInfoVuln ? 'True' : 'False',
-        include_attack_surface_map: includeAttackSurface ? 'True' : 'False',
-        include_attack_paths: includeAttackPaths ? 'True' : 'False',
-        include_found_parameters: includeFoundParameters ? 'True' : 'False',
-        include_secret_findings: includeSecretFindings ? 'True' : 'False',
+        ignore_info_vuln: techSettings.ignoreInfoVuln ? 'True' : 'False',
+        include_attack_surface_map: execSettings.attackSurface ? 'True' : 'False',
+        include_attack_paths: execSettings.attackPaths ? 'True' : 'False',
+        include_found_parameters: techSettings.parameters ? 'True' : 'False',
+        include_secret_findings: techSettings.secretFindings ? 'True' : 'False',
+        include_endpoints: techSettings.endpoints ? 'True' : 'False',
+        include_directories: techSettings.directories ? 'True' : 'False',
+        include_s3_buckets: techSettings.s3Buckets ? 'True' : 'False',
+        include_waf: techSettings.wafInfo ? 'True' : 'False',
+        include_technologies: techSettings.technologies ? 'True' : 'False',
+        include_api_intelligence: techSettings.apiIntelligence ? 'True' : 'False',
+        include_identity: techSettings.identityIntelligence ? 'True' : 'False',
+        include_exposures: techSettings.exposures ? 'True' : 'False',
+        include_dorks_metadata: techSettings.metadataDorks ? 'True' : 'False',
+        include_certificates: techSettings.certificates ? 'True' : 'False',
+        include_employees: techSettings.employees ? 'True' : 'False',
         download: download ? 'True' : 'False',
         comments: comments
       });
@@ -289,8 +353,7 @@ export const ScanReportModal: React.FC<ScanReportModalProps> = ({ open, onClose,
                   const val = e.target.value;
                   setReportTemplate(val);
                   if (val !== 'enterprise' && val !== 'cyber_pro') {
-                    setIncludeAttackSurface(false);
-                    setIncludeAttackPaths(false);
+                    setExecSettings(prev => ({ ...prev, attackSurface: false, attackPaths: false }));
                   }
                 }}>
                   <FormControlLabel
@@ -316,113 +379,129 @@ export const ScanReportModal: React.FC<ScanReportModalProps> = ({ open, onClose,
                 </RadioGroup>
               </Box>
 
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
-                {/* Column 1 */}
-                <Box>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={ignoreInfoVuln}
-                        onChange={(e) => setIgnoreInfoVuln(e.target.checked)}
-                        sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}
-                      />
-                    }
-                    label={<Typography sx={{ color: tokens.text.secondary, fontSize: '0.8rem', fontWeight: 600 }}>Ignore Information Vulnerabilities</Typography>}
-                  />
-
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={includeSecretFindings}
-                        onChange={(e) => setIncludeSecretFindings(e.target.checked)}
-                        sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}
-                      />
-                    }
-                    label={
+              {/* Executive & Technical Configuration Modes */}
+              <Box sx={{ mt: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                
+                {/* Executive Settings Group */}
+                <Box sx={{
+                  border: `1px solid ${alpha(tokens.accent.primary, 0.2)}`,
+                  borderRadius: 2,
+                  bgcolor: alpha(tokens.accent.primary, 0.02),
+                  overflow: 'hidden'
+                }}>
+                  <Box sx={{
+                    p: 2,
+                    borderBottom: `1px solid ${alpha(tokens.accent.primary, 0.1)}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    bgcolor: alpha(tokens.accent.primary, 0.04)
+                  }}>
+                    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                      <Briefcase size={18} color={tokens.accent.primary} />
                       <Box>
-                        <Typography sx={{ color: tokens.text.secondary, fontSize: '0.8rem', fontWeight: 600 }}>
-                          Include Secret & Credential Findings
+                        <Typography sx={{ color: tokens.text.primary, fontSize: '0.85rem', fontWeight: 800, fontFamily: 'Orbitron' }}>
+                          EXECUTIVE MODE
                         </Typography>
-                        <Typography sx={{ color: alpha(tokens.accent.primary, 0.4), fontSize: '0.65rem' }}>
-                          Semgrep static analysis results
+                        <Typography sx={{ color: tokens.text.secondary, fontSize: '0.65rem' }}>
+                          High-level summaries, visualizations, and impact paths
                         </Typography>
                       </Box>
-                    }
-                  />
-
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={includeAttackSurface}
+                    </Stack>
+                    <FormControlLabel
+                      control={<Checkbox 
+                        checked={Object.values(execSettings).some(v => v)} 
+                        onChange={(e) => handleMasterExecToggle(e.target.checked)} 
+                        sx={{ color: alpha(tokens.accent.primary, 0.3), '&.Mui-checked': { color: tokens.accent.primary } }} 
+                      />}
+                      label=""
+                      sx={{ m: 0 }}
+                    />
+                  </Box>
+                  <Box sx={{ p: 2, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                    <FormControlLabel
+                      control={<Checkbox
+                        checked={execSettings.attackSurface}
                         disabled={reportTemplate !== 'enterprise' && reportTemplate !== 'cyber_pro'}
-                        onChange={(e) => setIncludeAttackSurface(e.target.checked)}
-                        sx={{
-                          color: alpha(tokens.accent.primary, 0.15),
-                          '&.Mui-checked': { color: tokens.accent.primary },
-                          '&.Mui-disabled': { color: tokens.text.disabled }
-                        }}
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography sx={{
-                          color: (reportTemplate === 'enterprise' || reportTemplate === 'cyber_pro') ? tokens.text.secondary : tokens.text.disabled,
-                          fontSize: '0.8rem',
-                          fontWeight: 600,
-                          transition: 'color 0.2s'
-                        }}>
-                          Include Attack Surface Map
-                        </Typography>
-                        {reportTemplate !== 'enterprise' && reportTemplate !== 'cyber_pro' && (
-                          <Typography sx={{ color: alpha(tokens.accent.primary, 0.3), fontSize: '0.65rem' }}>Enterprise/Pro only</Typography>
-                        )}
-                      </Box>
-                    }
-                  />
+                        onChange={handleExecSettingChange('attackSurface')}
+                        sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}
+                      />}
+                      label={
+                        <Box>
+                          <Typography sx={{ color: (reportTemplate === 'enterprise' || reportTemplate === 'cyber_pro') ? tokens.text.secondary : tokens.text.disabled, fontSize: '0.75rem', fontWeight: 600 }}>Attack Surface Map</Typography>
+                          {reportTemplate !== 'enterprise' && reportTemplate !== 'cyber_pro' && <Typography sx={{ color: alpha(tokens.accent.primary, 0.3), fontSize: '0.6rem' }}>Enterprise/Pro only</Typography>}
+                        </Box>
+                      }
+                    />
+                    <FormControlLabel
+                      control={<Checkbox
+                        checked={execSettings.attackPaths}
+                        disabled={reportTemplate !== 'enterprise' && reportTemplate !== 'cyber_pro'}
+                        onChange={handleExecSettingChange('attackPaths')}
+                        sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}
+                      />}
+                      label={
+                        <Box>
+                          <Typography sx={{ color: (reportTemplate === 'enterprise' || reportTemplate === 'cyber_pro') ? tokens.text.secondary : tokens.text.disabled, fontSize: '0.75rem', fontWeight: 600 }}>Attack Paths</Typography>
+                          {reportTemplate !== 'enterprise' && reportTemplate !== 'cyber_pro' && <Typography sx={{ color: alpha(tokens.accent.primary, 0.3), fontSize: '0.6rem' }}>Enterprise/Pro only</Typography>}
+                        </Box>
+                      }
+                    />
+                  </Box>
                 </Box>
 
-                {/* Column 2 */}
-                <Box>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={includeAttackPaths}
-                        disabled={reportTemplate !== 'enterprise' && reportTemplate !== 'cyber_pro'}
-                        onChange={(e) => setIncludeAttackPaths(e.target.checked)}
-                        sx={{
-                          color: alpha(tokens.accent.primary, 0.15),
-                          '&.Mui-checked': { color: tokens.accent.primary },
-                          '&.Mui-disabled': { color: tokens.text.disabled }
-                        }}
-                      />
-                    }
-                    label={
+                {/* Technical Settings Group */}
+                <Box sx={{
+                  border: `1px solid ${alpha(tokens.accent.primary, 0.2)}`,
+                  borderRadius: 2,
+                  bgcolor: alpha(tokens.accent.primary, 0.02),
+                  overflow: 'hidden'
+                }}>
+                  <Box sx={{
+                    p: 2,
+                    borderBottom: `1px solid ${alpha(tokens.accent.primary, 0.1)}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    bgcolor: alpha(tokens.accent.primary, 0.04)
+                  }}>
+                    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                      <Terminal size={18} color={tokens.accent.primary} />
                       <Box>
-                        <Typography sx={{
-                          color: (reportTemplate === 'enterprise' || reportTemplate === 'cyber_pro') ? tokens.text.secondary : tokens.text.disabled,
-                          fontSize: '0.8rem',
-                          fontWeight: 600,
-                          transition: 'color 0.2s'
-                        }}>
-                          Include Attack Paths
+                        <Typography sx={{ color: tokens.text.primary, fontSize: '0.85rem', fontWeight: 800, fontFamily: 'Orbitron' }}>
+                          TECHNICAL MODE
                         </Typography>
-                        {reportTemplate !== 'enterprise' && reportTemplate !== 'cyber_pro' && (
-                          <Typography sx={{ color: alpha(tokens.accent.primary, 0.3), fontSize: '0.65rem' }}>Enterprise/Pro only</Typography>
-                        )}
+                        <Typography sx={{ color: tokens.text.secondary, fontSize: '0.65rem' }}>
+                          Raw data, parameters, deep-dive intelligence, and full findings
+                        </Typography>
                       </Box>
-                    }
-                  />
-
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={includeFoundParameters}
-                        onChange={(e) => setIncludeFoundParameters(e.target.checked)}
-                        sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}
-                      />
-                    }
-                    label={<Typography sx={{ color: tokens.text.secondary, fontSize: '0.8rem', fontWeight: 600 }}>Include Found Parameters</Typography>}
-                  />
+                    </Stack>
+                    <FormControlLabel
+                      control={<Checkbox 
+                        checked={Object.values(techSettings).some(v => v)} 
+                        onChange={(e) => handleMasterTechToggle(e.target.checked)} 
+                        sx={{ color: alpha(tokens.accent.primary, 0.3), '&.Mui-checked': { color: tokens.accent.primary } }} 
+                      />}
+                      label=""
+                      sx={{ m: 0 }}
+                    />
+                  </Box>
+                  <Box sx={{ p: 2, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: y => 1.5, columnGap: 3 }}>
+                    <FormControlLabel control={<Checkbox checked={techSettings.ignoreInfoVuln} onChange={handleTechSettingChange('ignoreInfoVuln')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>Ignore Info Vulns</Typography>} />
+                    <FormControlLabel control={<Checkbox checked={techSettings.secretFindings} onChange={handleTechSettingChange('secretFindings')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>Secret & Credential Findings</Typography>} />
+                    <FormControlLabel control={<Checkbox checked={techSettings.parameters} onChange={handleTechSettingChange('parameters')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>Found Parameters</Typography>} />
+                    <FormControlLabel control={<Checkbox checked={techSettings.endpoints} onChange={handleTechSettingChange('endpoints')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>Endpoints</Typography>} />
+                    <FormControlLabel control={<Checkbox checked={techSettings.directories} onChange={handleTechSettingChange('directories')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>Directories</Typography>} />
+                    <FormControlLabel control={<Checkbox checked={techSettings.s3Buckets} onChange={handleTechSettingChange('s3Buckets')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>S3 Buckets</Typography>} />
+                    <FormControlLabel control={<Checkbox checked={techSettings.wafInfo} onChange={handleTechSettingChange('wafInfo')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>WAF Info</Typography>} />
+                    <FormControlLabel control={<Checkbox checked={techSettings.technologies} onChange={handleTechSettingChange('technologies')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>Technologies</Typography>} />
+                    <FormControlLabel control={<Checkbox checked={techSettings.apiIntelligence} onChange={handleTechSettingChange('apiIntelligence')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>API Intelligence</Typography>} />
+                    <FormControlLabel control={<Checkbox checked={techSettings.identityIntelligence} onChange={handleTechSettingChange('identityIntelligence')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>Identity Intelligence</Typography>} />
+                    <FormControlLabel control={<Checkbox checked={techSettings.exposures} onChange={handleTechSettingChange('exposures')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>Exposures</Typography>} />
+                    <FormControlLabel control={<Checkbox checked={techSettings.metadataDorks} onChange={handleTechSettingChange('metadataDorks')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>Metadata & Dorks</Typography>} />
+                    <FormControlLabel control={<Checkbox checked={techSettings.certificates} onChange={handleTechSettingChange('certificates')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>Certificates</Typography>} />
+                    <FormControlLabel control={<Checkbox checked={techSettings.employees} onChange={handleTechSettingChange('employees')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>Employees</Typography>} />
+                  </Box>
                 </Box>
               </Box>
             </Stack>
