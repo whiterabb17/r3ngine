@@ -537,17 +537,20 @@ def run_command_with_retry(cmd, results_file, max_retries=3, **kwargs):
     return return_code, output
 
 
-def save_email(email_address, scan_history=None):
+def save_email(email_address: str, scan_history=None, source: str = 'hunter'):
     if not validators.email(email_address):
-        logger.info(f'Email {email_address} is invalid. Skipping.')
+        logger.info('Email %s is invalid. Skipping.', email_address)
         return None, False
-    email, created = Email.objects.get_or_create(address=email_address)
+    email, created = Email.objects.get_or_create(
+        address=email_address,
+        defaults={'source': source},
+    )
 
     # Add email to ScanHistory
     if scan_history:
         scan_history.emails.add(email)
         scan_history.save()
-        from reNgine.osint_tasks import enrich_identities_task
+        from reNgine.tasks.osint import enrich_identities_task
         threading.Thread(
             target=enrich_identities_task,
             kwargs={'identity': email_address, 'identity_type': 'email', 'scan_history_id': scan_history.id},
@@ -565,7 +568,7 @@ def save_employee(name, designation='', scan_history=None):
     if scan_history:
         scan_history.employees.add(employee)
         scan_history.save()
-        from reNgine.osint_tasks import enrich_identities_task
+        from reNgine.tasks.osint import enrich_identities_task
         threading.Thread(
             target=enrich_identities_task,
             kwargs={'identity': name, 'identity_type': 'employee', 'scan_history_id': scan_history.id},
@@ -671,7 +674,7 @@ def save_endpoint(
     if ctx.get('domain_id'):
         # Cache resolved Domain in ctx to avoid repeated SELECT per save_endpoint() call.
         domain = ctx.get('_domain_obj')
-        if domain is None:
+        if domain is None or isinstance(domain, int):
             domain = Domain.objects.filter(id=ctx.get('domain_id')).first()
             ctx['_domain_obj'] = domain
         if domain and domain.name not in http_url:
@@ -701,12 +704,12 @@ def save_endpoint(
         # Cache resolved ORM objects in ctx to avoid repeated queries within
         # the same scan context (e.g., once per port in port_scan's hot loop).
         scan = ctx.get('_scan_obj')
-        if scan is None:
+        if scan is None or isinstance(scan, int):
             scan = ScanHistory.objects.filter(pk=ctx.get('scan_history_id')).first()
             ctx['_scan_obj'] = scan
 
         domain = ctx.get('_domain_obj')
-        if domain is None:
+        if domain is None or isinstance(domain, int):
             domain = Domain.objects.filter(pk=ctx.get('domain_id')).first()
             ctx['_domain_obj'] = domain
 
@@ -737,6 +740,27 @@ def save_endpoint(
         endpoint.is_default = is_default
         endpoint.discovered_date = timezone.now()
         endpoint.save()
+
+        # Centralized Brute-Force Candidate Registration
+        auth_keywords = ['login', 'admin', 'auth', 'portal', 'controlpanel', 'signin', 'manage']
+        if any(k in http_url.lower() for k in auth_keywords):
+            from reNgine.utilities import save_auth_candidate
+            try:
+                parsed = urlparse(http_url)
+                port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+                save_auth_candidate(
+                    scan_history=endpoint.scan_history,
+                    subdomain=endpoint.subdomain,
+                    endpoint=endpoint,
+                    target=parsed.hostname,
+                    protocol='http',
+                    port=port,
+                    source_tool=endpoint_data.get('source_tool', 'discovery_engine'),
+                    tech_hint=f"Discovered URL: {http_url}"
+                )
+            except Exception as e:
+                logger.error(f"Error registering AuthCandidate from endpoint {http_url}: {e}")
+
         subscan_id = ctx.get('subscan_id')
         if subscan_id:
             from startScan.models import SubScan

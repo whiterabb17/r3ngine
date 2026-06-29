@@ -23,13 +23,14 @@ export const useDeleteEndpoints = (projectSlug: string) => {
   });
 };
 
-export const useEndpoints = (projectSlug: string, page = 1, searchQuery = '', scanId?: number, gfTag?: string, targetId?: number, httpStatus?: string) => {
+export const useEndpoints = (projectSlug: string, page = 1, searchQuery = '', scanId?: number, gfTag?: string, targetId?: number, httpStatus?: string, pageSize = 25) => {
   return useQuery<EndpointResponse>({
-    queryKey: ['endpoints', projectSlug, page, searchQuery, scanId, gfTag, targetId, httpStatus],
+    queryKey: ['endpoints', projectSlug, page, searchQuery, scanId, gfTag, targetId, httpStatus, pageSize],
     queryFn: async () => {
       const url = new URL(`${window.location.origin}/api/listEndpoints/`);
       url.searchParams.append('project', projectSlug);
       url.searchParams.append('page', page.toString());
+      url.searchParams.append('length', pageSize.toString());
       
       if (searchQuery) {
         url.searchParams.append('query_param', searchQuery);

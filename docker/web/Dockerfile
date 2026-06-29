@@ -21,10 +21,12 @@ RUN npm run build
 # Only /go/bin/* binaries are exported to the final image — the entire Go SDK,
 # module cache, and build cache stay inside this ephemeral stage.
 # ===========================================================================
-FROM golang:1.25-bookworm AS go-tools-builder
+FROM golang:1.26-bookworm AS go-tools-builder
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends libpcap-dev make && \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends libpcap-dev make curl && \
     rm -rf /var/lib/apt/lists/*
 
 ENV GO111MODULE=on
@@ -62,7 +64,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go install -ldflags="-s -w" -v github.com/Chocapikk/wpprobe@latest && \
     go install -ldflags="-s -w" -v github.com/hueristiq/xurlfind3r/cmd/xurlfind3r@latest && \
     go install -ldflags="-s -w" -v github.com/edoardottt/cariddi/cmd/cariddi@latest && \
-    go install -ldflags="-s -w" -v github.com/dimasma0305/wp-taint-scan/cmd/taint-scan@latest
+    go install -ldflags="-s -w" -v github.com/dimasma0305/wp-taint-scan/cmd/taint-scan@latest && \
+    curl -sSfL https://github.com/praetorian-inc/brutus/releases/download/v1.5.1/brutus-linux-amd64.tar.gz | tar -C /go/bin -xz brutus
 
 # betterleaks has no published go install path — clone and build directly.
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -100,7 +103,9 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # ===========================================================================
 FROM golang:1.26-bookworm AS vigolium-builder
 
-RUN apt-get update && \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
     apt-get install -y --no-install-recommends curl git make unzip && \
     rm -rf /var/lib/apt/lists/*
 
@@ -115,7 +120,8 @@ RUN git clone --depth 1 https://github.com/vigolium/vigolium /build/vigolium
 WORKDIR /build/vigolium
 
 # Build embedded binaries (vigolium-audit via bun, jsscan via bun)
-RUN make ensure-audit && make ensure-jsscan
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    make ensure-audit && make ensure-jsscan
 
 # Compile vigolium binary
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -133,7 +139,9 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # ===========================================================================
 FROM rust:bookworm AS dalfox-builder
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     musl-tools \
     pkg-config \
     git \
@@ -188,7 +196,9 @@ LABEL \
 # Ubuntu 22.04 ships postgresql-client 14 by default; pg_dump requires the
 # client version to be >= the server version (now 16), so we pin to 16.
 # ---------------------------------------------------------------------------
-RUN apt-get update -y && \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update -y && \
     apt-get install -y --no-install-recommends ca-certificates gnupg curl lsb-release && \
     rm -rf /var/lib/apt/lists/* && \
     curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
@@ -206,7 +216,9 @@ RUN apt-get update -y && \
 # build-essential is kept because pip installs some packages that compile
 # C extensions (cryptography, pycairo, etc.) and gems (wpscan) need gcc.
 # ---------------------------------------------------------------------------
-RUN apt-get update -y && \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update -y && \
     apt-get install -y --no-install-recommends \
     # Python 3.12 runtime
     python3.12 \
@@ -256,6 +268,8 @@ RUN apt-get update -y && \
     hping3 \
     wrk \
     postgresql-client-16 \
+    # Email security testing tools
+    swaks \
     # Network protocol enumeration tools
     onesixtyone \
     snmp \
@@ -299,10 +313,13 @@ ENV PATH="/root/.local/bin:${PATH}"
 # Node.js 20 + Retire.js (JS dependency vulnerability scanner)
 # Node runtime is needed at runtime for `retire` — not just build time.
 # ---------------------------------------------------------------------------
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    --mount=type=cache,target=/root/.npm \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
     npm install -g retire && \
-    rm -rf /var/lib/apt/lists/* /root/.npm
+    rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
 # Copy compiled Go tool binaries from the builder stage.
@@ -339,10 +356,6 @@ RUN ARCH=$(dpkg --print-architecture) && \
     mv "k6-v${K6_VERSION}-linux-${K6_ARCH}/k6" /usr/local/bin/ && \
     rm -rf "k6-v${K6_VERSION}-linux-${K6_ARCH}"*
 
-# Brutus — HTTP brute force tool
-RUN curl -L https://github.com/praetorian-inc/brutus/releases/latest/download/brutus-linux-amd64.tar.gz | \
-    tar xz && mv brutus /usr/local/bin/
-
 # Dalfox v3 — XSS scanner (Rust rewrite; built from source in dalfox-builder stage)
 COPY --from=dalfox-builder /usr/local/bin/dalfox /usr/local/bin/dalfox
 
@@ -367,7 +380,8 @@ RUN git clone --depth 1 https://gitlab.com/exploit-database/exploitdb /usr/src/e
     cp /usr/src/exploitdb/.searchsploit_rc /root/.searchsploit_rc
 
 # WPScan — WordPress vulnerability scanner
-RUN gem install wpscan --no-document
+RUN --mount=type=cache,target=/root/.gem \
+    gem install wpscan --no-document
 
 # GooFuzz — Google-dork based fuzzer (shell script, no compilation)
 RUN mkdir -p /usr/src/github && \
@@ -384,53 +398,64 @@ WORKDIR /usr/src/app
 # All clones are shallow (--depth 1) and .git directories are removed after
 # installation to eliminate full git history from the image.
 # ---------------------------------------------------------------------------
-RUN git clone --depth 1 https://github.com/smicallef/spiderfoot /usr/src/github/spiderfoot && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/smicallef/spiderfoot /usr/src/github/spiderfoot && \
     pip3 install -r /usr/src/github/spiderfoot/requirements.txt && \
     rm -rf /usr/src/github/spiderfoot/.git
 
-RUN git clone --depth 1 https://github.com/assetnote/cpanel2shell-scanner /usr/src/github/cpanel2shell-scanner && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/assetnote/cpanel2shell-scanner /usr/src/github/cpanel2shell-scanner && \
     pip3 install -r /usr/src/github/cpanel2shell-scanner/requirements.txt && \
     rm -rf /usr/src/github/cpanel2shell-scanner/.git
 
-RUN git clone --depth 1 https://github.com/assetnote/react2shell-scanner /usr/src/github/react2shell-scanner && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/assetnote/react2shell-scanner /usr/src/github/react2shell-scanner && \
     pip3 install -r /usr/src/github/react2shell-scanner/requirements.txt && \
     rm -rf /usr/src/github/react2shell-scanner/.git
 
-RUN git clone --depth 1 https://github.com/UnaPibaGeek/ctfr /usr/src/github/ctfr && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/UnaPibaGeek/ctfr /usr/src/github/ctfr && \
     pip3 install -r /usr/src/github/ctfr/requirements.txt && \
     rm -rf /usr/src/github/ctfr/.git
 
 RUN git clone --depth 1 https://github.com/urbanadventurer/username-anarchy /usr/src/github/username-anarchy && \
     ln -sf /usr/src/github/username-anarchy/username-anarchy /usr/local/bin/username-anarchy
 
-RUN git clone --depth 1 https://github.com/WazeHell/acunetix-python /usr/src/github/acunetix-python && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/WazeHell/acunetix-python /usr/src/github/acunetix-python && \
     sed -i 's/Sent from Acunetix-Python/r3-external/g' /usr/src/github/acunetix-python/acunetix/core.py && \
-    pip3 install --no-cache-dir /usr/src/github/acunetix-python && \
+    pip3 install /usr/src/github/acunetix-python && \
     rm -rf /usr/src/github/acunetix-python/.git
 
-RUN git clone --depth 1 https://github.com/shmilylty/OneForAll /usr/src/github/OneForAll && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/shmilylty/OneForAll /usr/src/github/OneForAll && \
     pip3 install -r /usr/src/github/OneForAll/requirements.txt && \
     rm -rf /usr/src/github/OneForAll/.git
 
-RUN git clone --depth 1 https://github.com/aboul3la/Sublist3r /usr/src/github/Sublist3r && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/aboul3la/Sublist3r /usr/src/github/Sublist3r && \
     pip3 install -r /usr/src/github/Sublist3r/requirements.txt && \
     sed -i "s/token = csrf_regex.findall(resp)\[0\]/token = csrf_regex.findall(resp)[0] if csrf_regex.findall(resp) else ''/g" /usr/src/github/Sublist3r/sublist3r.py && \
     rm -rf /usr/src/github/Sublist3r/.git
 
-RUN git clone --depth 1 https://github.com/laramies/theHarvester /usr/src/github/theHarvester && \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    git clone --depth 1 https://github.com/laramies/theHarvester /usr/src/github/theHarvester && \
     cd /usr/src/github/theHarvester && uv sync && \
     rm -rf /usr/src/github/theHarvester/.git
 
-RUN git clone --depth 1 https://github.com/devanshbatham/ParamSpider /usr/src/github/ParamSpider && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/devanshbatham/ParamSpider /usr/src/github/ParamSpider && \
     cd /usr/src/github/ParamSpider && pip3 install . && \
     rm -rf /usr/src/github/ParamSpider/.git
 
-RUN git clone --depth 1 https://github.com/GerbenJavado/LinkFinder.git /usr/src/github/LinkFinder && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/GerbenJavado/LinkFinder.git /usr/src/github/LinkFinder && \
     pip3 install -r /usr/src/github/LinkFinder/requirements.txt && \
     cd /usr/src/github/LinkFinder && python3 setup.py install && \
     rm -rf /usr/src/github/LinkFinder/.git
 
-RUN git clone --depth 1 https://github.com/Tuhinshubhra/CMSeeK /usr/src/github/CMSeeK && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/Tuhinshubhra/CMSeeK /usr/src/github/CMSeeK && \
     pip3 install -r /usr/src/github/CMSeeK/requirements.txt && \
     rm -rf /usr/src/github/CMSeeK/.git
 
@@ -438,7 +463,8 @@ RUN git clone --depth 1 https://github.com/drwetter/testssl.sh /usr/src/github/t
     chmod +x /usr/src/github/testssl.sh/testssl.sh && \
     ln -sf /usr/src/github/testssl.sh/testssl.sh /usr/local/bin/testssl.sh
 
-RUN git clone --depth 1 https://github.com/ticarpi/jwt_tool /usr/src/github/jwt_tool && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/ticarpi/jwt_tool /usr/src/github/jwt_tool && \
     pip3 install -r /usr/src/github/jwt_tool/requirements.txt && \
     rm -rf /usr/src/github/jwt_tool/.git
 
@@ -461,7 +487,7 @@ RUN git clone --depth 1 https://github.com/ticarpi/jwt_tool /usr/src/github/jwt_
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install --upgrade pip setuptools wheel pyOpenSSL h8mail && \
-    pip3 install --upgrade fierce dirsearch meson ninja arjun inql netlas holehe
+    pip3 install --upgrade fierce dirsearch meson ninja arjun inql netlas holehe smtp-user-enum
 
 # Ensure pipx is available and install baddns
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -508,11 +534,13 @@ RUN TRIVY_VERSION="0.69.3" && \
     tar -xzf /tmp/trivy.tar.gz -C /usr/local/bin trivy && \
     rm /tmp/trivy.tar.gz
 
-RUN git clone --depth 1 https://github.com/dolevf/graphql-cop.git /usr/src/github/graphql-cop \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/dolevf/graphql-cop.git /usr/src/github/graphql-cop \
     && pip3 install -r /usr/src/github/graphql-cop/requirements.txt \
     && rm -rf /usr/src/github/graphql-cop/.git
 
-RUN git clone --depth 1 https://github.com/cddmp/enum4linux-ng /usr/src/github/enum4linux-ng \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/cddmp/enum4linux-ng /usr/src/github/enum4linux-ng \
     && pip3 install -r /usr/src/github/enum4linux-ng/requirements.txt \
     && ln -sf /usr/src/github/enum4linux-ng/enum4linux-ng.py /usr/local/bin/enum4linux-ng \
     && rm -rf /usr/src/github/enum4linux-ng/.git

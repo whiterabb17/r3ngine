@@ -1154,6 +1154,51 @@ def remove_proxy_from_pool(proxy_value, proxy_obj=None):
 
 	return removed
 
+def remove_proxies_from_pool(proxy_values, proxy_obj=None):
+	"""Remove multiple proxies from the persisted pool safely and idempotently.
+	"""
+	targets = []
+	for pv in proxy_values:
+		if is_proxy_recently_used(pv):
+			continue
+		target = _normalize_proxy_pool_line(pv)
+		if target:
+			targets.append(target)
+			
+	if not targets:
+		return False
+
+	from django.db import transaction
+
+	with _proxy_pool_lock:
+		with transaction.atomic():
+			if proxy_obj is None:
+				locked_obj = Proxy.objects.select_for_update().first()
+			else:
+				locked_obj = Proxy.objects.select_for_update().filter(pk=proxy_obj.pk).first()
+
+			if not locked_obj or not locked_obj.proxies:
+				return False
+
+			remaining_lines = []
+			removed_count = 0
+			for line in locked_obj.proxies.splitlines():
+				stripped = line.strip()
+				if not stripped:
+					continue
+				if _normalize_proxy_pool_line(stripped) in targets:
+					removed_count += 1
+					continue
+				remaining_lines.append(stripped)
+
+			if removed_count > 0:
+				locked_obj.proxies = '\n'.join(remaining_lines)
+				locked_obj.save(update_fields=['proxies'])
+				logger.warning('Removed %d invalid proxies from pool', removed_count)
+				return True
+				
+	return False
+
 
 
 
@@ -1294,16 +1339,15 @@ def get_random_proxy(http_only=False):
 	result_holder = [None]  # thread-safe single-slot via GIL
 
 	def _check(proxy_url):
-		"""Check a single proxy; mark it failed on the cache and prune from DB if dead."""
+		"""Check a single proxy; mark it failed on the cache."""
 		if check_proxy_robust(proxy_url, timeout=PROXY_VALIDATION_TIMEOUT, server_ip=server_ip):
 			return proxy_url
 		_failed_proxy_cache[proxy_url] = time.time()
-		if remove_proxy_from_pool(proxy_url, _proxy_obj):
-			logger.warning('Removed invalid proxy from pool: %s', proxy_url)
 		return None
 
 	with ThreadPoolExecutor(max_workers=max_workers) as pool:
 		future_map = {pool.submit(_check, p): p for p in candidates}
+		dead_proxies = []
 		for fut in as_completed(future_map):
 			try:
 				live = fut.result()
@@ -1316,6 +1360,11 @@ def get_random_proxy(http_only=False):
 					if other is not fut:
 						other.cancel()
 				break
+			else:
+				dead_proxies.append(future_map[fut])
+				
+	if dead_proxies:
+		remove_proxies_from_pool(dead_proxies, _proxy_obj)
 
 	if result_holder[0]:
 		mark_proxy_used(result_holder[0])
@@ -2673,43 +2722,97 @@ def is_valid_nmap_command(cmd):
 # Vulnerability Parsing Utils  #
 #------------------------------#
 
-def clean_semgrep_check_id(check_id):
-	"""Cleans and normalizes Semgrep check IDs by removing rule path prefixes
-	and deduplicating repeating suffixes.
+_SEMGREP_LABEL_MAP = {
+	'detected-facebook-oauth': 'Facebook OAuth Token',
+	'detected-github-oauth': 'GitHub OAuth Token',
+	'detected-google-oauth': 'Google OAuth Token',
+	'detected-twitter-oauth': 'Twitter OAuth Token',
+	'generic-api-key': 'Generic API Key',
+	'detected-aws-account-id': 'AWS Account ID',
+	'detected-aws-access-key': 'AWS Access Key',
+	'detected-aws-secret-key': 'AWS Secret Key',
+	'stripe-secret-key': 'Stripe Secret Key',
+	'stripe-publishable-key': 'Stripe Publishable Key',
+	'slack-api-token': 'Slack API Token',
+	'slack-webhook-url': 'Slack Webhook URL',
+	'github-personal-access-token': 'GitHub Personal Access Token',
+	'gitlab-personal-access-token': 'GitLab Personal Access Token',
+	'sendgrid-api-token': 'SendGrid API Token',
+	'twilio-api-key': 'Twilio API Key',
+	'jwt-token': 'JWT Token',
+	'private-key': 'Private Key',
+	'rsa-private-key': 'RSA Private Key',
+	'ssh-private-key': 'SSH Private Key',
+	'password-in-url': 'Password in URL',
+	'hardcoded-password': 'Hardcoded Password',
+	'hardcoded-secret': 'Hardcoded Secret',
+	'basic-auth-credentials': 'Basic Auth Credentials',
+	'firebase-api-key': 'Firebase API Key',
+	'heroku-api-key': 'Heroku API Key',
+	'mailchimp-api-key': 'Mailchimp API Key',
+	'paypal-braintree-access-token': 'PayPal Braintree Token',
+	'shopify-access-token': 'Shopify Access Token',
+	'twitch-api-key': 'Twitch API Key',
+}
 
-	Args:
-		check_id (str): The raw check ID from Semgrep results.
+_SEMGREP_STRIP_PREFIXES = {
+	'usr', 'src', 'github', 'semgrep_rules', 'rules', 'app', 'p',
+	'semgrep_vulnerability_temp', 'semgrep_secret_temp', 'temp',
+}
 
-	Returns:
-		str: The cleaned check ID.
+_SEMGREP_BOILERPLATE = {'detected', 'generic', 'security'}
+
+
+def clean_semgrep_check_id(check_id: str) -> str:
+	"""Return a human-readable label for a Semgrep check ID.
+
+	Lookup table takes priority; unknown slugs are smart-parsed.
 	"""
 	if not check_id:
 		return ""
-	
-	# Split by dots to inspect path components
+
 	parts = check_id.split('.')
-	
-	# Common prefixes or folders to discard from check IDs
-	prefixes_to_strip = {
-		'usr', 'src', 'github', 'semgrep_rules', 'rules', 'app', 'p',
-		'semgrep_vulnerability_temp', 'semgrep_secret_temp', 'temp'
-	}
-	
-	# Filter out initial path elements that match our strip list
+
+	# Strip leading path prefixes
 	start_idx = 0
-	while start_idx < len(parts) and parts[start_idx].lower() in prefixes_to_strip:
+	while start_idx < len(parts) and parts[start_idx].lower() in _SEMGREP_STRIP_PREFIXES:
 		start_idx += 1
-		
 	clean_parts = parts[start_idx:]
-	
+
 	if not clean_parts:
 		return check_id
-		
-	# Deduplicate repeating suffix (e.g. ['react-dangerouslysetinnerhtml', 'react-dangerouslysetinnerhtml'])
+
+	# Deduplicate repeating suffix
 	if len(clean_parts) >= 2 and clean_parts[-1].lower() == clean_parts[-2].lower():
 		clean_parts.pop()
-		
-	return '.'.join(clean_parts)
+
+	# Try lookup against the final dot-segment
+	slug = clean_parts[-1]
+	if slug in _SEMGREP_LABEL_MAP:
+		return _SEMGREP_LABEL_MAP[slug]
+
+	# Smart-parse fallback: title-case words, drop boilerplate
+	words = slug.replace('-', ' ').split()
+	words = [w for w in words if w.lower() not in _SEMGREP_BOILERPLATE]
+	return ' '.join(w.title() for w in words) if words else slug
+
+
+def categorize_secret_type(label: str) -> tuple[str, str]:
+	"""Return (category_name, color_key) for a human-readable secret label.
+
+	color_key matches the frontend colorKey: 'error' | 'warning' | 'info' | 'default'.
+	"""
+	lower = label.lower()
+	if any(kw in lower for kw in ('private key', 'rsa', 'ssh')):
+		return ('Private Key', 'error')
+	# Check oauth before 'auth' to avoid 'oauth' matching the credential 'auth' substring
+	if any(kw in lower for kw in ('oauth', 'access token')):
+		return ('OAuth Token', 'info')
+	if any(kw in lower for kw in ('password', 'credential', 'auth', 'login', 'hardcoded secret')):
+		return ('Credential', 'error')
+	if any(kw in lower for kw in ('api key', 'api token', 'access key')):
+		return ('API Key', 'warning')
+	return ('Secret', 'warning')
 
 
 def parse_semgrep_result(result):
@@ -2722,6 +2825,7 @@ def parse_semgrep_result(result):
 		dict: Vulnerability data dictionary ready for saving.
 	"""
 	check_id = result.get('check_id', '')
+	# NOTE: clean_semgrep_check_id returns human-readable labels since v3.6.4; historical DB rows retain dotted-path format.
 	cleaned_check_id = clean_semgrep_check_id(check_id)
 	return {
 		'name': f"Semgrep: {cleaned_check_id}",

@@ -1,4 +1,4 @@
-"""Tests for AddManualSubdomain API view behaviour."""
+﻿"""Tests for AddManualSubdomain API view behaviour."""
 from django.test import TestCase
 
 
@@ -18,7 +18,7 @@ class AddManualSubdomainSizeCapTest(TestCase):
             format='json',
         )
 
-        with patch('api.views.Domain') as mock_domain_cls:
+        with patch('api.views.targets.Domain') as mock_domain_cls:
             mock_domain = MagicMock()
             mock_domain.target_type = 'domain'
             mock_domain.name = 'example.com'
@@ -57,7 +57,7 @@ class AddManualSubdomainStatusCodesTest(TestCase):
         request = self._make_request({'target_id': 99999, 'subdomain_name': 'sub.example.com'})
         view = AddManualSubdomain.as_view()
         with patch('api.views.AddManualSubdomain.permission_classes', []):
-            with patch('api.views.Domain') as mock_domain_cls:
+            with patch('api.views.targets.Domain') as mock_domain_cls:
                 mock_domain_cls.objects.filter.return_value.first.return_value = None
                 response = view(request)
         self.assertEqual(response.status_code, 404)

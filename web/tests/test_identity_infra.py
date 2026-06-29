@@ -75,7 +75,7 @@ class TestIdentityInfraDiscoveryModel(TestCase):
 
 class TestIdentityDetection(TestCase):
     def test_classify_adfs_url(self):
-        from reNgine.identity_tasks import classify_url
+        from reNgine.tasks.identity import classify_url
         result = classify_url("https://adfs.corp.example.com/adfs/ls/idpinitiatedsignon.htm")
         self.assertIsNotNone(result)
         infra_type, confidence = result
@@ -83,60 +83,60 @@ class TestIdentityDetection(TestCase):
         self.assertGreater(confidence, 0.8)
 
     def test_classify_owa_url(self):
-        from reNgine.identity_tasks import classify_url
+        from reNgine.tasks.identity import classify_url
         result = classify_url("https://mail.corp.example.com/owa/")
         self.assertIsNotNone(result)
         self.assertEqual(result[0], "owa")
 
     def test_classify_exchange_autodiscover(self):
-        from reNgine.identity_tasks import classify_url
+        from reNgine.tasks.identity import classify_url
         result = classify_url("https://corp.example.com/autodiscover/autodiscover.xml")
         self.assertIsNotNone(result)
         self.assertEqual(result[0], "exchange")
 
     def test_classify_ldap_url(self):
-        from reNgine.identity_tasks import classify_url
+        from reNgine.tasks.identity import classify_url
         result = classify_url("ldap://ldap.corp.example.com:389/dc=corp,dc=example,dc=com")
         self.assertIsNotNone(result)
         self.assertEqual(result[0], "ldap")
 
     def test_classify_sso_portal(self):
-        from reNgine.identity_tasks import classify_url
+        from reNgine.tasks.identity import classify_url
         result = classify_url("https://sso.corp.example.com/sso/")
         self.assertIsNotNone(result)
         self.assertEqual(result[0], "sso")
 
     def test_classify_unrelated_url_returns_none(self):
-        from reNgine.identity_tasks import classify_url
+        from reNgine.tasks.identity import classify_url
         result = classify_url("https://blog.corp.example.com/posts/welcome")
         self.assertIsNone(result)
 
     def test_classify_adfs_title(self):
-        from reNgine.identity_tasks import classify_title
+        from reNgine.tasks.identity import classify_title
         result = classify_title("Sign In - Active Directory Federation Services")
         self.assertIsNotNone(result)
         self.assertEqual(result[0], "adfs")
 
     def test_classify_owa_title(self):
-        from reNgine.identity_tasks import classify_title
+        from reNgine.tasks.identity import classify_title
         result = classify_title("Outlook Web App - Sign in")
         self.assertIsNotNone(result)
         self.assertEqual(result[0], "owa")
 
     def test_classify_unrelated_title_returns_none(self):
-        from reNgine.identity_tasks import classify_title
+        from reNgine.tasks.identity import classify_title
         result = classify_title("Welcome to Our Company Blog")
         self.assertIsNone(result)
 
     def test_classify_ntlm_header(self):
-        from reNgine.identity_tasks import classify_header
+        from reNgine.tasks.identity import classify_header
         headers = {"WWW-Authenticate": "NTLM"}
         result = classify_header(headers)
         self.assertIsNotNone(result)
         self.assertEqual(result[0], "ntlm_endpoint")
 
     def test_classify_negotiate_header(self):
-        from reNgine.identity_tasks import classify_header
+        from reNgine.tasks.identity import classify_header
         headers = {"WWW-Authenticate": "Negotiate"}
         result = classify_header(headers)
         self.assertIsNotNone(result)
@@ -153,7 +153,7 @@ class TestIdentityActivity(TestCase):
 
     def test_activity_calls_runner(self):
         from unittest.mock import patch
-        with patch("reNgine.identity_tasks.run_identity_intel") as mock_runner:
+        with patch("reNgine.tasks.identity.run_identity_intel") as mock_runner:
             from reNgine.temporal_activities import run_identity_infra_activity
             mock_runner.return_value = []
             result = run_identity_infra_activity(self.scan.id)
@@ -163,7 +163,7 @@ class TestIdentityActivity(TestCase):
 
     def test_activity_returns_count(self):
         from unittest.mock import patch
-        with patch("reNgine.identity_tasks.run_identity_intel") as mock_runner:
+        with patch("reNgine.tasks.identity.run_identity_intel") as mock_runner:
             from reNgine.temporal_activities import run_identity_infra_activity
             from startScan.models import IdentityInfraDiscovery
             fake = IdentityInfraDiscovery(host="adfs.corp.com", infra_type="adfs")

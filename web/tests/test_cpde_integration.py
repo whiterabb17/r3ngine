@@ -7,7 +7,7 @@ class TestParamDiscoveryWiresUrlCollector(TestCase):
 
     def test_collect_all_called_with_results_dir(self):
         """param_discovery must call url_param_collector.collect_all(results_dir)."""
-        from reNgine.cpde_tasks import param_discovery
+        from reNgine.tasks.cpde import param_discovery
 
         ctx = {
             'scan_history_id': 99,
@@ -19,12 +19,12 @@ class TestParamDiscoveryWiresUrlCollector(TestCase):
         with patch('reNgine.cpde.js_collector.get_js_urls_from_results_dir', return_value=[]), \
              patch('reNgine.cpde.js_collector.download_js_files', return_value=[]), \
              patch('reNgine.cpde.ast_analyzer.extract_from_js_files', return_value=[]), \
-             patch('reNgine.cpde_tasks.has_openapi_spec', return_value=False), \
+             patch('reNgine.tasks.cpde.has_openapi_spec', return_value=False), \
              patch('reNgine.cpde.url_param_collector.collect_all') as mock_collect, \
              patch('reNgine.cpde.correlation_engine.correlate', return_value=[]), \
-             patch('reNgine.cpde_tasks.activity_heartbeat_safe'), \
+             patch('reNgine.tasks.cpde.activity_heartbeat_safe'), \
              patch('startScan.models.Domain.objects') as mock_dom, \
-             patch('reNgine.cpde_tasks.save_endpoint', return_value=(MagicMock(), True)), \
+             patch('reNgine.tasks.cpde.save_endpoint', return_value=(MagicMock(), True)), \
              patch('reNgine.utils.graph.get_neo4j_driver', return_value=None):
 
             mock_dom.filter.return_value.first.return_value = None
@@ -40,7 +40,7 @@ class TestParamDiscoveryWiresUrlCollector(TestCase):
 
     def test_tool_findings_passed_to_correlate(self):
         """Tool findings from collect_all must be combined with ast+openapi before correlate()."""
-        from reNgine.cpde_tasks import param_discovery
+        from reNgine.tasks.cpde import param_discovery
         ctx = {
             'scan_history_id': 99,
             'results_dir': '/tmp/test_results',
@@ -57,12 +57,12 @@ class TestParamDiscoveryWiresUrlCollector(TestCase):
         with patch('reNgine.cpde.js_collector.get_js_urls_from_results_dir', return_value=[]), \
              patch('reNgine.cpde.js_collector.download_js_files', return_value=[]), \
              patch('reNgine.cpde.ast_analyzer.extract_from_js_files', return_value=[]), \
-             patch('reNgine.cpde_tasks.has_openapi_spec', return_value=False), \
+             patch('reNgine.tasks.cpde.has_openapi_spec', return_value=False), \
              patch('reNgine.cpde.url_param_collector.collect_all', return_value=[tool_finding]), \
              patch('reNgine.cpde.correlation_engine.correlate') as mock_correlate, \
-             patch('reNgine.cpde_tasks.activity_heartbeat_safe'), \
+             patch('reNgine.tasks.cpde.activity_heartbeat_safe'), \
              patch('startScan.models.Domain.objects') as mock_dom, \
-             patch('reNgine.cpde_tasks.save_endpoint', return_value=(MagicMock(), True)), \
+             patch('reNgine.tasks.cpde.save_endpoint', return_value=(MagicMock(), True)), \
              patch('reNgine.utils.graph.get_neo4j_driver', return_value=None):
 
             mock_dom.filter.return_value.first.return_value = None
@@ -79,6 +79,6 @@ class TestParamDiscoveryWiresUrlCollector(TestCase):
     def test_source_code_imports_url_param_collector(self):
         """cpde_tasks.py must import url_param_collector."""
         import inspect
-        import reNgine.cpde_tasks as mod
+        import reNgine.tasks.cpde as mod
         source = inspect.getsource(mod)
         self.assertIn('url_param_collector', source)

@@ -16,19 +16,19 @@ Optional local aid:
 ## Mental Model
 - `frontend/`: React + Vite + TypeScript UI
 - `web/api/`: DRF API entrypoints
-- `web/reNgine/temporal_workflows.py`: durable orchestration
-- `web/reNgine/temporal_activities.py`: workflow-to-task bridge
-- `web/reNgine/tasks.py`: tool execution, parsing, persistence
+- `web/reNgine/temporal/workflows/`: durable orchestration
+- `web/reNgine/temporal/activities/`: workflow-to-task bridge
+- `web/reNgine/tasks/*`: tool execution, parsing, persistence
 - `web/startScan/`: scan persistence and result models
 - `web/apme/`: attack-path and graph intelligence
 
 ## Navigation Rules
 - Prefer targeted reads over broad repo rescans.
-- For orchestration changes, start in `web/reNgine/temporal_workflows.py`.
-- For tool execution or parsing changes, inspect `web/reNgine/tasks.py` and `web/reNgine/temporal_activities.py`.
+- For orchestration changes, start in `web/reNgine/temporal/workflows/`.
+- For tool execution or parsing changes, inspect `web/reNgine/tasks/*` and `web/reNgine/temporal/activities/`.
 - For frontend changes, start in `frontend/src/features/` before shared components.
 - When tracing behavior, use:
-  `API view -> workflow starter in tasks.py -> workflow -> activity -> task function -> model write`
+  `API view -> workflow starter in tasks modules -> workflow -> activity -> task function -> model write`
 
 ## Theme Rules
 - Start theme work in `frontend/src/theme/`, `frontend/src/context/ThemeContext.tsx`, and the affected feature screen.

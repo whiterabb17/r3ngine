@@ -1,4 +1,4 @@
-import shutil
+﻿import shutil
 import tempfile
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -130,8 +130,8 @@ class ManualSubdomainScanBootstrapTests(TestCase):
         shutil.rmtree(self.results_dir, ignore_errors=True)
 
     @patch('reNgine.temporal_client.TemporalClientProvider.get_client', new_callable=AsyncMock)
-    @patch('reNgine.tasks.save_endpoint')
-    @patch('reNgine.tasks.send_scan_notif')
+    @patch('reNgine.tasks.scan_init.save_endpoint')
+    @patch('reNgine.tasks.scan_init.send_scan_notif')
     def test_initiate_scan_temporal_merges_target_manual_subdomains(
         self,
         mock_send_notif,

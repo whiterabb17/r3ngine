@@ -13,7 +13,9 @@ import {
   MenuItem,
   Chip,
   Snackbar,
-  Alert
+  Alert,
+  FormControl,
+  Select
 } from '@mui/material';
 import {
   Search,
@@ -37,6 +39,7 @@ import { TacticalPanel } from '../../../components/TacticalPanel';
 import { copyToClipboard } from '../../endpoints/utils/copy';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { ExtractAuthModal } from './ExtractAuthModal';
 
 interface EndpointsTabProps {
   projectSlug: string;
@@ -49,6 +52,7 @@ interface EndpointsTabProps {
 export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId, matchedGfCounts, targetId, initialAlive }) => {
   const { tokens, isLight, theme } = useThemeTokens();
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
   const [selectedGfPattern, setSelectedGfPattern] = useState<string | undefined>(undefined);
@@ -67,6 +71,11 @@ export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId,
   const [bruteModalOpen, setBruteModalOpen] = useState(false);
   const [bruteEndpoint, setBruteEndpoint] = useState<{ id: number; url: string } | null>(null);
   const [pendingActionId, setPendingActionId] = useState<{ id: number; action: string } | null>(null);
+
+  const [extractAuthModalOpen, setExtractAuthModalOpen] = useState(false);
+  const [extractAuthUrl, setExtractAuthUrl] = useState('');
+  const [extractAuthWorkflowId, setExtractAuthWorkflowId] = useState<string | null>(null);
+  const [extractAuthStatus, setExtractAuthStatus] = useState<'idle' | 'extracting' | 'completed' | 'error'>('idle');
 
   const [selectedEndpoints, setSelectedEndpoints] = useState<number[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -89,15 +98,25 @@ export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId,
   const handleExtractAuth = async (id: number, url: string) => {
     if (!scanId) return;
     setPendingActionId({ id, action: 'extract_auth' });
+    setExtractAuthUrl(url);
+    setExtractAuthModalOpen(true);
+    setExtractAuthStatus('extracting');
+    setExtractAuthWorkflowId(null);
     try {
-      await dispatchMutation.mutateAsync({
+      const response = await dispatchMutation.mutateAsync({
         url,
         action: 'extract_auth',
         scan_id: scanId
       });
-      showNotification('Auth extraction dispatched successfully', 'success');
+      if (response && response.workflow_id) {
+        setExtractAuthWorkflowId(response.workflow_id);
+      } else {
+        setExtractAuthStatus('error');
+        showNotification('Workflow dispatched but no workflow_id returned', 'error');
+      }
     } catch (error: any) {
       showNotification(error.message || 'Failed to dispatch auth extraction', 'error');
+      setExtractAuthStatus('error');
     } finally {
       setPendingActionId(null);
     }
@@ -149,13 +168,14 @@ export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId,
     scanId,
     selectedGfPattern,
     targetId,
-    isAliveFilter ? '200' : undefined
+    isAliveFilter ? '200' : undefined,
+    pageSize
   );
 
-  // Reset selection on query/page changes
+  // Reset selection on query/page/size changes
   React.useEffect(() => {
     setSelectedEndpoints([]);
-  }, [page, activeSearch, selectedGfPattern, isAliveFilter]);
+  }, [page, pageSize, activeSearch, selectedGfPattern, isAliveFilter]);
 
   const handleSearch = () => {
     setPage(1);
@@ -400,7 +420,7 @@ export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId,
             </Typography>
             <Box sx={{ px: 2, py: 0.5, bgcolor: `${tokens.accent.primary}0D`, borderRadius: 0.5, border: `1px solid ${tokens.accent.primary}15` }}>
               <Typography sx={{ fontSize: '10px', fontWeight: 800, color: tokens.accent.primary, fontFamily: 'Orbitron' }}>
-                PAGE {page} OF {Math.ceil((data?.count || 0) / 100) || 1}
+                PAGE {page} OF {Math.ceil((data?.count || 0) / pageSize) || 1}
               </Typography>
             </Box>
           </Box>
@@ -740,12 +760,20 @@ export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId,
         </Box>
 
         {/* Tactical Pagination */}
-        <Box sx={{ p: 2, display: 'flex', justifyContent: 'center', borderTop: '1px solid', borderColor: 'divider' }}>
+        <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid', borderColor: 'divider' }}>
+          {/* Results range label */}
+          <Box sx={{ color: tokens.text.secondary, fontSize: '0.75rem', fontFamily: 'monospace', minWidth: 160 }}>
+            {data?.count
+              ? `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, data.count)} of ${data.count}`
+              : '0 results'}
+          </Box>
+
           <Pagination
-            count={Math.ceil((data?.count || 0) / 100)}
+            count={Math.ceil((data?.count || 0) / pageSize)}
             page={page}
             onChange={(_, v) => setPage(v)}
             size="small"
+            shape="rounded"
             sx={{
               '& .MuiPaginationItem-root': {
                 color: 'text.secondary',
@@ -757,12 +785,41 @@ export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId,
                   color: tokens.accent.primary,
                   borderColor: tokens.accent.primary
                 },
-                '&:hover': {
-                  bgcolor: 'action.hover'
-                }
+                '&:hover': { bgcolor: 'action.hover' }
               }
             }}
           />
+
+          {/* Per-page selector */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 160, justifyContent: 'flex-end' }}>
+            <Typography sx={{ color: tokens.text.secondary, fontSize: '0.75rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+              per page
+            </Typography>
+            <FormControl size="small" variant="outlined" sx={{ minWidth: 80 }}>
+              <Select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                sx={{
+                  color: tokens.accent.primary,
+                  bgcolor: `${tokens.accent.primary}0D`,
+                  fontFamily: 'monospace',
+                  fontSize: '0.8rem',
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: `${tokens.accent.primary}33` },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: `${tokens.accent.primary}66` },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: tokens.accent.primary },
+                  '& .MuiSvgIcon-root': { color: tokens.accent.primary },
+                }}
+              >
+                <MenuItem value={10}>10</MenuItem>
+                <MenuItem value={25}>25</MenuItem>
+                <MenuItem value={50}>50</MenuItem>
+                <MenuItem value={100}>100</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
         </Box>
       </TacticalPanel>
 
@@ -783,13 +840,21 @@ export const EndpointsTab: React.FC<EndpointsTabProps> = ({ projectSlug, scanId,
       <ConfirmDialog
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
-        onConfirm={() => {
-          confirmConfig.onConfirm();
-          setConfirmOpen(false);
-        }}
+        onConfirm={confirmConfig.onConfirm}
+        type={confirmConfig.type}
         title={confirmConfig.title}
         message={confirmConfig.message}
-        type={confirmConfig.type}
+        confirmText="Confirm"
+        cancelText="Cancel"
+      />
+
+      <ExtractAuthModal
+        open={extractAuthModalOpen}
+        onClose={() => setExtractAuthModalOpen(false)}
+        url={extractAuthUrl}
+        workflowId={extractAuthWorkflowId}
+        status={extractAuthStatus}
+        onComplete={(result) => setExtractAuthStatus(result)}
       />
 
       <Snackbar

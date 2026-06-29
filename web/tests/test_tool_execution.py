@@ -7,9 +7,9 @@ from django.utils import timezone
 
 # Mocking Celery tasks and project imports
 from reNgine.tasks import *
-from reNgine.wpscan_tasks import *
-from reNgine.vulnerability_tasks import *
-from reNgine.osint_tasks import *
+from reNgine.tasks.wpscan import *
+from reNgine.tasks.vulnerability import *
+from reNgine.tasks.osint import *
 from startScan.models import *
 from targetApp.models import *
 from scanEngine.models import EngineType, OpSec, Proxy
@@ -138,7 +138,7 @@ class ToolExecutionTest(TransactionTestCase):
                 with open(output_file, 'w') as out:
                     out.write(f.read())
             
-            with patch('reNgine.osint_tasks.subprocess.run') as mock_run:
+            with patch('reNgine.tasks.osint.subprocess.run') as mock_run:
                 res = run_maigret(username, self.scan.id)
                 print(f"[DEBUG] run_maigret result: {res}")
             
@@ -460,7 +460,7 @@ class ToolExecutionTest(TransactionTestCase):
             print(f"[DEBUG] Holehe real result: {res}")
         else:
             # holehe parsing is based on stdout lines
-            with patch('reNgine.osint_tasks.subprocess.Popen') as mock_popen:
+            with patch('reNgine.tasks.osint.subprocess.Popen') as mock_popen:
                 process_mock = MagicMock()
                 process_mock.communicate.return_value = ("[+] twitter\n[+] github\n", "")
                 mock_popen.return_value = process_mock
@@ -479,7 +479,7 @@ class ToolExecutionTest(TransactionTestCase):
         if self.is_real_mode:
             pass
         else:
-            with patch('reNgine.osint_tasks.subprocess.Popen') as mock_popen:
+            with patch('reNgine.tasks.osint.subprocess.Popen') as mock_popen:
                 process_mock = MagicMock()
                 # Mock username-anarchy output (one username per line) and gosearch output
                 process_mock.communicate.side_effect = [

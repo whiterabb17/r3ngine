@@ -103,17 +103,17 @@ class Pathfinder:
     def find_paths_bfs(self, scan_id, start_node_id, target_subtypes=None, top_n=5):
         targets = target_subtypes or list(HIGH_VALUE_TARGET_SUBTYPES)
         raw = self._bfs_query(scan_id, start_node_id, targets)
-        return self._validate_and_build(raw, top_n)
+        return self._validate_and_build(raw, top_n, algo="bfs")
 
     def find_paths_dfs(self, scan_id, start_node_id, target_subtypes=None, top_n=5):
         targets = target_subtypes or list(HIGH_VALUE_TARGET_SUBTYPES)
         raw = self._dfs_query(scan_id, start_node_id, targets)
-        return self._validate_and_build(raw, top_n)
+        return self._validate_and_build(raw, top_n, algo="dfs")
 
     def find_paths_dijkstra(self, scan_id, start_node_id, target_subtypes=None, top_n=5):
         targets = target_subtypes or list(HIGH_VALUE_TARGET_SUBTYPES)
         raw = self._dijkstra_query(scan_id, start_node_id, targets)
-        return self._validate_and_build(raw, top_n)
+        return self._validate_and_build(raw, top_n, algo="dijkstra")
 
     def find_all_paths(
         self,
@@ -122,7 +122,12 @@ class Pathfinder:
         target_subtypes: Optional[List[str]] = None,
         top_n: int = 5,
     ) -> List[AttackPath]:
-        """Run BFS + DFS + Dijkstra across all entry points, deduplicate, return top N."""
+        """Run BFS + DFS + Dijkstra across all entry points, deduplicate, return all.
+
+        NOTE: We do NOT slice to top_n here — the scorer in the orchestrator needs
+        the full ranked list to select the best paths. Slicing here would discard
+        valid paths before scoring and cause zero-path results for large scans.
+        """
         entries = start_node_ids or self._get_internet_entry_points(scan_id)
         if len(entries) > self.MAX_ENTRY_POINTS:
             logger.warning(
@@ -130,7 +135,17 @@ class Pathfinder:
                 len(entries), self.MAX_ENTRY_POINTS,
             )
             entries = entries[:self.MAX_ENTRY_POINTS]
-        logger.info("APME Pathfinder: querying %d entry points", len(entries))
+
+        # Log entry point subtype distribution so truncation impact is visible
+        if entries:
+            entry_ids_sample = entries[:20]
+            logger.info(
+                "APME Pathfinder: querying %d entry points (sample: %s)",
+                len(entries), entry_ids_sample,
+            )
+        else:
+            logger.warning("APME Pathfinder: no internet entry points found for scan_id=%s", scan_id)
+
         all_paths: List[AttackPath] = []
 
         for entry_id in entries:
@@ -138,36 +153,55 @@ class Pathfinder:
             all_paths.extend(self.find_paths_dfs(scan_id, entry_id, target_subtypes, top_n))
             all_paths.extend(self.find_paths_dijkstra(scan_id, entry_id, target_subtypes, top_n))
 
-        # Deduplicate by semantic fingerprint — same attack chain type, different instances
+        logger.info(
+            "APME Pathfinder: %d raw paths collected across all entry points and algorithms",
+            len(all_paths),
+        )
+
+        # Deduplicate by semantic fingerprint — same attack chain type, different instances.
+        # Pre-strip trailing numeric IDs outside the f-string (backslashes not allowed in
+        # f-string expressions on Python 3.10).
+        _strip_id = re.compile(r"::\d+$")
         seen: set = set()
         unique: List[AttackPath] = []
         for p in all_paths:
-            key = "->".join(
-                f"{s.edge_type}:{re.sub(r'::\\d+$', '', s.from_id)}:"
-                f"{re.sub(r'::\\d+$', '', s.to_id)}"
-                for s in p.steps
-            )
+            parts = []
+            for s in p.steps:
+                from_stripped = _strip_id.sub("", s.from_id)
+                to_stripped = _strip_id.sub("", s.to_id)
+                parts.append(f"{s.edge_type}:{from_stripped}:{to_stripped}")
+            key = "->".join(parts)
             if key not in seen:
                 seen.add(key)
                 unique.append(p)
 
-        # Sort descending by step count — richer chains first; scorer picks the best ones
-        return sorted(unique, key=lambda p: len(p.steps), reverse=True)[:top_n]
+        logger.info(
+            "APME Pathfinder: %d unique paths after deduplication (from %d raw)",
+            len(unique), len(all_paths),
+        )
+
+        # Sort descending by step count — richer chains first; scorer picks the best ones.
+        # Do NOT slice here — the orchestrator scorer needs all candidates.
+        return sorted(unique, key=lambda p: len(p.steps), reverse=True)
 
     # -------------------------------------------------------------------------
     # Neo4j Queries
     # -------------------------------------------------------------------------
 
     def _bfs_query(self, scan_id, start_id, target_subtypes):
+        # Use a variable-length path match rather than shortestPath() so that
+        # multiple distinct paths through different intermediate nodes are all
+        # returned. shortestPath() would only find one path per (start, target)
+        # pair, silently hiding longer but valid attack chains.
         query = (
-            f"MATCH path = shortestPath("
-            f"(start:APMENode {{apme_id: $start_id, scan_id: $scan_id}})"
+            f"MATCH path = (start:APMENode {{apme_id: $start_id, scan_id: $scan_id}})"
             f"-[:APME_EDGE*1..{self.MAX_DEPTH}]->"
-            f"(target:APMENode))"
+            f"(target:APMENode)"
             f" WHERE target.subtype IN $target_subtypes"
             f"   AND target.scan_id = $scan_id"
             f"   AND ALL(r IN relationships(path) WHERE r.confidence >= $min_conf)"
             f" RETURN {_NODES_PROJECTION}, {_RELS_PROJECTION}"
+            f" ORDER BY length(path) ASC"
             f" LIMIT $limit"
         )
         return self._run_path_query(query, scan_id, start_id, target_subtypes)
@@ -254,36 +288,88 @@ class Pathfinder:
         return results
 
     def _get_internet_entry_points(self, scan_id):
+        """Return internet-facing entry point IDs ordered deterministically.
+
+        ORDER BY subtype, id ensures that when the MAX_ENTRY_POINTS cap is hit,
+        truncation is reproducible and not dependent on Neo4j's internal storage
+        order (which could arbitrarily exclude productive entry types).
+        Priority ordering: domain < endpoint < ip < service (alphabetical by subtype).
+        """
         if not self._driver:
             return []
         with self._driver.session() as session:
             result = session.run(
                 "MATCH (n:APMENode) "
                 "WHERE n.subtype IN $subtypes AND n.scan_id = $scan_id "
-                "RETURN n.apme_id AS id",
+                "RETURN n.apme_id AS id, n.subtype AS subtype "
+                "ORDER BY n.subtype ASC, n.apme_id ASC",
                 subtypes=list(INTERNET_ENTRY_SUBTYPES),
                 scan_id=scan_id,
             )
-            return [r["id"] for r in result]
+            records = list(result)
+
+        # Log subtype distribution so truncation impact is visible
+        from collections import Counter
+        subtype_counts = Counter(r["subtype"] for r in records)
+        logger.info(
+            "APME Pathfinder: entry point subtypes for scan_id=%s: %s (total=%d)",
+            scan_id, dict(subtype_counts), len(records),
+        )
+        return [r["id"] for r in records]
 
     # -------------------------------------------------------------------------
     # Path Construction & Validation
     # -------------------------------------------------------------------------
 
-    def _validate_and_build(self, raw_paths: List[Dict], top_n: int) -> List[AttackPath]:
-        """Convert raw Neo4j path records into validated AttackPath objects."""
+    def _validate_and_build(
+        self, raw_paths: List[Dict], top_n: int, algo: str = "?"
+    ) -> List[AttackPath]:
+        """Convert raw Neo4j path records into validated AttackPath objects.
+
+        Tracks per-constraint rejection counts and logs them in aggregate so
+        zero-path incidents can be diagnosed without re-running the scan.
+        """
         validated: List[AttackPath] = []
+        rejected_too_short = 0
+        rejected_min_steps = 0
+        rejection_counts: Dict[str, int] = {
+            "confidence":       0,
+            "cycle":            0,
+            "auth":             0,
+            "internal":         0,
+            "privilege":        0,
+            "victim":           0,
+            "php":              0,
+            "java":             0,
+            "wordpress":        0,
+            "endpoint_auth":    0,
+            "path_confidence":  0,
+            "dotnet":           0,
+            "kubernetes":       0,
+            "docker":           0,
+            "ruby":             0,
+            "nodejs":           0,
+            "active_directory": 0,
+            "mssql":            0,
+            "oracle":           0,
+            "redis":            0,
+            "drupal":           0,
+            "joomla":           0,
+            "magento":          0,
+        }
 
         for raw in raw_paths:
             nodes = raw.get("nodes", [])
             rels = raw.get("rels", [])
 
             if len(nodes) < 2:
+                rejected_too_short += 1
                 continue
 
             steps: List[PathStep] = []
             context = PathContext()
             valid = True
+            rejection_reason: Optional[str] = None
 
             for i, rel in enumerate(rels):
                 from_node = nodes[i]
@@ -293,7 +379,11 @@ class Pathfinder:
 
                 step_dict = self._edge_to_step_dict(edge_type, from_node, to_node, confidence, rel)
 
-                if not self._constraint_engine.validate_step(step_dict, context):
+                # ── Inline constraint checking with reason tracking ──────────
+                reason = self._check_constraint(step_dict, context)
+                if reason:
+                    rejection_counts[reason] = rejection_counts.get(reason, 0) + 1
+                    rejection_reason = reason
                     valid = False
                     break
 
@@ -317,6 +407,7 @@ class Pathfinder:
 
             if valid and steps:
                 if len(steps) < 2:
+                    rejected_min_steps += 1
                     continue
                 path = AttackPath(
                     id=f"APT-{uuid.uuid4().hex[:6].upper()}",
@@ -327,7 +418,110 @@ class Pathfinder:
                 )
                 validated.append(path)
 
+        total_raw = len(raw_paths)
+        total_accepted = len(validated)
+        total_rejected = total_raw - total_accepted
+        active_rejections = {k: v for k, v in rejection_counts.items() if v > 0}
+
+        if total_raw > 0:
+            logger.info(
+                "APME Pathfinder [%s]: %d/%d paths accepted | "
+                "rejected_too_short=%d rejected_min_steps=%d | "
+                "constraint_rejections=%s",
+                algo, total_accepted, total_raw,
+                rejected_too_short, rejected_min_steps,
+                active_rejections if active_rejections else "none",
+            )
+        elif total_raw == 0:
+            logger.debug("APME Pathfinder [%s]: no raw paths returned by Neo4j query.", algo)
+
         return validated[:top_n]
+
+    @staticmethod
+    def _check_constraint(step: Dict[str, Any], context: "PathContext") -> Optional[str]:
+        """Run the constraint engine checks and return the name of the first
+        failing constraint, or None if all pass.
+
+        This mirrors ConstraintEngine.validate_step() but returns the reason
+        string rather than a bool so _validate_and_build can track rejection stats.
+        """
+        _PRIVILEGE_ORDER = ["none", "user", "admin", "domain_admin", "root"]
+
+        if step.get("confidence", 1.0) < 0.15:
+            return "confidence"
+
+        visited = context.visited_node_ids or set()
+        to_id = step.get("to_id", "")
+        if to_id and to_id in visited:
+            return "cycle"
+
+        if step.get("requires_auth") and not context.has_auth:
+            return "auth"
+
+        if step.get("requires_internal") and not context.has_internal_access:
+            return "internal"
+
+        required_priv = step.get("requires_privilege", "none")
+        if required_priv in _PRIVILEGE_ORDER:
+            if _PRIVILEGE_ORDER.index(context.privilege_level) < _PRIVILEGE_ORDER.index(required_priv):
+                return "privilege"
+
+        if step.get("requires_victim") and not context.has_victim_interaction:
+            return "victim"
+
+        if step.get("requires_php") and not context.has_php_tech:
+            return "php"
+
+        if step.get("requires_java") and not context.has_java_tech:
+            return "java"
+
+        if step.get("requires_wordpress") and not context.has_wordpress_tech:
+            return "wordpress"
+
+        if step.get("endpoint_requires_auth") and not context.has_auth:
+            return "endpoint_auth"
+
+        projected = context.path_confidence_product * step.get("confidence", 1.0)
+        if projected < 0.05:
+            return "path_confidence"
+
+        if step.get("requires_dotnet") and not context.has_dotnet_tech:
+            return "dotnet"
+
+        if step.get("requires_kubernetes") and not context.has_kubernetes_tech:
+            return "kubernetes"
+
+        if step.get("requires_docker") and not context.has_docker_tech:
+            return "docker"
+
+        if step.get("requires_ruby") and not context.has_ruby_tech:
+            return "ruby"
+
+        if step.get("requires_nodejs") and not context.has_nodejs_tech:
+            return "nodejs"
+
+        if step.get("requires_active_directory") and not context.has_active_directory_tech:
+            return "active_directory"
+
+        if step.get("requires_mssql") and not context.has_mssql_tech:
+            return "mssql"
+
+        if step.get("requires_oracle") and not context.has_oracle_tech:
+            return "oracle"
+
+        if step.get("requires_redis") and not context.has_redis_tech:
+            return "redis"
+
+        if step.get("requires_drupal") and not context.has_drupal_tech:
+            return "drupal"
+
+        if step.get("requires_joomla") and not context.has_joomla_tech:
+            return "joomla"
+
+        if step.get("requires_magento") and not context.has_magento_tech:
+            return "magento"
+
+        return None
 
     @staticmethod
     def _edge_to_step_dict(

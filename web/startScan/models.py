@@ -1145,9 +1145,30 @@ class MetaFinderDocument(models.Model):
 
 
 class Email(models.Model):
-	id = models.AutoField(primary_key=True)
-	address = models.CharField(max_length=200, blank=True, null=True)
+	SOURCE_MANUAL    = 'manual'
+	SOURCE_HUNTER    = 'hunter'
+	SOURCE_HARVESTER = 'harvester'
+	SOURCE_PHONEBOOK = 'phonebook'
+	SOURCE_PATTERN   = 'pattern'
+	SOURCE_CRAWLED   = 'crawled'
+	SOURCE_CHOICES = [
+		(SOURCE_MANUAL,    'Manual'),
+		(SOURCE_HUNTER,    'Hunter.io'),
+		(SOURCE_HARVESTER, 'theHarvester'),
+		(SOURCE_PHONEBOOK, 'Phonebook.cz'),
+		(SOURCE_PATTERN,   'Pattern Inference'),
+		(SOURCE_CRAWLED,   'Crawled URLs'),
+	]
+
+	id       = models.AutoField(primary_key=True)
+	address  = models.CharField(max_length=200, blank=True, null=True)
 	password = models.CharField(max_length=200, blank=True, null=True)
+	source   = models.CharField(
+		max_length=50,
+		choices=SOURCE_CHOICES,
+		default=SOURCE_HUNTER,
+		blank=True,
+	)
 	metadata = models.JSONField(default=dict, blank=True)
 
 class Employee(models.Model):
@@ -1414,6 +1435,30 @@ class ScanReport(models.Model):
 
 	def __str__(self):
 		return f"Report for {self.scan_history.domain.name} ({self.report_type})"
+
+
+class DnsRecord(models.Model):
+	scan_history = models.ForeignKey(
+		ScanHistory, on_delete=models.CASCADE, related_name='dns_records'
+	)
+	target_domain = models.ForeignKey(
+		'targetApp.Domain', on_delete=models.CASCADE
+	)
+	subdomain = models.ForeignKey(
+		'Subdomain', on_delete=models.SET_NULL, null=True, blank=True,
+		related_name='dns_records',
+	)
+	record_type = models.CharField(max_length=10)  # TXT, MX, NS, A, CNAME
+	value = models.TextField()
+	source = models.CharField(max_length=200, blank=True)
+	raw_metadata = models.JSONField(default=dict, blank=True)
+
+	class Meta:
+		unique_together = [['scan_history', 'record_type', 'value']]
+
+	def __str__(self) -> str:
+		return f"{self.record_type}: {self.value[:50]}"
+
 
 class OsintStaging(models.Model):
 	id = models.AutoField(primary_key=True)

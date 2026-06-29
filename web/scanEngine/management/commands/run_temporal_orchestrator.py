@@ -148,6 +148,7 @@ from reNgine.temporal_activities import (
     run_vigolium_scan_activity,
     run_vigolium_discovery_activity,
     run_vigolium_analysis_activity,
+    post_scan_processing_activity,
     mark_vulnerability_scan_complete_activity,
     run_waf_bypass_activity,
 
@@ -222,6 +223,9 @@ from reNgine.temporal_activities import (
     # Plugin lifecycle
     log_plugin_start_activity,
     log_plugin_end_activity,
+
+    # Email security (internal module — Tier 2 post-scan)
+    run_email_security_activity,
 )
 
 
@@ -526,6 +530,7 @@ class Command(BaseCommand):
                 run_vigolium_scan_activity,
                 run_vigolium_discovery_activity,
                 run_vigolium_analysis_activity,
+                post_scan_processing_activity,
                 mark_vulnerability_scan_complete_activity,
                 run_waf_bypass_activity,
 
@@ -601,6 +606,9 @@ class Command(BaseCommand):
                 # Plugin lifecycle
                 log_plugin_start_activity,
                 log_plugin_end_activity,
+
+                # Email security (internal module — Tier 2 post-scan)
+                run_email_security_activity,
             ]
 
             # -------------------------------------------------------------------

@@ -249,3 +249,125 @@ class ExposureCorrelationEngineTests(TestCase):
         self._correlate()
         exposure = Exposure.objects.get(subdomain=sub)
         self.assertIn("Email Server", exposure.type)
+
+    # --- Risk score tests ---
+
+    def test_risk_score_nonzero_after_correlation(self):
+        """VPN Gateway with no vulns should have a non-zero risk score (asset type weight alone)."""
+        self._correlate()
+        exposure = Exposure.objects.get(subdomain=self.subdomain)
+        self.assertGreater(exposure.risk_score, 0.0)
+
+    def test_risk_score_increases_with_critical_vuln(self):
+        """A critical vulnerability must push the risk score above the type-only baseline."""
+        # Correlate once to get the baseline (no vulns)
+        self._correlate()
+        baseline = Exposure.objects.get(subdomain=self.subdomain).risk_score
+
+        # Add a critical vuln, recorrelate
+        Vulnerability.objects.create(
+            scan_history=self.scan_history,
+            target_domain=self.domain,
+            subdomain=self.subdomain,
+            name="Critical RCE",
+            severity=4,
+            http_url="https://vpn.example.com",
+        )
+        self._correlate()
+        exposure = Exposure.objects.get(subdomain=self.subdomain)
+        self.assertGreater(exposure.risk_score, baseline)
+
+    def test_risk_score_dampened_by_false_positive_history(self):
+        """Prior false_positive on same subdomain name should dampen the risk score by 30%."""
+        # Seed a prior scan's exposure for the same subdomain name, marked false_positive
+        prior_scan = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_type=self.engine,
+            start_scan_date=timezone.now(),
+            scan_status=2,
+        )
+        prior_sub = Subdomain.objects.create(
+            scan_history=prior_scan,
+            target_domain=self.domain,
+            name="vpn.example.com",
+            http_status=200,
+            http_url="https://vpn.example.com",
+            page_title="GlobalProtect Portal",
+        )
+        Exposure.objects.create(
+            scan_history=prior_scan,
+            subdomain=prior_sub,
+            target_domain=self.domain,
+            type=["VPN Gateway"],
+            status='false_positive',
+            risk_score=7.0,
+        )
+        # Add a critical vuln to the current scan's subdomain
+        Vulnerability.objects.create(
+            scan_history=self.scan_history,
+            target_domain=self.domain,
+            subdomain=self.subdomain,
+            name="Critical RCE",
+            severity=4,
+            http_url="https://vpn.example.com",
+        )
+        self._correlate()
+        exposure = Exposure.objects.get(subdomain=self.subdomain)
+        # Undampened: 0.5*10 + 0.35*9 = 5 + 3.15 = 8.15
+        # Dampened:   8.15 * 0.7 = 5.705
+        self.assertLess(exposure.risk_score, 8.0)
+        self.assertGreater(exposure.risk_score, 0.0)
+
+    # --- URL-false-positive regression tests ---
+
+    def test_dashboard_in_url_does_not_classify_admin_portal(self):
+        """A subdomain whose URL contains 'dashboard' but whose page title does not
+        should NOT be classified as Admin Portal."""
+        sub = self._make_subdomain(
+            "dashboardv3.example.com",
+            http_url="https://dashboardv3.example.com",
+            http_status=200,
+            page_title="Product Overview",
+        )
+        EndPoint.objects.create(
+            scan_history=self.scan_history,
+            subdomain=sub,
+            target_domain=self.domain,
+            http_url="https://dashboardv3.example.com/home",
+            http_status=200,
+        )
+        self._correlate()
+        exposure = Exposure.objects.get(subdomain=sub)
+        self.assertNotIn("Admin Portal", exposure.type)
+
+    def test_admin_in_page_title_still_classifies_admin_portal(self):
+        """Page title containing 'admin' must still classify as Admin Portal (regression guard)."""
+        sub = self._make_subdomain(
+            "panel.example.com",
+            http_url="https://panel.example.com",
+            http_status=200,
+            page_title="Admin Control Panel",
+        )
+        self._correlate()
+        exposure = Exposure.objects.get(subdomain=sub)
+        self.assertIn("Admin Portal", exposure.type)
+
+    def test_endpoint_url_keyword_does_not_leak_into_classification(self):
+        """Endpoint URLs should not contribute to keyword-based classification signals."""
+        sub = self._make_subdomain(
+            "branding.example.com",
+            http_url="https://branding.example.com",
+            http_status=200,
+            page_title="Brand Assets",
+        )
+        # Endpoint URL contains 'admin' in the path — must NOT trigger Admin Portal
+        EndPoint.objects.create(
+            scan_history=self.scan_history,
+            subdomain=sub,
+            target_domain=self.domain,
+            http_url="https://branding.example.com/admin-resources",
+            http_status=200,
+        )
+        self._correlate()
+        exposure = Exposure.objects.get(subdomain=sub)
+        self.assertNotIn("Admin Portal", exposure.type)

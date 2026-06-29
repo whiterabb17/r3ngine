@@ -6,19 +6,25 @@ export const useExposures = (params: ExposureQueryParams) => {
   return useQuery({
     queryKey: ['exposures', params],
     queryFn: () => getExposures(params),
-    staleTime: 30000, // 30 seconds
+    staleTime: 30000,
   });
 };
 
-export const useMutateExposureStatus = () => {
+export const useMutateExposureStatus = (
+  onSuccessCallback?: () => void,
+  onErrorCallback?: (message: string) => void,
+) => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ id, status }: { id: number; status: 'open' | 'verified' | 'false_positive' | 'remediated' }) =>
       updateExposureStatus(id, status),
     onSuccess: () => {
-      // Invalidate and refetch exposures
       queryClient.invalidateQueries({ queryKey: ['exposures'] });
+      onSuccessCallback?.();
+    },
+    onError: () => {
+      onErrorCallback?.('Failed to update exposure status. Please try again.');
     },
   });
 };

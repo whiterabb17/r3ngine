@@ -1,5 +1,5 @@
 """
-network_tasks.py — Protocol-specific enumeration extensions for port_scan.
+network.py — Protocol-specific enumeration extensions for port_scan.
 
 After naabu + optional nmap finish, checks discovered ports and dispatches
 protocol-specific tools: enum4linux-ng (SMB), onesixtyone + snmpwalk (SNMP),

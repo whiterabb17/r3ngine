@@ -1,3 +1,4 @@
+{% load custom_tags %}
 <html>
   <head>
     <meta charset="utf-8">
@@ -943,6 +944,43 @@
       </article>
     {% endif %}
 
+    {% if secret_leaks_count > 0 %}
+    <article style="page-break-before: always" class="summary">
+        <h3 id="secret-findings" class="page_title">Secret & Credential Findings</h3>
+        <p>
+            The following secrets and credentials were detected by Semgrep static analysis
+            on JavaScript, configuration, and source files crawled during the scan.
+            Findings are grouped by secret type and source file.
+        </p>
+        {% for type_key, group in secret_findings_by_type.items %}
+        {% with cat=group.display_name|categorize_secret %}
+        <div class="table" style="margin-bottom: 1rem;">
+            <div class="row header" style="
+                {% if cat.1 == 'error' %}background:#dc2626;{% elif cat.1 == 'info' %}background:#0284c7;{% else %}background:#d97706;{% endif %}
+            ">
+                <div class="col">{{ group.display_name }} &mdash; {{ cat.0 }}</div>
+            </div>
+            <div class="row header bg-info" style="font-size: 9pt;">
+                <div class="col" style="width:40%;">Source URL</div>
+                <div class="col" style="width:8%; text-align:center;">Count</div>
+                <div class="col" style="width:37%;">Sample Match</div>
+                <div class="col" style="width:15%;">Status</div>
+            </div>
+            {% regroup group.leaks by source_url as url_groups %}
+            {% for url_group in url_groups %}
+            <div class="row" style="font-size: 9pt;">
+                <div class="col" style="width:40%; font-family:monospace; word-break:break-all;">{{ url_group.grouper|truncatechars:80 }}</div>
+                <div class="col" style="width:8%; text-align:center; font-weight:bold;">{{ url_group.list|length }}</div>
+                <div class="col" style="width:37%; font-family:monospace; color:#888; word-break:break-all;">{{ url_group.list.0.match_content|truncatechars:100 }}</div>
+                <div class="col" style="width:15%; text-transform:uppercase;">{{ url_group.list.0.status }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endwith %}
+        {% endfor %}
+    </article>
+    {% endif %}
+
     {% if all_vulnerabilities_count > 0 and show_vuln %}
       <article style="page-break-before: always" class="summary">
         <h3 id="vulnerabilities-discovered" class="page_title">Vulnerabilities Discovered</h3>
@@ -1013,7 +1051,7 @@
           </section>
         </div>
       </article>
-
+    {% endif %}
 
       {# start vulnerability #}
       {% if show_vuln %}
@@ -1068,6 +1106,8 @@
                   <br>
                   <span class="mini-heading ml-8">CWE IDs</span><br>
                     &nbsp;&nbsp;&nbsp;&nbsp;{% for cwe in vulnerability.cwe_ids.all %} {{cwe}}{% if not forloop.last %}, {% endif %} {% endfor %}
+                  {% endif %}
+                {% endif %}
                 <!-- <ul>
                   {% for vuln_urls in vuln_http_url_list %}
                     <li>{{vuln_urls.grouper}}</li>

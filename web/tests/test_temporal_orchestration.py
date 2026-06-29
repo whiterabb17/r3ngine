@@ -1,4 +1,4 @@
-import os
+﻿import os
 import django
 from django.test import TestCase
 from unittest.mock import patch, MagicMock, AsyncMock
@@ -49,8 +49,8 @@ class TestTemporalOrchestration(TestCase):
         self.domain.delete()
 
     @patch('reNgine.temporal_client.TemporalClientProvider.get_client', new_callable=AsyncMock)
-    @patch('reNgine.tasks.save_endpoint')
-    @patch('reNgine.tasks.send_scan_notif')
+    @patch('reNgine.tasks.scan_init.save_endpoint')
+    @patch('reNgine.tasks.scan_init.send_scan_notif')
     def test_initiate_scan_temporal(self, mock_send_notif, mock_save_endpoint, mock_get_client):
         """Test that initiate_scan_temporal correctly sets up scan history and starts the MasterScanWorkflow."""
         from reNgine.tasks import initiate_scan_temporal
@@ -97,8 +97,8 @@ class TestTemporalOrchestration(TestCase):
         self.assertEqual(temporal_ctx['engine_id'], self.engine.id)
 
     @patch('reNgine.temporal_client.TemporalClientProvider.get_client', new_callable=AsyncMock)
-    @patch('reNgine.tasks.save_endpoint')
-    @patch('reNgine.tasks.send_scan_notif')
+    @patch('reNgine.tasks.scan_init.save_endpoint')
+    @patch('reNgine.tasks.scan_init.send_scan_notif')
     def test_initiate_subscan_temporal(self, mock_send_notif, mock_save_endpoint, mock_get_client):
         """Test that initiate_subscan_temporal sets up subscan record and triggers SubScanWorkflow on Temporal."""
         from reNgine.tasks import initiate_subscan_temporal
@@ -159,8 +159,8 @@ class TestTemporalOrchestration(TestCase):
         self.assertEqual(subscan.workflow_ids, ['mock-subscan-workflow-id'])
 
     @patch('reNgine.temporal_client.TemporalClientProvider.get_client', new_callable=AsyncMock)
-    @patch('reNgine.tasks.save_endpoint')
-    @patch('reNgine.tasks.send_scan_notif')
+    @patch('reNgine.tasks.scan_init.save_endpoint')
+    @patch('reNgine.tasks.scan_init.send_scan_notif')
     def test_initiate_multiple_subscans_temporal(self, mock_send_notif, mock_save_endpoint, mock_get_client):
         """Test that initiating subscans with multiple tasks creates multiple SubScan records
 
@@ -229,8 +229,8 @@ class TestTemporalOrchestration(TestCase):
             self.assertEqual(subscan.workflow_ids, ['mock-multi-subscan-workflow-id'])
 
     @patch('reNgine.temporal_client.TemporalClientProvider.get_client', new_callable=AsyncMock)
-    @patch('reNgine.tasks.save_endpoint')
-    @patch('reNgine.tasks.send_scan_notif')
+    @patch('reNgine.tasks.scan_init.save_endpoint')
+    @patch('reNgine.tasks.scan_init.send_scan_notif')
     def test_initiate_subscan_temporal_skips_duplicate_active_type(self, mock_send_notif, mock_save_endpoint, mock_get_client):
         """Duplicate subscan launches for the same subdomain/type should reuse the active run."""
         from reNgine.tasks import initiate_subscan_temporal
@@ -269,7 +269,7 @@ class TestTemporalOrchestration(TestCase):
         mock_save_endpoint.assert_not_called()
         mock_send_notif.assert_not_called()
 
-    @patch('reNgine.tasks.resume_scan_temporal')
+    @patch('reNgine.tasks.scan_init.resume_scan_temporal')
     @patch('reNgine.temporal_client.TemporalClientProvider.get_client', new_callable=AsyncMock)
     def test_recover_stuck_scans_restarts_running_and_failed(self, mock_get_client, mock_resume_scan):
         """Verify recover_stuck_scans recovers both RUNNING_TASK and FAILED_TASK scans with dead workflows, but not ABORTED ones."""
@@ -371,7 +371,7 @@ class TestWorkflowStructuralInvariants(TestCase):
     No Temporal server or Django ORM is required — they inspect source only.
     """
 
-    _SOURCE_PATH = "reNgine/temporal_workflows.py"
+    _SOURCE_PATH = "reNgine/temporal/workflows/__init__.py"
 
     @classmethod
     def _source(cls):
@@ -402,7 +402,7 @@ class TestWorkflowStructuralInvariants(TestCase):
                             "before the concurrent gather of other T6 activities."
                         )
                         return
-        self.fail("MasterScanWorkflow.run() not found in temporal_workflows.py")
+        self.fail("MasterScanWorkflow.run() not found in temporal/workflows/__init__.py")
 
     def test_subscan_nuclei_future_variable_present(self):
         """SubScanWorkflow tier loop must declare 'nuclei_future' to separate
@@ -424,7 +424,7 @@ class TestWorkflowStructuralInvariants(TestCase):
         nuclei_idx = source.find("await nuclei_future")
         gather_idx = source.find("await asyncio.gather(*tier_futures)")
         self.assertGreater(nuclei_idx, 0,
-                           "'await nuclei_future' not found in temporal_workflows.py")
+                           "'await nuclei_future' not found in temporal/workflows/__init__.py")
         self.assertGreater(gather_idx, 0,
                            "'await asyncio.gather(*tier_futures)' not found")
         self.assertLess(
@@ -448,7 +448,7 @@ class TestWorkflowStructuralInvariants(TestCase):
                         self.assertIn("success = False", method_src,
                                       "MasterScanWorkflow.run() must initialise 'success = False'")
                         return
-        self.fail("MasterScanWorkflow.run() not found in temporal_workflows.py")
+        self.fail("MasterScanWorkflow.run() not found in temporal/workflows/__init__.py")
 
     def test_masterscan_correlate_activity_in_finally_block(self):
         """CorrelateVulnerabilitiesActivity must appear inside a finally: block
@@ -478,19 +478,19 @@ class TestWorkflowStructuralInvariants(TestCase):
                         "in MasterScanWorkflow.run(), not inline in the try: body. "
                         "It must be guarded by 'if success:' so it only runs on clean completion."
                     )
-        self.fail("MasterScanWorkflow.run() not found in temporal_workflows.py")
+        self.fail("MasterScanWorkflow.run() not found in temporal/workflows/__init__.py")
 
     def test_masterscan_nuclei_failure_does_not_raise(self):
         """NucleiPlannerWorkflow failure must be caught so Tier 7 still runs.
 
-        Reads temporal_workflows.py source and asserts the execute_child_workflow
+        Reads temporal/workflows/__init__.py source and asserts the execute_child_workflow
         call for NucleiPlannerWorkflow is wrapped in a try-except block,
         confirming Tier 7 correlation/risk/Neo4j activities are not gated on it.
         """
         import ast
 
         src_path = os.path.join(
-            os.path.dirname(__file__), '..', 'reNgine', 'temporal_workflows.py'
+            os.path.dirname(__file__), '..', 'reNgine', 'temporal', 'workflows', '__init__.py'
         )
         with open(src_path) as f:
             source = f.read()

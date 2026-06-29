@@ -186,11 +186,11 @@ class BackendOptimizationTest(TransactionTestCase):
             )
 
     @patch('reNgine.tasks.http_crawl')
-    @patch('reNgine.fuzzing_tasks.Redis')
-    @patch('reNgine.fuzzing_tasks.get_http_urls')
+    @patch('reNgine.tasks.fuzzing.Redis')
+    @patch('reNgine.tasks.fuzzing.get_http_urls')
     @patch('reNgine.common_func.get_http_urls')
-    @patch('reNgine.fuzzing_tasks.stream_command')
-    @patch('reNgine.fuzzing_tasks.run_command')
+    @patch('reNgine.tasks.fuzzing.stream_command')
+    @patch('reNgine.tasks.fuzzing.run_command')
     def test_dir_file_fuzz_deduplication(self, mock_run, mock_stream, mock_get_urls_common, mock_get_urls_fuzz, mock_redis_cls, mock_http_crawl):
         """Test that dir_file_fuzz correctly merges and deduplicates results from ffuf and dirsearch."""
         mock_redis = MagicMock()

@@ -11,6 +11,7 @@ from reNgine.common_func import (
     get_subdomain_from_url
 )
 from dashboard.models import WpScanAPIKey
+from scanEngine.models import Proxy
 from startScan.models import EndPoint, ScanHistory, Subdomain, Vulnerability
 
 logger = logging.getLogger(__name__)
@@ -270,7 +271,7 @@ def save_finding(task_instance, finding, subdomain, name, severity='info', extra
                 path = '/'
             get_vulnerability_gpt_report((vuln.name, path), vulnerability_id=vuln.id)
         except Exception as e:
-            logger.error(f"Failed to generate LLM description for finding {vuln.name}: {e}")
+            logger.error("Failed to generate LLM description for finding %s: %s", vuln.name, e)
 
 def wpscan_scan(self, urls=[], ctx={}, description=None):
     """WPScan task for WordPress vulnerability scanning.
@@ -372,14 +373,14 @@ def wpscan_scan(self, urls=[], ctx={}, description=None):
         for _ in stream_command(update_cmd, scan_id=self.scan_id, activity_id=self.activity_id):
             pass
     except Exception as e:
-        logger.error(f"Failed to run wpscan database update: {e}")
+        logger.error("Failed to run wpscan database update: %s", e)
 
     for target_url, subdomain in targets:
         target_name = subdomain.name
         
         # Ensure trailing slash is stripped from target URL
         target_url = target_url.rstrip('/')
-        logger.info(f"WPScan target: {target_url}")
+        logger.info("WPScan target: %s", target_url)
         
         output_file = f"{results_dir}/{target_name}_wpscan.json"
         
@@ -391,15 +392,17 @@ def wpscan_scan(self, urls=[], ctx={}, description=None):
             # The final retry attempt must be executed without the proxy flag
             proxy = None
             if attempt < max_attempts - 1:
-                proxy = get_random_proxy()
+                proxy_obj = Proxy.objects.first()
+                if proxy_obj and proxy_obj.use_proxy:
+                    proxy = get_random_proxy()
             
             if proxy:
                 cmd += f" --proxy {proxy}"
             if api_key:
                 cmd += f" --api-token {api_key}"
             
-            logger.info(f"Running WPScan for {target_url} (Attempt {attempt + 1}/{max_attempts})")
-            logger.warning(f"Full WPScan command: {cmd}")
+            logger.info("Running WPScan for %s (Attempt %d/%d)", target_url, attempt + 1, max_attempts)
+            logger.warning("Full WPScan command: %s", cmd)
             
             # Remove output file if it exists to ensure we don't read stale results
             if os.path.exists(output_file):
@@ -435,20 +438,20 @@ def wpscan_scan(self, urls=[], ctx={}, description=None):
                             ):
                                 failed_with_ssl_error = True
                 except Exception as parse_err:
-                    logger.error(f"Failed to parse WPScan output JSON: {parse_err}")
+                    logger.error("Failed to parse WPScan output JSON: %s", parse_err)
 
             if failed_with_ssl_error:
                 if attempt < max_attempts - 1:
                     logger.warning(
-                        f"WPScan aborted due to SSL peer certificate error on {target_url}. "
-                        f"Retrying ({attempt + 1}/{max_attempts - 1})..."
+                        "WPScan aborted due to SSL peer certificate error on %s. Retrying (%d/%d)...",
+                        target_url, attempt + 1, max_attempts - 1,
                     )
                     time.sleep(2)
                     continue
                 else:
                     logger.error(
-                        f"WPScan failed on {target_url} with SSL certificate error after {max_attempts} attempts. "
-                        f"Skipping target."
+                        "WPScan failed on %s with SSL certificate error after %d attempts. Skipping target.",
+                        target_url, max_attempts,
                     )
                     # Clean up aborted output file to prevent parsing junk
                     if os.path.exists(output_file):

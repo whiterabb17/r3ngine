@@ -77,6 +77,15 @@
   - Added per-row action buttons for Copy, Open in Browser, and Delete.
   - Added a page-level export button to download all visible URLs as a `.txt` file.
 
+- **Email Discovery & Import**:
+  - Added `Email.source` field (`manual`, `hunter`, `harvester`, `phonebook`, `pattern`, `crawled`) with Django migration; `save_email()` updated to accept an optional `source` parameter (backward-compatible, defaults to `hunter`).
+  - Migrated `email_security` plugin to the internal module `web/reNgine/tasks/email_security.py`; wired `run_email_security_activity` into the Tier 2 Temporal workflow (post-port-scan); added `check_ssl_cert()` for port 465 (SMTPS) and 993 (IMAPS) implicit-TLS certificate validation — expired, self-signed, hostname-mismatch, and expiring-soon findings feed into the vulnerability table.
+  - New `web/reNgine/tasks/email_discovery.py` orchestrator runs five discovery sources sequentially, pushing per-tool progress events to the `scan:logs:{scan_id}` Redis Stream: Hunter.io domain search (existing integration), theHarvester (`-b all`), phonebook.cz HTTP scrape, pattern inference (6 common formats verified via SMTP RCPT TO against the domain MX record), and crawled URL extraction from saved `Screenshot.html_path` HTML files.
+  - Four new API endpoints under `IsPenetrationTester` RBAC: `POST /api/emails/manual/` (add/import with RFC-5322 validation), `POST /api/emailDiscovery/start/` (starts background thread, returns `job_id`), `POST /api/emailDiscovery/stop/` (Redis stop signal), `GET /api/emailDiscovery/{job_id}/replay/` (stream replay from Redis for WS reconnect/page-reload).
+  - OSINT tab `EmailSection` gains an **Actions ▾** dropdown with "Add / Import Emails" and "Discover Emails"; each email row shows a source badge chip (amber for manual, muted for tool-discovered).
+  - `EmailImportModal`: paste tab (comma/semicolon/newline-separated) and file upload tab (`.txt`/`.csv`) with client-side validation, live valid/invalid count preview, and duplicate deduplication on the backend.
+  - `EmailDiscoveryModal`: live per-tool progress over `ws/logs/{scanId}/` WebSocket; hides without stopping the background run; on reconnect the REST replay endpoint restores full modal state from Redis Stream history.
+
 #### Fixed
 
 - **Scan Detail Subdomains N+1 Query & Screenshot Lookup**:

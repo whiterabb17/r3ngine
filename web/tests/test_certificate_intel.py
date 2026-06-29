@@ -70,7 +70,7 @@ class TestCertificateIntelligenceModel(TestCase):
 
 class TestCertificateParser(TestCase):
     def test_parse_valid_tlsx_json_line(self):
-        from reNgine.certificate_tasks import parse_tlsx_json_line
+        from reNgine.tasks.certificate import parse_tlsx_json_line
         line = (
             '{"host":"example.com","ip":"1.2.3.4","port":443,'
             '"tls_version":"tls13","cipher":"TLS_AES_256_GCM_SHA384",'
@@ -88,29 +88,29 @@ class TestCertificateParser(TestCase):
         self.assertFalse(result["self_signed"])
 
     def test_parse_invalid_json_returns_none(self):
-        from reNgine.certificate_tasks import parse_tlsx_json_line
+        from reNgine.tasks.certificate import parse_tlsx_json_line
         result = parse_tlsx_json_line("not json at all")
         self.assertIsNone(result)
 
     def test_parse_empty_line_returns_none(self):
-        from reNgine.certificate_tasks import parse_tlsx_json_line
+        from reNgine.tasks.certificate import parse_tlsx_json_line
         result = parse_tlsx_json_line("")
         self.assertIsNone(result)
 
     def test_is_weak_cipher_rc4(self):
-        from reNgine.certificate_tasks import is_weak_cipher
+        from reNgine.tasks.certificate import is_weak_cipher
         self.assertTrue(is_weak_cipher("TLS_RSA_WITH_RC4_128_SHA"))
 
     def test_is_weak_cipher_3des(self):
-        from reNgine.certificate_tasks import is_weak_cipher
+        from reNgine.tasks.certificate import is_weak_cipher
         self.assertTrue(is_weak_cipher("TLS_RSA_WITH_3DES_EDE_CBC_SHA"))
 
     def test_is_strong_cipher(self):
-        from reNgine.certificate_tasks import is_weak_cipher
+        from reNgine.tasks.certificate import is_weak_cipher
         self.assertFalse(is_weak_cipher("TLS_AES_256_GCM_SHA384"))
 
     def test_is_weak_cipher_null(self):
-        from reNgine.certificate_tasks import is_weak_cipher
+        from reNgine.tasks.certificate import is_weak_cipher
         self.assertTrue(is_weak_cipher("TLS_NULL_WITH_NULL_NULL"))
 
 
@@ -121,7 +121,7 @@ class TestCertificateActivity(TestCase):
 
     def test_activity_calls_runner(self):
         from unittest.mock import patch, MagicMock
-        with patch("reNgine.certificate_tasks.run_certificate_intel") as mock_runner, \
+        with patch("reNgine.tasks.certificate.run_certificate_intel") as mock_runner, \
              patch("temporalio.activity.heartbeat", MagicMock()):
             from reNgine.temporal_activities import run_certificate_intel_activity
             mock_runner.return_value = []
@@ -132,7 +132,7 @@ class TestCertificateActivity(TestCase):
 
     def test_activity_returns_count(self):
         from unittest.mock import patch, MagicMock
-        with patch("reNgine.certificate_tasks.run_certificate_intel") as mock_runner, \
+        with patch("reNgine.tasks.certificate.run_certificate_intel") as mock_runner, \
              patch("temporalio.activity.heartbeat", MagicMock()):
             from reNgine.temporal_activities import run_certificate_intel_activity
             fake_cert = CertificateIntelligence(host="a.example.com", port=443)

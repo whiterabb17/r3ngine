@@ -56,4 +56,4 @@ Keep the project modular and layered to avoid circular dependencies:
 - Do not add new Python dependencies without approval; add them to `web/requirements.txt`.
 - Do not add new npm dependencies without approval; add them to `frontend/package.json`.
 - Do not modify `docker-compose.yml` or `web/Dockerfile` without understanding the full build pipeline.
-- Any change that touches `temporal_workflows.py` must be reviewed for determinism violations (see `r3ngine-temporal.md`).
+- Any change that touches `temporal/workflows/__init__.py` (or the shim `temporal_workflows.py`) must be reviewed for determinism violations (see `r3ngine-temporal.md`).

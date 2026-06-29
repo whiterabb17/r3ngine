@@ -96,7 +96,7 @@ class CVEEnrichmentService:
         
         # Get or create CVE record
         cve_obj, created = CveId.objects.get_or_create(name=cve_name)
-        
+
         if not is_valid_cve:
             # We don't perform external enrichment for non-CVE strings, just return
             return cve_obj
@@ -108,7 +108,7 @@ class CVEEnrichmentService:
                 logger.debug(f"CVE {cve_name} recently enriched, skipping")
                 return cve_obj
         
-        # Attempt enrichment (graceful degradation)
+        # 1. Official NVD API (Primary Source)
         try:
             self._enrich_from_nvd(cve_obj)
         except Exception as e:
@@ -152,14 +152,18 @@ class CVEEnrichmentService:
             Dict[str, CveId]: Mapping of CVE name to enriched object
         """
         results = {}
+        print(f"DEBUG: enrich_multiple_cves called with {cve_names}")
         for cve_name in cve_names:
             try:
                 cve_obj = self.enrich_cve(cve_name)
+                print(f"DEBUG: enrich_cve returned {cve_obj}")
                 if cve_obj:
                     results[cve_name] = cve_obj
             except Exception as e:
-                logger.error(f"Failed to enrich {cve_name}: {e}")
+                print(f"DEBUG: Exception in enrich_cve: {e}")
+                logger.error(f"Failed to enrich {cve_name}: {e}", exc_info=True)
         
+        print(f"DEBUG: enrich_multiple_cves returning {len(results)} results")
         return results
     
     def sync_cisa_kev_catalog(self) -> Dict[str, int]:

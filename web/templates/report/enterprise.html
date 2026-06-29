@@ -1,3 +1,4 @@
+{% load custom_tags %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -748,6 +749,56 @@
                 {% endfor %}
             </tbody>
         </table>
+    </article>
+    {% endif %}
+
+    {% if secret_leaks_count > 0 %}
+    <article class="page-break" id="secret-findings-section">
+        <h1>Secret & Credential Findings</h1>
+        <p style="margin-top: 4mm; margin-bottom: 4mm;">
+            The following secrets and credentials were detected by Semgrep static analysis
+            on JavaScript, configuration, and source files crawled during the scan.
+        </p>
+        {% for type_key, group in secret_findings_by_type.items %}
+        {% with cat=group.display_name|categorize_secret %}
+        <div style="
+            margin-bottom: 1.5rem;
+            border-left: 4px solid {% if cat.1 == 'error' %}#dc2626{% elif cat.1 == 'info' %}#0284c7{% else %}#d97706{% endif %};
+            padding-left: 12px;
+        ">
+            <h3 style="margin-bottom: 0.4rem; font-size: 11pt;">
+                {{ group.display_name }}
+                <span style="
+                    font-size: 8pt; font-weight: 600; padding: 2px 6px; border-radius: 3px; margin-left: 6px;
+                    {% if cat.1 == 'error' %}background:#fee2e2;color:#991b1b;{% endif %}
+                    {% if cat.1 == 'warning' %}background:#fef3c7;color:#92400e;{% endif %}
+                    {% if cat.1 == 'info' %}background:#e0f2fe;color:#075985;{% endif %}
+                ">{{ cat.0 }}</span>
+            </h3>
+        {% endwith %}
+            <table style="width:100%; border-collapse:collapse; font-size:9pt;">
+                <thead>
+                    <tr class="table-header">
+                        <th style="width:40%; text-align:left; padding:5px 8px;">Source URL</th>
+                        <th style="width:8%; text-align:center; padding:5px 8px;">Count</th>
+                        <th style="width:37%; text-align:left; padding:5px 8px;">Sample Match</th>
+                        <th style="width:15%; padding:5px 8px;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% regroup group.leaks by source_url as url_groups %}
+                    {% for url_group in url_groups %}
+                    <tr>
+                        <td style="padding:5px 8px; font-family:monospace; font-size:8pt; word-break:break-all; border-bottom:1px solid #e2e8f0;">{{ url_group.grouper|truncatechars:80 }}</td>
+                        <td style="padding:5px 8px; text-align:center; font-weight:bold; border-bottom:1px solid #e2e8f0;">{{ url_group.list|length }}</td>
+                        <td style="padding:5px 8px; font-family:monospace; font-size:8pt; color:#888; word-break:break-all; border-bottom:1px solid #e2e8f0;">{{ url_group.list.0.match_content|truncatechars:100 }}</td>
+                        <td style="padding:5px 8px; text-transform:uppercase; font-size:8pt; border-bottom:1px solid #e2e8f0;">{{ url_group.list.0.status }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
     </article>
     {% endif %}
 

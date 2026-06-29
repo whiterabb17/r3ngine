@@ -13,10 +13,12 @@ Apply these guidelines when working on Python/Django backend code in `web/` (vie
 Organise modules to avoid circular dependencies:
 
 - Leaf modules (e.g. `definitions.py`, `common_func.py`, `utils/`) sit at the bottom.
-- Core business logic (task functions in `tasks.py`, activity implementations in `temporal_activities.py`, graph utilities in `graph_utils.py`) sits in the middle.
-- Orchestration layers (`temporal_workflows.py`, HTTP views, Django Channels consumers) sit at the top.
+- Core business logic (task functions in `reNgine/tasks/` package, activity implementations in `reNgine/temporal/activities/`, graph utilities in `graph_utils.py`) sits in the middle.
+- Orchestration layers (`reNgine/temporal/workflows/`, HTTP views in `api/views/`, Django Channels consumers) sit at the top.
 
-**Temporal-specific**: `temporal_workflows.py` must remain a thin orchestrator — no scanning logic, no DB calls, no I/O. All side-effecting work belongs in `temporal_activities.py` or the Go executor. See `r3ngine-temporal.md` for determinism rules.
+**Temporal-specific**: `temporal/workflows/__init__.py` must remain a thin orchestrator — no scanning logic, no DB calls, no I/O. All side-effecting work belongs in `temporal/activities/__init__.py` or the Go executor. See `r3ngine-temporal.md` for determinism rules.
+
+**Shims**: `temporal_workflows.py` and `temporal_activities.py` are backward-compatible shims (`from reNgine.temporal.* import *`). New code should import directly from the package paths.
 
 ## Python code style
 
@@ -46,7 +48,7 @@ if user.is_active and user.is_admin:
 
 There are **two** logging patterns in this codebase. Use the right one based on where the code lives.
 
-### Pattern 1 — Scan task modules (tasks.py, *_tasks.py, common_func.py, etc.)
+### Pattern 1 — Scan task modules (tasks/ package, *_tasks.py, common_func.py, etc.)
 
 Use the standard `logging.getLogger(__name__)`. The `task` log handler in `settings.py` automatically formats output as:
 
@@ -71,7 +73,7 @@ logger.error(f"Failed: {e}")
 
 All modules under `reNgine.*` are routed to the `task` handler via the catch-all entry in `settings.py` — **no extra registration needed** for new task files under `web/reNgine/`. The `task` handler is also a `StreamHandler` so output goes to stdout; Docker logs include timestamps automatically.
 
-### Pattern 2 — Temporal activities (temporal_activities.py)
+### Pattern 2 — Temporal activities (temporal/activities/__init__.py)
 
 Use `get_module_logger` from `reNgine.utils.logger` for structured section-style logging. This routes to `temporal.log` in addition to stdout:
 
@@ -98,8 +100,8 @@ Use `format_exception_for_log(exc)` to produce a safe `"ExcType: message"` strin
 
 | Context | Logger init | Output format | Settings handler |
 |---------|-------------|---------------|-----------------|
-| Scan tasks (`tasks.py`, `*_tasks.py`, `common_func.py`) | `logging.getLogger(__name__)` | `module.funcName \| LEVEL \| message` | `reNgine` catch-all → `task` |
-| Temporal activities (`temporal_activities.py`) | `get_module_logger(__name__)` | `[PREFIX] ACTION \| message` | `reNgine.temporal_activities` → `temporal_file` |
+| Scan tasks (`tasks/` package, `*_tasks.py`, `common_func.py`) | `logging.getLogger(__name__)` | `module.funcName \| LEVEL \| message` | `reNgine` catch-all → `task` |
+| Temporal activities (`temporal/activities/__init__.py`) | `get_module_logger(__name__)` | `[PREFIX] ACTION \| message` | `reNgine.temporal.activities` → `temporal_file` |
 | Plugins (`plugins_data.*`) | `logging.getLogger(__name__)` | `module.funcName \| LEVEL \| message` | `plugins` → `task` |
 
 ## Django ORM

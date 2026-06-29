@@ -59,10 +59,10 @@ class ResyncSingleCertificateTests(TestCase):
     def setUp(self):
         self.cert = _make_scan_and_cert()
 
-    @patch('reNgine.certificate_tasks.subprocess.run')
+    @patch('reNgine.tasks.certificate.subprocess.run')
     def test_resync_updates_record(self, mock_run):
         mock_run.return_value = MagicMock(stdout=TLSX_SAMPLE_LINE + '\n', returncode=0)
-        from reNgine.certificate_tasks import resync_single_certificate
+        from reNgine.tasks.certificate import resync_single_certificate
         result = resync_single_certificate(self.cert.id)
         self.assertIsNotNone(result)
         self.cert.refresh_from_db()
@@ -71,46 +71,46 @@ class ResyncSingleCertificateTests(TestCase):
         self.assertEqual(self.cert.issuer_cn, 'New CA')
         self.assertFalse(self.cert.has_weak_cipher)
 
-    @patch('reNgine.certificate_tasks.subprocess.run')
+    @patch('reNgine.tasks.certificate.subprocess.run')
     def test_resync_returns_none_on_empty_output(self, mock_run):
         mock_run.return_value = MagicMock(stdout='', returncode=0)
-        from reNgine.certificate_tasks import resync_single_certificate
+        from reNgine.tasks.certificate import resync_single_certificate
         result = resync_single_certificate(self.cert.id)
         self.assertIsNone(result)
 
-    @patch('reNgine.certificate_tasks.subprocess.run')
+    @patch('reNgine.tasks.certificate.subprocess.run')
     def test_resync_returns_none_on_host_mismatch(self, mock_run):
         # tlsx returns data for a different host — should be skipped
         other_host_line = TLSX_SAMPLE_LINE.replace('api.resync.test', 'other.host.test')
         mock_run.return_value = MagicMock(stdout=other_host_line + '\n', returncode=0)
-        from reNgine.certificate_tasks import resync_single_certificate
+        from reNgine.tasks.certificate import resync_single_certificate
         result = resync_single_certificate(self.cert.id)
         self.assertIsNone(result)
 
-    @patch('reNgine.certificate_tasks.subprocess.run', side_effect=FileNotFoundError)
+    @patch('reNgine.tasks.certificate.subprocess.run', side_effect=FileNotFoundError)
     def test_resync_returns_none_when_tlsx_missing(self, mock_run):
-        from reNgine.certificate_tasks import resync_single_certificate
+        from reNgine.tasks.certificate import resync_single_certificate
         result = resync_single_certificate(self.cert.id)
         self.assertIsNone(result)
 
     def test_resync_returns_none_for_missing_cert(self):
-        from reNgine.certificate_tasks import resync_single_certificate
+        from reNgine.tasks.certificate import resync_single_certificate
         result = resync_single_certificate(cert_id=999999)
         self.assertIsNone(result)
 
-    @patch('reNgine.certificate_tasks.subprocess.run',
+    @patch('reNgine.tasks.certificate.subprocess.run',
            side_effect=subprocess.TimeoutExpired(cmd='tlsx', timeout=60))
     def test_resync_returns_none_on_timeout(self, mock_run):
-        from reNgine.certificate_tasks import resync_single_certificate
+        from reNgine.tasks.certificate import resync_single_certificate
         result = resync_single_certificate(self.cert.id)
         self.assertIsNone(result)
 
-    @patch('reNgine.certificate_tasks.subprocess.run')
+    @patch('reNgine.tasks.certificate.subprocess.run')
     def test_resync_rejects_host_with_unsafe_chars(self, mock_run):
         # The cert's host field contains shell metacharacters — must be rejected.
         self.cert.host = 'host; rm -rf /'
         self.cert.save(update_fields=['host'])
-        from reNgine.certificate_tasks import resync_single_certificate
+        from reNgine.tasks.certificate import resync_single_certificate
         result = resync_single_certificate(self.cert.id)
         self.assertIsNone(result)
         mock_run.assert_not_called()

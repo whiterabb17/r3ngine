@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 from django.contrib.auth import get_user_model
@@ -150,7 +150,7 @@ class EmailBreachAPITests(TestCase):
         self.assertEqual(response.status_code, 404)
 
 
-class HIBPScraperTaskTests(TestCase):
+class HIBPScraperTaskTests(TransactionTestCase):
     def setUp(self):
         # Clear existing data to prevent --keepdb contamination
         EmailBreach.objects.all().delete()

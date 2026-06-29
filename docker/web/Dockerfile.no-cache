@@ -321,7 +321,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
     rm -rf "k6-v${K6_VERSION}-linux-${K6_ARCH}"*
 
 # Brutus — HTTP brute force tool
-RUN curl -L https://github.com/praetorian-inc/brutus/releases/latest/download/brutus-linux-amd64.tar.gz | \
+RUN curl -sSfL https://github.com/praetorian-inc/brutus/releases/download/v1.5.1/brutus-linux-amd64.tar.gz | \
     tar xz && mv brutus /usr/local/bin/
 
 # Dalfox v3 — XSS scanner (Rust rewrite; built from source in dalfox-builder stage)

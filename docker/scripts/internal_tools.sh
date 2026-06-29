@@ -117,7 +117,7 @@ fi
 # brutus — HTTP brute force tool
 if ! command -v brutus &>/dev/null; then
     log "Installing brutus..."
-    curl -sL https://github.com/praetorian-inc/brutus/releases/latest/download/brutus-linux-amd64.tar.gz | \
+    curl -sSfL https://github.com/praetorian-inc/brutus/releases/download/v1.5.1/brutus-linux-amd64.tar.gz | \
         tar xz -C /usr/local/bin brutus
     log_done
 else

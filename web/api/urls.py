@@ -61,6 +61,12 @@ from .api_intel_mobile_views import (
 )
 from .todo_mobile_views import TodoMobileListCreateView, TodoMobileDetailView
 from .workflow_mobile_views import WorkflowMobileListView
+from .views.recon import (
+    ManualEmailAddView,
+    StartEmailDiscoveryView,
+    StopEmailDiscoveryView,
+    EmailDiscoveryReplayView,
+)
 
 
 app_name = 'api'
@@ -154,6 +160,10 @@ urlpatterns = [
         'emails/check_breach/',
         CheckEmailBreach.as_view(),
         name='check_email_breach'),
+    path('emails/manual/', ManualEmailAddView.as_view(), name='manual_email_add'),
+    path('emailDiscovery/start/', StartEmailDiscoveryView.as_view(), name='email_discovery_start'),
+    path('emailDiscovery/stop/', StopEmailDiscoveryView.as_view(), name='email_discovery_stop'),
+    path('emailDiscovery/<str:job_id>/replay/', EmailDiscoveryReplayView.as_view(), name='email_discovery_replay'),
     path(
         'queryEmployees/',
         ListEmployees.as_view(),
@@ -339,6 +349,11 @@ urlpatterns = [
         'action/directory-file/delete/',
         DirectoryFileDeleteView.as_view(),
         name='directory-file-delete',
+    ),
+    path(
+        'action/directory-file/auth-logs/',
+        ExtractAuthLogsView.as_view(),
+        name='directory-file-auth-logs',
     ),
     path(
         'action/subdomain/add/',

@@ -34,8 +34,8 @@ class TestNucleiProxyConcurrencyCap(TestCase):
             start_scan_date=timezone.now()
         )
 
-    @patch('reNgine.tasks.stream_command', return_value=iter([]))
-    @patch('reNgine.tasks.Notification.objects')
+    @patch('reNgine.tasks.vuln.stream_command', return_value=iter([]))
+    @patch('scanEngine.models.Notification.objects')
     def test_proxy_file_caps_concurrency(self, mock_notif, mock_stream):
         """When proxies_file_path is set, -c must be <= NUCLEI_PROXY_MAX_CONCURRENCY."""
         from reNgine.tasks import nuclei_scan
@@ -79,8 +79,8 @@ class TestNucleiProxyConcurrencyCap(TestCase):
             f"Expected -c <= {NUCLEI_PROXY_MAX_CONCURRENCY}, got {c_val}",
         )
 
-    @patch('reNgine.tasks.stream_command', return_value=iter([]))
-    @patch('reNgine.tasks.Notification.objects')
+    @patch('reNgine.tasks.vuln.stream_command', return_value=iter([]))
+    @patch('scanEngine.models.Notification.objects')
     def test_proxy_file_caps_rate_limit(self, mock_notif, mock_stream):
         """When proxies_file_path is set, -rl must be <= NUCLEI_PROXY_MAX_RATE_LIMIT."""
         from reNgine.tasks import nuclei_scan
@@ -119,8 +119,8 @@ class TestNucleiProxyConcurrencyCap(TestCase):
             f"Expected -rl <= {NUCLEI_PROXY_MAX_RATE_LIMIT}, got {rl_val}",
         )
 
-    @patch('reNgine.tasks.stream_command', return_value=iter([]))
-    @patch('reNgine.tasks.Notification.objects')
+    @patch('reNgine.tasks.vuln.stream_command', return_value=iter([]))
+    @patch('scanEngine.models.Notification.objects')
     def test_no_proxy_file_does_not_cap(self, mock_notif, mock_stream):
         """Without a proxy file, concurrency must not be artificially capped."""
         from reNgine.tasks import nuclei_scan
