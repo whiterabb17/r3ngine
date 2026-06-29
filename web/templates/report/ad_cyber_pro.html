@@ -72,7 +72,7 @@
     <td class="{{ f.severity|lower }}">{{ f.severity }}</td>
     <td>{{ f.title }}</td>
     <td><code>{{ f.affected_object }}</code></td>
-    <td style="font-size:0.8em">{{ f.remediation }}</td>
+    <td style="font-size:0.8em">{{ f.remediation|render_markdown }}</td>
   </tr>
   {% empty %}<tr><td colspan="4">// NO FINDINGS</td></tr>{% endfor %}
 </table>

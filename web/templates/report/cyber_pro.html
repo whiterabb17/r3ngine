@@ -704,6 +704,7 @@
     {% endif %}
 
     <!-- Detailed Findings -->
+    {% include 'report/technical_data_sections.html' %}
     {% if show_vuln %}
     <article class="page-break" id="detailed-findings">
         <h1>Technical Finding Details</h1>
@@ -726,6 +727,12 @@
                     <span class="section-label">Description</span>
                     <p>{{ vulnerability.description|linebreaks }}</p>
                 </div>
+                {% if vulnerability.remediation %}
+                <div class="finding-section">
+                    <span class="section-label">Remediation</span>
+                    <div>{{ vulnerability.remediation|render_markdown }}</div>
+                </div>
+                {% endif %}
                 <div class="finding-section">
                     <span class="section-label">Affected Asset(s)</span>
                     <div style="background-color: #f1f5f9; padding: 3mm; border-radius: 1mm; font-family: monospace; font-size: 8pt;">
