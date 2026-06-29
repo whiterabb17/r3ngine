@@ -585,7 +585,7 @@ class StartWorkflowView(APIView):
                     ctx,
                     id=wf_id,
                     task_queue="python-orchestrator-queue",
-                    execution_timeout=timedelta(hours=24),
+                    execution_timeout=timedelta(days=7),
                 )
                 return handle.id
 
@@ -814,7 +814,7 @@ class DirectoryFileDispatchView(APIView):
                     ctx,
                     id=wf_id,
                     task_queue='python-orchestrator-queue',
-                    execution_timeout=timedelta(hours=1),
+                    execution_timeout=timedelta(days=7),
                 )
                 return handle.id
 

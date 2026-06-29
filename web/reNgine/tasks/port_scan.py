@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import os
 import json
 import xmltodict
@@ -872,7 +872,7 @@ def parse_nmap_vulners_output(script_output, url='', service_title=''):
 		'description': description,
 		'cvss_score': max_cvss,
 		'references': all_references,
-		'cve_ids': [],
+		'cve_ids': [f['id'] for f in findings if f['id'].startswith('CVE-')],
 		'cwe_ids': [],
 		'tags': list(all_tags),
 		'source': 'VULNERS',

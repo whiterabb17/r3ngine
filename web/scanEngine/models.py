@@ -43,6 +43,7 @@ class EngineType(models.Model):
         try:
             config = yaml.safe_load(self.yaml_configuration)
             if isinstance(config, dict):
+                # Tasks are the top level keys in the YAML config
                 return list(config.keys())
         except Exception:
             pass
