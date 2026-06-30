@@ -3116,15 +3116,13 @@ async def check_scan_queue_status_activity(scan_id: int, queue_type: str) -> boo
             )
             return latest_exec.workflow_id if latest_exec else (scan_obj.workflow_ids[-1] if scan_obj.workflow_ids else None)
         else:
+            # TemporalWorkflowExecution rows are only ever created for ScanHistory
+            # (see reNgine.tasks.scan_init) — there is no subscan-scoped relation,
+            # so the only source of truth for a subscan's workflow id is the
+            # SubScan.workflow_ids array itself.
             scan_obj = SubScan.objects.filter(id=sid).first()
             if not scan_obj: return None
-            latest_exec = (
-                TemporalWorkflowExecution.objects
-                .filter(subscan=scan_obj, status='RUNNING')
-                .order_by('-started_at')
-                .first()
-            )
-            return latest_exec.workflow_id if latest_exec else (scan_obj.workflow_ids[-1] if getattr(scan_obj, 'workflow_ids', None) else None)
+            return scan_obj.workflow_ids[-1] if getattr(scan_obj, 'workflow_ids', None) else None
 
     logger.log_line("[TEMPORAL]", "START", "task=check_scan_queue_status scan_id=%s queue_type=%s" % (scan_id, queue_type))
     activity.logger.info(f"[CheckScanQueueStatusActivity] scan_id={scan_id} queue_type={queue_type}")
