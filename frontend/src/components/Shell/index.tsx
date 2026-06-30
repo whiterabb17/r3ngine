@@ -451,7 +451,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                     <List component="div" disablePadding sx={{ ml: 2 }}>
                       {item.children?.map((child) => {
                         const isChildActive = activePath === child.path;
-                        const subActiveColor = tokens.chrome.navActive;
+                        const subActiveColor = tokens.chrome.navChildActive;
                         const subInactiveColor = tokens.chrome.textMuted;
                         return (
                           <ListItemButton
@@ -463,7 +463,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                               py: 0.5,
                               borderRadius: 1,
                               mb: 0.2,
-                              bgcolor: isChildActive ? tokens.chrome.navActiveBg : 'transparent',
+                              bgcolor: isChildActive ? tokens.chrome.navChildActiveBg : 'transparent',
                               '&:hover': {
                                 bgcolor: alpha(theme.palette.primary.main, 0.05),
                               }
@@ -498,7 +498,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
         <AppBar position="fixed" sx={{
           bgcolor: alpha(tokens.chrome.bg, 0.95),
           backdropFilter: 'blur(12px)',
-          border: `1px solid ${tokens.chrome.border}`,
+          border: `1px solid ${tokens.chrome.headerBorder}`,
           borderRadius: 4,
           mt: 1.5,
           mx: 2,
@@ -606,7 +606,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                       onClick={handleToolboxOpen}
                       size="small"
                       sx={{
-                        color: toolboxAnchorEl ? theme.palette.primary.main : tokens.chrome.textMuted,
+                        color: toolboxAnchorEl ? theme.palette.primary.main : tokens.chrome.iconMuted,
                         bgcolor: toolboxAnchorEl ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
                         boxShadow: toolboxAnchorEl && theme.palette.mode === 'dark' ? `0 0 15px ${alpha(theme.palette.primary.main, 0.3)}` : 'none',
                         '&:hover': {
@@ -621,7 +621,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                       onClick={handleNotificationOpen}
                       size="small"
                       sx={{
-                        color: notificationAnchorEl ? theme.palette.primary.main : tokens.chrome.textMuted,
+                        color: notificationAnchorEl ? theme.palette.primary.main : tokens.chrome.iconMuted,
                         bgcolor: notificationAnchorEl ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
                         '&:hover': {
                           color: theme.palette.primary.main,
@@ -637,7 +637,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                       onClick={handleScanHistoryOpen}
                       size="small"
                       sx={{
-                        color: scanHistoryAnchorEl ? theme.palette.primary.main : tokens.chrome.textMuted,
+                        color: scanHistoryAnchorEl ? theme.palette.primary.main : tokens.chrome.iconMuted,
                         bgcolor: scanHistoryAnchorEl ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
                         '&:hover': {
                           color: theme.palette.primary.main,

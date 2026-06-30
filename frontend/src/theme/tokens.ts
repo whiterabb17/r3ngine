@@ -35,6 +35,10 @@ export interface ThemeTokenSet {
     navDefault: string;
     navActive: string;
     navActiveBg: string;
+    iconMuted: string;
+    navChildActive: string;
+    navChildActiveBg: string;
+    headerBorder: string;
   };
   accent: {
     primary: string;
@@ -140,11 +144,15 @@ const hackerSet: ThemeTokenSet = {
   chrome: {
     bg: '#12121a',
     text: '#e0e0e0',
-    textMuted: 'rgba(224, 224, 224, 0.5)',
+    textMuted: 'rgba(224, 224, 224, 0.7)',
     border: 'rgba(0, 243, 255, 0.1)',
     navDefault: '#00f3ff',
     navActive: '#bc13fe',
     navActiveBg: 'rgba(0, 243, 255, 0.15)',
+    iconMuted: 'rgba(224, 224, 224, 0.5)',
+    navChildActive: '#7000ff',
+    navChildActiveBg: 'rgba(0, 243, 255, 0.1)',
+    headerBorder: 'rgba(0, 243, 255, 0.1)',
   },
   accent: {
     primary: '#00f3ff',
@@ -198,11 +206,15 @@ const modernSet: ThemeTokenSet = {
   chrome: {
     bg: '#1e293b',
     text: '#f8fafc',
-    textMuted: 'rgba(248, 250, 252, 0.5)',
+    textMuted: 'rgba(248, 250, 252, 0.7)',
     border: 'rgba(0, 243, 255, 0.1)',
     navDefault: '#00f3ff',
     navActive: '#bc13fe',
     navActiveBg: 'rgba(0, 243, 255, 0.15)',
+    iconMuted: 'rgba(248, 250, 252, 0.5)',
+    navChildActive: '#7000ff',
+    navChildActiveBg: 'rgba(0, 243, 255, 0.1)',
+    headerBorder: 'rgba(0, 243, 255, 0.1)',
   },
   effects: {
     ...sharedEffects,
@@ -237,6 +249,10 @@ const enterpriseSet: ThemeTokenSet = {
     navDefault: 'rgba(245, 243, 239, 0.55)',
     navActive: '#f5f3ef',
     navActiveBg: '#9c1c2e',
+    iconMuted: 'rgba(245, 243, 239, 0.4)',
+    navChildActive: '#f5f3ef',
+    navChildActiveBg: 'rgba(156, 28, 46, 0.1)',
+    headerBorder: 'rgba(245, 243, 239, 0.1)',
   },
   accent: {
     primary: '#9c1c2e',
@@ -297,6 +313,10 @@ const v3LightSet: ThemeTokenSet = {
     navDefault: 'rgba(15, 23, 42, 0.65)',
     navActive: '#0ea5e9',
     navActiveBg: 'rgba(14, 165, 233, 0.15)',
+    iconMuted: 'rgba(15, 23, 42, 0.5)',
+    navChildActive: '#0ea5e9',
+    navChildActiveBg: 'rgba(14, 165, 233, 0.1)',
+    headerBorder: 'rgba(15, 23, 42, 0.1)',
   },
   accent: {
     primary: '#0ea5e9',
