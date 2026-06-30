@@ -5,7 +5,7 @@ import {
   Typography, Button, Box, CircularProgress, LinearProgress, IconButton,
 } from '@mui/material';
 import { CheckCircle2, XCircle, X } from 'lucide-react';
-import { checkProxy } from '../api';
+import { checkProxy, checkProxyBulk } from '../api';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 
 export interface ProxyValidationResult {
@@ -21,7 +21,7 @@ interface ProxyValidationModalProps {
   projectSlug: string;
 }
 
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 50;
 
 export const ProxyValidationModal: React.FC<ProxyValidationModalProps> = ({
   open, onClose, onSave, proxyList, projectSlug,
@@ -46,38 +46,45 @@ export const ProxyValidationModal: React.FC<ProxyValidationModalProps> = ({
     setIsRunning(true);
     setIsDone(false);
 
+    const batches: string[][] = [];
     for (let i = 0; i < proxyList.length; i += BATCH_SIZE) {
-      if (controller.signal.aborted) break;
+      batches.push(proxyList.slice(i, i + BATCH_SIZE));
+    }
 
-      const batch = proxyList.slice(i, i + BATCH_SIZE);
+    setResults(proxyList.map(p => ({ proxy: p, status: 'checking' })));
 
-      setResults(prev =>
-        prev.map(r => batch.includes(r.proxy) ? { ...r, status: 'checking' } : r)
-      );
-
-      await Promise.allSettled(
-        batch.map(async (proxy) => {
+    try {
+      await Promise.all(
+        batches.map(async (batch) => {
+          if (controller.signal.aborted) return;
           try {
-            const result = await checkProxy(projectSlug, proxy, controller.signal);
+            const res = await checkProxyBulk(projectSlug, batch, controller.signal);
             setResults(prev =>
-              prev.map(r => r.proxy === proxy
-                ? { ...r, status: result.valid ? 'valid' : 'invalid' }
-                : r
-              )
+              prev.map(r => {
+                if (batch.includes(r.proxy)) {
+                  const isValid = res.results[r.proxy];
+                  return { ...r, status: isValid ? 'valid' : 'invalid' };
+                }
+                return r;
+              })
             );
           } catch {
             if (!controller.signal.aborted) {
               setResults(prev =>
-                prev.map(r => r.proxy === proxy ? { ...r, status: 'invalid' } : r)
+                prev.map(r => batch.includes(r.proxy) ? { ...r, status: 'invalid' } : r)
               );
             }
           }
         })
       );
+    } catch (err) {
+      console.error('Proxy validation error:', err);
+    } finally {
+      if (!controller.signal.aborted) {
+        setIsRunning(false);
+        setIsDone(true);
+      }
     }
-
-    setIsRunning(false);
-    setIsDone(true);
   }, [proxyList, projectSlug]);
 
   useEffect(() => {

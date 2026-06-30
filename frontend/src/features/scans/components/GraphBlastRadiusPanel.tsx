@@ -10,7 +10,7 @@ interface Props {
 }
 
 export const GraphBlastRadiusPanel: React.FC<Props> = ({ projectSlug }) => {
-  const { tokens } = useThemeTokens();
+  const { tokens, isLight } = useThemeTokens();
   const { selectedNodeId, selectedNodeData, activePanel, setActivePanel } = useGraphStore();
   
   const { data, isLoading } = useGraphBlastRadius(
@@ -23,8 +23,9 @@ export const GraphBlastRadiusPanel: React.FC<Props> = ({ projectSlug }) => {
   return (
     <Box sx={{
       width: 350,
-      bgcolor: 'rgba(15, 23, 42, 0.95)',
-      borderLeft: `1px solid ${tokens.accent.primary}33`,
+      bgcolor: tokens.surface.glass,
+      backdropFilter: tokens.effects.blur,
+      borderLeft: `1px solid ${tokens.border.subtle}`,
       p: 2,
       display: 'flex',
       flexDirection: 'column',
@@ -40,7 +41,7 @@ export const GraphBlastRadiusPanel: React.FC<Props> = ({ projectSlug }) => {
         >
             <ArrowLeft size={16} />
         </Button>
-        <Typography sx={{ color: tokens.accent.primary, fontWeight: 800, fontSize: '14px', fontFamily: 'Orbitron' }}>
+        <Typography sx={{ color: tokens.accent.primary, fontWeight: 800, fontSize: '14px', fontFamily: tokens.headingFont === 'orbitron' ? 'Orbitron' : 'Inter' }}>
           BLAST RADIUS
         </Typography>
       </Box>
@@ -51,14 +52,14 @@ export const GraphBlastRadiusPanel: React.FC<Props> = ({ projectSlug }) => {
         </Box>
       ) : data ? (
         <Stack spacing={2}>
-            <Box sx={{ bgcolor: 'rgba(239, 68, 68, 0.1)', p: 2, borderRadius: 1, border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                <Typography sx={{ fontSize: '12px', color: 'rgba(239, 68, 68, 0.8)', fontWeight: 700, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ bgcolor: `${tokens.severity.critical}1A`, p: 2, borderRadius: 1, border: `1px solid ${tokens.severity.critical}33` }}>
+                <Typography sx={{ fontSize: '12px', color: tokens.severity.critical, fontWeight: 700, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Crosshair size={14} /> COMPROMISED ASSETS
                 </Typography>
-                <Typography sx={{ fontSize: '24px', color: '#ef4444', fontWeight: 900 }}>
+                <Typography sx={{ fontSize: '24px', color: tokens.severity.critical, fontWeight: 900 }}>
                     {data.nodes?.length || 0}
                 </Typography>
-                <Typography sx={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', mt: 1 }}>
+                <Typography sx={{ fontSize: '11px', color: 'text.secondary', mt: 1 }}>
                     Downstream assets exposed if {selectedNodeData?.label} is breached.
                 </Typography>
             </Box>
@@ -67,7 +68,7 @@ export const GraphBlastRadiusPanel: React.FC<Props> = ({ projectSlug }) => {
                 <Typography sx={{ fontSize: '10px', color: 'text.secondary', mb: 1, fontWeight: 700 }}>AFFECTED NODES</Typography>
                 <Stack spacing={1}>
                 {data.nodes?.map((n: any) => (
-                    <Box key={n.data.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, bgcolor: 'rgba(0,0,0,0.2)', borderRadius: 1 }}>
+                    <Box key={n.data.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, bgcolor: tokens.surface.primary, border: 1, borderColor: 'divider', borderRadius: 1 }}>
                         <Typography sx={{ fontSize: '11px', color: 'text.primary', fontWeight: 500, wordBreak: 'break-all' }}>
                             {n.data.label}
                         </Typography>

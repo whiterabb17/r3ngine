@@ -110,7 +110,7 @@ export const ScanList: React.FC = () => {
       </Box>
 
       <Card sx={{ 
-        bgcolor: 'rgba(10, 10, 20, 0.6)', 
+        bgcolor: isLight ? tokens.surface.secondary : 'rgba(10, 10, 20, 0.6)', 
         backdropFilter: 'blur(10px)', 
         border: `1px solid ${tokens.accent.primary}15`,
         borderRadius: 4,
@@ -126,8 +126,8 @@ export const ScanList: React.FC = () => {
               flex: 1,
               '& .MuiOutlinedInput-root': {
                 color: 'text.primary',
-                bgcolor: 'rgba(255,255,255,0.03)',
-                '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
+                bgcolor: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.03)',
+                '& fieldset': { borderColor: isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)' },
                 '&:hover fieldset': { borderColor: `${tokens.accent.primary}4D` },
                 '&.Mui-focused fieldset': { borderColor: tokens.accent.primary },
               }
@@ -145,7 +145,7 @@ export const ScanList: React.FC = () => {
         </Box>
         <TableContainer>
           <Table>
-            <TableHead sx={{ bgcolor: 'rgba(0, 243, 255, 0.03)' }}>
+            <TableHead sx={{ bgcolor: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(0, 243, 255, 0.03)' }}>
               <TableRow>
                 <TableCell sx={{ color: tokens.accent.primary, fontWeight: 800, fontFamily: 'Orbitron', fontSize: '0.75rem', borderBottom: `1px solid ${tokens.accent.primary}15` }}>TARGET / ENGINE</TableCell>
                 <TableCell sx={{ color: tokens.accent.primary, fontWeight: 800, fontFamily: 'Orbitron', fontSize: '0.75rem', borderBottom: `1px solid ${tokens.accent.primary}15` }}>PROGRESS</TableCell>
@@ -160,7 +160,7 @@ export const ScanList: React.FC = () => {
                 <TableRow key={scan.id!} sx={{ '&:hover': { bgcolor: 'action.hover' }, transition: 'all 0.2s' }}>
                   <TableCell sx={{ borderBottom: 1, borderColor: 'divider' }}>
                     <a
-                      href={`/scan/detail/${scan.id!}`}
+                      href={`/${projectSlug}/scan/detail/${scan.id!}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{ textDecoration: 'none' }}
@@ -213,7 +213,7 @@ export const ScanList: React.FC = () => {
                       <Tooltip title="Vulnerabilities Detected">
                         <Box sx={{ textAlign: 'center' }}>
                           <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontWeight: 800 }}>VUL</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 900, color: Number(scan.vulnerability_count || 0) > 0 ? '#ff003c' : '#fff' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 900, color: Number(scan.vulnerability_count || 0) > 0 ? tokens.accent.error : 'text.primary' }}>
                             {scan.vulnerability_count || 0}
                           </Typography>
                         </Box>
@@ -238,7 +238,7 @@ export const ScanList: React.FC = () => {
                         <IconButton 
                           size="small" 
                           component="a"
-                          href={`/scan/detail/${scan.id!}`}
+                          href={`/${projectSlug}/scan/detail/${scan.id!}`}
                           target="_blank"
                           sx={{ color: tokens.accent.primary, '&:hover': { bgcolor: `${tokens.accent.primary}15` } }}
                         >
@@ -284,7 +284,7 @@ export const ScanList: React.FC = () => {
                 fontFamily: 'Orbitron',
                 fontSize: '0.7rem',
                 fontWeight: 700,
-                color: 'rgba(255,255,255,0.8)',
+                color: 'text.primary',
                 gap: 1.5,
                 py: 1.2,
                 '&:hover': { bgcolor: `${tokens.accent.primary}0D`, color: tokens.accent.primary },

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 
-from reNgine.fuzzing_tasks import dir_file_fuzz
+from reNgine.tasks.fuzzing import dir_file_fuzz
 
 
 # ---------------------------------------------------------------------------
@@ -37,10 +37,10 @@ def _prepare(yaml_config, ctx_override=None):
     def _fake_ensure(task_proxy, func, ctx, description=None):
         return func(ctx=ctx, description=description)
 
-    with patch('reNgine.fuzzing_tasks.ensure_endpoints_crawled_and_execute',
+    with patch('reNgine.tasks.fuzzing.ensure_endpoints_crawled_and_execute',
                side_effect=_fake_ensure), \
          patch('os.path.exists', return_value=True), \
-         patch('reNgine.api_tasks.resolve_wordlist_path',
+         patch('reNgine.tasks.api.resolve_wordlist_path',
                side_effect=lambda cfg, path: path):
         return dir_file_fuzz(proxy, ctx=ctx, prepare_only=True)
 
@@ -220,20 +220,20 @@ class TestFfufUrlAndHeaderConstruction(TestCase):
         def _fake_ensure(task_proxy, func, ctx, description=None):
             return func(ctx=ctx, description=description)
 
-        with patch('reNgine.fuzzing_tasks.ensure_endpoints_crawled_and_execute',
+        with patch('reNgine.tasks.fuzzing.ensure_endpoints_crawled_and_execute',
                    side_effect=_fake_ensure), \
              patch('os.path.exists', return_value=False), \
-             patch('reNgine.api_tasks.resolve_wordlist_path',
+             patch('reNgine.tasks.api.resolve_wordlist_path',
                    side_effect=lambda cfg, path: path), \
-             patch('reNgine.fuzzing_tasks.stream_command', side_effect=fake_stream), \
-             patch('reNgine.fuzzing_tasks.run_command', return_value=None), \
-             patch('reNgine.fuzzing_tasks.DirectoryScan') as mock_ds, \
-             patch('reNgine.fuzzing_tasks.Subdomain'), \
-             patch('reNgine.fuzzing_tasks.ScanHistory'), \
-             patch('reNgine.fuzzing_tasks.Redis'), \
-             patch('reNgine.fuzzing_tasks.OpSecManager') as mock_opsec, \
-             patch('reNgine.fuzzing_tasks.get_random_proxy', return_value=None), \
-             patch('reNgine.fuzzing_tasks._fuzz_target_marker', return_value='/tmp/no_marker'), \
+             patch('reNgine.tasks.fuzzing.stream_command', side_effect=fake_stream), \
+             patch('reNgine.tasks.fuzzing.run_command', return_value=None), \
+             patch('reNgine.tasks.fuzzing.DirectoryScan') as mock_ds, \
+             patch('reNgine.tasks.fuzzing.Subdomain'), \
+             patch('reNgine.tasks.fuzzing.ScanHistory'), \
+             patch('reNgine.tasks.fuzzing.Redis'), \
+             patch('reNgine.tasks.fuzzing.OpSecManager') as mock_opsec, \
+             patch('reNgine.tasks.fuzzing.get_random_proxy', return_value=None), \
+             patch('reNgine.tasks.fuzzing._fuzz_target_marker', return_value='/tmp/no_marker'), \
              patch('reNgine.tasks.http_crawl', return_value=None), \
              patch('builtins.open', MagicMock()):
             mock_ds.objects.create.return_value = MagicMock()
@@ -337,6 +337,155 @@ class TestFfufMaxtimeJob(TestCase):
                          "Non-recursive scan must not have -maxtime-job flag")
 
 
+class TestFeroxbusterConfig(TestCase):
+    """run_feroxbuster config key: command construction and prepare_only contract."""
+
+    BASE_CONFIG = {
+        'dir_file_fuzz': {
+            'auto_calibration': True,
+            'rate_limit': 100,
+            'threads': 20,
+            'extensions': ['.php', '.html'],
+            'match_http_status': [200],
+            'recursive_level': 2,
+            'max_time': 0,
+            'stop_on_error': False,
+            'follow_redirect': True,
+            'timeout': 10,
+            'run_feroxbuster': True,
+        }
+    }
+
+    def test_disabled_by_default(self):
+        """run_feroxbuster defaults to False; ferox_base_cmd must be None."""
+        config = {
+            'dir_file_fuzz': {
+                'auto_calibration': True,
+                'rate_limit': 0,
+                'threads': 10,
+                'extensions': [],
+                'match_http_status': [200],
+                'recursive_level': 0,
+                'max_time': 0,
+                'stop_on_error': False,
+                'follow_redirect': False,
+                'timeout': 10,
+                # run_feroxbuster intentionally absent
+            }
+        }
+        result = _prepare(config)
+        self.assertIsNotNone(result)
+        self.assertIn('ferox_base_cmd', result)
+        self.assertIsNone(result['ferox_base_cmd'],
+                          "ferox_base_cmd must be None when run_feroxbuster is absent/False")
+
+    def test_enabled_returns_non_none_cmd(self):
+        """When run_feroxbuster=True, ferox_base_cmd must be a non-empty string."""
+        result = _prepare(self.BASE_CONFIG)
+        self.assertIsNotNone(result)
+        self.assertIn('ferox_base_cmd', result)
+        self.assertIsNotNone(result['ferox_base_cmd'],
+                             "ferox_base_cmd must be set when run_feroxbuster=True")
+        self.assertIsInstance(result['ferox_base_cmd'], str)
+
+    def test_command_includes_no_state_and_json(self):
+        result = _prepare(self.BASE_CONFIG)
+        cmd = result['ferox_base_cmd']
+        self.assertIn('--no-state', cmd)
+        self.assertIn('--json', cmd)
+
+    def test_wordlist_propagated(self):
+        result = _prepare(self.BASE_CONFIG)
+        cmd = result['ferox_base_cmd']
+        self.assertIn('--wordlist', cmd)
+
+    def test_threads_propagated(self):
+        result = _prepare(self.BASE_CONFIG)
+        cmd = result['ferox_base_cmd']
+        self.assertIn('--threads 20', cmd)
+
+    def test_rate_limit_propagated(self):
+        result = _prepare(self.BASE_CONFIG)
+        cmd = result['ferox_base_cmd']
+        self.assertIn('--rate-limit 100', cmd)
+
+    def test_timeout_propagated(self):
+        result = _prepare(self.BASE_CONFIG)
+        cmd = result['ferox_base_cmd']
+        self.assertIn('--timeout 10', cmd)
+
+    def test_extensions_propagated(self):
+        result = _prepare(self.BASE_CONFIG)
+        cmd = result['ferox_base_cmd']
+        self.assertIn('--extensions', cmd)
+        self.assertIn('.php', cmd)
+        self.assertIn('.html', cmd)
+
+    def test_follow_redirects_when_enabled(self):
+        result = _prepare(self.BASE_CONFIG)
+        cmd = result['ferox_base_cmd']
+        self.assertIn('--follow-redirects', cmd)
+
+    def test_no_follow_redirects_when_disabled(self):
+        config = {
+            'dir_file_fuzz': {
+                **self.BASE_CONFIG['dir_file_fuzz'],
+                'follow_redirect': False,
+            }
+        }
+        result = _prepare(config)
+        self.assertNotIn('--follow-redirects', result['ferox_base_cmd'])
+
+    def test_depth_set_when_recursive(self):
+        result = _prepare(self.BASE_CONFIG)
+        cmd = result['ferox_base_cmd']
+        self.assertIn('--depth 2', cmd)
+        self.assertNotIn('--no-recursion', cmd)
+
+    def test_no_recursion_when_level_zero(self):
+        config = {
+            'dir_file_fuzz': {
+                **self.BASE_CONFIG['dir_file_fuzz'],
+                'recursive_level': 0,
+            }
+        }
+        result = _prepare(config)
+        cmd = result['ferox_base_cmd']
+        self.assertIn('--no-recursion', cmd)
+        self.assertNotIn('--depth', cmd)
+
+    def test_auto_calibration_adds_flag(self):
+        result = _prepare(self.BASE_CONFIG)
+        cmd = result['ferox_base_cmd']
+        self.assertIn('--auto-calibration', cmd)
+
+    def test_no_auto_calibration_omits_flag(self):
+        config = {
+            'dir_file_fuzz': {
+                **self.BASE_CONFIG['dir_file_fuzz'],
+                'auto_calibration': False,
+            }
+        }
+        result = _prepare(config)
+        self.assertNotIn('--auto-calibration', result['ferox_base_cmd'])
+
+    def test_custom_headers_included(self):
+        config = {
+            'dir_file_fuzz': {
+                **self.BASE_CONFIG['dir_file_fuzz'],
+                'custom_header': ['Authorization: Bearer token123'],
+            }
+        }
+        result = _prepare(config)
+        cmd = result['ferox_base_cmd']
+        self.assertIn("-H 'Authorization: Bearer token123'", cmd)
+
+    def test_prepare_only_always_returns_ferox_key(self):
+        """prepare_only=True must always return ferox_base_cmd key, value may be None."""
+        result = _prepare({'dir_file_fuzz': {}})
+        self.assertIn('ferox_base_cmd', result,
+                      "prepare_only dict must contain ferox_base_cmd key")
+
 class TestFfufStreamingHeartbeat(TestCase):
     """Bug #7: ffuf must not be routed to Go executor (blocks heartbeats)."""
 
@@ -375,21 +524,21 @@ class TestFfufStreamingHeartbeat(TestCase):
         # _fuzz_target_marker returns a path ending in .marker so the
         # os.path.exists patch (which returns False for .marker paths) prevents
         # the "already fuzzed" skip, while returning True for wordlist paths.
-        with patch('reNgine.fuzzing_tasks.ensure_endpoints_crawled_and_execute',
+        with patch('reNgine.tasks.fuzzing.ensure_endpoints_crawled_and_execute',
                    side_effect=_fake_ensure), \
              patch('os.path.exists', side_effect=lambda p: not p.endswith('.marker')), \
-             patch('reNgine.api_tasks.resolve_wordlist_path',
+             patch('reNgine.tasks.api.resolve_wordlist_path',
                    side_effect=lambda cfg, path: path), \
-             patch('reNgine.fuzzing_tasks.stream_command', side_effect=fake_stream), \
-             patch('reNgine.fuzzing_tasks.DirectoryScan') as mock_ds, \
-             patch('reNgine.fuzzing_tasks.Subdomain'), \
-             patch('reNgine.fuzzing_tasks.ScanHistory'), \
-             patch('reNgine.fuzzing_tasks.Redis'), \
-             patch('reNgine.fuzzing_tasks.OpSecManager') as mock_opsec, \
-             patch('reNgine.fuzzing_tasks.get_random_proxy', return_value=None), \
-             patch('reNgine.fuzzing_tasks._fuzz_target_marker',
+             patch('reNgine.tasks.fuzzing.stream_command', side_effect=fake_stream), \
+             patch('reNgine.tasks.fuzzing.DirectoryScan') as mock_ds, \
+             patch('reNgine.tasks.fuzzing.Subdomain'), \
+             patch('reNgine.tasks.fuzzing.ScanHistory'), \
+             patch('reNgine.tasks.fuzzing.Redis'), \
+             patch('reNgine.tasks.fuzzing.OpSecManager') as mock_opsec, \
+             patch('reNgine.tasks.fuzzing.get_random_proxy', return_value=None), \
+             patch('reNgine.tasks.fuzzing._fuzz_target_marker',
                    return_value='/tmp/no_marker.marker'), \
-             patch('reNgine.fuzzing_tasks.run_command'), \
+             patch('reNgine.tasks.fuzzing.run_command'), \
              patch('reNgine.tasks.http_crawl'), \
              patch('builtins.open', MagicMock()):
             mock_ds.objects.create.return_value = MagicMock()
@@ -399,14 +548,14 @@ class TestFfufStreamingHeartbeat(TestCase):
 
         return captured_kwargs
 
-    def test_stream_command_not_routed_to_executor(self):
-        """stream_command must be called with route_to_executor=False for ffuf."""
+    def test_stream_command_routed_to_executor(self):
+        """stream_command must be called with route_to_executor=True for ffuf (Go executor)."""
         captured_kwargs = self._run_with_fake_stream([])
 
         self.assertIn('route_to_executor', captured_kwargs,
                       "stream_command must receive route_to_executor kwarg")
-        self.assertFalse(captured_kwargs['route_to_executor'],
-                         "ffuf stream_command must have route_to_executor=False")
+        self.assertTrue(captured_kwargs['route_to_executor'],
+                        "ffuf stream_command must have route_to_executor=True")
 
     def test_heartbeat_fires_after_batch_fills(self):
         """activity_heartbeat_safe must be called after every 100 results."""
@@ -429,25 +578,25 @@ class TestFfufStreamingHeartbeat(TestCase):
         def _fake_ensure(task_proxy, func, ctx, description=None):
             return func(ctx=ctx, description=description)
 
-        with patch('reNgine.fuzzing_tasks.ensure_endpoints_crawled_and_execute',
+        with patch('reNgine.tasks.fuzzing.ensure_endpoints_crawled_and_execute',
                    side_effect=_fake_ensure), \
              patch('os.path.exists', side_effect=lambda p: not p.endswith('.marker')), \
-             patch('reNgine.api_tasks.resolve_wordlist_path',
+             patch('reNgine.tasks.api.resolve_wordlist_path',
                    side_effect=lambda cfg, path: path), \
-             patch('reNgine.fuzzing_tasks.stream_command', return_value=iter(fake_results)), \
-             patch('reNgine.fuzzing_tasks.DirectoryScan') as mock_ds, \
-             patch('reNgine.fuzzing_tasks.Subdomain'), \
-             patch('reNgine.fuzzing_tasks.ScanHistory'), \
-             patch('reNgine.fuzzing_tasks.Redis'), \
-             patch('reNgine.fuzzing_tasks.OpSecManager') as mock_opsec, \
-             patch('reNgine.fuzzing_tasks.get_random_proxy', return_value=None), \
-             patch('reNgine.fuzzing_tasks._fuzz_target_marker',
+             patch('reNgine.tasks.fuzzing.stream_command', return_value=iter(fake_results)), \
+             patch('reNgine.tasks.fuzzing.DirectoryScan') as mock_ds, \
+             patch('reNgine.tasks.fuzzing.Subdomain'), \
+             patch('reNgine.tasks.fuzzing.ScanHistory'), \
+             patch('reNgine.tasks.fuzzing.Redis'), \
+             patch('reNgine.tasks.fuzzing.OpSecManager') as mock_opsec, \
+             patch('reNgine.tasks.fuzzing.get_random_proxy', return_value=None), \
+             patch('reNgine.tasks.fuzzing._fuzz_target_marker',
                    return_value='/tmp/no_marker.marker'), \
-             patch('reNgine.fuzzing_tasks.run_command'), \
+             patch('reNgine.tasks.fuzzing.run_command'), \
              patch('reNgine.tasks.http_crawl'), \
              patch('builtins.open', MagicMock()), \
-             patch('reNgine.fuzzing_tasks._flush_ffuf_batch'), \
-             patch('reNgine.fuzzing_tasks.activity_heartbeat_safe') as mock_heartbeat:
+             patch('reNgine.tasks.fuzzing._flush_ffuf_batch'), \
+             patch('reNgine.tasks.fuzzing.activity_heartbeat_safe') as mock_heartbeat:
             mock_ds.objects.create.return_value = MagicMock()
             mock_opsec.return_value.apply_stealth = MagicMock(
                 side_effect=lambda t, c, proxy=None: c)

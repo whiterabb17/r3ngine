@@ -1,26 +1,28 @@
 import React, { useState } from 'react';
-import { 
-  Box, 
-  Typography, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow, 
-  IconButton, 
+import type { SelectChangeEvent } from '@mui/material';
+import {
+  Box,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton,
   Tooltip,
   TextField,
   InputAdornment,
   Checkbox,
   Button,
-  Chip,
-  Paper,
   Stack,
   CircularProgress,
   Collapse,
   Alert,
-  TablePagination
+  TablePagination,
+  Select,
+  MenuItem,
+  FormControl
 } from '@mui/material';
 import { 
   Search, 
@@ -44,6 +46,8 @@ import {
 } from '../../api';
 import type { OsintStaging } from '../../types';
 import { useThemeTokens } from '../../../../theme/useThemeTokens';
+import { StagingTypeBadge } from './StagingTypeBadge';
+import { StagingMetadataPanel } from './StagingMetadataPanel';
 
 interface OsintStagingSectionProps {
   scanId: number;
@@ -56,11 +60,13 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selected, setSelected] = useState<number[]>([]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [typeFilter, setTypeFilter] = useState<string>('');
 
-  const { data, isLoading, refetch } = useOsintStaging({ 
-    scan_id: scanId, 
+  const { data, isLoading, refetch } = useOsintStaging({
+    scan_id: scanId,
     search: search,
-    page: page + 1 
+    page: page + 1,
+    osint_type: typeFilter || undefined
   });
 
   const discardMutation = useBulkDiscardOsint();
@@ -80,6 +86,11 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
     } else {
       setSelected([...selected, id]);
     }
+  };
+
+  const handleTypeFilterChange = (event: SelectChangeEvent) => {
+    setTypeFilter(event.target.value);
+    setPage(0);
   };
 
   const handleBulkDiscard = async () => {
@@ -144,8 +155,8 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
                     </IconButton>
                   </InputAdornment>
                 ),
-                sx: { 
-                  fontSize: '0.75rem', 
+                sx: {
+                  fontSize: '0.75rem',
                   bgcolor: 'rgba(255,255,255,0.03)',
                   border: 1, borderColor: 'divider',
                   '&:hover': { border: '1px solid rgba(255,255,255,0.2)' }
@@ -154,6 +165,25 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
             }}
             sx={{ width: 250 }}
           />
+          <FormControl size="small" sx={{ minWidth: 130 }}>
+            <Select
+              displayEmpty
+              value={typeFilter}
+              onChange={handleTypeFilterChange}
+              sx={{
+                fontSize: '0.72rem',
+                bgcolor: 'rgba(255,255,255,0.03)',
+                border: 1, borderColor: 'divider',
+                '& .MuiSelect-select': { py: 0.75 },
+              }}
+            >
+              <MenuItem value=""><em>All Types</em></MenuItem>
+              {['SSL', 'DNS', 'Email', 'Employee', 'Phone', 'Social', 'IP', 'Port',
+                'Tech', 'OS', 'Leak', 'Crypto', 'Hosting', 'Subdomain'].map(t => (
+                <MenuItem key={t} value={t} sx={{ fontSize: '0.72rem' }}>{t}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           {selected.length > 0 && (
             <Stack direction="row" spacing={1}>
               <Button
@@ -240,19 +270,7 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
                         />
                       </TableCell>
                       <TableCell>
-                        <Chip 
-                          label={item.osint_type.replace(/_/g, ' ')} 
-                          size="small" 
-                          sx={{ 
-                            fontSize: '10px', 
-                            height: 18, 
-                            fontWeight: 800,
-                            bgcolor: 'action.hover',
-                            color: 'rgba(255,255,255,0.7)',
-                            border: '1px solid rgba(255,255,255,0.1)',
-                            textTransform: 'uppercase'
-                          }} 
-                        />
+                        <StagingTypeBadge osintType={item.osint_type} />
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -323,16 +341,7 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
                     <TableRow>
                       <TableCell colSpan={6} sx={{ p: 0, border: 'none' }}>
                         <Collapse in={expandedId === item.id} timeout="auto" unmountOnExit>
-                          <Box sx={{ p: 2, bgcolor: 'rgba(0,0,0,0.2)', borderBottom: 1, borderColor: 'divider' }}>
-                            <Typography sx={{ fontSize: '0.7rem', color: tokens.accent.primary, fontWeight: 900, mb: 1, textTransform: 'uppercase' }}>
-                              Extended Metadata
-                            </Typography>
-                            <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover', borderColor: 'rgba(255,255,255,0.05)' }}>
-                              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)', whiteSpace: 'pre-wrap' }}>
-                                {item.metadata || 'No extended metadata available.'}
-                              </Typography>
-                            </Paper>
-                          </Box>
+                          <StagingMetadataPanel item={item} onPromote={handleIndividualPromote} />
                         </Collapse>
                       </TableCell>
                     </TableRow>

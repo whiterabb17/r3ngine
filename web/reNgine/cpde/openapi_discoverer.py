@@ -18,6 +18,9 @@ import logging
 from urllib.parse import urljoin
 
 import requests
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +174,7 @@ def discover(base_urls: list[str], proxy: str | None = None) -> list[dict]:
                     timeout=_REQUEST_TIMEOUT,
                     proxies=proxies,
                     allow_redirects=True,
+                    verify=False,
                 )
                 if resp.status_code != 200:
                     continue

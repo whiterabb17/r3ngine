@@ -45,16 +45,18 @@ class Scorer:
     """Computes a risk score for a complete attack path."""
 
     WEIGHTS = {
-        "severity":        0.15,
-        "exploitability":  0.15,
+        "severity":        0.10,
+        "exploitability":  0.10,
         "path_length":     0.10,
-        "privilege_gain":  0.15,
+        "privilege_gain":  0.10,
         "impact":          0.12,
-        "epss":            0.13,
-        "poc":             0.08,
+        "epss":            0.10,
+        "poc":             0.05,
         "recency":         0.04,
-        "connectivity":    0.05,
-        "stealthiness":    0.03,
+        "connectivity":    0.04,
+        "stealthiness":    0.05,
+        "exposure":        0.10,
+        "auth_state":      0.10,
     }
 
     def __init__(self):
@@ -126,6 +128,14 @@ class Scorer:
         )
         stealthiness_score = max(0.0, 1.0 - boundary_crossings * 0.2 - victim_steps * 0.3)
 
+        # 11. Exposure (Internal vs External)
+        exposure_val = path_metadata.get("exposure", "external")
+        exposure_score = 1.0 if exposure_val == "external" else 0.3
+
+        # 12. Auth State
+        auth_val = path_metadata.get("auth_state", "unauthenticated")
+        auth_score = 1.0 if auth_val == "unauthenticated" else 0.5
+
         # Additive sum (weights sum to 1.0)
         score = (
             severity_score      * self.WEIGHTS["severity"]
@@ -138,6 +148,8 @@ class Scorer:
             + recency_score     * self.WEIGHTS["recency"]
             + connectivity_score * self.WEIGHTS["connectivity"]
             + stealthiness_score * self.WEIGHTS["stealthiness"]
+            + exposure_score     * self.WEIGHTS["exposure"]
+            + auth_score         * self.WEIGHTS["auth_state"]
         )
 
         # Path confidence product multiplier [0.5, 1.0]
@@ -165,10 +177,11 @@ class Scorer:
         logger.debug(
             "APME Scorer: path=%s score=%.4f risk=%s "
             "(sev=%.2f expl=%.2f len=%.2f priv=%.2f impact=%.2f epss=%.2f "
-            "poc=%.2f recency=%.2f conn=%.2f stealth=%.2f conf_mult=%.2f)",
+            "poc=%.2f recency=%.2f conn=%.2f stealth=%.2f exp=%.2f auth=%.2f conf_mult=%.2f)",
             path.id, score, path.risk, severity_score, exploitability,
             length_score, privilege_score, impact_score, epss_score,
             poc_score, recency_score, connectivity_score, stealthiness_score,
+            exposure_score, auth_score,
             conf_multiplier,
         )
         return score

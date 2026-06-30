@@ -17,6 +17,8 @@ import {
   Collapse,
   Divider,
   Chip,
+  useTheme,
+  alpha,
 } from '@mui/material';
 import {
   X,
@@ -36,6 +38,8 @@ import {
 } from 'lucide-react';
 import { useUpdateTarget, useOrganizations, useEngines } from '../api';
 import type { Domain } from '../types';
+import { useThemeTokens } from '../../../theme/useThemeTokens';
+import { getDialogPaperSx, getFieldSx } from '../../../theme/semanticColors';
 
 // The generated OpenAPI schema omits several fields that the backend serializes.
 // Extend locally so we can read them without casting everywhere.
@@ -71,6 +75,10 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
   domain,
   projectSlug,
 }) => {
+  const { tokens } = useThemeTokens();
+  const theme = useTheme();
+  const isLight = tokens.mode === 'light';
+
   const [formData, setFormData] = useState({
     description: '',
     organization: '',
@@ -159,6 +167,22 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
     );
   };
 
+  const fieldStyles = {
+    ...getFieldSx(isLight, tokens, tokens.accent.primary),
+    '& .MuiOutlinedInput-root': {
+      color: 'text.primary',
+      '& fieldset': { borderColor: isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.1)' },
+      '&:hover fieldset': { borderColor: alpha(tokens.accent.primary, 0.4) },
+      '&.Mui-focused fieldset': { borderColor: tokens.accent.primary },
+      bgcolor: isLight ? 'rgba(0,0,0,0.01)' : 'rgba(255,255,255,0.03)',
+    },
+    '& .MuiInputLabel-root': { 
+      color: 'text.secondary',
+      '&.Mui-focused': { color: tokens.accent.primary }
+    },
+    '& .MuiSelect-icon': { color: 'text.secondary' },
+  };
+
   return (
     <Dialog
       open={open}
@@ -168,11 +192,10 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
       slotProps={{
         paper: {
           sx: {
-            bgcolor: 'rgba(10, 10, 20, 0.97)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255, 165, 0, 0.3)',
+            ...getDialogPaperSx(isLight, theme, tokens),
             borderRadius: 4,
-            backgroundImage: 'radial-gradient(circle at top right, rgba(255, 165, 0, 0.04), transparent)',
+            backgroundImage: isLight ? 'none' : `radial-gradient(circle at top right, ${alpha(tokens.accent.primary, 0.05)}, transparent)`,
+            border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : `${tokens.accent.primary}33`}`,
           }
         }
       }}
@@ -181,15 +204,15 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
+        borderBottom: `1px solid ${isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)'}`,
         pb: 2,
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Box sx={{
             p: 1,
             borderRadius: 2,
-            bgcolor: 'rgba(255, 165, 0, 0.1)',
-            color: '#ffa500',
+            bgcolor: alpha(tokens.accent.primary, 0.1),
+            color: tokens.accent.primary,
             display: 'flex',
           }}>
             <Target size={20} />
@@ -199,20 +222,20 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
               fontFamily: 'Orbitron',
               fontWeight: 800,
               letterSpacing: 1,
-              color: '#fff',
+              color: tokens.text.primary,
               lineHeight: 1.1,
             }}>
               EDIT TARGET
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-              <Lock size={12} color="rgba(255,255,255,0.3)" />
-              <Typography sx={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}>
+              <Lock size={12} color={tokens.text.muted} />
+              <Typography sx={{ fontSize: '0.7rem', color: tokens.text.secondary, fontFamily: 'monospace' }}>
                 {domain.name}
               </Typography>
             </Box>
           </Box>
         </Box>
-        <IconButton onClick={onClose} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ff003c' } }}>
+        <IconButton onClick={onClose} sx={{ color: tokens.text.muted, '&:hover': { color: tokens.accent.error } }}>
           <X size={20} />
         </IconButton>
       </DialogTitle>
@@ -222,10 +245,10 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
           {error && (
             <Alert severity="error" sx={{
               mb: 3,
-              bgcolor: 'rgba(255, 0, 60, 0.1)',
-              color: '#ff003c',
-              border: '1px solid rgba(255, 0, 60, 0.2)',
-              '& .MuiAlert-icon': { color: '#ff003c' },
+              bgcolor: alpha(tokens.accent.error, 0.1),
+              color: tokens.accent.error,
+              border: `1px solid ${alpha(tokens.accent.error, 0.2)}`,
+              '& .MuiAlert-icon': { color: tokens.accent.error },
             }}>
               {error}
             </Alert>
@@ -234,7 +257,7 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* Identity */}
             <Box>
-              <Typography sx={{ fontSize: '0.65rem', fontFamily: 'Orbitron', color: 'rgba(255,165,0,0.7)', fontWeight: 700, letterSpacing: 1, mb: 1.5 }}>
+              <Typography sx={{ fontSize: '0.65rem', fontFamily: 'Orbitron', color: tokens.accent.primary, fontWeight: 700, letterSpacing: 1, mb: 1.5 }}>
                 IDENTITY
               </Typography>
               <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
@@ -246,17 +269,17 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                   sx={{
                     ...fieldStyles,
                     '& .MuiOutlinedInput-root.Mui-disabled': {
-                      bgcolor: 'rgba(255,255,255,0.02)',
-                      '& fieldset': { borderColor: 'rgba(255,255,255,0.05)' },
+                      bgcolor: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.01)',
+                      '& fieldset': { borderColor: tokens.border.subtle },
                     },
-                    '& .MuiInputBase-input.Mui-disabled': { color: 'rgba(255,255,255,0.3)', WebkitTextFillColor: 'rgba(255,255,255,0.3)' },
+                    '& .MuiInputBase-input.Mui-disabled': { color: tokens.text.disabled, WebkitTextFillColor: tokens.text.disabled },
                   }}
                   slotProps={{
                     input: {
                       startAdornment: (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mr: 1 }}>
-                          <Globe size={16} color="rgba(255,255,255,0.2)" />
-                          <Chip label="READ-ONLY" size="small" sx={{ height: 16, fontSize: '0.55rem', bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.3)', fontFamily: 'Orbitron' }} />
+                          <Globe size={16} color={tokens.text.disabled} />
+                          <Chip label="READ-ONLY" size="small" sx={{ height: 16, fontSize: '0.55rem', bgcolor: alpha(tokens.text.primary, 0.05), color: tokens.text.secondary, fontFamily: 'Orbitron' }} />
                         </Box>
                       ),
                     }
@@ -271,17 +294,17 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                   sx={fieldStyles}
                   slotProps={{
                     input: {
-                      startAdornment: <Target size={16} style={{ marginRight: 12, color: '#ffa500' }} />,
+                      startAdornment: <Target size={16} style={{ marginRight: 12, color: tokens.accent.primary }} />,
                     }
                   }}
                 >
                   {TARGET_TYPES.map((type) => (
                     <MenuItem key={type.value} value={type.value}>
                       <Box>
-                        <Typography sx={{ fontSize: '0.85rem', color: '#fff', lineHeight: 1.2 }}>
+                        <Typography sx={{ fontSize: '0.85rem', color: tokens.text.primary, lineHeight: 1.2 }}>
                           {type.label}
                         </Typography>
-                        <Typography sx={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', lineHeight: 1.2 }}>
+                        <Typography sx={{ fontSize: '0.7rem', color: tokens.text.secondary, lineHeight: 1.2 }}>
                           {type.description}
                         </Typography>
                       </Box>
@@ -293,7 +316,7 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
 
             {/* Metadata */}
             <Box>
-              <Typography sx={{ fontSize: '0.65rem', fontFamily: 'Orbitron', color: 'rgba(255,165,0,0.7)', fontWeight: 700, letterSpacing: 1, mb: 1.5 }}>
+              <Typography sx={{ fontSize: '0.65rem', fontFamily: 'Orbitron', color: tokens.accent.primary, fontWeight: 700, letterSpacing: 1, mb: 1.5 }}>
                 METADATA
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -317,7 +340,7 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                     sx={fieldStyles}
                     slotProps={{
                       input: {
-                        startAdornment: <Building2 size={16} style={{ marginRight: 12, color: 'rgba(255,255,255,0.4)' }} />,
+                        startAdornment: <Building2 size={16} style={{ marginRight: 12, color: tokens.text.secondary }} />,
                       }
                     }}
                   >
@@ -339,7 +362,7 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                     sx={fieldStyles}
                     slotProps={{
                       input: {
-                        startAdornment: <Terminal size={16} style={{ marginRight: 12, color: 'rgba(255,255,255,0.4)' }} />,
+                        startAdornment: <Terminal size={16} style={{ marginRight: 12, color: tokens.text.secondary }} />,
                       }
                     }}
                   />
@@ -347,7 +370,7 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
               </Box>
             </Box>
 
-            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+            <Divider sx={{ borderColor: tokens.border.subtle }} />
 
             {/* Scope Configuration */}
             <Box>
@@ -358,10 +381,10 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                 startIcon={<Network size={16} />}
                 sx={{
                   justifyContent: 'flex-start',
-                  color: showScopeConfig ? '#ffa500' : 'rgba(255,255,255,0.4)',
+                  color: showScopeConfig ? tokens.accent.primary : tokens.text.secondary,
                   fontSize: '0.75rem',
                   fontFamily: 'Orbitron',
-                  '&:hover': { color: '#ffa500', bgcolor: 'transparent' },
+                  '&:hover': { color: tokens.accent.primary, bgcolor: 'transparent' },
                 }}
               >
                 {showScopeConfig ? 'HIDE' : 'SHOW'} SCOPE CONFIGURATION
@@ -380,9 +403,9 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                     sx={fieldStyles}
                     helperText="One IP or CIDR per line — included in scanning scope"
                     slotProps={{
-                      formHelperText: { sx: { color: 'rgba(255,255,255,0.3)' } },
+                      formHelperText: { sx: { color: tokens.text.muted } },
                       input: {
-                        startAdornment: <Network size={16} style={{ marginRight: 12, marginTop: -40, color: 'rgba(255,255,255,0.4)' }} />,
+                        startAdornment: <Network size={16} style={{ marginRight: 12, marginTop: -40, color: tokens.text.secondary }} />,
                       }
                     }}
                   />
@@ -398,9 +421,9 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                     sx={fieldStyles}
                     helperText="Related domains included in the scan scope (one per line)"
                     slotProps={{
-                      formHelperText: { sx: { color: 'rgba(255,255,255,0.3)' } },
+                      formHelperText: { sx: { color: tokens.text.muted } },
                       input: {
-                        startAdornment: <GitBranch size={16} style={{ marginRight: 12, marginTop: -40, color: 'rgba(255,255,255,0.4)' }} />,
+                        startAdornment: <GitBranch size={16} style={{ marginRight: 12, marginTop: -40, color: tokens.text.secondary }} />,
                       }
                     }}
                   />
@@ -417,10 +440,10 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                 startIcon={<Settings2 size={16} />}
                 sx={{
                   justifyContent: 'flex-start',
-                  color: showAdvanced ? '#ffa500' : 'rgba(255,255,255,0.4)',
+                  color: showAdvanced ? tokens.accent.primary : tokens.text.secondary,
                   fontSize: '0.75rem',
                   fontFamily: 'Orbitron',
-                  '&:hover': { color: '#ffa500', bgcolor: 'transparent' },
+                  '&:hover': { color: tokens.accent.primary, bgcolor: 'transparent' },
                 }}
               >
                 {showAdvanced ? 'HIDE' : 'SHOW'} ADVANCED SCAN CONFIGURATION
@@ -437,9 +460,9 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                     sx={fieldStyles}
                     helperText="Initial path to start scanning from"
                     slotProps={{
-                      formHelperText: { sx: { color: 'rgba(255,255,255,0.3)' } },
+                      formHelperText: { sx: { color: tokens.text.muted } },
                       input: {
-                        startAdornment: <Map size={16} style={{ marginRight: 12, color: 'rgba(255,255,255,0.4)' }} />,
+                        startAdornment: <Map size={16} style={{ marginRight: 12, color: tokens.text.secondary }} />,
                       }
                     }}
                   />
@@ -455,9 +478,9 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                     sx={fieldStyles}
                     helperText="Paths to ignore during scanning (newline separated)"
                     slotProps={{
-                      formHelperText: { sx: { color: 'rgba(255,255,255,0.3)' } },
+                      formHelperText: { sx: { color: tokens.text.muted } },
                       input: {
-                        startAdornment: <ListX size={16} style={{ marginRight: 12, marginTop: -20, color: 'rgba(255,255,255,0.4)' }} />,
+                        startAdornment: <ListX size={16} style={{ marginRight: 12, marginTop: -20, color: tokens.text.secondary }} />,
                       }
                     }}
                   />
@@ -465,7 +488,7 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
               </Collapse>
             </Box>
 
-            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+            <Divider sx={{ borderColor: tokens.border.subtle }} />
 
             {/* Monitoring */}
             <Box>
@@ -475,19 +498,19 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                     checked={formData.is_monitored}
                     onChange={(e) => setFormData({ ...formData, is_monitored: e.target.checked })}
                     sx={{
-                      '& .MuiSwitch-switchBase.Mui-checked': { color: '#ffa500' },
-                      '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: '#ffa500' },
+                      '& .MuiSwitch-switchBase.Mui-checked': { color: tokens.accent.primary },
+                      '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: tokens.accent.primary },
                     }}
                   />
                 }
                 label={
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Activity size={16} color={formData.is_monitored ? '#ffa500' : 'rgba(255,255,255,0.4)'} />
+                    <Activity size={16} color={formData.is_monitored ? tokens.accent.primary : tokens.text.secondary} />
                     <Typography sx={{
                       fontFamily: 'Orbitron',
                       fontSize: '0.75rem',
                       fontWeight: 600,
-                      color: formData.is_monitored ? '#fff' : 'rgba(255,255,255,0.4)',
+                      color: formData.is_monitored ? tokens.text.primary : tokens.text.secondary,
                     }}>
                       CONTINUOUS MONITORING
                     </Typography>
@@ -500,8 +523,8 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                   mt: 2,
                   p: 2,
                   borderRadius: 2,
-                  bgcolor: 'rgba(255,165,0,0.03)',
-                  border: '1px solid rgba(255,165,0,0.1)',
+                  bgcolor: alpha(tokens.accent.primary, 0.03),
+                  border: `1px solid ${alpha(tokens.accent.primary, 0.1)}`,
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 2,
@@ -517,7 +540,7 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                       sx={fieldStyles}
                       slotProps={{
                         input: {
-                          startAdornment: <Clock size={16} style={{ marginRight: 8, color: 'rgba(255,255,255,0.4)' }} />,
+                          startAdornment: <Clock size={16} style={{ marginRight: 8, color: tokens.text.secondary }} />,
                         }
                       }}
                     >
@@ -537,7 +560,7 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                       sx={fieldStyles}
                       slotProps={{
                         input: {
-                          startAdornment: <Search size={16} style={{ marginRight: 8, color: 'rgba(255,255,255,0.4)' }} />,
+                          startAdornment: <Search size={16} style={{ marginRight: 8, color: tokens.text.secondary }} />,
                         }
                       }}
                     >
@@ -558,7 +581,7 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                     sx={fieldStyles}
                     slotProps={{
                       input: {
-                        startAdornment: <Settings2 size={16} style={{ marginRight: 8, color: 'rgba(255,255,255,0.4)' }} />,
+                        startAdornment: <Settings2 size={16} style={{ marginRight: 8, color: tokens.text.secondary }} />,
                       }
                     }}
                   >
@@ -574,14 +597,15 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
           </Box>
         </DialogContent>
 
-        <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <DialogActions sx={{ p: 3, borderTop: `1px solid ${tokens.border.subtle}` }}>
           <Button
             onClick={onClose}
             sx={{
-              color: 'rgba(255,255,255,0.5)',
+              color: tokens.text.secondary,
               fontFamily: 'Orbitron',
               fontSize: '0.7rem',
               fontWeight: 800,
+              '&:hover': { color: tokens.text.primary }
             }}
           >
             CANCEL
@@ -591,41 +615,26 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
             variant="contained"
             disabled={isPending || (formData.is_monitored && !formData.monitor_engine_id)}
             sx={{
-              bgcolor: '#ffa500',
-              color: '#000',
+              bgcolor: tokens.accent.primary,
+              color: theme.palette.getContrastText(tokens.accent.primary),
               fontWeight: 900,
               fontFamily: 'Orbitron',
               letterSpacing: 1,
               px: 4,
               '&:hover': {
-                bgcolor: '#e69500',
-                boxShadow: '0 0 20px rgba(255, 165, 0, 0.4)',
+                bgcolor: alpha(tokens.accent.primary, 0.85),
+                boxShadow: `0 0 20px ${alpha(tokens.accent.primary, 0.4)}`,
               },
               '&.Mui-disabled': {
-                bgcolor: 'rgba(255, 165, 0, 0.2)',
-                color: 'rgba(0, 0, 0, 0.4)',
+                bgcolor: alpha(tokens.accent.primary, 0.2),
+                color: alpha(theme.palette.getContrastText(tokens.accent.primary), 0.5),
               },
             }}
           >
-            {isPending ? <CircularProgress size={20} sx={{ color: '#000' }} /> : 'SAVE CHANGES'}
+            {isPending ? <CircularProgress size={20} sx={{ color: theme.palette.getContrastText(tokens.accent.primary) }} /> : 'SAVE CHANGES'}
           </Button>
         </DialogActions>
       </form>
     </Dialog>
   );
-};
-
-const fieldStyles = {
-  '& .MuiOutlinedInput-root': {
-    color: '#fff',
-    '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
-    '&:hover fieldset': { borderColor: 'rgba(255, 165, 0, 0.3)' },
-    '&.Mui-focused fieldset': { borderColor: '#ffa500' },
-    bgcolor: 'rgba(255,255,255,0.03)',
-  },
-  '& .MuiInputLabel-root': {
-    color: 'rgba(255,255,255,0.4)',
-    '&.Mui-focused': { color: '#ffa500' },
-  },
-  '& .MuiSelect-icon': { color: 'rgba(255,255,255,0.4)' },
 };

@@ -25,7 +25,9 @@ import {
   Grid,
   Badge,
   alpha,
-  useMediaQuery
+  useMediaQuery,
+  Snackbar,
+  Alert
 } from '@mui/material';
 
 import {
@@ -76,8 +78,7 @@ import { NotificationsDropdown } from '../../features/notifications/components/N
 import { useUnreadCount } from '../../features/notifications/api';
 import { ScanHistoryDrawer } from '../../features/scans/components/ScanHistoryDrawer';
 import { CheckForUpdateModal } from '../../features/settings/components/CheckForUpdateModal';
-import { useRengineUpdateCheck, useTorStatus, useTorExitIP } from '../../features/settings/api';
-import { useAppTheme } from '../../context/ThemeContext';
+import { useProxySettings, useRengineUpdateCheck, useTorStatus, useTorExitIP } from '../../features/settings/api';
 import { HeaderThemeSwitcher } from './HeaderThemeSwitcher';
 
 const drawerWidth = 260;
@@ -94,7 +95,6 @@ interface NavItem {
 export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { tokens, isLight, isCyber } = useThemeTokens();
   const theme = useTheme();
-  const { themeName } = useAppTheme();
   const { version, projectName, setVersion } = useAppContext();
   const [isHovered, setIsHovered] = useState(false);
   const [openItems, setOpenItems] = useState<string[]>([]);
@@ -116,6 +116,12 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const torActive = torStatus?.running ?? false;
   const { data: torExitIP } = useTorExitIP(torActive);
   const { data: unreadData } = useUnreadCount(projectSlug);
+  const { data: proxySettings } = useProxySettings(projectSlug, {
+    refetchInterval: 15000,
+    refetchIntervalInBackground: true,
+  });
+  const [proxyWarningOpen, setProxyWarningOpen] = useState(false);
+  const [hasWarnedForLowProxyStock, setHasWarnedForLowProxyStock] = useState(false);
 
   const { data: pluginsRegistry } = useQuery({
     queryKey: ['pluginsRegistry'],
@@ -135,6 +141,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const navItems: NavItem[] = [
     { title: 'Dashboard', icon: <Home size={20} />, path: `/${projectSlug}/dashboard`, color: theme.palette.primary.main },
     { title: 'Projects', icon: <Folder size={20} />, path: `/${projectSlug}/projects`, color: theme.palette.primary.main },
+    { title: 'Assessments', icon: <Briefcase size={20} />, path: `/${projectSlug}/assessments`, color: theme.palette.primary.main },
     { title: 'Targets', icon: <Target size={20} />, path: `/${projectSlug}/targets`, color: theme.palette.primary.main },
     { title: 'Monitoring', icon: <Monitor size={20} />, path: `/${projectSlug}/monitoring`, color: theme.palette.primary.main },
     {
@@ -179,6 +186,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
         { title: 'Tool Arsenal', path: `/${projectSlug}/settings/tools-arsenal` },
         { title: 'Report Settings', path: `/${projectSlug}/settings/report-settings` },
         { title: 'reNgine Settings', path: `/${projectSlug}/settings/rengine-settings` },
+        { title: 'Remote Workers', path: `/${projectSlug}/settings/workers` },
         { title: 'Notification Settings', path: `/${projectSlug}/settings/notifications` },
       ]
     },
@@ -241,6 +249,63 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     }
   }, []);
 
+  const validProxyCount = proxySettings?.proxies 
+    ? proxySettings.proxies.split('\n').filter(p => p.trim() !== '').length 
+    : (proxySettings?.valid_proxy_count ?? 0);
+  const proxyModeEnabled = Boolean(proxySettings?.use_proxy);
+  const proxyIndicator = React.useMemo(() => {
+    if (!proxyModeEnabled) {
+      return {
+        fg: alpha(theme.palette.text.secondary, 0.8),
+        bg: alpha(theme.palette.text.secondary, 0.08),
+        border: alpha(theme.palette.text.secondary, 0.16),
+        label: 'PROXY OFF',
+      };
+    }
+    if (validProxyCount > 20) {
+      return {
+        fg: tokens.accent.success,
+        bg: alpha(tokens.accent.success, 0.12),
+        border: alpha(tokens.accent.success, 0.28),
+        label: `PROXY ${validProxyCount}`,
+      };
+    }
+    if (validProxyCount >= 10) {
+      return {
+        fg: tokens.accent.warning,
+        bg: alpha(tokens.accent.warning, 0.12),
+        border: alpha(tokens.accent.warning, 0.28),
+        label: `PROXY ${validProxyCount}`,
+      };
+    }
+    return {
+      fg: tokens.accent.error,
+      bg: alpha(tokens.accent.error, 0.12),
+      border: alpha(tokens.accent.error, 0.28),
+      label: `PROXY ${validProxyCount}`,
+    };
+  }, [
+    proxyModeEnabled,
+    theme.palette.text.secondary,
+    tokens.accent.error,
+    tokens.accent.success,
+    tokens.accent.warning,
+    validProxyCount,
+  ]);
+
+  React.useEffect(() => {
+    if (!proxyModeEnabled || validProxyCount >= 5) {
+      setHasWarnedForLowProxyStock(false);
+      setProxyWarningOpen(false);
+      return;
+    }
+
+    if (!hasWarnedForLowProxyStock) {
+      setProxyWarningOpen(true);
+      setHasWarnedForLowProxyStock(true);
+    }
+  }, [hasWarnedForLowProxyStock, proxyModeEnabled, validProxyCount]);
+
   const handleUpdateCheckClick = () => {
     setUpdateModalOpen(true);
     handleMenuClose();
@@ -293,7 +358,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
             overflowY: 'auto',
             boxSizing: 'border-box',
             borderRight: 'none',
-            bgcolor: alpha(theme.palette.background.paper, 0.8),
+            bgcolor: alpha(tokens.chrome.bg, 0.8),
             backdropFilter: 'blur(10px)',
             backgroundImage: 'none',
             borderRadius: '0 30px 30px 0',
@@ -301,7 +366,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
             maxHeight: 'calc(100vh - 40px)',
             top: '50%',
             transform: 'translateY(-50%)',
-            border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+            border: `1px solid ${tokens.chrome.border}`,
             boxShadow: theme.shadows[10],
             py: 2,
             /* Custom Scrollbar */
@@ -326,9 +391,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
             const hasChildren = item.children && item.children.length > 0;
             const isOpen = openItems.includes(item.title);
             const isActive = activePath.startsWith(item.path);
-            const itemColor = isLight
-              ? (isActive ? theme.palette.primary.main : theme.palette.text.secondary)
-              : (isActive ? tokens.accent.secondary : tokens.accent.primary);
+            const itemColor = isActive ? tokens.chrome.navActive : tokens.chrome.navDefault;
 
             return (
               <React.Fragment key={item.title}>
@@ -346,7 +409,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                       minHeight: 48,
                       justifyContent: isHovered ? 'initial' : 'center',
                       px: 2.5,
-                      bgcolor: isActive ? alpha(theme.palette.primary.main, 0.15) : 'transparent',
+                      bgcolor: isActive ? tokens.chrome.navActiveBg : 'transparent',
                       '&:hover': {
                         bgcolor: isActive ? alpha(theme.palette.primary.main, 0.2) : alpha(theme.palette.primary.main, 0.05),
                       }
@@ -368,7 +431,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                           primary={
                             <Typography variant="body2" sx={{
                               fontWeight: 600,
-                              color: isActive ? theme.palette.primary.main : alpha(theme.palette.text.primary, 0.6),
+                              color: isActive ? tokens.chrome.navLabelActive : tokens.chrome.navLabel,
                               fontSize: '0.85rem'
                             }}>
                               {item.title}
@@ -388,8 +451,8 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                     <List component="div" disablePadding sx={{ ml: 2 }}>
                       {item.children?.map((child) => {
                         const isChildActive = activePath === child.path;
-                        const subActiveColor = isLight ? theme.palette.primary.main : tokens.severity.unknown;
-                        const subInactiveColor = theme.palette.text.secondary;
+                        const subActiveColor = tokens.chrome.navChildActive;
+                        const subInactiveColor = tokens.chrome.textMuted;
                         return (
                           <ListItemButton
                             key={child.title}
@@ -400,7 +463,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                               py: 0.5,
                               borderRadius: 1,
                               mb: 0.2,
-                              bgcolor: isChildActive ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
+                              bgcolor: isChildActive ? tokens.chrome.navChildActiveBg : 'transparent',
                               '&:hover': {
                                 bgcolor: alpha(theme.palette.primary.main, 0.05),
                               }
@@ -433,9 +496,9 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {/* Floating Topbar */}
         <AppBar position="fixed" sx={{
-          bgcolor: alpha(theme.palette.background.paper, 0.95),
+          bgcolor: alpha(tokens.chrome.bg, 0.95),
           backdropFilter: 'blur(12px)',
-          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+          border: `1px solid ${tokens.chrome.headerBorder}`,
           borderRadius: 4,
           mt: 1.5,
           mx: 2,
@@ -502,7 +565,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
               <Box sx={{
                 display: 'flex',
                 alignItems: 'center',
-                bgcolor: isLight ? alpha(theme.palette.text.primary, 0.05) : alpha(theme.palette.text.primary, 0.03),
+                bgcolor: isLight ? alpha(tokens.chrome.text, 0.05) : alpha(tokens.chrome.text, 0.03),
                 px: 2,
                 py: 0.5,
                 borderRadius: 10,
@@ -512,7 +575,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
               }}>
                 <InputBase
                   placeholder="Universal Search..."
-                  sx={{ color: theme.palette.text.secondary, fontSize: '0.75rem', flex: 1, ml: 1 }}
+                  sx={{ color: tokens.chrome.textMuted, fontSize: '0.75rem', flex: 1, ml: 1 }}
                 />
                 <Search size={14} style={{ color: theme.palette.primary.main, opacity: 0.8 }} />
               </Box>
@@ -524,17 +587,17 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                     to={`/${projectSlug}/projects`}
                     sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: 0.5, textDecoration: 'none' }}
                   >
-                    <Typography variant="body2" sx={{ fontSize: '0.8rem', color: theme.palette.text.secondary }}>Projects</Typography>
-                    <ChevronDown size={14} style={{ opacity: 0.5, color: theme.palette.text.secondary }} />
+                    <Typography variant="body2" sx={{ fontSize: '0.8rem', color: tokens.chrome.textMuted }}>Projects</Typography>
+                    <ChevronDown size={14} style={{ opacity: 0.5, color: tokens.chrome.textMuted }} />
                   </Box>
 
                   <Box
                     onClick={handleQuickAddOpen}
                     sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: 0.5 }}
                   >
-                    <Plus size={14} style={{ opacity: 0.6, color: theme.palette.text.secondary }} />
-                    <Typography variant="body2" sx={{ fontSize: '0.8rem', color: theme.palette.text.secondary }}>Quick Add</Typography>
-                    <ChevronDown size={14} style={{ opacity: 0.5, color: theme.palette.text.secondary }} />
+                    <Plus size={14} style={{ opacity: 0.6, color: tokens.chrome.textMuted }} />
+                    <Typography variant="body2" sx={{ fontSize: '0.8rem', color: tokens.chrome.textMuted }}>Quick Add</Typography>
+                    <ChevronDown size={14} style={{ opacity: 0.5, color: tokens.chrome.textMuted }} />
                   </Box>
 
                   <Box sx={{ display: 'flex', gap: 1, mx: 2 }}>
@@ -543,7 +606,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                       onClick={handleToolboxOpen}
                       size="small"
                       sx={{
-                        color: toolboxAnchorEl ? theme.palette.primary.main : alpha(theme.palette.text.secondary, 0.5),
+                        color: toolboxAnchorEl ? theme.palette.primary.main : tokens.chrome.iconMuted,
                         bgcolor: toolboxAnchorEl ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
                         boxShadow: toolboxAnchorEl && theme.palette.mode === 'dark' ? `0 0 15px ${alpha(theme.palette.primary.main, 0.3)}` : 'none',
                         '&:hover': {
@@ -558,7 +621,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                       onClick={handleNotificationOpen}
                       size="small"
                       sx={{
-                        color: notificationAnchorEl ? theme.palette.primary.main : alpha(theme.palette.text.secondary, 0.5),
+                        color: notificationAnchorEl ? theme.palette.primary.main : tokens.chrome.iconMuted,
                         bgcolor: notificationAnchorEl ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
                         '&:hover': {
                           color: theme.palette.primary.main,
@@ -574,7 +637,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                       onClick={handleScanHistoryOpen}
                       size="small"
                       sx={{
-                        color: scanHistoryAnchorEl ? theme.palette.primary.main : alpha(theme.palette.text.secondary, 0.5),
+                        color: scanHistoryAnchorEl ? theme.palette.primary.main : tokens.chrome.iconMuted,
                         bgcolor: scanHistoryAnchorEl ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
                         '&:hover': {
                           color: theme.palette.primary.main,
@@ -586,6 +649,34 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                         <ScanEyeIcon size={18} />
                       </Badge>
                     </IconButton>
+                    <Box
+                      sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 0.75,
+                        px: isMobileHeader ? 1 : 1.25,
+                        py: 0.6,
+                        borderRadius: 999,
+                        border: `1px solid ${proxyIndicator.border}`,
+                        bgcolor: proxyIndicator.bg,
+                        color: proxyIndicator.fg,
+                        minWidth: isMobileHeader ? 'auto' : 96,
+                        cursor: 'default',
+                      }}
+                    >
+                      <ShieldAlert size={14} />
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: 'inherit',
+                          fontWeight: 800,
+                          letterSpacing: 0.7,
+                          fontSize: isMobileHeader ? '0.62rem' : '0.68rem',
+                        }}
+                      >
+                        {isMobileHeader ? validProxyCount : proxyIndicator.label}
+                      </Typography>
+                    </Box>
                   </Box>
 
                   <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', ml: 1 }} onClick={handleMenuOpen}>
@@ -594,32 +685,61 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                       sx={{
                         width: 32,
                         height: 32,
-                        bgcolor: alpha(theme.palette.text.primary, 0.05),
+                        bgcolor: alpha(tokens.chrome.text, 0.05),
                         border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
                         p: 0.2
                       }}
                     />
                     <Box sx={{ ml: 1, display: 'flex', alignItems: 'center' }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem', color: theme.palette.text.primary }}>root</Typography>
-                      <ChevronDown size={14} style={{ opacity: 0.4, marginLeft: 4, color: theme.palette.text.secondary }} />
+                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem', color: tokens.chrome.text }}>root</Typography>
+                      <ChevronDown size={14} style={{ opacity: 0.4, marginLeft: 4, color: tokens.chrome.textMuted }} />
                     </Box>
                   </Box>
                 </>
               ) : (
-                <IconButton
-                  onClick={() => setMobileMenuOpen(true)}
-                  sx={{
-                    color: alpha(theme.palette.primary.main, 0.8),
-                    bgcolor: alpha(theme.palette.primary.main, 0.05),
-                    border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
-                    '&:hover': {
-                      bgcolor: alpha(theme.palette.primary.main, 0.1),
-                      color: theme.palette.primary.main,
-                    }
-                  }}
-                >
-                  <MenuIcon size={20} />
-                </IconButton>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 0.6,
+                      px: 1,
+                      py: 0.55,
+                      borderRadius: 999,
+                      border: `1px solid ${proxyIndicator.border}`,
+                      bgcolor: proxyIndicator.bg,
+                      color: proxyIndicator.fg,
+                      cursor: 'default',
+                    }}
+                  >
+                    <ShieldAlert size={13} />
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'inherit',
+                        fontWeight: 800,
+                        letterSpacing: 0.6,
+                        fontSize: '0.62rem',
+                      }}
+                    >
+                      {validProxyCount}
+                    </Typography>
+                  </Box>
+                  <IconButton
+                    onClick={() => setMobileMenuOpen(true)}
+                    sx={{
+                      color: alpha(theme.palette.primary.main, 0.8),
+                      bgcolor: alpha(theme.palette.primary.main, 0.05),
+                      border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+                      '&:hover': {
+                        bgcolor: alpha(theme.palette.primary.main, 0.1),
+                        color: theme.palette.primary.main,
+                      }
+                    }}
+                  >
+                    <MenuIcon size={20} />
+                  </IconButton>
+                </Box>
               )}
             </Box>
 
@@ -630,24 +750,20 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
               slotProps={{
                 paper: {
                   sx: {
-                    bgcolor: isLight ? theme.palette.background.paper : 'rgba(10, 10, 15, 0.95)',
-                    backdropFilter: 'blur(12px)',
-                    border: isLight ? `1px solid ${theme.palette.divider}` : '1px solid rgba(0, 243, 255, 0.2)',
-                    borderRadius: 2,
+                    ...getMenuPaperSx(isLight, theme, tokens),
                     minWidth: 200,
                     mt: 1.5,
-                    boxShadow: isLight ? theme.shadows[4] : '0 8px 32px rgba(0,0,0,0.8)',
                     '& .MuiMenuItem-root': {
                       py: 1.5,
                       px: 2.5,
                       gap: 2,
-                      color: isLight ? theme.palette.text.primary : 'rgba(255,255,255,0.7)',
+                      color: tokens.text.primary,
                       fontFamily: 'var(--r3-heading-font)',
                       fontSize: '0.75rem',
                       letterSpacing: '1px',
                       '&:hover': {
-                        bgcolor: isLight ? alpha(theme.palette.primary.main, 0.08) : 'rgba(0, 243, 255, 0.1)',
-                        color: isLight ? theme.palette.primary.main : tokens.accent.primary,
+                        bgcolor: isLight ? alpha(tokens.accent.primary, 0.08) : alpha(tokens.accent.primary, 0.15),
+                        color: tokens.accent.primary,
                       }
                     }
                   }
@@ -679,14 +795,11 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
               slotProps={{
                 paper: {
                   sx: {
-                    bgcolor: isLight ? theme.palette.background.paper : 'rgba(10, 10, 15, 0.98)',
-                    backdropFilter: 'blur(15px)',
-                    border: isLight ? `1px solid ${theme.palette.divider}` : '1px solid rgba(0, 243, 255, 0.2)',
+                    ...getMenuPaperSx(isLight, theme, tokens),
                     borderRadius: 3,
                     p: 2.5,
                     width: 320,
                     mt: 1.5,
-                    boxShadow: isLight ? theme.shadows[4] : '0 10px 40px rgba(0,0,0,0.9)',
                     overflow: 'hidden',
                     '&::before': {
                       content: '""',
@@ -735,17 +848,17 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                         border: '1px solid transparent',
                         '&:hover': {
-                          bgcolor: isLight ? alpha(theme.palette.primary.main, 0.08) : 'rgba(255, 255, 255, 0.03)',
-                          borderColor: isLight ? alpha(theme.palette.primary.main, 0.2) : 'rgba(255, 255, 255, 0.05)',
+                          bgcolor: isLight ? alpha(tokens.accent.primary, 0.08) : alpha(tokens.text.primary, 0.03),
+                          borderColor: isLight ? alpha(tokens.accent.primary, 0.2) : tokens.border.subtle,
                           transform: 'translateY(-4px)',
-                          boxShadow: isLight ? `0 4px 20px ${theme.palette.primary.main}15` : `0 4px 20px ${item.color}15`,
+                          boxShadow: isLight ? `0 4px 20px ${alpha(tokens.accent.primary, 0.15)}` : `0 4px 20px ${alpha(item.color, 0.15)}`,
                           '& .icon-box': {
-                            color: isLight ? theme.palette.primary.main : item.color,
-                            filter: isLight ? 'none' : `drop-shadow(0 0 12px ${item.color}cc)`
+                            color: isLight ? tokens.accent.primary : item.color,
+                            filter: isLight ? 'none' : `drop-shadow(0 0 12px ${alpha(item.color, 0.8)})`
                           },
                           '& .item-text': {
-                            color: isLight ? theme.palette.primary.main : theme.palette.text.primary,
-                            textShadow: isLight ? 'none' : `0 0 8px ${item.color}aa`
+                            color: isLight ? tokens.accent.primary : theme.palette.text.primary,
+                            textShadow: isLight ? 'none' : `0 0 8px ${alpha(item.color, 0.67)}`
                           }
                         }
                       }}
@@ -754,12 +867,12 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                         className="icon-box"
                         sx={{
                           mb: 2,
-                          color: isLight ? theme.palette.text.secondary : 'rgba(255,255,255,0.3)',
+                          color: tokens.text.secondary,
                           transition: 'all 0.3s',
                           display: 'flex',
                           transform: 'scale(1)',
                           '& svg': {
-                            filter: isLight ? 'none' : 'drop-shadow(0 0 2px rgba(255,255,255,0.1))'
+                            filter: isLight ? 'none' : `drop-shadow(0 0 2px ${alpha(tokens.text.primary, 0.1)})`
                           }
                         }}
                       >
@@ -767,7 +880,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                       </Box>
                       <Typography className="item-text" sx={{
                         fontSize: '0.7rem',
-                        color: isLight ? theme.palette.text.secondary : 'rgba(255,255,255,0.4)',
+                        color: tokens.text.muted,
                         fontFamily: 'var(--r3-heading-font)',
                         textAlign: 'center',
                         fontWeight: 700,
@@ -799,6 +912,37 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
               onClose={() => setScanHistoryOpen(false)}
               projectSlug={projectSlug}
             />
+
+            <Snackbar
+              open={proxyWarningOpen}
+              autoHideDuration={8000}
+              onClose={() => setProxyWarningOpen(false)}
+              anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+              <Alert
+                severity="warning"
+                onClose={() => setProxyWarningOpen(false)}
+                action={(
+                  <Button
+                    component={Link}
+                    to={`/${projectSlug}/settings/proxies`}
+                    size="small"
+                    color="inherit"
+                    sx={{ fontWeight: 700 }}
+                  >
+                    Open Proxies
+                  </Button>
+                )}
+                sx={{
+                  alignItems: 'center',
+                  bgcolor: theme.palette.background.paper,
+                  color: theme.palette.text.primary,
+                  border: `1px solid ${alpha(tokens.accent.warning, 0.3)}`,
+                }}
+              >
+                Very few proxies remain in the pool ({validProxyCount} left).
+              </Alert>
+            </Snackbar>
 
             <CheckForUpdateModal
               open={updateModalOpen}
@@ -989,7 +1133,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                       letterSpacing: '1px',
                       transition: 'all 0.2s',
                       '&:hover': {
-                        bgcolor: alpha(theme.palette.primary.main, 0.1),
+                        bgcolor: alpha(tokens.accent.primary, 0.1),
                         color: tokens.accent.primary,
                         '& .menu-icon': {
                           color: tokens.accent.primary,

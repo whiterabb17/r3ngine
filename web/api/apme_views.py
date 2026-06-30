@@ -271,3 +271,33 @@ class AttackPathExplanationAPIView(APIView):
             'explanation': explanation
         }, status=status.HTTP_200_OK)
 
+
+class AttackTreeAPIView(APIView):
+    """
+    GET /api/apme/attack-trees/<scan_id>/<target_id>/
+
+    Returns the hierarchical AND/OR attack tree for a specific target asset.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, scan_id, target_id):
+        from apme.engine.attack_tree import AttackTreeBuilder
+        
+        try:
+            scan_id_int = int(scan_id)
+        except ValueError:
+            return Response({'error': 'scan_id must be an integer'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        builder = AttackTreeBuilder(scan_id=scan_id_int)
+        tree = builder.build_tree(target_id)
+        
+        if tree is None:
+            return Response({
+                'error': 'No attack paths found for this target.'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        return Response({
+            'status': 'success',
+            'tree': tree
+        }, status=status.HTTP_200_OK)
+

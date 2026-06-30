@@ -1,6 +1,29 @@
+import re
+
 from django.apps import apps
 from django.db import models
 from dashboard.models import Project
+
+
+def normalize_manual_subdomains(value):
+	"""Normalize manual subdomains into a de-duplicated lowercase list."""
+	if not value:
+		return []
+
+	if isinstance(value, str):
+		candidates = re.split(r'[\s,]+', value)
+	else:
+		candidates = value
+
+	normalized = []
+	seen = set()
+	for item in candidates:
+		name = str(item or '').strip().lower()
+		if not name or name in seen:
+			continue
+		seen.add(name)
+		normalized.append(name)
+	return normalized
 
 
 class HistoricalIP(models.Model):
@@ -178,6 +201,13 @@ class Domain(models.Model):
 	excluded_paths = models.JSONField(default=list, blank=True, null=True)
 	in_scope_ips = models.TextField(blank=True, null=True)
 	secondary_domains = models.TextField(blank=True, null=True)
+	manual_subdomains = models.TextField(blank=True, null=True)
+
+	def get_manual_subdomains(self):
+		return normalize_manual_subdomains(self.manual_subdomains)
+
+	def set_manual_subdomains(self, subdomains):
+		self.manual_subdomains = '\n'.join(normalize_manual_subdomains(subdomains))
 
 	def get_organization(self):
 		return Organization.objects.filter(domains__id=self.id)

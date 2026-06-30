@@ -1,8 +1,10 @@
 import React from 'react';
 import { Box, Typography, Divider, IconButton, Tooltip, Stack, Grid } from '@mui/material';
 import { Refresh as RefreshIcon, Store as StoreIcon, Inventory as InventoryIcon } from '@mui/icons-material';
+import { alpha } from '@mui/material/styles';
 import type { Plugin, MarketplacePlugin } from '../api/pluginsApi';
 import PluginCard from './PluginCard';
+import { useThemeTokens } from '../../../theme/useThemeTokens';
 
 interface Props {
   plugins: Plugin[];
@@ -20,19 +22,21 @@ const PluginInventory: React.FC<Props> = ({
   isRefreshingMarketplace,
   onInstallStarted,
 }) => {
+  const { tokens } = useThemeTokens();
+
   return (
     <Box>
       {/* INSTALLED PLUGINS */}
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 3 }}>
-        <InventoryIcon sx={{ color: 'rgba(255,255,255,0.3)', fontSize: 20 }} />
-        <Typography sx={{ fontFamily: 'Orbitron', fontWeight: 900, letterSpacing: 2, fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)' }}>
+        <InventoryIcon sx={{ color: tokens.text.muted, fontSize: 20 }} />
+        <Typography sx={{ fontFamily: 'var(--r3-heading-font)', fontWeight: 900, letterSpacing: 2, fontSize: '0.7rem', color: tokens.text.secondary }}>
           INSTALLED ASSETS
         </Typography>
       </Stack>
 
       {(!Array.isArray(plugins) || plugins.length === 0) ? (
-        <Box sx={{ textAlign: "center", py: 4, mb: 6, border: '1px dashed rgba(255,255,255,0.1)' }}>
-          <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'Orbitron' }}>
+        <Box sx={{ textAlign: "center", py: 4, mb: 6, border: `1px dashed ${tokens.border.subtle}` }}>
+          <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'var(--r3-heading-font)' }}>
             NO PLUGINS INSTALLED
           </Typography>
         </Box>
@@ -46,13 +50,13 @@ const PluginInventory: React.FC<Props> = ({
         </Grid>
       )}
 
-      <Divider sx={{ mb: 6, borderColor: 'rgba(255,255,255,0.05)' }} />
+      <Divider sx={{ mb: 6, borderColor: tokens.border.subtle }} />
 
       {/* MARKETPLACE PLUGINS */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-          <StoreIcon sx={{ color: '#00f3ff', fontSize: 20 }} />
-          <Typography sx={{ fontFamily: 'Orbitron', fontWeight: 900, letterSpacing: 2, fontSize: '0.7rem', color: '#00f3ff' }}>
+          <StoreIcon sx={{ color: tokens.accent.primary, fontSize: 20 }} />
+          <Typography sx={{ fontFamily: 'var(--r3-heading-font)', fontWeight: 900, letterSpacing: 2, fontSize: '0.7rem', color: tokens.accent.primary }}>
             PLUGIN MARKETPLACE
           </Typography>
         </Stack>
@@ -60,7 +64,7 @@ const PluginInventory: React.FC<Props> = ({
           <IconButton
             onClick={onRefreshMarketplace}
             disabled={isRefreshingMarketplace}
-            sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#00f3ff' } }}
+            sx={{ color: tokens.text.muted, '&:hover': { color: tokens.accent.primary } }}
           >
             <RefreshIcon sx={{ fontSize: 18 }} />
           </IconButton>
@@ -68,8 +72,8 @@ const PluginInventory: React.FC<Props> = ({
       </Box>
 
       {(!Array.isArray(marketplacePlugins) || marketplacePlugins.length === 0) ? (
-        <Box sx={{ textAlign: "center", py: 10, border: '1px dashed rgba(255,255,255,0.1)' }}>
-          <Typography variant="h6" sx={{ fontFamily: 'Orbitron', fontWeight: 800, color: 'rgba(255,255,255,0.3)' }}>
+        <Box sx={{ textAlign: "center", py: 10, border: `1px dashed ${tokens.border.subtle}` }}>
+          <Typography variant="h6" sx={{ fontFamily: 'var(--r3-heading-font)', fontWeight: 800, color: tokens.text.muted }}>
             MARKETPLACE COMING SOON
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>

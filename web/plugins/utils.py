@@ -498,43 +498,8 @@ class AtomicInstaller:
                         _tool_name = _tool.get('name')
                         if _tool_name:
                             cache.delete(f"plugin_{plugin_slug}_tool_{_tool_name}_verified")
-
-                    # Trigger orchestrator restart via Redis so it picks up the new plugin
-                    # and installs any required tools in its own container on startup.
-                    def _restart_orchestrator():
-                        try:
-                            import redis as _redis
-                            from django.conf import settings as _settings
-                            rdb = _redis.StrictRedis(
-                                host=_settings.REDIS_HOST,
-                                port=_settings.REDIS_PORT,
-                                password=_settings.REDIS_PASSWORD,
-                                db=0,
-                            )
-                            rdb.publish('orchestrator_control', 'restart')
-                            logger.info(f"[{plugin_slug}] Orchestrator restart triggered for tool installation.")
-                        except Exception as _e:
-                            logger.error(f"[{plugin_slug}] Failed to trigger orchestrator restart: {_e}")
-
-                    threading.Thread(target=_restart_orchestrator, daemon=True).start()
                 except Exception as e:
                     logger.error(f"Failed to parse tools.yaml for {plugin_slug}: {str(e)}")
-
-            # Trigger a graceful delayed restart of the web container so it picks up
-            # the new plugin API URLs without instantly severing this HTTP response.
-            def _restart_web_container():
-                import time
-                time.sleep(2)  # Give the current JSON response time to reach the client
-                try:
-                    import docker
-                    client = docker.from_env()
-                    web_container = client.containers.get('r3ngine-web-1')
-                    logger.info(f"[{plugin_slug}] Restarting web container to load new API routes.")
-                    web_container.restart()
-                except Exception as _e:
-                    logger.error(f"[{plugin_slug}] Failed to restart web container: {_e}")
-
-            threading.Thread(target=_restart_web_container, daemon=True).start()
 
             # Set needs_restart to True in cache
             cache.set(f"plugin_{plugin_slug}_needs_restart", True, timeout=None)

@@ -270,14 +270,21 @@ class TestVulnerabilityCorrelation(TestCase):
             elif "known_exploited_vulnerabilities.json" in url:
                 return MockResponse({
                     "vulnerabilities": [
-                        {"cveID": "CVE-2024-TEST-ENRICH"}
+                        {"cveID": "CVE-2024-99999"}
                     ]
                 })
             return MockResponse({}, status_code=404)
 
+        from startScan.models import EpssFeedData
+        EpssFeedData.objects.create(
+            cve_id="CVE-2024-99999",
+            epss_score=0.12345,
+            epss_percentile=85.0
+        )
+
         with patch("requests.get", side_effect=mock_get):
-            cve_obj = service.enrich_cve("CVE-2024-TEST-ENRICH")
-            self.assertEqual(cve_obj.name, "CVE-2024-TEST-ENRICH")
+            cve_obj = service.enrich_cve("CVE-2024-99999")
+            self.assertEqual(cve_obj.name, "CVE-2024-99999")
             self.assertEqual(cve_obj.cvss_v31_base_score, 8.8)
             self.assertEqual(cve_obj.attack_vector, "NETWORK")
             self.assertEqual(cve_obj.attack_complexity, "LOW")

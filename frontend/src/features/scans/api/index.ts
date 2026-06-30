@@ -79,6 +79,8 @@ export const useInitiateScan = (projectSlug: string) => {
       kr_wordlist?: string;
       spiderfoot_scan?: boolean;
       selected_plugins?: string[];
+      worker_name?: string;
+      task_queue?: string;
     }) => {
       const response = await fetch('/api/action/initiate/scan/', {
         method: 'POST',
@@ -412,6 +414,47 @@ export const useSecretLeaks = (projectSlug: string, scanId: number) => {
     enabled: !!projectSlug && !!scanId,
   });
 };
+
+export const useEmailBreaches = (scanId: number) => {
+  return useQuery<any[]>({
+    queryKey: ['email-breaches', scanId],
+    queryFn: async () => {
+      const response = await fetch(`/api/emailBreaches/?scan_id=${scanId}`, {
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    },
+    enabled: !!scanId,
+  });
+};
+
+export const useCheckEmailBreach = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ emailAddress, scanId }: { emailAddress: string; scanId: number }) => {
+      const response = await fetch('/api/emails/check_breach/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email_address: emailAddress, scan_id: scanId }),
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['email-breaches'] });
+      queryClient.invalidateQueries({ queryKey: ['scan-summary'] });
+    }
+  });
+};
+
 
 export const useScanStatus = (projectSlug: string) => {
   return useQuery({
@@ -753,4 +796,179 @@ export const useUnpauseScan = (projectSlug: string) => {
       queryClient.invalidateQueries({ queryKey: ['domains', projectSlug] });
     },
   });
+};
+
+export const useDirectoryFileDispatch = () => {
+  return useMutation({
+    mutationFn: async (params: {
+      url: string;
+      action: string;
+      scan_id: number;
+      tool?: string;
+      wordlist_user?: string;
+      wordlist_pass?: string;
+      threads?: number;
+      additional_flags?: string;
+    }): Promise<{ status: string; workflow_id: string }> => {
+      const response = await fetch('/api/action/directory-file/dispatch/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+        },
+        credentials: 'include',
+        body: JSON.stringify(params),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || errorData.message || 'Failed to dispatch directory file action');
+      }
+      return response.json();
+    },
+  });
+};
+
+export const useDirectoryFileDelete = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      directory_file_ids: number[];
+    }): Promise<{ deleted: number }> => {
+      const response = await fetch('/api/action/directory-file/delete/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+        },
+        credentials: 'include',
+        body: JSON.stringify(params),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || errorData.message || 'Failed to delete directory file(s)');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['directories'] });
+    },
+  });
+};
+
+export const useRetryScanTask = (projectSlug: string, scanId: number) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (activityId: number) => {
+      const response = await fetch(`/api/action/retry/task/${activityId}/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+        },
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        let message = 'Failed to retry task';
+        try {
+          const errorData = await response.json();
+          message = errorData.message || errorData.error || message;
+        } catch {
+          // ignore
+        }
+        throw new Error(message);
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scan-summary', projectSlug, scanId] });
+    },
+    onError: (e: Error) => {
+      // Toast is handled by the caller if needed; log for now
+      console.error('Retry task failed:', e.message);
+    },
+  });
+};
+
+// ── Email discovery API hooks ──────────────────────────────────────────────
+
+export interface EmailRecord {
+  id: number;
+  address: string;
+  password: string | null;
+  source: string;
+  metadata: Record<string, unknown>;
+}
+
+export const useEmails = (scanId: number | string | undefined) => {
+  return useQuery<EmailRecord[]>({
+    queryKey: ['emails', scanId],
+    queryFn: async () => {
+      const resp = await fetch(`/api/queryEmails/?scan_id=${scanId}`, {
+        credentials: 'include',
+      });
+      if (!resp.ok) throw new Error('Failed to fetch emails');
+      const data = await resp.json();
+      return (data.emails ?? []) as EmailRecord[];
+    },
+    enabled: !!scanId,
+  });
+};
+
+export const useManualAddEmails = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ scanId, addresses }: { scanId: number; addresses: string[] }) => {
+      const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+      const resp = await fetch('/api/emails/manual/', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ scan_id: scanId, addresses }),
+      });
+      if (!resp.ok && resp.status !== 207) throw new Error('Failed to add emails');
+      return resp.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['emails', variables.scanId] });
+    },
+  });
+};
+
+export const useStartEmailDiscovery = () => {
+  return useMutation({
+    mutationFn: async ({ scanId }: { scanId: number }) => {
+      const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+      const resp = await fetch('/api/emailDiscovery/start/', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ scan_id: scanId }),
+      });
+      // 409 means already running — return existing job_id
+      if (resp.status === 409 || resp.ok) return resp.json() as Promise<{ job_id: string }>;
+      throw new Error('Failed to start discovery');
+    },
+  });
+};
+
+export const useStopEmailDiscovery = () => {
+  return useMutation({
+    mutationFn: async ({ jobId }: { jobId: string }) => {
+      const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+      const resp = await fetch('/api/emailDiscovery/stop/', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ job_id: jobId }),
+      });
+      if (!resp.ok) throw new Error('Failed to stop discovery');
+      return resp.json();
+    },
+  });
+};
+
+export const fetchEmailDiscoveryReplay = async (jobId: string): Promise<{ events: object[]; complete: boolean }> => {
+  const resp = await fetch(`/api/emailDiscovery/${jobId}/replay/`, { credentials: 'include' });
+  if (!resp.ok) return { events: [], complete: false };
+  return resp.json();
 };

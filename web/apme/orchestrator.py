@@ -86,6 +86,33 @@ class APMEOrchestrator:
         all_nodes.extend(tech_nodes)
         all_edges.extend(tech_edges)
 
+        # Certificate intelligence ingestion (Plan 1)
+        from apme.ingestion.certificates import ingest_certificates
+        cert_nodes, cert_edges = ingest_certificates(target_id)
+        all_nodes.extend(cert_nodes)
+        all_edges.extend(cert_edges)
+
+        # Identity infrastructure ingestion (Plan 2)
+        from apme.ingestion.identity_infra import ingest_identity_infra
+        identity_nodes, identity_edges = ingest_identity_infra(target_id)
+        all_nodes.extend(identity_nodes)
+        all_edges.extend(identity_edges)
+
+        # API intelligence ingestion (Plan 3)
+        from apme.ingestion.api_intelligence import ingest_api_intelligence
+        api_nodes, api_edges = ingest_api_intelligence(target_id)
+        all_nodes.extend(api_nodes)
+        all_edges.extend(api_edges)
+
+        # Organization and Application nodes (Plan 3)
+        from apme.ingestion.graph_expansion import ingest_organizations, ingest_applications
+        org_nodes, org_edges = ingest_organizations(target_id)
+        all_nodes.extend(org_nodes)
+        all_edges.extend(org_edges)
+        app_nodes, app_edges = ingest_applications(target_id)
+        all_nodes.extend(app_nodes)
+        all_edges.extend(app_edges)
+
         # Inject virtual goal nodes (Objectives) to ensure rules have targets
         goal_nodes = self._generate_virtual_goal_nodes(scan_history_id)
         all_nodes.extend(goal_nodes)
@@ -120,13 +147,19 @@ class APMEOrchestrator:
         derived_edges = enricher.enrich(all_nodes, scan_history_id)
         logger.info(f"APME [3/7] Derived {len(derived_edges)} new edges from rules.")
 
+        # Diagnostic: check goal node reachability immediately after enrichment.
+        # If all goal nodes have zero incoming edges, no path algorithm can find anything.
+        self._log_goal_node_connectivity(builder, scan_history_id)
+
         _heartbeat("step 3/7 enrichment complete")
 
         # ── Step 4 & 5: Pathfinding ───────────────────────────────────────────
         logger.info("APME [4/7] Running pathfinding algorithms...")
         pathfinder = Pathfinder()
         try:
-            paths = pathfinder.find_all_paths(scan_history_id, top_n=self.top_n * 3)
+            # Pass top_n directly — find_all_paths no longer slices to top_n
+            # internally; it returns all deduplicated candidates for the scorer.
+            paths = pathfinder.find_all_paths(scan_history_id, top_n=self.top_n)
         except Exception as exc:
             logger.error(f"APME: Pathfinding failed: {exc}")
             paths = []
@@ -398,3 +431,61 @@ class APMEOrchestrator:
     @staticmethod
     def _risk_to_priority(risk: str) -> int:
         return {"critical": 5, "high": 4, "medium": 3, "low": 2}.get(risk, 1)
+
+    @staticmethod
+    def _log_goal_node_connectivity(builder, scan_history_id: int) -> None:
+        """Query Neo4j for the in-degree of every goal (Capability/Privilege) node.
+
+        Logged at INFO level. If all counts are 0 the enrichment rules produced
+        no edges pointing at goal nodes for this scan — the primary reason
+        pathfinding returns zero candidates.
+        """
+        if not builder._driver:
+            return
+        try:
+            with builder._driver.session() as session:
+                result = session.run(
+                    "MATCH (n:APMENode) "
+                    "WHERE n.type IN ['Capability', 'Privilege'] "
+                    "  AND n.scan_id = $scan_id "
+                    "OPTIONAL MATCH (src)-[:APME_EDGE]->(n) "
+                    "RETURN n.subtype AS subtype, count(src) AS incoming "
+                    "ORDER BY incoming DESC",
+                    scan_id=scan_history_id,
+                )
+                rows = list(result)
+
+            if not rows:
+                logger.warning(
+                    "APME [3/7] Goal node diagnostic: no Capability/Privilege nodes found "
+                    "in Neo4j for scan_id=%s. Virtual goal nodes may not have been persisted.",
+                    scan_history_id,
+                )
+                return
+
+            total_incoming = sum(r["incoming"] for r in rows)
+            reachable = [(r["subtype"], r["incoming"]) for r in rows if r["incoming"] > 0]
+            unreachable = [r["subtype"] for r in rows if r["incoming"] == 0]
+
+            if total_incoming == 0:
+                logger.warning(
+                    "APME [3/7] Goal node diagnostic: ALL %d goal nodes have 0 incoming edges "
+                    "for scan_id=%s. The enrichment rules did not produce any edges pointing "
+                    "to Capability/Privilege nodes. Pathfinding WILL return 0 paths. "
+                    "Check that the target's tech stack matches rule conditions. "
+                    "Unreachable subtypes: %s",
+                    len(rows), scan_history_id, unreachable,
+                )
+            else:
+                logger.info(
+                    "APME [3/7] Goal node diagnostic: %d/%d goal nodes reachable "
+                    "(total_incoming_edges=%d) for scan_id=%s. "
+                    "Reachable: %s | Unreachable: %s",
+                    len(reachable), len(rows), total_incoming, scan_history_id,
+                    reachable, unreachable,
+                )
+        except Exception as exc:
+            logger.warning(
+                "APME [3/7] Goal node diagnostic query failed for scan_id=%s: %s",
+                scan_history_id, exc,
+            )

@@ -5,6 +5,8 @@ import re
 import tempfile
 import subprocess
 import json
+import threading
+import time
 from urllib.parse import urlparse
 from django.conf import settings
 from scanEngine.models import OpSec, Proxy
@@ -278,47 +280,59 @@ class ProxychainsWrapper:
         Retrieves a random, verified alive, and unauthenticated proxy from the fetched proxy list.
         Converts the proxychains line format to standard requests proxy dictionary for testing.
 
+        Enhancement: all candidates are checked in *parallel* (up to 10 workers) and the first
+        live one wins, instead of the old sequential loop capped at 5.  This removes the hard
+        upper-bound on tries while cutting worst-case wait time dramatically.
+
         Returns:
             str: Validated proxy line in 'type host port [user pass]' format, or None if no valid proxy is found.
         """
         if not self.proxies:
             return None
-        
-        # Create a copy and shuffle to test proxies in a random sequence
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from reNgine.common_func import check_proxy_robust
+
+        # Shuffle for random distribution across the available pool
         test_list = list(self.proxies)
         random.shuffle(test_list)
-        
-        checked_count = 0
-        for proxy_str in test_list:
-            if checked_count >= 5:
-                logging.getLogger(__name__).warning("Reached maximum sequential proxychains validation limit (5). Stopping checks.")
-                break
-            checked_count += 1
-            # Parse the proxychains formatted line: type host port [user pass]
+
+        _log = logging.getLogger(__name__)
+
+        def _check_line(proxy_str):
+            """Parse a proxychains line, validate via HTTP, and return the line or None."""
             parts = proxy_str.split()
-            if len(parts) >= 3:
-                p_type = parts[0]
-                p_host = parts[1]
-                p_port = parts[2]
-                
-                # Map proxychains protocol name to requests standard scheme
-                scheme = "http" if p_type in ["http", "https"] else p_type
-                proxy_url = f"{scheme}://{p_host}:{p_port}"
-                
+            if len(parts) < 3:
+                return None
+            p_type, p_host, p_port = parts[0], parts[1], parts[2]
+            scheme = 'http' if p_type in ['http', 'https'] else p_type
+            proxy_url = f'{scheme}://{p_host}:{p_port}'
+            if check_proxy_robust(proxy_url, timeout=10):
+                from reNgine.common_func import mark_proxy_used
+                mark_proxy_used(proxy_url)
+                return proxy_str
+            _log.error('Proxychains proxy %s validation failed.', proxy_url)
+            from reNgine.common_func import remove_proxy_from_pool
+            remove_proxy_from_pool(proxy_url)
+            return None
+
+        max_workers = min(10, len(test_list))
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            future_map = {pool.submit(_check_line, line): line for line in test_list}
+            for fut in as_completed(future_map):
                 try:
-                    from reNgine.common_func import check_proxy_robust
-                    
-                    # Perform validation check with robust verification method to avoid false positives
-                    if not check_proxy_robust(proxy_url, timeout=5):
-                        raise Exception("Proxy verification failed (robust check)")
-                        
-                    # Valid proxy found, return the original proxychains formatted line
-                    return proxy_str
-                except Exception as e:
-                    # Log the proxy validation failure and continue to the next one
-                    logging.getLogger(__name__).error(f"Proxychains proxy {proxy_url} validation failed: {e}")
-                    
+                    result = fut.result()
+                except Exception:
+                    result = None
+                if result:
+                    # Cancel remaining futures – we have a winner
+                    for other in future_map:
+                        if other is not fut:
+                            other.cancel()
+                    return result
+
         return None
+
 
     def should_wrap(self):
         proxy_obj = Proxy.objects.first()
@@ -344,10 +358,42 @@ class ProxychainsWrapper:
         """
         if not proxy:
             proxy = self.get_random_proxy()
-        
+
         if proxy and self.should_wrap():
             conf_path = self.write_temp_config(proxy)
             return f"{PROXYCHAINS_EXEC_PATH} -f {conf_path} {cmd}", conf_path
         return cmd, None
 
+
+# Module-level singleton for OpSecManager with TTL-based expiry.
+# Fires 2 DB queries on first call; re-fetched after _OPSEC_MANAGER_TTL seconds.
+# Call get_opsec_manager(refresh=True) to force an immediate re-fetch.
+_opsec_manager_instance: 'OpSecManager | None' = None
+_opsec_manager_fetched_at: float = 0.0
+_OPSEC_MANAGER_TTL: float = 300.0  # 5 minutes; settings changes propagate within one TTL window
+_opsec_manager_lock = threading.Lock()
+
+
+def get_opsec_manager(refresh: bool = False) -> 'OpSecManager':
+    """Return a cached OpSecManager, re-fetching after TTL or on explicit refresh.
+
+    The Temporal worker runs in a separate process; Django signals do not cross
+    process boundaries. The TTL ensures settings changes take effect within
+    _OPSEC_MANAGER_TTL seconds without requiring a worker restart.
+    """
+    global _opsec_manager_instance, _opsec_manager_fetched_at
+    now = time.monotonic()
+    if (not refresh
+            and _opsec_manager_instance is not None
+            and now - _opsec_manager_fetched_at < _OPSEC_MANAGER_TTL):
+        return _opsec_manager_instance
+    with _opsec_manager_lock:
+        now = time.monotonic()  # re-read inside the lock
+        if (not refresh
+                and _opsec_manager_instance is not None
+                and now - _opsec_manager_fetched_at < _OPSEC_MANAGER_TTL):
+            return _opsec_manager_instance
+        _opsec_manager_instance = OpSecManager()
+        _opsec_manager_fetched_at = now
+    return _opsec_manager_instance
 

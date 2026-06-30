@@ -138,12 +138,59 @@ class BackendOptimizationTest(TransactionTestCase):
         # Verify that discovered technology tags are properly injected
         self.assertIn('wordpress', cmd)
 
+    @patch('reNgine.tasks.get_http_urls')
+    @patch('reNgine.tasks.Subdomain.objects.filter')
+    @patch('reNgine.tasks.stream_command')
+    @patch('reNgine.tasks.run_command')
+    def test_nuclei_tag_batch_limit_in_fallback_path(self, mock_run_cmd, mock_stream, mock_subdomain_filter, mock_get_urls):
+        """When tags_override is not provided (legacy path) and many tech tags are found,
+        the command must never receive more than 3 tags via -tags to prevent overload."""
+        mock_sub = MagicMock()
+        mock_sub.name = self.domain_name
+        # Technologies that produce many nuclei tags
+        mock_sub.technologies.values_list.return_value = [
+            'WordPress', 'Nginx', 'Spring Boot', 'Jenkins', 'Drupal'
+        ]
+        mock_subdomain_filter.return_value = [mock_sub]
+
+        def get_urls_side_effect(write_filepath=None, **kwargs):
+            if write_filepath:
+                os.makedirs(os.path.dirname(write_filepath), exist_ok=True)
+                with open(write_filepath, 'w') as f:
+                    f.write(f"http://{self.domain_name}\n")
+            return [f"http://{self.domain_name}"]
+        mock_get_urls.side_effect = get_urls_side_effect
+        mock_stream.return_value = iter([])
+
+        task_instance = MagicMock()
+        task_instance.scan = self.scan
+        task_instance.scan_id = self.scan.id
+        task_instance.activity_id = None
+        task_instance.results_dir = self.results_dir
+        task_instance.starting_point_path = ""
+        task_instance.yaml_configuration = self.ctx['yaml_configuration']
+
+        actual_func = getattr(nuclei_scan, 'run', getattr(nuclei_scan, '__wrapped__', nuclei_scan))
+        actual_func(task_instance, [f"http://{self.domain_name}"], self.ctx)
+
+        self.assertTrue(mock_stream.called)
+        cmd = mock_stream.call_args[0][0]
+        if '-tags' in cmd:
+            import re
+            match = re.search(r"-tags\s+'([^']+)'", cmd)
+            self.assertIsNotNone(match, "Could not parse -tags value from command")
+            tag_list = [t.strip() for t in match.group(1).split(',') if t.strip()]
+            self.assertLessEqual(
+                len(tag_list), 3,
+                msg=f"Non-Temporal fallback passed {len(tag_list)} tags at once: {tag_list}",
+            )
+
     @patch('reNgine.tasks.http_crawl')
-    @patch('reNgine.fuzzing_tasks.Redis')
-    @patch('reNgine.fuzzing_tasks.get_http_urls')
+    @patch('reNgine.tasks.fuzzing.Redis')
+    @patch('reNgine.tasks.fuzzing.get_http_urls')
     @patch('reNgine.common_func.get_http_urls')
-    @patch('reNgine.fuzzing_tasks.stream_command')
-    @patch('reNgine.fuzzing_tasks.run_command')
+    @patch('reNgine.tasks.fuzzing.stream_command')
+    @patch('reNgine.tasks.fuzzing.run_command')
     def test_dir_file_fuzz_deduplication(self, mock_run, mock_stream, mock_get_urls_common, mock_get_urls_fuzz, mock_redis_cls, mock_http_crawl):
         """Test that dir_file_fuzz correctly merges and deduplicates results from ffuf and dirsearch."""
         mock_redis = MagicMock()

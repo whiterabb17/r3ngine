@@ -33,6 +33,11 @@
       port_scan:
         enable_http_crawl: true
         timeout: 5
+        run_favirecon: true
+        run_sourcemapper: true
+        run_grpcurl: true
+        run_julius: true
+        run_gqlspection: true
         ports:
           - top-100
         rate_limit: 150
@@ -71,6 +76,7 @@
       dir_file_fuzz:
         auto_calibration: true
         run_dirsearch: true
+        run_feroxbuster: false
         enable_http_crawl: true
         rate_limit: 150
         extensions:
@@ -106,6 +112,7 @@
         threads: 20
         wordlist_name: dicc
         use_api_wordlist: false
+        max_repeat_by_signature: 10
       fetch_url:
         uses_tools:
           - gospider
@@ -160,6 +167,9 @@
         arjun_methods: GET,POST,JSON,XML,FETCH,PUT,DELETE,PATCH
       vulnerability_scan:
         run_nuclei: true
+        run_smugglex: true
+        run_second_order: true
+        run_nuclei_dast: true
         run_dalfox: true
         run_crlfuzz: false
         run_acunetix: false
@@ -175,6 +185,7 @@
         fetch_gpt_report: true
         nuclei:
           use_nuclei_config: false
+          max_templates_per_batch: 100
           severities:
             - unknown
             - info
@@ -229,6 +240,9 @@
         use_arp: false
       host_recon:
         run_nuclei: true
+        run_smugglex: true
+        run_second_order: true
+        run_nuclei_dast: true
       url_fuzz:
         fuzzers:
           - ffuf

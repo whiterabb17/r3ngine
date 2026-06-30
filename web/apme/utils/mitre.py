@@ -61,6 +61,13 @@ TACTIC_COLOR: dict[str, str] = {
     "reconnaissance":       "#44aaff",
 }
 
+MITIGATION_CATALOG: dict[str, str] = {
+    "T1190": "Apply security patches and implement WAF.",
+    "T1078": "Enforce MFA and strong password policies.",
+    "T1566": "Implement email filtering and DMARC.",
+}
+
+
 
 def lookup(technique_id: str) -> dict[str, str]:
     """Return full MITRE metadata for a technique ID.
@@ -95,3 +102,33 @@ def lookup(technique_id: str) -> dict[str, str]:
         "tactic_display": tactic_display,
         "tactic_color":   TACTIC_COLOR.get(tactic_slug, "#888888"),
     }
+
+def infer_cost(mitre_id: str) -> str:
+    """Infer the typical cost to execute a MITRE technique."""
+    if not mitre_id or mitre_id == "unknown":
+        return "low"
+    if mitre_id.startswith("T1190"): # Exploit Public-Facing Application
+        return "low"
+    return "medium"
+
+def infer_skill(mitre_id: str) -> str:
+    """Infer the typical skill required to execute a MITRE technique."""
+    if not mitre_id or mitre_id == "unknown":
+        return "low"
+    if mitre_id.startswith("T1190"):
+        return "low"
+    return "medium"
+
+def get_mitigation(mitre_id: str) -> str:
+    """Get the recommended mitigation for a given MITRE technique."""
+    if not mitre_id:
+        return "Implement defense-in-depth controls."
+        
+    if mitre_id in MITIGATION_CATALOG:
+        return MITIGATION_CATALOG[mitre_id]
+        
+    for key, mitigation in MITIGATION_CATALOG.items():
+        if mitre_id.startswith(key):
+            return mitigation
+            
+    return "Implement defense-in-depth controls."

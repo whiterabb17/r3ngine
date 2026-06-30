@@ -119,15 +119,6 @@ class EndToEndCVECorrelationTestCase(TestCase):
                         }
                     }]
                 }
-            elif 'api.first.org' in url:
-                # Mocked FIRST EPSS API response
-                mock_response.json.return_value = {
-                    "data": [{
-                        "cve": "CVE-2024-CRITICAL",
-                        "epss": "0.98765",
-                        "percentile": "0.99"  # Will be converted to 99.0
-                    }]
-                }
             else:
                 mock_response.json.return_value = {}
 
@@ -135,9 +126,17 @@ class EndToEndCVECorrelationTestCase(TestCase):
 
         mock_get.side_effect = mock_get_side_effect
 
+        # Create EpssFeedData directly since the app reads from local cache
+        from startScan.models import EpssFeedData
+        EpssFeedData.objects.create(
+            cve_id='CVE-2024-99999',
+            epss_score=0.98765,
+            epss_percentile=99.0
+        )
+
         # Enrich CVE via mocked external APIs
         service = CVEEnrichmentService()
-        cve = service.enrich_cve('CVE-2024-CRITICAL')
+        cve = service.enrich_cve('CVE-2024-99999')
 
         # Assert enrichment applied correctly
         self.assertIsNotNone(cve, "CVE enrichment returned None - check CVEEnrichmentService")

@@ -55,6 +55,13 @@ class ProxySerializer(serializers.ModelSerializer):
 		fields = '__all__'
 
 
+class ScanWorkerSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = ScanWorker
+		fields = '__all__'
+		read_only_fields = ['id', 'last_heartbeat', 'hostname', 'ip_address']
+
+
 class ConfigurationSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = Configuration
@@ -159,6 +166,16 @@ class DomainSerializer(serializers.ModelSerializer):
 		fields = '__all__'
 		depth = 2
 
+	def _get_recent_scan(self, obj):
+		from django.apps import apps
+		ScanHistory = apps.get_model('startScan.ScanHistory')
+		return (
+			ScanHistory.objects
+			.filter(domain__id=obj.id)
+			.order_by('-id')
+			.first()
+		)
+
 	def get_vuln_count(self, obj):
 		from startScan.models import Vulnerability
 		return Vulnerability.objects.filter(target_domain=obj).count()
@@ -176,7 +193,8 @@ class DomainSerializer(serializers.ModelSerializer):
 			return [org.name for org in Organization.objects.filter(domains__id=obj.id)]
 
 	def get_most_recent_scan(self, obj):
-		return obj.get_recent_scan_id()
+		recent_scan = self._get_recent_scan(obj)
+		return recent_scan.id if recent_scan else None
 
 	def get_insert_date(self, obj):
 		if obj.insert_date:
@@ -195,18 +213,14 @@ class DomainSerializer(serializers.ModelSerializer):
 			return naturaltime(obj.start_scan_date).title()
 
 	def get_most_recent_scan_status(self, obj):
-		from django.apps import apps
-		ScanHistory = apps.get_model('startScan.ScanHistory')
-		recent_scan = ScanHistory.objects.filter(domain__id=obj.id).order_by('-id').first()
+		recent_scan = self._get_recent_scan(obj)
 		if recent_scan:
 			from reNgine.definitions import CELERY_TASK_STATUS_MAP
 			return CELERY_TASK_STATUS_MAP.get(recent_scan.scan_status, 'UNKNOWN')
-		return 'NEW'
+		return 'NEVER_SCANNED'
 
 	def get_most_recent_scan_progress(self, obj):
-		from django.apps import apps
-		ScanHistory = apps.get_model('startScan.ScanHistory')
-		recent_scan = ScanHistory.objects.filter(domain__id=obj.id).order_by('-id').first()
+		recent_scan = self._get_recent_scan(obj)
 		if recent_scan:
 			return recent_scan.get_progress() or 0
 		return 0
@@ -478,7 +492,7 @@ class ScanHistorySerializer(serializers.ModelSerializer):
 		active_tier = 1
 		uncompleted_started = [t for t in started_tiers if t not in completed_tiers]
 		if uncompleted_started:
-			active_tier = min(uncompleted_started)
+			active_tier = max(uncompleted_started)
 		elif completed_tiers:
 			active_tier = min(max(completed_tiers) + 1, total_tiers)
 		elif obj.scan_status == RUNNING_TASK:
@@ -1396,10 +1410,17 @@ class SubdomainSerializer(serializers.ModelSerializer):
 			return None
 
 
+class AuthCandidateSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = AuthCandidate
+		fields = '__all__'
+
+
 class EndpointSerializer(serializers.ModelSerializer):
 
 	techs = TechnologySerializer(many=True)
 	parameters = ParameterSerializer(many=True, read_only=True)
+	auth_candidates = AuthCandidateSerializer(many=True, read_only=True, source='authcandidate_set')
 
 	class Meta:
 		model = EndPoint
@@ -1518,6 +1539,13 @@ class SecretLeakSerializer(serializers.ModelSerializer):
 		fields = '__all__'
 
 
+class EmailBreachSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = EmailBreach
+		fields = '__all__'
+
+
+
 class VulnerabilityReportSettingSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = VulnerabilityReportSetting
@@ -1539,3 +1567,50 @@ class ScanProfileSerializer(serializers.ModelSerializer):
 		model = ScanProfile
 		fields = '__all__'
 		read_only_fields = ['id', 'is_builtin', 'created_at', 'updated_at']
+
+
+class ExposureEvidenceSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = ExposureEvidence
+		fields = '__all__'
+
+
+class ExposureStatusUpdateSerializer(serializers.ModelSerializer):
+	"""Write-only serializer for status transitions on an Exposure."""
+	class Meta:
+		model = Exposure
+		fields = ['status']
+
+
+class ExposureSerializer(serializers.ModelSerializer):
+	evidence = ExposureEvidenceSerializer(many=True, read_only=True)
+	scan_history = serializers.SerializerMethodField()
+	discovered_date = serializers.SerializerMethodField()
+
+	class Meta:
+		model = Exposure
+		fields = '__all__'
+		depth = 2
+
+	def get_discovered_date(self, obj):
+		if obj.first_seen:
+			return obj.first_seen.strftime("%b %d, %Y %H:%M")
+		return None
+
+	def get_scan_history(self, obj):
+		scan_history_dict = {}
+		scan_history = obj.scan_history
+		if scan_history:
+			scan_history_dict = model_to_dict(
+				scan_history, 
+				exclude=['emails', 'employees', 'buckets', 'dorks']
+			)
+			if scan_history.domain:
+				scan_history_dict['domain'] = {
+					'name': scan_history.domain.name,
+				}
+			scan_history_dict['initiated_by'] = MinimalUserSerializer(scan_history.initiated_by).data if scan_history.initiated_by else None
+			scan_history_dict['aborted_by'] = MinimalUserSerializer(scan_history.aborted_by).data if scan_history.aborted_by else None
+			scan_history_dict['completed_ago'] = scan_history.get_completed_ago()
+		return scan_history_dict
+

@@ -1,0 +1,76 @@
+# Category W — Identity Infrastructure (6 rules)
+# Fires from IdentityInfra nodes to Capability virtual goal nodes.
+# All target_subtype values appear in schema.py NODE_TYPES["Capability"].
+rules:
+
+  - name: adfs_external_to_saml_assertion_forgery
+    mitre_id: "T1606.002"
+    if:
+      node.type: IdentityInfra
+      node.subtype: adfs
+      node.property: "is_externally_accessible:True"
+    then:
+      create_edge:
+        type: LEADS_TO
+        target_subtype: saml_assertion_forgery
+        confidence: 0.82
+
+  - name: owa_external_to_account_takeover
+    mitre_id: "T1078.002"
+    if:
+      node.type: IdentityInfra
+      node.subtype: owa
+      node.property: "is_externally_accessible:True"
+    then:
+      create_edge:
+        type: LEADS_TO
+        target_subtype: account_takeover
+        confidence: 0.75
+
+  - name: ldap_external_to_credential_harvesting
+    mitre_id: "T1087.002"
+    if:
+      node.type: IdentityInfra
+      node.subtype: ldap
+      node.property: "is_externally_accessible:True"
+    then:
+      create_edge:
+        type: LEADS_TO
+        target_subtype: credential_harvesting
+        confidence: 0.78
+
+  - name: exchange_to_email_account_compromise
+    mitre_id: "T1114.002"
+    if:
+      node.type: IdentityInfra
+      node.subtype: exchange
+      node.property: "is_externally_accessible:True"
+    then:
+      create_edge:
+        type: LEADS_TO
+        target_subtype: email_account_compromise
+        confidence: 0.72
+
+  - name: adfs_to_lateral_movement
+    mitre_id: "T1550.001"
+    if:
+      node.type: IdentityInfra
+      node.subtype: adfs
+      node.property: "is_externally_accessible:True"
+    then:
+      create_edge:
+        type: LEADS_TO
+        target_subtype: lateral_movement
+        confidence: 0.68
+
+  - name: generic_auth_portal_to_authenticated_access
+    mitre_id: "T1078.001"
+    if:
+      node.type: IdentityInfra
+      node.subtype: generic
+      node.property: "is_externally_accessible:True"
+    then:
+      create_edge:
+        type: LEADS_TO
+        target_subtype: authenticated_access
+        confidence: 0.55

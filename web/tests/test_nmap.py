@@ -99,8 +99,8 @@ class NmapTestCase(TestCase):
     def test_vulners_dedup_uses_subdomain_not_http_url(self):
         """Vulners dedup_fields must use subdomain not http_url (deduplicates across ports)."""
         import inspect
-        from reNgine import tasks
-        source = inspect.getsource(tasks)
+        from reNgine.tasks import nmap
+        source = inspect.getsource(nmap)
         import re
         # Find the dedup_fields line in the nmap vulns save loop
         # Must NOT contain http_url in the dedup_fields for vulners

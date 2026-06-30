@@ -10,7 +10,7 @@ interface Props {
 }
 
 export const GraphNodeDetailPanel: React.FC<Props> = ({ projectSlug }) => {
-  const { tokens } = useThemeTokens();
+  const { tokens, theme } = useThemeTokens();
   const { selectedNodeId, selectedNodeData, activePanel, setActivePanel } = useGraphStore();
   
   const { data: details, isLoading } = useGraphNodeDetails(
@@ -33,8 +33,9 @@ export const GraphNodeDetailPanel: React.FC<Props> = ({ projectSlug }) => {
   return (
     <Box sx={{
       width: 350,
-      bgcolor: 'rgba(15, 23, 42, 0.95)',
-      borderLeft: `1px solid ${tokens.accent.primary}33`,
+      bgcolor: tokens.surface.glass,
+      backdropFilter: tokens.effects.blur,
+      borderLeft: `1px solid ${tokens.border.subtle}`,
       p: 2,
       display: 'flex',
       flexDirection: 'column',
@@ -43,7 +44,7 @@ export const GraphNodeDetailPanel: React.FC<Props> = ({ projectSlug }) => {
       overflowY: 'auto'
     }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography sx={{ color: tokens.accent.primary, fontWeight: 800, fontSize: '14px', fontFamily: 'Orbitron' }}>
+        <Typography sx={{ color: tokens.accent.primary, fontWeight: 800, fontSize: '14px', fontFamily: tokens.headingFont === 'orbitron' ? 'Orbitron' : 'Inter' }}>
           NODE DETAILS
         </Typography>
         <Chip label={selectedNodeData?.type} size="small" sx={{ bgcolor: `${tokens.accent.primary}15`, color: tokens.accent.primary, fontSize: '10px' }} />
@@ -64,7 +65,7 @@ export const GraphNodeDetailPanel: React.FC<Props> = ({ projectSlug }) => {
             <Stack spacing={1}>
               {Object.entries(details.properties || {}).map(([k, v]) => (
                 <Box key={k} sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography sx={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>{k}</Typography>
+                  <Typography sx={{ fontSize: '11px', color: 'text.secondary' }}>{k}</Typography>
                   <Typography sx={{ fontSize: '11px', color: 'text.primary', fontWeight: 500, maxWidth: '60%', textAlign: 'right', wordBreak: 'break-all' }}>
                     {String(v)}
                   </Typography>
@@ -74,13 +75,13 @@ export const GraphNodeDetailPanel: React.FC<Props> = ({ projectSlug }) => {
           </Box>
 
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <Box sx={{ flex: 1, bgcolor: 'rgba(239, 68, 68, 0.1)', p: 1, borderRadius: 1, border: '1px solid rgba(239, 68, 68, 0.2)', textAlign: 'center' }}>
-              <Typography sx={{ fontSize: '18px', color: '#ef4444', fontWeight: 800 }}>{selectedNodeData?.criticalVulnCount || 0}</Typography>
-              <Typography sx={{ fontSize: '9px', color: 'rgba(239, 68, 68, 0.8)', fontWeight: 700 }}>CRITICAL</Typography>
+            <Box sx={{ flex: 1, bgcolor: `${tokens.severity.critical}1A`, p: 1, borderRadius: 1, border: `1px solid ${tokens.severity.critical}33`, textAlign: 'center' }}>
+              <Typography sx={{ fontSize: '18px', color: tokens.severity.critical, fontWeight: 800 }}>{selectedNodeData?.criticalVulnCount || 0}</Typography>
+              <Typography sx={{ fontSize: '9px', color: tokens.severity.critical, fontWeight: 700 }}>CRITICAL</Typography>
             </Box>
-            <Box sx={{ flex: 1, bgcolor: 'rgba(249, 115, 22, 0.1)', p: 1, borderRadius: 1, border: '1px solid rgba(249, 115, 22, 0.2)', textAlign: 'center' }}>
-              <Typography sx={{ fontSize: '18px', color: '#f97316', fontWeight: 800 }}>{selectedNodeData?.highVulnCount || 0}</Typography>
-              <Typography sx={{ fontSize: '9px', color: 'rgba(249, 115, 22, 0.8)', fontWeight: 700 }}>HIGH</Typography>
+            <Box sx={{ flex: 1, bgcolor: `${tokens.severity.high}1A`, p: 1, borderRadius: 1, border: `1px solid ${tokens.severity.high}33`, textAlign: 'center' }}>
+              <Typography sx={{ fontSize: '18px', color: tokens.severity.high, fontWeight: 800 }}>{selectedNodeData?.highVulnCount || 0}</Typography>
+              <Typography sx={{ fontSize: '9px', color: tokens.severity.high, fontWeight: 700 }}>HIGH</Typography>
             </Box>
             <Box sx={{ flex: 1, bgcolor: `${tokens.accent.primary}15`, p: 1, borderRadius: 1, border: `1px solid ${tokens.accent.primary}33`, textAlign: 'center' }}>
               <Typography sx={{ fontSize: '18px', color: tokens.accent.primary, fontWeight: 800 }}>{selectedNodeData?.degree_centrality || 0}</Typography>
@@ -103,7 +104,13 @@ export const GraphNodeDetailPanel: React.FC<Props> = ({ projectSlug }) => {
               variant="contained" 
               startIcon={<ShieldAlert size={14} />}
               onClick={handleCreateTicket}
-              sx={{ bgcolor: '#ef4444', color: 'text.primary', fontSize: '11px', fontWeight: 700, '&:hover': { bgcolor: '#dc2626' } }}
+              sx={{ 
+                bgcolor: tokens.severity.critical, 
+                color: theme.palette.common.white,
+                fontSize: '11px', 
+                fontWeight: 700, 
+                '&:hover': { bgcolor: theme.palette.error.dark } 
+              }}
             >
               CREATE TICKET
             </Button>

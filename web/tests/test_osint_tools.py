@@ -18,7 +18,7 @@ class TestOsintOrchestratorAlwaysRuns(TestCase):
     def setUp(self):
         from scanEngine.models import EngineType
         self.domain = Domain.objects.create(name='osint-test.example.com')
-        self.engine = EngineType.objects.first()
+        self.engine, _ = EngineType.objects.get_or_create(engine_name='test')
         self.scan = ScanHistory.objects.create(
             domain=self.domain,
             scan_status=0,
@@ -26,9 +26,9 @@ class TestOsintOrchestratorAlwaysRuns(TestCase):
             scan_type=self.engine,
         )
 
-    @patch('reNgine.tasks.osint_orchestrator')
-    @patch('reNgine.tasks.finish_osint')
-    @patch('reNgine.tasks.osint_discovery')
+    @patch('reNgine.tasks.osint.osint_orchestrator')
+    @patch('reNgine.tasks.osint.finish_osint')
+    @patch('reNgine.tasks.osint.osint_discovery')
     def test_orchestrator_called_when_discovery_produces_results(
         self, mock_discovery, mock_finish, mock_orchestrator
     ):
@@ -50,8 +50,8 @@ class TestOsintOrchestratorAlwaysRuns(TestCase):
 
         mock_orchestrator.assert_called_once_with(scan_history_id=self.scan.id)
 
-    @patch('reNgine.tasks.osint_orchestrator')
-    @patch('reNgine.tasks.finish_osint')
+    @patch('reNgine.tasks.osint.osint_orchestrator')
+    @patch('reNgine.tasks.osint.finish_osint')
     def test_orchestrator_called_when_no_discovery_config(
         self, mock_finish, mock_orchestrator
     ):

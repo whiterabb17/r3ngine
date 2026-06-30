@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  temporal-python-orchestrator:
+    image: docker.pkg.github.com/whiterabb17/r3ngine/r3ngine:latest
+    restart: always
+    init: true
+    entrypoint: /usr/src/app/temporal-entrypoint.sh
+    command: ["--worker-name", "${WORKER_NAME}", "--worker-token", "${WORKER_AUTH_TOKEN}", "--r3ngine-url", "${MASTER_URL}"]
+    environment:
+      - DEBUG=${DEBUG:-0}
+      - TEMPORAL_HOST=${TEMPORAL_HOST:-temporal:7233}
+      - TEMPORAL_NAMESPACE=default
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_SSLMODE=${POSTGRES_SSLMODE}
+      - DOMAIN_NAME=${DOMAIN_NAME}
+      - REDIS_URL=${REDIS_URL:-redis://:${REDIS_PASSWORD}@redis:6379/0}
+      - NEO4J_URI=${NEO4J_URI}
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      # Remote worker configuration
+      - WORKER_NAME=${WORKER_NAME}
+      - WORKER_AUTH_TOKEN=${WORKER_AUTH_TOKEN}
+      - MASTER_URL=${MASTER_URL}
+    volumes:
+      - ../web:/usr/src/app
+      - github_repos:/usr/src/github
+      - wordlist:/usr/src/wordlist
+      - scan_results:/usr/src/scan_results
+      - gf_patterns:/root/.gf
+      - nuclei_templates:/root/nuclei-templates
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - r3ngine_network
+
+  temporal-go-executor:
+    image: docker.pkg.github.com/whiterabb17/r3ngine/r3ngine-go-executor:latest
+    restart: always
+    init: true
+    command: ["--worker-name", "${WORKER_NAME}"]
+    environment:
+      - TEMPORAL_HOST=${TEMPORAL_HOST:-temporal:7233}
+      - WORKER_NAME=${WORKER_NAME}
+      # The Go worker can optionally take an auth token and master URL if we implement heartbeat there too
+    volumes:
+      - scan_results:/app/scan_results
+      - github_repos:/app/github
+      - wordlist:/app/wordlist
+    networks:
+      - r3ngine_network
+
+volumes:
+  scan_results:
+  github_repos:
+  wordlist:
+  gf_patterns:
+  nuclei_templates:
+
+networks:
+  r3ngine_network:
+    name: r3ngine_network
+    driver: bridge

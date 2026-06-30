@@ -397,11 +397,30 @@ class ProxyForm(forms.ModelForm):
                 "placeholder": "http://username:password@proxyip.com:port",
             }))
 
+    proxies_verified_at = forms.DateTimeField(required=False)
+    proxy_ttl_minutes = forms.IntegerField(required=False)
+
+    def clean_proxies_verified_at(self):
+        data = self.cleaned_data.get('proxies_verified_at')
+        if data is None and self.instance and self.instance.pk:
+            return self.instance.proxies_verified_at
+        return data
+
+    def clean_proxy_ttl_minutes(self):
+        data = self.cleaned_data.get('proxy_ttl_minutes')
+        if data is None:
+            if self.instance and self.instance.pk:
+                return self.instance.proxy_ttl_minutes
+            return 120
+        return data
+
     def set_value(self, key):
         self.initial['use_proxy'] = key.use_proxy
         self.initial['proxies'] = key.proxies
         self.initial['use_proxychains'] = key.use_proxychains
         self.initial['use_tor'] = key.use_tor
+        self.initial['proxies_verified_at'] = key.proxies_verified_at
+        self.initial['proxy_ttl_minutes'] = key.proxy_ttl_minutes
 
         if not key.use_proxy:
             self.fields['proxies'].widget.attrs['readonly'] = True
@@ -410,6 +429,7 @@ class ProxyForm(forms.ModelForm):
         self.initial['use_proxy'] = False
         self.initial['use_proxychains'] = False
         self.initial['use_tor'] = False
+        self.initial['proxy_ttl_minutes'] = 120
         self.fields['proxies'].widget.attrs['readonly'] = True
 
 

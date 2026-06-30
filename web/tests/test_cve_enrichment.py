@@ -102,26 +102,20 @@ class CVEEnrichmentServiceTestCase(TestCase):
         self.assertEqual(cve.attack_vector, "NETWORK")
         self.assertIsNotNone(cve.published_date)
     
-    @patch('requests.get')
-    def test_enrich_cve_from_epss(self, mock_get):
+    def test_enrich_cve_from_epss(self):
         """
-        Verify that FIRST EPSS API responses are parsed and applied to CveId objects.
-
-        Args:
-            mock_get: Mocked requests.get function.
+        Verify that FIRST EPSS data from local EpssFeedData is applied to CveId objects.
         """
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "data": [{
-                "cve": "CVE-2024-1234",
-                "epss": "0.95842",
-                "percentile": "0.98765"
-            }]
-        }
-        mock_get.return_value = mock_response
+        from startScan.models import EpssFeedData
         
         cve = CveId.objects.create(name="CVE-2024-1234")
+        
+        EpssFeedData.objects.create(
+            cve_id="CVE-2024-1234",
+            epss_score=0.95842,
+            epss_percentile=98.765
+        )
+        
         self.service._enrich_from_epss(cve)
         
         self.assertAlmostEqual(cve.epss_score, 0.95842, places=5)

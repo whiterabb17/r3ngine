@@ -28,6 +28,12 @@ setup:			## Generate certificates.
 up:				## Build and start all services in production mode.
 	DEBUG=0 ${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} up -d --build ${SERVICES}
 
+up-worker:		## Build and start the remote worker.
+	DEBUG=0 ${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} --env-file .env -f docker/docker-compose.worker.yml up -d --build
+
+down-worker:	## Stop the remote worker.
+	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} --env-file .env -f docker/docker-compose.worker.yml down
+
 devup:				## Build and start all services in development mode.
 	DEBUG=1 ${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_DEV_FILES} up -d --build ${SERVICES}
 

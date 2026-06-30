@@ -1,4 +1,5 @@
 import type { Theme } from '@mui/material/styles';
+import { alpha } from '@mui/material/styles';
 import type { ResolvedThemeTokens, ThemeTokenSet } from './tokens';
 import { getResolvedTokens } from './tokens';
 
@@ -58,7 +59,7 @@ export function getChartSeriesColors(tokens: Pick<ResolvedThemeTokens, 'chart'>)
 }
 
 /** Surface styles for glass/elevated cards — theme-aware */
-export function getSurfaceSx(isLight: boolean, tokens: ResolvedThemeTokens) {
+export function getSurfaceSx(isLight: boolean, tokens: ResolvedThemeTokens, theme?: Theme) {
   if (isLight) {
     return {
       bgcolor: tokens.surface.elevated,
@@ -67,9 +68,27 @@ export function getSurfaceSx(isLight: boolean, tokens: ResolvedThemeTokens) {
     };
   }
   return {
-    bgcolor: 'rgba(5, 5, 15, 0.6)',
+    bgcolor: alpha(theme?.palette.background.paper || tokens.surface.elevated, 0.72),
     backdropFilter: 'blur(10px)',
     border: `1px solid ${tokens.border.subtle}`,
+  };
+}
+
+export function getElevatedSurfaceSx(isLight: boolean, theme: Theme, tokens: ResolvedThemeTokens) {
+  if (isLight) {
+    return {
+      bgcolor: theme.palette.background.paper,
+      border: `1px solid ${theme.palette.divider}`,
+      borderRadius: 1,
+      boxShadow: theme.shadows[2],
+    };
+  }
+  return {
+    bgcolor: alpha(tokens.surface.elevated, 0.82),
+    backdropFilter: 'blur(14px)',
+    border: `1px solid ${tokens.border.subtle}`,
+    borderRadius: 1,
+    boxShadow: `0 12px 36px ${alpha('#000', 0.55)}`,
   };
 }
 
@@ -80,16 +99,36 @@ export function getMenuPaperSx(isLight: boolean, theme: Theme, tokens: ResolvedT
       bgcolor: theme.palette.background.paper,
       backdropFilter: 'blur(12px)',
       border: `1px solid ${theme.palette.divider}`,
-      borderRadius: 2,
+      borderRadius: 1,
       boxShadow: theme.shadows[4],
     };
   }
   return {
-    bgcolor: 'rgba(10, 10, 15, 0.95)',
+    bgcolor: alpha(tokens.surface.elevated, 0.95),
     backdropFilter: 'blur(12px)',
     border: `1px solid ${tokens.border.subtle}`,
-    borderRadius: 2,
-    boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
+    borderRadius: 1,
+    boxShadow: `0 8px 32px ${alpha('#000', 0.78)}`,
+  };
+}
+
+export function getDialogPaperSx(isLight: boolean, theme: Theme, tokens: ResolvedThemeTokens) {
+  return {
+    ...getElevatedSurfaceSx(isLight, theme, tokens),
+    color: theme.palette.text.primary,
+    borderRadius: 1,
+  };
+}
+
+export function getFieldSx(isLight: boolean, tokens: ResolvedThemeTokens, accent = tokens.accent.primary) {
+  return {
+    '& .MuiOutlinedInput-root': {
+      color: 'text.primary',
+      '& fieldset': { borderColor: isLight ? tokens.border.subtle : alpha(tokens.text.primary, 0.12) },
+      '&:hover fieldset': { borderColor: accent },
+      '&.Mui-focused fieldset': { borderColor: accent },
+    },
+    '& .MuiInputLabel-root': { color: 'text.secondary' },
   };
 }
 
@@ -103,7 +142,10 @@ export function getSemanticColors(themeName: string) {
     severity: (level: SeverityLevel) => getSeverityColor(level, tokens),
     httpStatus: (status: number) => getHttpStatusColor(status, tokens),
     chartSeries: () => getChartSeriesColors(tokens),
-    surface: () => getSurfaceSx(isLight, tokens),
+    surface: (theme?: Theme) => getSurfaceSx(isLight, tokens, theme),
+    elevatedSurface: (theme: Theme) => getElevatedSurfaceSx(isLight, theme, tokens),
     menuPaper: (theme: Theme) => getMenuPaperSx(isLight, theme, tokens),
+    dialogPaper: (theme: Theme) => getDialogPaperSx(isLight, theme, tokens),
+    field: (accent?: string) => getFieldSx(isLight, tokens, accent),
   };
 }

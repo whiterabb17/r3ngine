@@ -48,7 +48,7 @@ MANIFEST
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
-
+.superpowers
 
 # Sphinx documentation
 docs/_build/
@@ -72,9 +72,12 @@ web/templates/report/stress_test_report/content.md
 stress_test_report.pdf
 scripts/generate_stress_report.py
 # Plugin files
-UPGRADES.md
+web/scripts
 web/ca.crt
 backups/
 .remember
 release_notes.md
 web/killer
+
+GEMINI.md
+TESTS.md

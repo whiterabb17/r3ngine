@@ -37,6 +37,9 @@ urlpatterns = [
             'api.urls',
             'mapi')),
     path(
+        'api/engagements/',
+        include('engagements.urls')),
+    path(
         'target/',
         include('targetApp.urls')),
     path(

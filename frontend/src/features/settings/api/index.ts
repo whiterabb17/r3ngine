@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { UseQueryOptions } from '@tanstack/react-query';
 import axios from 'axios';
 import { getCsrfToken } from '../../../api/axiosConfig';
 
@@ -54,6 +55,7 @@ export interface ProxySettings {
   proxies: string;
   use_proxychains: boolean;
   use_tor: boolean;
+  valid_proxy_count?: number;
   skip_validation?: boolean;
 }
 
@@ -162,7 +164,10 @@ export interface FileContentResponse {
 
 
 
-export const useProxySettings = (slug: string) => {
+export const useProxySettings = (
+  slug: string,
+  options?: Omit<UseQueryOptions<ProxySettings>, 'queryKey' | 'queryFn'>
+) => {
   return useQuery<ProxySettings>({
     queryKey: ['proxy-settings', slug],
     queryFn: async () => {
@@ -171,6 +176,7 @@ export const useProxySettings = (slug: string) => {
       });
       return response.data;
     },
+    ...options,
   });
 };
 
@@ -228,6 +234,19 @@ export const checkProxy = async (
   const response = await axios.post(
     `/scanEngine/${slug}/check_proxy/`,
     { proxy },
+    { headers: { 'X-CSRFToken': getCsrfToken() }, signal }
+  );
+  return response.data;
+};
+
+export const checkProxyBulk = async (
+  slug: string,
+  proxies: string[],
+  signal?: AbortSignal
+): Promise<{ results: Record<string, boolean> }> => {
+  const response = await axios.post(
+    `/scanEngine/${slug}/check_proxy_bulk/`,
+    { proxies },
     { headers: { 'X-CSRFToken': getCsrfToken() }, signal }
   );
   return response.data;
@@ -884,6 +903,62 @@ export const useDeleteUser = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+  });
+};
+
+export interface RemoteWorker {
+  id: number;
+  name: string;
+  auth_token: string;
+  ip_address: string | null;
+  last_heartbeat: string | null;
+  created_at: string;
+}
+
+export const useRemoteWorkers = () => {
+  return useQuery<RemoteWorker[]>({
+    queryKey: ['remote-workers'],
+    queryFn: async () => {
+      const response = await axios.get('/api/settings/workers/');
+      return Array.isArray(response.data) ? response.data : response.data.results;
+    },
+    refetchInterval: 30000,
+  });
+};
+
+export const useCreateRemoteWorker = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { name: string, auth_token: string }) => {
+      const response = await axios.post('/api/settings/workers/', data, {
+        headers: {
+          'X-CSRFToken': getCsrfToken(),
+          'Accept': 'application/json'
+        }
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['remote-workers'] });
+    },
+  });
+};
+
+export const useDeleteRemoteWorker = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (workerId: number) => {
+      const response = await axios.delete(`/api/settings/workers/${workerId}/`, {
+        headers: {
+          'X-CSRFToken': getCsrfToken(),
+          'Accept': 'application/json'
+        }
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['remote-workers'] });
     },
   });
 };

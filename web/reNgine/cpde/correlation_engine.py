@@ -55,6 +55,30 @@ _SOURCE_CATEGORIES = {
     'kiterunner': 'api_brute',
 }
 
+# ── Noise blocklist ───────────────────────────────────────────────────────────
+# Parameter names that are known analytics/tracking noise and are never
+# interesting from a security testing perspective. Applied in `correlate()`
+# before output. The set is normalized the same way as param names (strip
+# non-alphanumeric, lowercase) so variant spellings (utm-source, utm_source)
+# are all blocked by the same entry.
+_NOISE_PARAMS_RAW: frozenset[str] = frozenset([
+    # Google Analytics campaign tracking
+    'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+    'utm_id', 'utm_source_platform', 'utm_creative_format', 'utm_marketing_tactic',
+    # Google Analytics session / client IDs
+    '_ga', '_gl', '_gid',
+    # Ad click tracking
+    'fbclid', 'gclid', 'msclkid', 'dclid', 'gbraid', 'wbraid',
+    # Cloudflare challenge tokens
+    '__cf_chl_captcha_tk__', '__cf_chl_managed_tk__',
+    # Build / cache busters that carry no semantic meaning
+    '__hssc', '__hstc', '__hsfp', 'hsCtaTracking',
+])
+
+_NOISE_PARAMS_NORMALIZED: frozenset[str] = frozenset(
+    re.sub(r'[^a-z0-9]', '', p.lower()) for p in _NOISE_PARAMS_RAW
+)
+
 
 def _normalize_name(name: str) -> str:
     """Normalize a parameter name for deduplication.
@@ -88,6 +112,8 @@ def _source_category(source: str) -> str:
 def correlate(
     findings: list[dict],
     min_confidence: int = _MIN_CONFIDENCE,
+    *,
+    apply_noise_filter: bool = True,
 ) -> list[dict]:
     """Merge and score parameter findings from multiple sources.
 
@@ -97,6 +123,11 @@ def correlate(
                                at minimum: 'name', 'location', 'source_url',
                                'confidence'.
         min_confidence (int): Minimum confidence to include in output. Default 50.
+        apply_noise_filter (bool): When True (default), parameters that match the
+                                   noise blocklist (_NOISE_PARAMS_NORMALIZED) are
+                                   discarded regardless of their confidence score.
+                                   Pass False to disable for debugging or exhaustive
+                                   discovery runs.
 
     Returns:
         list[dict]: Correlated, deduplicated, confidence-scored parameter records
@@ -172,6 +203,12 @@ def correlate(
         # Check auth by name if not already flagged
         if not is_auth and _AUTH_RE.search(canonical_name):
             is_auth = True
+
+        # Apply noise blocklist — filter known tracking/analytics params that
+        # carry no security-testing value regardless of confidence.
+        if apply_noise_filter and norm_name in _NOISE_PARAMS_NORMALIZED:
+            logger.debug('[CPDE:correlation] Noise-filtered param: %s', canonical_name)
+            continue
 
         if confidence < min_confidence:
             continue

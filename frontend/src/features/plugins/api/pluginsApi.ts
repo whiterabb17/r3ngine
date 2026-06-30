@@ -208,10 +208,18 @@ export const useRestartOrchestrator = () => {
   return useMutation({
     mutationFn: restartOrchestrator,
     onSuccess: () => {
-      // Invalidate queries so we reload plugin status
       queryClient.invalidateQueries({ queryKey: ['plugins'] });
     },
   });
+};
+
+export const restartServer = async () => {
+  const { data } = await axios.post(`${API_URL}restart-server/`);
+  return data;
+};
+
+export const useRestartServer = () => {
+  return useMutation({ mutationFn: restartServer });
 };
 
 export const fetchPluginDocs = async (slug: string): Promise<Record<string, string>> => {

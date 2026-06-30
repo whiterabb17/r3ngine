@@ -6,7 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 from startScan.models import Subdomain, WafBypassFinding
 from dashboard.models import ShodanAPIKey, CensysAPIKey
-from reNgine.utils.opsec import OpSecManager
+from reNgine.utils.opsec import get_opsec_manager
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ class OriginDiscoveryManager:
         self.domain = subdomain_obj.name
         self.shodan_key = self._get_shodan_key()
         self.censys_key = self._get_censys_key()
-        self.opsec = OpSecManager()
+        self.opsec = get_opsec_manager()
 
     def _get_shodan_key(self):
         key_obj = ShodanAPIKey.objects.first()
@@ -72,18 +72,21 @@ class OriginDiscoveryManager:
     def _query_censys(self):
         ips = []
         try:
-            from censys.platform import CensysPlatform
-            # Initialize Censys Platform client with the single API key
-            cp = CensysPlatform(api_key=self.censys_key)
-            query = f"services.tls.certificates.leaf_data.names: {self.domain}"
-            
-            # The new Platform API uses search.hosts and returns an iterator of results
-            # We take the first page of results (usually enough for origin discovery)
-            results = cp.search.hosts(query)
-            for hit in results.view(pages=1):
-                ips.append(hit.get('ip'))
+            from censys_platform import SDK, SearchQueryInputBody
+            sdk = SDK(personal_access_token=self.censys_key)
+            query = "services.tls.certificates.leaf_data.names: %s" % self.domain
+            response = sdk.global_data.search(
+                search_query_input_body=SearchQueryInputBody(query=query, page_size=100)
+            )
+            for hit in (response.result.hits or []):
+                host = getattr(hit, 'host_v1', None)
+                if host:
+                    resource = getattr(host, 'resource', None) or {}
+                    ip = getattr(resource, 'ip', None) or resource.get('ip')
+                    if ip:
+                        ips.append(ip)
         except Exception as e:
-            logger.error(f"Censys query failed for {self.domain}: {str(e)}")
+            logger.error("Censys query failed for %s: %s", self.domain, e)
         return ips
 
     def _internal_heuristics(self):
@@ -138,7 +141,7 @@ class WafBypassOrchestrator:
     def __init__(self, subdomain_obj):
         self.subdomain = subdomain_obj
         self.target_url = f"https://{subdomain_obj.name}"
-        self.opsec = OpSecManager()
+        self.opsec = get_opsec_manager()
 
     def run_all_tests(self, use_nuclei=True, use_benchmarking=True):
         findings = []

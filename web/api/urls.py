@@ -24,9 +24,49 @@ from .subscans import SubScanViewSet
 from .scan_history import ScanHistoryViewSet
 from .users import UserManageViewSet
 from .stress_testing_views import StressTestingAPIView, StressTestingHistoryAPIView
-from .apme_views import AttackPathsAPIView, TriggerLLMAPMEAPIView, RecalculateAttackPathsAPIView, AttackPathExplanationAPIView
+from .apme_views import AttackPathsAPIView, TriggerLLMAPMEAPIView, RecalculateAttackPathsAPIView, AttackPathExplanationAPIView, AttackTreeAPIView
+from .apme_mobile_views import (
+    RiskSummaryMobileView,
+    ImpactDetailMobileView,
+    RegenerateImpactMobileView,
+    AttackTreeMobileView,
+    DismissPathMobileView,
+)
 from .scan_configuration import ScanConfigurationAPI
 from .config_migration_views import ExportConfig, ImportConfig, ExportScanResults
+from .cert_views import CertificateIntelView
+from .identity_views import IdentityInfraView
+from .identity_mobile_views import (
+    IdentityMobileDetailView,
+    IdentityConfirmView,
+    IdentityDismissView,
+)
+from .graph_intel_views import FullChainGraphView, ChainNodesByTypeView
+from .exposure_mobile_views import (
+    ExposureMobileListView,
+    ExposureMobileDetailView,
+    ExposureStatsMobileView,
+    ExposureStatusUpdateView,
+    ExposureBulkStatusView,
+)
+from .cert_mobile_views import (
+    CertificateMobileListView,
+    CertificateMobileDetailView,
+    CertificateResyncView,
+    CertificateFlagView,
+)
+from .api_intel_mobile_views import (
+    APIIntelMobileListView,
+    APIIntelMobileDetailView,
+)
+from .todo_mobile_views import TodoMobileListCreateView, TodoMobileDetailView
+from .workflow_mobile_views import WorkflowMobileListView
+from .views.recon import (
+    ManualEmailAddView,
+    StartEmailDiscoveryView,
+    StopEmailDiscoveryView,
+    EmailDiscoveryReplayView,
+)
 
 
 app_name = 'api'
@@ -37,6 +77,7 @@ router.register(r'listSubdomains', SubdomainsViewSet, basename='subdomain-list')
 router.register(r'listEndpoints', EndPointViewSet, basename='endpoint-list')
 router.register(r'listDirectories', DirectoryViewSet, basename='directory')
 router.register(r'listVulnerability', VulnerabilityViewSet, basename='vulnerability-list')
+router.register(r'listExposures', ExposureViewSet, basename='exposure-list')
 router.register(r'listInterestingSubdomains', InterestingSubdomainViewSet, basename='interesting-subdomain')
 router.register(r'listInterestingEndpoints', InterestingEndpointViewSet, basename='interesting-endpoint')
 router.register(r'listParameters', ParameterViewSet, basename='parameters-list')
@@ -50,6 +91,7 @@ router.register(r'hackerone-programs', HackerOneProgramViewSet, basename='hacker
 router.register(r'monitoring', MonitoringDiscoveryViewSet, basename='monitoring')
 router.register(r'projects', ProjectViewSet, basename='projects')
 router.register(r'secretLeaks', SecretLeakViewSet, basename='secret-leaks')
+router.register(r'emailBreaches', EmailBreachViewSet, basename='email-breaches')
 router.register(r'hardwareProfiles', HardwareProfileViewSet, basename='hardware-profiles')
 router.register(r'scanProfiles', ScanProfileViewSet, basename='scan-profiles')
 
@@ -60,10 +102,12 @@ router.register(r'subscans', SubScanViewSet, basename='subscans')
 router.register(r'soc-settings', SOCSettingsViewSet, basename='soc-settings')
 router.register(r'listScans', ScanHistoryViewSet, basename='list-scans')
 router.register(r'users', UserManageViewSet, basename='users')
+router.register(r'workers', ScanWorkerViewSet, basename='workers')
 
 
 urlpatterns = [
     re_path(r'^', include(router.urls)),
+    path('settings/workers/heartbeat/', WorkerHeartbeatAPIView.as_view(), name='worker_heartbeat'),
     path(
         'add/target/',
         AddTarget.as_view(),
@@ -112,6 +156,14 @@ urlpatterns = [
         'queryEmails/',
         ListEmails.as_view(),
         name='queryEmails'),
+    path(
+        'emails/check_breach/',
+        CheckEmailBreach.as_view(),
+        name='check_email_breach'),
+    path('emails/manual/', ManualEmailAddView.as_view(), name='manual_email_add'),
+    path('emailDiscovery/start/', StartEmailDiscoveryView.as_view(), name='email_discovery_start'),
+    path('emailDiscovery/stop/', StopEmailDiscoveryView.as_view(), name='email_discovery_stop'),
+    path('emailDiscovery/<str:job_id>/replay/', EmailDiscoveryReplayView.as_view(), name='email_discovery_replay'),
     path(
         'queryEmployees/',
         ListEmployees.as_view(),
@@ -289,6 +341,25 @@ urlpatterns = [
         TorExitIPAPIView.as_view(),
         name='rengine_tor_exit_ip'),
     path(
+        'action/directory-file/dispatch/',
+        DirectoryFileDispatchView.as_view(),
+        name='directory-file-dispatch',
+    ),
+    path(
+        'action/directory-file/delete/',
+        DirectoryFileDeleteView.as_view(),
+        name='directory-file-delete',
+    ),
+    path(
+        'action/directory-file/auth-logs/',
+        ExtractAuthLogsView.as_view(),
+        name='directory-file-auth-logs',
+    ),
+    path(
+        'action/subdomain/add/',
+        AddManualSubdomain.as_view(),
+        name='add_manual_subdomain'),
+    path(
         'action/subdomain/delete/',
         DeleteSubdomain.as_view(),
         name='delete_subdomain'),
@@ -336,6 +407,10 @@ urlpatterns = [
         'action/initiate/subtask/',
         InitiateSubTask.as_view(),
         name='initiate_subscan'),
+    path(
+        'action/retry/task/<int:pk>/',
+        ScanActivityRetryAPIView.as_view(),
+        name='retry_task'),
     path(
         'action/initiate/scan/',
         InitiateScan.as_view(),
@@ -475,6 +550,17 @@ urlpatterns = [
         ParameterSummaryView.as_view(),
         name='parameters_summary'
     ),
+    # Exposure mobile views (order matters: stats/bulk-status before <int:pk>)
+    path('exposures/', ExposureMobileListView.as_view(), name='exposures_mobile_list'),
+    path('exposures/stats/', ExposureStatsMobileView.as_view(), name='exposures_mobile_stats'),
+    path('exposures/bulk-status/', ExposureBulkStatusView.as_view(), name='exposures_bulk_status'),
+    path('exposures/<int:pk>/', ExposureMobileDetailView.as_view(), name='exposures_mobile_detail'),
+    path('exposures/<int:pk>/status/', ExposureStatusUpdateView.as_view(), name='exposures_status_update'),
+    path('apme/risk-summary/', RiskSummaryMobileView.as_view(), name='apme_risk_summary_mobile'),
+    path('apme/tree/<str:target_id>/', AttackTreeMobileView.as_view(), name='apme_tree_mobile'),
+    path('apme/impact/regenerate/', RegenerateImpactMobileView.as_view(), name='apme_impact_regenerate'),
+    path('apme/impact/<str:path_id>/', ImpactDetailMobileView.as_view(), name='apme_impact_detail'),
+    path('apme/path/<str:path_id>/dismiss/', DismissPathMobileView.as_view(), name='apme_path_dismiss'),
     path(
         'apme/paths/',
         AttackPathsAPIView.as_view(),
@@ -495,6 +581,28 @@ urlpatterns = [
         AttackPathExplanationAPIView.as_view(),
         name='apme_explain'
     ),
+    path(
+        'apme/attack-trees/<str:scan_id>/<str:target_id>/',
+        AttackTreeAPIView.as_view(),
+        name='apme_attack_trees'
+    ),
+    path('certs/', CertificateIntelView.as_view(), name='certificate_intel'),
+    # Certificate mobile views (order matters: resync/flag before <int:pk>)
+    path('certificates/', CertificateMobileListView.as_view(), name='certificates_mobile_list'),
+    path('certificates/<int:pk>/resync/', CertificateResyncView.as_view(), name='certificates_resync'),
+    path('certificates/<int:pk>/flag/', CertificateFlagView.as_view(), name='certificates_flag'),
+    path('certificates/<int:pk>/', CertificateMobileDetailView.as_view(), name='certificates_mobile_detail'),
+    path('identity/', IdentityInfraView.as_view(), name='identity_infra'),
+    # Identity mobile views (confirm/dismiss before <int:pk> so literals are matched first)
+    path('identity/<int:pk>/confirm/', IdentityConfirmView.as_view(), name='identity_confirm'),
+    path('identity/<int:pk>/dismiss/', IdentityDismissView.as_view(), name='identity_dismiss'),
+    path('identity/<int:pk>/', IdentityMobileDetailView.as_view(), name='identity_mobile_detail'),
+    # API Intelligence mobile views
+    path('api-intel/', APIIntelMobileListView.as_view(), name='api_intel_mobile_list'),
+    path('api-intel/<int:pk>/', APIIntelMobileDetailView.as_view(), name='api_intel_mobile_detail'),
+    # Todos mobile CRUD
+    path('todos/', TodoMobileListCreateView.as_view(), name='todos_mobile_list_create'),
+    path('todos/<int:pk>/', TodoMobileDetailView.as_view(), name='todos_mobile_detail'),
     path(
         'action/ad-assessment/from-subdomain/',
         LaunchADAssessmentFromSubdomain.as_view(),
@@ -532,6 +640,16 @@ urlpatterns = [
         name='get_node_details'
     ),
     path(
+        'graph/chain/',
+        FullChainGraphView.as_view(),
+        name='full_chain_graph',
+    ),
+    path(
+        'graph/chain/nodes/',
+        ChainNodesByTypeView.as_view(),
+        name='chain_nodes_by_type',
+    ),
+    path(
         'system/logs/',
         GetSystemLogs.as_view(),
         name='get_system_logs'
@@ -542,6 +660,8 @@ urlpatterns = [
         RegisterPushTokenView.as_view(),
         name='register_push_token',
     ),
+    # Phase 3 — mobile workflow discovery
+    path('workflows/', WorkflowMobileListView.as_view(), name='workflows_mobile_list'),
     # Phase 2 — standalone workflow launcher
     path(
         'workflows/<str:workflow_slug>/start/',

@@ -264,12 +264,22 @@ web_api_discovery:
     - retire
     - jwt_tool
     - graphql-cop
+    - favirecon
+    - sourcemapper
+    - grpcurl
+    - julius
+    - gqlspection
   scan_only_active: true
   threads: 30
   timeout: 5
   kiterunner_wordlist: routes-large.kite  # kiterunner routes wordlist
   arjun_methods: GET,POST,JSON,XML,FETCH,PUT,DELETE,PATCH
   use_api_wordlist: false     # Use API wordlist for dir_file_fuzz integration
+  run_favirecon: true         # Favicon tech recon
+  run_sourcemapper: true      # Source map extraction
+  run_grpcurl: true           # gRPC reflection probe
+  run_julius: true            # LLM service fingerprinting
+  run_gqlspection: true       # GraphQL introspection & query generation
 
 # ---------------------------------------------------------------------------
 # TIER 5 — Vigolium Analysis (active)

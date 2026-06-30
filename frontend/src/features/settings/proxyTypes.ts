@@ -3,6 +3,7 @@ export interface ProxySettings {
   proxies: string;
   use_proxychains: boolean;
   use_tor: boolean;
+  valid_proxy_count?: number;
 }
 
 export interface ProxyTaskStatus {

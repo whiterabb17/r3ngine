@@ -5,9 +5,11 @@ import type { VulnerabilityResponse } from '../types';
 
 export interface VulnerabilityFilters {
   severity?: string;
+  exclude_severity?: string;
   validation_status?: string;
   open_status?: string;
   source?: string;
+  exclude_source?: string;
 }
 
 export const useVulnerabilities = (projectSlug: string, page = 1, searchQuery = '', scanId?: number, targetId?: number, filters?: VulnerabilityFilters, pageSize = 10) => {
@@ -33,9 +35,11 @@ export const useVulnerabilities = (projectSlug: string, page = 1, searchQuery = 
       
       if (filters) {
         if (filters.severity) url.searchParams.append('severity', filters.severity);
+        if (filters.exclude_severity) url.searchParams.append('exclude_severity', filters.exclude_severity);
         if (filters.validation_status) url.searchParams.append('validation_status', filters.validation_status);
         if (filters.open_status) url.searchParams.append('open_status', filters.open_status);
         if (filters.source) url.searchParams.append('source', filters.source);
+        if (filters.exclude_source) url.searchParams.append('exclude_source', filters.exclude_source);
       }
       
       url.searchParams.append('format', 'json');
@@ -186,8 +190,25 @@ export const useImpactGraphData = (projectSlug: string, vulnId: number | null) =
     enabled: !!projectSlug && !!vulnId,
   });
 };
+export interface AttackChainStep {
+  phase: string;
+  description: string;
+}
+
+export interface ImpactAssessmentResponse {
+  status: boolean;
+  potential_impact?: string;
+  remediation_priority?: number;
+  potential_attack_chain?: {
+    steps: AttackChainStep[];
+    confidence?: string;
+  };
+  created_at?: string;
+  is_ai_generated?: boolean;
+}
+
 export const useImpactAssessment = (projectSlug: string, vulnId: number | null) => {
-  return useQuery({
+  return useQuery<ImpactAssessmentResponse>({
     queryKey: ['impact-assessment', projectSlug, vulnId],
     queryFn: async () => {
       const response = await fetch(`/${projectSlug}/api/impact/vulnerability/${vulnId}/details/`, {
@@ -196,12 +217,11 @@ export const useImpactAssessment = (projectSlug: string, vulnId: number | null) 
       if (!response.ok) {
         throw new Error('Failed to fetch impact assessment');
       }
-      return response.json();
+      return response.json() as Promise<ImpactAssessmentResponse>;
     },
     enabled: !!projectSlug && !!vulnId,
-    refetchInterval: (data) => {
-      // If AI generation is in progress (no assessment yet or marked as generated recently), poll
-      if (!data || (data as any).status === false) return 5000;
+    refetchInterval: (query) => {
+      if (!query.state.data || query.state.data.status === false) return 5000;
       return false;
     }
   });

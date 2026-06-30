@@ -82,7 +82,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
           style: {
             'label': 'data(label)',
             'background-color': 'data(color)',
-            'color': '#fff',
+            'color': tokens.text.primary,
             'font-size': '10px',
             'font-family': 'Inter, sans-serif',
             'text-valign': 'bottom',
@@ -91,7 +91,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
             'width': (ele: any) => Math.min(80, 30 + (ele.data('degree_centrality') || 0) * 5),
             'height': (ele: any) => Math.min(80, 30 + (ele.data('degree_centrality') || 0) * 5),
             'border-width': (ele: any) => (ele.data('criticalVulnCount') || 0) > 0 ? 4 : 1,
-            'border-color': (ele: any) => (ele.data('criticalVulnCount') || 0) > 0 ? '#ef4444' : 'rgba(255,255,255,0.1)',
+            'border-color': (ele: any) => (ele.data('criticalVulnCount') || 0) > 0 ? tokens.accent.error : tokens.border.subtle,
             'overlay-padding': 6,
             'z-index': 1,
             'shadow-blur': 10,
@@ -128,7 +128,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
             'text-opacity': 1,
             'shape': 'hexagon',
             'border-width': 3,
-            'border-color': '#fff',
+            'border-color': tokens.border.strong,
             'shadow-opacity': 0.8,
             'shadow-blur': 20
           } as any
@@ -139,28 +139,29 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
             'shape': 'diamond',
             'width': 45,
             'height': 45,
-            'background-color': '#ef4444',
-            'shadow-color': '#ef4444'
+            'background-color': tokens.accent.error,
+            'shadow-color': tokens.accent.error
           } as any
         },
         {
           selector: 'node.cy-expand-collapse-collapsed-node',
           style: {
-            'background-color': '#1e293b',
-            'background-opacity': 0.8,
+            'background-color': tokens.surface.elevated,
+            'background-opacity': 0.9,
             'border-width': 2,
             'border-color': tokens.accent.primary,
             'shape': 'roundrectangle',
             'text-opacity': 1,
+            'color': tokens.text.primary,
             'label': (ele: any) => `${ele.data('label')} (${ele.data('collapsedChildren')?.length || 0})`
-          }
+          } as any
         },
         {
           selector: 'edge',
           style: {
             'width': 1,
-            'line-color': 'rgba(148, 163, 184, 0.1)',
-            'target-arrow-color': 'rgba(148, 163, 184, 0.1)',
+            'line-color': tokens.border.subtle,
+            'target-arrow-color': tokens.border.subtle,
             'target-arrow-shape': 'triangle',
             'curve-style': 'unbundled-bezier',
             'control-point-distances': [20, -20],
@@ -173,10 +174,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
             style: {
                 'text-opacity': 1,
                 'border-width': 4,
-                'border-color': '#fff',
+                'border-color': tokens.border.strong,
                 'z-index': 999,
                 'text-background-opacity': 0.9,
-                'text-background-color': '#0f172a',
+                'text-background-color': tokens.surface.elevated,
                 'text-background-padding': 4,
                 'text-background-shape': 'roundrectangle',
                 'shadow-opacity': 1,
@@ -216,8 +217,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
       expandCollapseCuePosition: 'top-left',
       expandCollapseCueSize: 16,
       expandCollapseCueLineSize: 10,
-      expandCueImage: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2300f3ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>',
-      collapseCueImage: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2300f3ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>'
+      expandCueImage: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${tokens.accent.primary.replace('#', '%23')}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>`,
+      collapseCueImage: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${tokens.accent.primary.replace('#', '%23')}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>`
     });
 
     // Initialize Context Menus

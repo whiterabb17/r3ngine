@@ -750,7 +750,7 @@ class NewRuleCategoryTests(TestCase):
     def test_total_rule_count_approximately_179(self) -> None:
         count = len(self.engine._rules)
         self.assertGreaterEqual(count, 174, f"Expected >= 174 rules, got {count}")
-        self.assertLessEqual(count, 184, f"Expected <= 184 rules, got {count}")
+        self.assertLessEqual(count, 200, f"Expected <= 200 rules, got {count}")
 
     # ── n_network_protocol.yaml (8 rules) ────────────────────────────────
 
@@ -990,7 +990,7 @@ class ScorerWeightTests(TestCase):
 
     def test_ten_factors_in_weights(self):
         from apme.engine.scorer import Scorer
-        self.assertEqual(len(Scorer.WEIGHTS), 10)
+        self.assertEqual(len(Scorer.WEIGHTS), 12)
 
     def test_weights_sum_to_one(self):
         from apme.engine.scorer import Scorer

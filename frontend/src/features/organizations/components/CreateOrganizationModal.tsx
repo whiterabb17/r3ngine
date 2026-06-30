@@ -15,9 +15,13 @@ import {
   OutlinedInput,
   Chip,
   CircularProgress,
+  useTheme,
+  alpha,
 } from '@mui/material';
 import { useTargetsWithoutOrganization, useCreateOrganization, useUpdateOrganization } from '../api';
 import type { Organization } from '../orgTypes';
+import { useThemeTokens } from '../../../theme/useThemeTokens';
+import { getDialogPaperSx, getMenuPaperSx, getFieldSx } from '../../../theme/semanticColors';
 
 interface CreateOrganizationModalProps {
   open: boolean;
@@ -28,19 +32,6 @@ interface CreateOrganizationModalProps {
 
 const ITEM_HEIGHT = 48;
 const ITEM_PADDING_TOP = 8;
-const MenuProps = {
-  slotProps: {
-    paper: {
-      style: {
-        maxHeight: ITEM_HEIGHT * 4.5 + ITEM_PADDING_TOP,
-        width: 250,
-        backgroundColor: '#0a0a0f',
-        border: '1px solid #1a1a2e',
-        color: '#fff',
-      },
-    }
-  },
-};
 
 export const CreateOrganizationModal: React.FC<CreateOrganizationModalProps> = ({
   open,
@@ -48,6 +39,10 @@ export const CreateOrganizationModal: React.FC<CreateOrganizationModalProps> = (
   organization,
   projectSlug,
 }) => {
+  const theme = useTheme();
+  const { tokens } = useThemeTokens();
+  const isLight = tokens.mode === 'light';
+
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedDomains, setSelectedDomains] = useState<number[]>([]);
@@ -96,6 +91,18 @@ export const CreateOrganizationModal: React.FC<CreateOrganizationModalProps> = (
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
+  const selectMenuProps = {
+    slotProps: {
+      paper: {
+        sx: {
+          maxHeight: ITEM_HEIGHT * 4.5 + ITEM_PADDING_TOP,
+          width: 250,
+          ...getMenuPaperSx(isLight, theme, tokens),
+        },
+      }
+    },
+  };
+
   return (
     <Dialog
       open={open}
@@ -105,17 +112,17 @@ export const CreateOrganizationModal: React.FC<CreateOrganizationModalProps> = (
       slotProps={{
         paper: {
           sx: {
-            backgroundColor: '#0a0a0f',
-            backgroundImage: 'linear-gradient(to bottom right, rgba(0, 243, 255, 0.05), rgba(255, 0, 60, 0.05))',
-            border: '1px solid #1a1a2e',
-            color: '#fff',
-            boxShadow: '0 0 20px rgba(0, 0, 0, 0.5)',
+            ...getDialogPaperSx(isLight, theme, tokens),
+            backgroundImage: isLight
+              ? 'none'
+              : `linear-gradient(to bottom right, ${alpha(tokens.accent.primary, 0.05)}, ${alpha(tokens.accent.error, 0.05)})`,
+            border: `1px solid ${tokens.border.subtle}`,
           }
         }
       }}
     >
-      <DialogTitle sx={{ borderBottom: '1px solid #1a1a2e', py: 2 }}>
-        <Typography variant="h6" sx={{ color: '#00f3ff', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>
+      <DialogTitle sx={{ borderBottom: `1px solid ${tokens.border.subtle}`, py: 2 }}>
+        <Typography variant="h6" sx={{ color: tokens.accent.primary, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>
           {organization ? 'Edit Organization' : 'Create New Organization'}
         </Typography>
       </DialogTitle>
@@ -128,12 +135,7 @@ export const CreateOrganizationModal: React.FC<CreateOrganizationModalProps> = (
             onChange={(e) => setName(e.target.value)}
             variant="outlined"
             required
-            slotProps={{
-              input: {
-                sx: { color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#1a1a2e' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#00f3ff' } }
-              },
-              inputLabel: { sx: { color: 'rgba(255, 255, 255, 0.7)' } }
-            }}
+            sx={getFieldSx(isLight, tokens)}
           />
           <TextField
             label="Description (Optional)"
@@ -143,27 +145,18 @@ export const CreateOrganizationModal: React.FC<CreateOrganizationModalProps> = (
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             variant="outlined"
-            slotProps={{
-              input: {
-                sx: { color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#1a1a2e' }, '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#00f3ff' } }
-              },
-              inputLabel: { sx: { color: 'rgba(255, 255, 255, 0.7)' } }
-            }}
+            sx={getFieldSx(isLight, tokens)}
           />
 
-          <FormControl fullWidth>
-            <InputLabel id="domains-label" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>Select Targets</InputLabel>
+          <FormControl fullWidth sx={getFieldSx(isLight, tokens)}>
+            <InputLabel id="domains-label">Select Targets</InputLabel>
             <Select
               labelId="domains-label"
               id="domains-select"
               multiple
               value={selectedDomains}
               onChange={(e) => setSelectedDomains(typeof e.target.value === 'string' ? e.target.value.split(',').map(Number) : e.target.value)}
-              input={<OutlinedInput label="Select Targets" sx={{
-                color: '#fff',
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#1a1a2e' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#00f3ff' }
-              }} />}
+              input={<OutlinedInput label="Select Targets" />}
               renderValue={(selected) => (
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                   {selected.map((value) => {
@@ -173,29 +166,29 @@ export const CreateOrganizationModal: React.FC<CreateOrganizationModalProps> = (
                         key={value}
                         label={target?.name || value}
                         sx={{
-                          backgroundColor: 'rgba(0, 243, 255, 0.1)',
-                          color: '#00f3ff',
-                          border: '1px solid rgba(0, 243, 255, 0.3)',
-                          '& .MuiChip-deleteIcon': { color: '#00f3ff' }
+                          backgroundColor: alpha(tokens.accent.primary, 0.1),
+                          color: tokens.accent.primary,
+                          border: `1px solid ${alpha(tokens.accent.primary, 0.3)}`,
+                          '& .MuiChip-deleteIcon': { color: tokens.accent.primary }
                         }}
                       />
                     );
                   })}
                 </Box>
               )}
-              MenuProps={MenuProps}
+              MenuProps={selectMenuProps}
             >
               {isLoadingTargets ? (
                 <MenuItem disabled>
-                  <CircularProgress size={24} sx={{ color: '#00f3ff' }} />
+                  <CircularProgress size={24} sx={{ color: tokens.accent.primary }} />
                 </MenuItem>
               ) : availableTargets?.length === 0 ? (
                 <MenuItem disabled>No available targets</MenuItem>
               ) : (
                 availableTargets?.map((target) => (
                   <MenuItem key={target.id} value={target.id} sx={{
-                    '&.Mui-selected': { backgroundColor: 'rgba(0, 243, 255, 0.2)' },
-                    '&:hover': { backgroundColor: 'rgba(0, 243, 255, 0.1)' }
+                    '&.Mui-selected': { backgroundColor: alpha(tokens.accent.primary, 0.2) },
+                    '&:hover': { backgroundColor: alpha(tokens.accent.primary, 0.1) }
                   }}>
                     {target.name}
                   </MenuItem>
@@ -206,7 +199,7 @@ export const CreateOrganizationModal: React.FC<CreateOrganizationModalProps> = (
         </Box>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3 }}>
-        <Button onClick={onClose} sx={{ color: 'rgba(255, 255, 255, 0.7)', '&:hover': { color: '#fff' } }}>
+        <Button onClick={onClose} sx={{ color: tokens.text.secondary, '&:hover': { color: tokens.text.primary } }}>
           Cancel
         </Button>
         <Button
@@ -214,19 +207,22 @@ export const CreateOrganizationModal: React.FC<CreateOrganizationModalProps> = (
           variant="contained"
           disabled={!name || isSaving}
           sx={{
-            background: 'linear-gradient(45deg, #00f3ff, #ff003c)',
-            color: '#fff',
+            background: isLight 
+              ? tokens.accent.primary 
+              : `linear-gradient(45deg, ${tokens.accent.primary}, ${tokens.accent.secondary})`,
+            color: theme.palette.getContrastText(tokens.accent.primary),
             fontWeight: 'bold',
             '&:hover': {
-              boxShadow: '0 0 15px rgba(0, 243, 255, 0.5)',
+              bgcolor: alpha(tokens.accent.primary, 0.85),
+              boxShadow: `0 0 15px ${alpha(tokens.accent.primary, 0.5)}`,
             },
             '&.Mui-disabled': {
-              background: 'rgba(255, 255, 255, 0.1)',
-              color: 'rgba(255, 255, 255, 0.3)',
+              bgcolor: alpha(tokens.text.primary, 0.1),
+              color: tokens.text.disabled,
             }
           }}
         >
-          {isSaving ? <CircularProgress size={24} sx={{ color: '#fff' }} /> : organization ? 'Update' : 'Create'}
+          {isSaving ? <CircularProgress size={24} sx={{ color: theme.palette.getContrastText(tokens.accent.primary) }} /> : organization ? 'Update' : 'Create'}
         </Button>
       </DialogActions>
     </Dialog>

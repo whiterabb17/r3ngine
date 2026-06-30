@@ -59,9 +59,13 @@ import {
   Eye,
   Folder,
   Camera,
-  BarChart2 as BarChartIcon
+  BarChart2 as BarChartIcon,
+  Play,
+  Square
 } from 'lucide-react';
 import { useTargetSummary } from '../api';
+import { StartScanModal } from '../../scans/components/StartScanModal';
+import { useStopScan } from '../../scans/api';
 import Chart from 'react-apexcharts';
 import { GeoMap } from '../../dashboard/components/GeoMap';
 import { KpiCard } from '../../../components/KpiCard';
@@ -75,6 +79,8 @@ import PluginComponent from '../../plugins/components/PluginComponent';
 import VisualizationTab from '../../scans/components/VisualizationTab';
 import { AttackSurfaceTab } from '../../scans/components/AttackSurfaceTab';
 import PluginCardSlot from '../../plugins/components/PluginCardSlot';
+import { AiExportModal } from '../../scans/components/AiExportModal';
+import { ExposureList } from '../../exposures/components/ExposureList';
 
 
 const SeverityBadge: React.FC<{ severity: number }> = ({ severity }) => {
@@ -125,6 +131,11 @@ export const TargetSummary = () => {
   const { data, isLoading, error } = useTargetSummary(projectSlug || 'default', parseInt(targetId || '0'));
   const [activeTab, setActiveTab] = useState(0);
   const [infoTab, setInfoTab] = useState(0);
+  const [subdomainInitialAlive, setSubdomainInitialAlive] = useState(false);
+  const [endpointsInitialAlive, setEndpointsInitialAlive] = useState(false);
+  const [aiExportModalOpen, setAiExportModalOpen] = useState(false);
+  const [startScanTargets, setStartScanTargets] = useState<{ ids: number[]; names: string[] } | null>(null);
+  const stopScanMutation = useStopScan(projectSlug || 'default');
   const theme = useTheme();
   const isLight = theme.palette.mode === 'light';
 
@@ -160,10 +171,13 @@ export const TargetSummary = () => {
     { label: 'URLS', icon: LinkIcon },
     { label: 'PARAMETERS', icon: Search },
     { label: 'VULNERABILITIES', icon: ShieldAlert },
+    { label: 'EXPOSURES', icon: ShieldAlert },
     { label: 'ATTACK SURFACE', icon: MapIcon },
     { label: 'MONITORING', icon: Eye },
     { label: 'VISUALIZATION', icon: BarChart2 },
   ];
+
+  const latestScanId = data?.recent_scans?.[0]?.id;
 
   const renderHome = () => (
     <Box sx={{ flexGrow: 1 }}>
@@ -181,43 +195,65 @@ export const TargetSummary = () => {
                 Target <Chip label={data.target_info.name} size="small" sx={{ height: 16, fontSize: '0.6rem', bgcolor: alpha(cPrimary, 0.1), color: cPrimary }} /> has been scanned <b>{data.scan_count}</b> times.
               </Typography>
               <List sx={{ p: 0 }}>
-                {data.recent_scans?.map((scan: any) => (
-                  <Box key={scan.id} sx={{ mb: 2, pl: 2, borderLeft: `2px solid ${alpha(cPrimary, 0.2)}`, position: 'relative' }}>
-                    <Box sx={{ position: 'absolute', left: -5, top: 0, width: 8, height: 8, borderRadius: '50%', bgcolor: cPrimary }} />
-                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                      <Typography sx={{ fontSize: '0.75rem', fontWeight: 900, color: theme.palette.text.primary }}>{scan.engine_name}</Typography>
-                      <Chip
-                        label={scan.scan_status === 2 ? 'Completed' : 'Scanning'}
-                        size="small"
-                        sx={{ height: 16, fontSize: '0.55rem', fontWeight: 900, bgcolor: scan.scan_status === 2 ? alpha(cGreen, 0.1) : alpha(cPrimary, 0.1), color: scan.scan_status === 2 ? cGreen : cPrimary }}
-                      />
-                    </Stack>
-                    <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block', mb: 1 }}>{scan.completed_ago}</Typography>
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                      <Typography sx={{ fontSize: '0.7rem', color: cPrimary, fontWeight: 700 }}>{scan.subdomain_count} Subdomains Discovered</Typography>
-                      {scan.subdomain_diff !== 0 && (
-                        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                          {scan.subdomain_diff > 0 ? <ChevronUp size={12} color={cGreen} /> : <ChevronDown size={12} color={cRed} />}
-                          <Typography sx={{ fontSize: '0.65rem', fontWeight: 900, color: scan.subdomain_diff > 0 ? cGreen : cRed }}>{Math.abs(scan.subdomain_diff)}</Typography>
-                        </Stack>
-                      )}
-                    </Stack>
-                  </Box>
-                ))}
+                {(() => {
+                  const SCAN_STATUS_LABEL: Record<number, string> = {
+                    [-1]: 'Pending',
+                    [0]: 'Failed',
+                    [1]: 'Scanning',
+                    [2]: 'Completed',
+                    [3]: 'Aborted',
+                    [4]: 'Partial',
+                    [5]: 'Paused',
+                  };
+                  const getScanChipColor = (status: number): string => {
+                    if (status === 2) return cGreen;
+                    if (status === 1 || status === -1) return cPrimary;
+                    return cRed;
+                  };
+                  return data.recent_scans?.map((scan: any) => (
+                    <Box key={scan.id} sx={{ mb: 2, pl: 2, borderLeft: `2px solid ${alpha(cPrimary, 0.2)}`, position: 'relative' }}>
+                      <Box sx={{ position: 'absolute', left: -5, top: 0, width: 8, height: 8, borderRadius: '50%', bgcolor: cPrimary }} />
+                      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                        <Typography sx={{ fontSize: '0.75rem', fontWeight: 900, color: theme.palette.text.primary }}>{scan.engine_name}</Typography>
+                        <Chip
+                          label={SCAN_STATUS_LABEL[scan.scan_status] ?? 'Unknown'}
+                          size="small"
+                          sx={{
+                            height: 16,
+                            fontSize: '0.55rem',
+                            fontWeight: 900,
+                            bgcolor: alpha(getScanChipColor(scan.scan_status), 0.1),
+                            color: getScanChipColor(scan.scan_status),
+                          }}
+                        />
+                      </Stack>
+                      <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block', mb: 1 }}>{scan.completed_ago}</Typography>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                        <Typography sx={{ fontSize: '0.7rem', color: cPrimary, fontWeight: 700 }}>{scan.subdomain_count} Subdomains Discovered</Typography>
+                        {scan.subdomain_diff !== 0 && (
+                          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                            {scan.subdomain_diff > 0 ? <ChevronUp size={12} color={cGreen} /> : <ChevronDown size={12} color={cRed} />}
+                            <Typography sx={{ fontSize: '0.65rem', fontWeight: 900, color: scan.subdomain_diff > 0 ? cGreen : cRed }}>{Math.abs(scan.subdomain_diff)}</Typography>
+                          </Stack>
+                        )}
+                      </Stack>
+                    </Box>
+                  ));
+                })()}
               </List>
             </Box>
           </TacticalPanel>
 
-          <TacticalPanel 
-            title="Sub Scans" 
+          <TacticalPanel
+            title="Sub Scans"
             icon={<Layers size={14} />}
             headerAction={
-              <Box sx={{ 
-                px: 1, 
-                py: 0.2, 
-                bgcolor: alpha(cPurple, 0.15), 
-                border: `1px solid ${alpha(cPurple, 0.3)}`, 
-                borderRadius: 0.5 
+              <Box sx={{
+                px: 1,
+                py: 0.2,
+                bgcolor: alpha(cPurple, 0.15),
+                border: `1px solid ${alpha(cPurple, 0.3)}`,
+                borderRadius: 0.5
               }}>
                 <Typography sx={{ fontSize: '0.65rem', fontWeight: 900, color: cPurple }}>{data.subscans?.length || 0}</Typography>
               </Box>
@@ -226,12 +262,12 @@ export const TargetSummary = () => {
             <Box sx={{ p: 1 }}>
               <Stack spacing={2}>
                 {data.subscans?.slice(0, 8).map((scan: any) => (
-                  <Box 
-                    key={scan.id} 
-                    sx={{ 
-                      bgcolor: alpha(theme.palette.text.primary, 0.02), 
-                      border: `1px solid ${theme.palette.divider}`, 
-                      borderRadius: 1.5, 
+                  <Box
+                    key={scan.id}
+                    sx={{
+                      bgcolor: alpha(theme.palette.text.primary, 0.02),
+                      border: `1px solid ${theme.palette.divider}`,
+                      borderRadius: 1.5,
                       overflow: 'hidden'
                     }}
                   >
@@ -244,7 +280,7 @@ export const TargetSummary = () => {
                         {(scan.subdomain_name || data.target_info.name).toUpperCase()}
                       </Typography>
                     </Box>
- 
+
                     {/* Item Body */}
                     <Box sx={{ p: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Box>
@@ -255,18 +291,18 @@ export const TargetSummary = () => {
                           Took {scan.time_taken || '0 minutes'}
                         </Typography>
                       </Box>
-                      <Chip 
-                        label="Task Completed" 
-                        size="small" 
-                        sx={{ 
-                          height: 20, 
-                          fontSize: '0.55rem', 
-                          fontWeight: 900, 
-                          bgcolor: 'transparent', 
-                          color: cGreen, 
+                      <Chip
+                        label="Task Completed"
+                        size="small"
+                        sx={{
+                          height: 20,
+                          fontSize: '0.55rem',
+                          fontWeight: 900,
+                          bgcolor: 'transparent',
+                          color: cGreen,
                           border: `1px solid ${alpha(cGreen, 0.3)}`,
                           borderRadius: 0.5
-                        }} 
+                        }}
                       />
                     </Box>
                   </Box>
@@ -279,7 +315,7 @@ export const TargetSummary = () => {
               </Stack>
             </Box>
           </TacticalPanel>
- 
+
           <TacticalPanel title="Related Domains" icon={<LinkIcon size={14} />}>
             <Box sx={{ p: 2 }}>
               <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
@@ -317,6 +353,10 @@ export const TargetSummary = () => {
               color="#7000ff"
               icon={Layers}
               sx={{ height: 180 }}
+              onClick={() => {
+                setSubdomainInitialAlive(true);
+                setActiveTab(1);
+              }}
             />
             <KpiCard
               title="ENDPOINTS"
@@ -325,6 +365,10 @@ export const TargetSummary = () => {
               color="#ff00f7"
               icon={Target}
               sx={{ height: 180 }}
+              onClick={() => {
+                setEndpointsInitialAlive(true);
+                setActiveTab(3);
+              }}
             />
             <KpiCard
               title="VULNERABILITIES"
@@ -345,12 +389,12 @@ export const TargetSummary = () => {
                     <Tab key={l} label={l} sx={{ fontSize: '0.65rem', fontWeight: 900, minHeight: 32, p: 1, color: theme.palette.text.secondary, '&.Mui-selected': { color: cPrimary } }} />
                   ))}
                 </Tabs>
- 
+
                 {infoTab === 0 && (
-                  <Box sx={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(3, 1fr)', 
-                    gap: 3 
+                  <Box sx={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: 3
                   }}>
                     <Box><Typography sx={{ fontSize: '0.6rem', color: theme.palette.text.secondary, opacity: 0.7, mb: 0.5 }}>Domain</Typography><Typography sx={{ fontSize: '0.8rem', fontWeight: 700, color: cRed }}>{data.target_info.name}</Typography></Box>
                     <Box><Typography sx={{ fontSize: '0.6rem', color: theme.palette.text.secondary, opacity: 0.7, mb: 0.5 }}>Dnssec</Typography><Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>{data.domain_info?.dnssec || 'N/A'}</Typography></Box>
@@ -549,7 +593,7 @@ export const TargetSummary = () => {
                 )}
               </Box>
             </TacticalPanel>
-             <PluginCardSlot context={{ type: 'target', targetId: data.target_info.id }} />
+            <PluginCardSlot context={{ type: 'target', targetId: data.target_info.id }} />
           </Box>
 
           {/* Footer Info Cards */}
@@ -604,7 +648,7 @@ export const TargetSummary = () => {
       </Box>
     </Box>
   );
- 
+
   const renderMonitoring = () => (
     <TacticalPanel title={`Monitoring Discoveries for ${data.target_info.name}`} icon={<Eye size={14} />}>
       <TableContainer>
@@ -660,8 +704,69 @@ export const TargetSummary = () => {
             <Typography variant="h5" sx={{ fontWeight: 900, fontFamily: 'var(--r3-heading-font)', color: theme.palette.text.primary, letterSpacing: 2 }}>TARGET SUMMARY</Typography>
             <Typography sx={{ fontSize: '0.7rem', color: theme.palette.text.secondary, fontWeight: 600 }}>IDENTIFIER: {targetId} | TARGET: {data.target_info.name}</Typography>
           </Box>
-          <Stack direction="row" spacing={1} sx={{ fontSize: '0.65rem', color: theme.palette.text.secondary, opacity: 0.8, fontFamily: 'monospace' }}>
-            <span>TARGETS</span> / <span>SUMMARY</span> / <span style={{ color: theme.palette.primary.main }}>{data.target_info.name}</span>
+
+          <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+            {/* Start Scan Button */}
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<Play size={14} />}
+              onClick={() => setStartScanTargets({ ids: [data.target_info.id], names: [data.target_info.name] })}
+              sx={{
+                borderColor: alpha(cGreen, 0.4),
+                color: cGreen,
+                fontWeight: 900,
+                fontFamily: 'Orbitron',
+                fontSize: '0.65rem',
+                letterSpacing: 1,
+                px: 2,
+                '&:hover': {
+                  borderColor: cGreen,
+                  bgcolor: alpha(cGreen, 0.05),
+                  boxShadow: `0 0 12px ${alpha(cGreen, 0.2)}`
+                }
+              }}
+            >
+              START SCAN
+            </Button>
+
+            {/* Stop Scan Button */}
+            {data.recent_scans?.find((scan: any) => [1, -1, 4, 5].includes(scan.scan_status)) && (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={stopScanMutation.isPending ? <CircularProgress size={12} color="inherit" /> : <Square size={14} />}
+                onClick={() => {
+                  const running = data.recent_scans?.find((scan: any) => [1, -1, 4, 5].includes(scan.scan_status));
+                  if (running) stopScanMutation.mutate(running.id);
+                }}
+                disabled={stopScanMutation.isPending}
+                sx={{
+                  borderColor: alpha(cRed, 0.4),
+                  color: cRed,
+                  fontWeight: 900,
+                  fontFamily: 'Orbitron',
+                  fontSize: '0.65rem',
+                  letterSpacing: 1,
+                  px: 2,
+                  '&:hover': {
+                    borderColor: cRed,
+                    bgcolor: alpha(cRed, 0.05),
+                    boxShadow: `0 0 12px ${alpha(cRed, 0.2)}`
+                  },
+                  '&.Mui-disabled': {
+                    borderColor: alpha(theme.palette.action.disabled, 0.1),
+                    color: theme.palette.action.disabled
+                  }
+                }}
+              >
+                STOP SCAN
+              </Button>
+            )}
+
+            <Stack direction="row" spacing={1} sx={{ fontSize: '0.65rem', color: theme.palette.text.secondary, opacity: 0.8, fontFamily: 'monospace' }}>
+              <span>TARGETS</span> / <span>SUMMARY</span> / <span style={{ color: theme.palette.primary.main }}>{data.target_info.name}</span>
+            </Stack>
           </Stack>
         </Stack>
       </Box>
@@ -670,34 +775,38 @@ export const TargetSummary = () => {
       <Box sx={{ mb: 3, borderBottom: `1px solid ${theme.palette.divider}`, position: 'sticky', top: 0, bgcolor: theme.palette.background.default, zIndex: 10, backdropFilter: 'blur(10px)', borderRadius: '0 0 12px 12px' }}>
         <Tabs 
           value={activeTab} 
-          onChange={(_, v) => setActiveTab(v)} 
+          onChange={(_, v) => {
+            setActiveTab(v);
+            setSubdomainInitialAlive(false);
+            setEndpointsInitialAlive(false);
+          }} 
           variant="scrollable"
           scrollButtons="auto"
-          sx={{ 
-            minHeight: 50, 
+          sx={{
+            minHeight: 50,
             '& .MuiTabs-indicator': { bgcolor: theme.palette.primary.main, height: 3, boxShadow: theme.palette.mode === 'light' ? 'none' : `0 0 15px ${theme.palette.primary.main}` },
             '& .MuiTabs-scrollButtons': { color: theme.palette.primary.main }
           }}
         >
           {tabs.map((tab, idx) => (
-            <Tab 
-              key={idx} 
+            <Tab
+              key={idx}
               label={
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <tab.icon size={14} />
                   <span>{tab.label}</span>
                 </Stack>
-              } 
-              sx={{ 
-                fontSize: '0.65rem', 
-                fontWeight: 900, 
-                minHeight: 50, 
-                color: theme.palette.text.secondary, 
-                letterSpacing: 1.5, 
+              }
+              sx={{
+                fontSize: '0.65rem',
+                fontWeight: 900,
+                minHeight: 50,
+                color: theme.palette.text.secondary,
+                letterSpacing: 1.5,
                 fontFamily: 'var(--r3-heading-font)',
                 px: 3,
-                '&.Mui-selected': { color: theme.palette.primary.main } 
-              }} 
+                '&.Mui-selected': { color: theme.palette.primary.main }
+              }}
             />
           ))}
         </Tabs>
@@ -706,20 +815,73 @@ export const TargetSummary = () => {
       {/* Tab Content */}
       <Box sx={{ mt: 2 }}>
         {tabs[activeTab]?.label === 'HOME' && renderHome()}
-        {tabs[activeTab]?.label === 'SUBDOMAINS' && <SubdomainsTab projectSlug={projectSlug || 'default'} targetId={parseInt(targetId || '0')} />}
-        {tabs[activeTab]?.label === 'DIRECTORIES' && <DirectoriesTab projectSlug={projectSlug || 'default'} targetId={parseInt(targetId || '0')} />}
-        {tabs[activeTab]?.label === 'URLS' && <EndpointsTab projectSlug={projectSlug || 'default'} targetId={parseInt(targetId || '0')} />}
-        {tabs[activeTab]?.label === 'PARAMETERS' && <ParametersTab targetId={parseInt(targetId || '0')} />}
-        {tabs[activeTab]?.label === 'VULNERABILITIES' && <PluginComponent 
-      name="VulnerabilityTable" 
-      default={VulnerabilityTable} 
-      projectSlug={projectSlug || 'default'} 
-      targetId={parseInt(targetId || '0')} 
-    />}
+        {tabs[activeTab]?.label === 'SUBDOMAINS' && <SubdomainsTab projectSlug={projectSlug || 'default'} targetId={parseInt(targetId || '0')} initialAlive={subdomainInitialAlive} />}
+        {tabs[activeTab]?.label === 'DIRECTORIES' && <DirectoriesTab projectSlug={projectSlug || 'default'} targetId={parseInt(targetId || '0')} scanId={latestScanId} />}
+        {tabs[activeTab]?.label === 'URLS' && <EndpointsTab projectSlug={projectSlug || 'default'} targetId={parseInt(targetId || '0')} initialAlive={endpointsInitialAlive} />}
+        {tabs[activeTab]?.label === 'PARAMETERS' && <ParametersTab targetId={parseInt(targetId || '0')} scanId={latestScanId} />}
+        {tabs[activeTab]?.label === 'VULNERABILITIES' && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                variant="contained"
+                startIcon={<BarChartIcon size={16} />}
+                onClick={() => setAiExportModalOpen(true)}
+                disabled={!latestScanId}
+                sx={{
+                  bgcolor: alpha(cYellow, 0.12),
+                  color: cYellow,
+                  border: `1px solid ${alpha(cYellow, 0.4)}`,
+                  fontFamily: 'var(--r3-heading-font)',
+                  fontSize: '0.68rem',
+                  fontWeight: 900,
+                  letterSpacing: 1,
+                  px: 2,
+                  '&:hover': { bgcolor: alpha(cYellow, 0.22) },
+                  '&.Mui-disabled': {
+                    color: alpha(cYellow, 0.45),
+                    borderColor: alpha(cYellow, 0.18),
+                    bgcolor: alpha(cYellow, 0.05),
+                  }
+                }}
+              >
+                EXPORT FOR AI
+              </Button>
+            </Box>
+            <PluginComponent
+              name="VulnerabilityTable"
+              default={VulnerabilityTable}
+              projectSlug={projectSlug || 'default'}
+              targetId={parseInt(targetId || '0')}
+            />
+            {latestScanId && (
+              <AiExportModal
+                open={aiExportModalOpen}
+                onClose={() => setAiExportModalOpen(false)}
+                projectSlug={projectSlug || 'default'}
+                scanId={latestScanId}
+                targetName={data?.target_info?.name ?? ''}
+              />
+            )}
+          </Box>
+        )}
+        {tabs[activeTab]?.label === 'EXPOSURES' && (
+          <Box sx={{ p: 2 }}>
+            <ExposureList target_id={targetId} />
+          </Box>
+        )}
         {tabs[activeTab]?.label === 'ATTACK SURFACE' && <AttackSurfaceTab projectSlug={projectSlug || 'default'} targetId={parseInt(targetId || '0')} />}
         {tabs[activeTab]?.label === 'MONITORING' && renderMonitoring()}
         {tabs[activeTab]?.label === 'VISUALIZATION' && <VisualizationTab projectSlug={projectSlug || 'default'} targetId={parseInt(targetId || '0')} />}
       </Box>
+      {startScanTargets && (
+        <StartScanModal
+          open={!!startScanTargets}
+          onClose={() => setStartScanTargets(null)}
+          domainIds={startScanTargets.ids}
+          domainNames={startScanTargets.names}
+          projectSlug={projectSlug || 'default'}
+        />
+      )}
     </Box>
   );
 };

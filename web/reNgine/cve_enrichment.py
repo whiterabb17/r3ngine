@@ -96,7 +96,7 @@ class CVEEnrichmentService:
         
         # Get or create CVE record
         cve_obj, created = CveId.objects.get_or_create(name=cve_name)
-        
+
         if not is_valid_cve:
             # We don't perform external enrichment for non-CVE strings, just return
             return cve_obj
@@ -108,7 +108,7 @@ class CVEEnrichmentService:
                 logger.debug(f"CVE {cve_name} recently enriched, skipping")
                 return cve_obj
         
-        # Attempt enrichment (graceful degradation)
+        # 1. Official NVD API (Primary Source)
         try:
             self._enrich_from_nvd(cve_obj)
         except Exception as e:
@@ -152,14 +152,18 @@ class CVEEnrichmentService:
             Dict[str, CveId]: Mapping of CVE name to enriched object
         """
         results = {}
+        print(f"DEBUG: enrich_multiple_cves called with {cve_names}")
         for cve_name in cve_names:
             try:
                 cve_obj = self.enrich_cve(cve_name)
+                print(f"DEBUG: enrich_cve returned {cve_obj}")
                 if cve_obj:
                     results[cve_name] = cve_obj
             except Exception as e:
-                logger.error(f"Failed to enrich {cve_name}: {e}")
+                print(f"DEBUG: Exception in enrich_cve: {e}")
+                logger.error(f"Failed to enrich {cve_name}: {e}", exc_info=True)
         
+        print(f"DEBUG: enrich_multiple_cves returning {len(results)} results")
         return results
     
     def sync_cisa_kev_catalog(self) -> Dict[str, int]:
@@ -588,30 +592,40 @@ class CVEEnrichmentService:
                 # Public exploits
                 public_exploits = []
                 # ExploitDB
-                edb_data = cve_data.get("ExploitDB Data", [])
-                for e in edb_data:
-                    public_exploits.append({"source": "ExploitDB", "exploit": e.get("id")})
+                edb_data = cve_data.get("ExploitDB Data") or []
+                if isinstance(edb_data, list):
+                    for e in edb_data:
+                        if isinstance(e, dict):
+                            public_exploits.append({"source": "ExploitDB", "exploit": e.get("id")})
                 
                 # Metasploit
-                msf_data = cve_data.get("Metasploit Data", {}).get("modules", [])
-                for m in msf_data:
-                    public_exploits.append({"source": "Metasploit", "exploit": m})
+                msf_data = (cve_data.get("Metasploit Data") or {}).get("modules") or []
+                if isinstance(msf_data, list):
+                    for m in msf_data:
+                        public_exploits.append({"source": "Metasploit", "exploit": m})
                 
                 # GitHub
-                github_data = cve_data.get("GitHub Data", {}).get("pocs", [])
-                for g in github_data:
-                    public_exploits.append({"source": "GitHub", "exploit": g})
+                github_data = (cve_data.get("GitHub Data") or {}).get("pocs") or []
+                if isinstance(github_data, list):
+                    for g in github_data:
+                        public_exploits.append({"source": "GitHub", "exploit": g})
                     
                 if public_exploits:
                     cve_obj.public_exploits = public_exploits
                     
                 # HackerOne data
-                h1_data = cve_data.get("HackerOne Data", {}).get("data", {}).get("cve_entry", {})
+                h1_entry = cve_data.get("HackerOne Data") or {}
+                h1_data = None
+                if isinstance(h1_entry, dict):
+                    h1_data = (h1_entry.get("data") or {}).get("cve_entry")
                 if h1_data:
                     cve_obj.hackerone_data = h1_data
                     
                 # Priority
-                priority = cve_data.get("Priority", {}).get("Priority")
+                priority_dict = cve_data.get("Priority") or {}
+                priority = None
+                if isinstance(priority_dict, dict):
+                    priority = priority_dict.get("Priority")
                 if priority:
                     cve_obj.patching_priority = priority
                     

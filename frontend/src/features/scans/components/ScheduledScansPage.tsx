@@ -10,8 +10,10 @@ import {
   Switch,
   Chip,
   CircularProgress,
-  TablePagination
+  TablePagination,
+  Card
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { 
   Search, 
   Trash2, 
@@ -28,7 +30,8 @@ import { useScheduledScans, useToggleScheduledScan, useBulkDeleteScheduledScans 
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 
 export const ScheduledScansPage: React.FC = () => {
-  const { tokens } = useThemeTokens();
+  const theme = useTheme();
+  const { tokens, isLight } = useThemeTokens();
   const { data, isLoading, isError } = useScheduledScans();
   const toggleMutation = useToggleScheduledScan();
   const bulkDeleteMutation = useBulkDeleteScheduledScans();
@@ -207,16 +210,16 @@ export const ScheduledScansPage: React.FC = () => {
       </Box>
 
       {/* Main Table */}
-      <Box sx={{ 
-        bgcolor: 'rgba(10, 15, 25, 0.7)', 
+      <Card sx={{ 
+        bgcolor: isLight ? tokens.surface.secondary : 'rgba(10, 15, 25, 0.7)', 
         borderRadius: 1, 
-        border: `1px solid ${tokens.accent.primary}15`,
+        border: `1px solid ${isLight ? theme.palette.divider : `${tokens.accent.primary}15`}`,
         overflow: 'hidden',
         position: 'relative'
       }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
-            <tr style={{ borderBottom: `2px solid ${tokens.accent.primary}33`, background: 'rgba(0, 243, 255, 0.03)' }}>
+            <tr style={{ borderBottom: `2px solid ${isLight ? theme.palette.divider : `${tokens.accent.primary}33`}`, background: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(0, 243, 255, 0.03)' }}>
               <th style={{ padding: '16px' }}>
                 <input 
                   type="checkbox" 
@@ -256,7 +259,7 @@ export const ScheduledScansPage: React.FC = () => {
                     borderBottom: 1, borderColor: 'divider',
                     transition: 'background 0.2s',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(0, 243, 255, 0.02)')}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = isLight ? 'rgba(0, 0, 0, 0.01)' : 'rgba(0, 243, 255, 0.02)')}
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
                   <td style={{ padding: '12px 16px' }}>
@@ -278,7 +281,7 @@ export const ScheduledScansPage: React.FC = () => {
                     </Box>
                   </td>
                   <td style={{ padding: '12px 16px' }}>
-                    <Typography sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '12px', fontFamily: 'monospace' }}>
+                    <Typography sx={{ color: 'text.secondary', fontSize: '12px', fontFamily: 'monospace' }}>
                       {scan.last_run_at ? new Date(scan.last_run_at).toLocaleString() : 'NEVER'}
                     </Typography>
                   </td>
@@ -291,8 +294,8 @@ export const ScheduledScansPage: React.FC = () => {
                         fontSize: '10px', 
                         fontWeight: 900,
                         bgcolor: 'action.hover',
-                        color: 'rgba(255,255,255,0.7)',
-                        border: '1px solid rgba(255,255,255,0.1)'
+                        color: 'text.secondary',
+                        border: `1px solid ${theme.palette.divider}`
                       }} 
                     />
                   </td>
@@ -300,7 +303,7 @@ export const ScheduledScansPage: React.FC = () => {
                     {scan.one_off ? (
                       <CheckCircle2 size={16} color="#00ff9d" />
                     ) : (
-                      <XCircle size={16} color="rgba(255,255,255,0.2)" />
+                      <XCircle size={16} color={isLight ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)'} />
                     )}
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'center' }}>
@@ -356,7 +359,7 @@ export const ScheduledScansPage: React.FC = () => {
             '& .MuiTablePagination-displayedRows': { fontFamily: 'monospace' },
           }}
         />
-      </Box>
+      </Card>
 
       {/* Footer Info */}
       <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', px: 1 }}>

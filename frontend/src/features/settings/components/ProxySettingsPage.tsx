@@ -24,15 +24,42 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { useParams } from '@tanstack/react-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { useProxySettings, useUpdateProxySettings, useFetchProxies, useProxyTaskStatus, useTorStatus } from '../api';
 import { TacticalPanel } from '../../../components/TacticalPanel';
 import { ProxyValidationModal } from './ProxyValidationModal';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 
+const KNOWN_SCHEMES = /^(https?|socks[45]):\/\//i;
+const HOST_PORT_RE = /^[\w.\-]+:\d{1,5}$/;
+
+/**
+ * Validates a single line from a fetched proxy list.
+ * Returns the bare "host:port" string, or null if the line is malformed.
+ * Exported for unit testing.
+ */
+export function parseProxyLine(line: string): string | null {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) return null;
+
+  const bare = trimmed.replace(KNOWN_SCHEMES, '');
+
+  // Credentials (user:pass@) or a path after the port are both invalid.
+  if (bare.includes('@') || bare.includes('/')) return null;
+
+  if (!HOST_PORT_RE.test(bare)) return null;
+
+  const port = parseInt(bare.slice(bare.lastIndexOf(':') + 1), 10);
+  if (port < 1 || port > 65535) return null;
+
+  return bare;
+}
+
 export const ProxySettingsPage: React.FC = () => {
   const { tokens } = useThemeTokens();
   const { projectSlug = 'default' } = useParams({ strict: false }) as any;
+  const queryClient = useQueryClient();
   const { data: settings, isLoading: isSettingsLoading } = useProxySettings(projectSlug);
   const updateSettings = useUpdateProxySettings(projectSlug);
   const fetchProxies = useFetchProxies(projectSlug);
@@ -47,6 +74,8 @@ export const ProxySettingsPage: React.FC = () => {
   const [validateOnSave, setValidateOnSave] = useState(false);
   const [useTor, setUseTor] = useState(false);
   const [isValidationModalOpen, setIsValidationModalOpen] = useState(false);
+  const [isFetchingQuick, setIsFetchingQuick] = useState<string | null>(null);
+
   const { data: torStatus } = useTorStatus();
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
@@ -75,6 +104,7 @@ export const ProxySettingsPage: React.FC = () => {
       const proxyStr = typeof resultData === 'string' ? resultData : (resultData?.proxies || '');
       setProxyList(proxyStr);
       setUseProxy(true);
+      queryClient.invalidateQueries({ queryKey: ['proxy-settings', projectSlug] });
       setSnackbar({
         open: true,
         message: 'Proxies automatically fetched and saved to database.',
@@ -89,7 +119,7 @@ export const ProxySettingsPage: React.FC = () => {
       });
       setCurrentTaskId(null);
     }
-  }, [taskStatus]);
+  }, [projectSlug, queryClient, taskStatus]);
 
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
@@ -167,6 +197,60 @@ export const ProxySettingsPage: React.FC = () => {
       }
     });
   };
+
+  const handleFetchQuick = async (url: string, protocol: 'socks5' | 'socks4' | 'https', label: string) => {
+    setIsFetchingQuick(label);
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const text = await response.text();
+      const parsedLines = text
+        .split('\n')
+        .map(line => parseProxyLine(line))
+        .filter((p): p is string => p !== null);
+
+      if (parsedLines.length === 0) {
+        setSnackbar({
+          open: true,
+          message: `No valid proxies found in ${label}.`,
+          severity: 'warning'
+        });
+        return;
+      }
+
+      const prefix = `${protocol}://`;
+      const formatted = parsedLines.map(p => `${prefix}${p}`);
+
+      let addedCount = 0;
+      setProxyList(prev => {
+        const existingSet = new Set(prev.split('\n').map(l => l.trim()).filter(Boolean));
+        const newEntries = formatted.filter(p => !existingSet.has(p));
+        addedCount = newEntries.length;
+        if (newEntries.length === 0) return prev;
+        return [...existingSet, ...newEntries].join('\n');
+      });
+
+      setSnackbar({
+        open: true,
+        message: addedCount > 0
+          ? `Added ${addedCount} new proxies from ${label}.`
+          : `No new proxies from ${label} — all already present.`,
+        severity: addedCount > 0 ? 'success' : 'info'
+      });
+      setUseProxy(true);
+    } catch (error: any) {
+      setSnackbar({
+        open: true,
+        message: `Failed to fetch from ${label}: ${error.message}`,
+        severity: 'error'
+      });
+    } finally {
+      setIsFetchingQuick(null);
+    }
+  };
+
 
   const parsedProxies = proxyList.split('\n').map(p => p.trim()).filter(p => p.length > 0);
 
@@ -344,9 +428,119 @@ export const ProxySettingsPage: React.FC = () => {
               </Box>
             </Box>
 
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 3, mb: 1, fontWeight: 600 }}>
+            <Box sx={{ mt: 3, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600, fontFamily: 'Orbitron', fontSize: '0.75rem', letterSpacing: 0.5 }}>
+                FETCH PROXY FROM:
+              </Typography>
+              
+              <Button
+                variant="outlined"
+                size="small"
+                disabled={isFetchingQuick !== null}
+                onClick={() => handleFetchQuick(
+                  'https://raw.githubusercontent.com/proxifly/free-proxy-list/refs/heads/main/proxies/protocols/socks5/data.txt',
+                  'socks5',
+                  'proxifly(s5)'
+                )}
+                sx={{
+                  borderColor: 'divider',
+                  color: tokens.accent.primary,
+                  fontFamily: 'Orbitron',
+                  fontSize: '0.65rem',
+                  fontWeight: 900,
+                  py: 0.2,
+                  px: 1.2,
+                  minWidth: 0,
+                  '&:hover': { borderColor: tokens.accent.primary, bgcolor: `${tokens.accent.primary}0D` }
+                }}
+              >
+                {isFetchingQuick === 'proxifly(s5)' ? 'LOADING...' : 'PROXIFLY (S5)'}
+              </Button>
+
+              <Button
+                variant="outlined"
+                size="small"
+                disabled={isFetchingQuick !== null}
+                onClick={() => handleFetchQuick(
+                  'https://raw.githubusercontent.com/proxifly/free-proxy-list/refs/heads/main/proxies/protocols/socks4/data.txt',
+                  'socks4',
+                  'proxifly(s4)'
+                )}
+                sx={{
+                  borderColor: 'divider',
+                  color: tokens.accent.secondary,
+                  fontFamily: 'Orbitron',
+                  fontSize: '0.65rem',
+                  fontWeight: 900,
+                  py: 0.2,
+                  px: 1.2,
+                  minWidth: 0,
+                  '&:hover': { borderColor: tokens.accent.secondary, bgcolor: `${tokens.accent.secondary}0D` }
+                }}
+              >
+                {isFetchingQuick === 'proxifly(s4)' ? 'LOADING...' : 'PROXIFLY (S4)'}
+              </Button>
+
+              <Button
+                variant="outlined"
+                size="small"
+                disabled={isFetchingQuick !== null}
+                onClick={() => handleFetchQuick(
+                  'https://raw.githubusercontent.com/proxifly/free-proxy-list/refs/heads/main/proxies/protocols/https/data.txt',
+                  'https',
+                  'proxifly(https)'
+                )}
+                sx={{
+                  borderColor: 'divider',
+                  color: tokens.accent.primary,
+                  fontFamily: 'Orbitron',
+                  fontSize: '0.65rem',
+                  fontWeight: 900,
+                  py: 0.2,
+                  px: 1.2,
+                  minWidth: 0,
+                  '&:hover': { borderColor: tokens.accent.primary, bgcolor: `${tokens.accent.primary}0D` }
+                }}
+              >
+                {isFetchingQuick === 'proxifly(https)' ? 'LOADING...' : 'PROXIFLY (HTTPS)'}
+              </Button>
+
+              <Button
+                variant="outlined"
+                size="small"
+                disabled={isFetchingQuick !== null}
+                onClick={() => handleFetchQuick(
+                  'https://raw.githubusercontent.com/VPSLabCloud/VPSLab-Free-Proxy-List/refs/heads/main/socks5_all.txt',
+                  'socks5',
+                  'vpslab(s5)'
+                )}
+                sx={{
+                  borderColor: 'divider',
+                  color: tokens.accent.secondary,
+                  fontFamily: 'Orbitron',
+                  fontSize: '0.65rem',
+                  fontWeight: 900,
+                  py: 0.2,
+                  px: 1.2,
+                  minWidth: 0,
+                  '&:hover': { borderColor: tokens.accent.secondary, bgcolor: `${tokens.accent.secondary}0D` }
+                }}
+              >
+                {isFetchingQuick === 'vpslab(s5)' ? 'LOADING...' : 'VPSLAB (S5)'}
+              </Button>
+
+              <Typography
+                variant="caption"
+                sx={{ color: 'text.disabled', fontSize: '0.6rem', width: '100%', mt: 0.5 }}
+              >
+                Unvetted public lists — review all entries before saving.
+              </Typography>
+            </Box>
+
+            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2, mb: 1, fontWeight: 600 }}>
               PROXY LIST (ONE PER LINE)
             </Typography>
+
             <TextField
               multiline
               rows={12}

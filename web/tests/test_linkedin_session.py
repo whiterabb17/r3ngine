@@ -155,7 +155,7 @@ class TestRunLinkedint(TestCase):
     def test_returns_empty_list_when_no_session_configured(self):
         HunterIOAPIKey.objects.create(key='hunter-key')
         scan = self._make_scan()
-        from reNgine.osint_tasks import run_linkedint
+        from reNgine.tasks.osint import run_linkedint
         result = run_linkedint('TargetCorp', scan.id)
         self.assertEqual(result, [])
 
@@ -164,11 +164,11 @@ class TestRunLinkedint(TestCase):
             id=1, username='u', cookies_json='[]', is_valid=False
         )
         scan = self._make_scan()
-        from reNgine.osint_tasks import run_linkedint
+        from reNgine.tasks.osint import run_linkedint
         result = run_linkedint('TargetCorp', scan.id)
         self.assertEqual(result, [])
 
-    @patch('reNgine.osint_tasks.LinkedInScraper')
+    @patch('reNgine.tasks.osint.LinkedInScraper')
     def test_returns_result_string_on_success(self, mock_cls):
         LinkedInCredentials.objects.create(
             id=1, username='u', cookies_json='[]', is_valid=False
@@ -185,11 +185,11 @@ class TestRunLinkedint(TestCase):
         mock_scraper.notes = []
         mock_cls.return_value = mock_scraper
 
-        from reNgine.osint_tasks import run_linkedint
+        from reNgine.tasks.osint import run_linkedint
         result = run_linkedint('TargetCorp', scan.id)
         self.assertEqual(result, ['LinkedIn Intelligence processed 1 employees for TargetCorp'])
 
-    @patch('reNgine.osint_tasks.LinkedInScraper')
+    @patch('reNgine.tasks.osint.LinkedInScraper')
     def test_notes_are_logged_on_auth_failure(self, mock_cls):
         LinkedInCredentials.objects.create(
             id=1, username='u', cookies_json='', is_valid=False
@@ -206,13 +206,13 @@ class TestRunLinkedint(TestCase):
         ]
         mock_cls.return_value = mock_scraper
 
-        from reNgine.osint_tasks import run_linkedint
-        with self.assertLogs('reNgine.osint_tasks', level='WARNING') as cm:
+        from reNgine.tasks.osint import run_linkedint
+        with self.assertLogs('reNgine.tasks.osint', level='WARNING') as cm:
             result = run_linkedint('TargetCorp', scan.id)
         self.assertIn('[OSINT][LinkedIn]', ' '.join(cm.output))
         self.assertEqual(result, ['LinkedIn Intelligence processed 0 employees for TargetCorp'])
 
-    @patch('reNgine.osint_tasks.LinkedInScraper')
+    @patch('reNgine.tasks.osint.LinkedInScraper')
     def test_never_raises_on_unexpected_exception(self, mock_cls):
         LinkedInCredentials.objects.create(
             id=1, username='u', cookies_json='[]', is_valid=False
@@ -221,7 +221,7 @@ class TestRunLinkedint(TestCase):
         scan = self._make_scan()
         mock_cls.side_effect = RuntimeError("Playwright crashed unexpectedly")
 
-        from reNgine.osint_tasks import run_linkedint
+        from reNgine.tasks.osint import run_linkedint
         result = run_linkedint('TargetCorp', scan.id)
         self.assertEqual(result, [])
 

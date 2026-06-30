@@ -5,6 +5,11 @@ Defines canonical node types and subtypes for the attack graph.
 """
 
 NODE_TYPES = {
+    "Organization": ["generic"],
+    "Application": ["web", "mobile", "desktop", "api", "generic"],
+    "IdentityInfra": ["adfs", "owa", "exchange", "ldap", "sso", "saml_idp", "vpn_portal", "ntlm", "generic"],
+    "Certificate": ["x509", "generic"],
+    "APIEndpoint": ["rest", "graphql", "soap", "generic"],
     "Asset": ["domain", "ip", "service", "host", "endpoint"],
     "Vulnerability": [
         # Injection
@@ -104,4 +109,9 @@ EDGE_TYPES = [
     "TRUSTS",         # system -> system
     "CONNECTED_TO",   # network pivot
     "USES_TECH",      # asset -> technology
+    "PROTECTS",       # certificate -> endpoint
+    "AUTHENTICATES_VIA", # application -> identity infra
+    "DEPENDS_ON",       # app -> api endpoint
+    "TRUSTS_DOMAIN",    # domain -> trusted external domain
+    "PART_OF",          # app/org node -> parent domain node
 ]

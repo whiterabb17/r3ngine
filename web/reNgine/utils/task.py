@@ -244,7 +244,9 @@ def run_command(
         scan_id=None, 
         activity_id=None,
         remove_ansi_sequence=False,
-        proxy=None
+        proxy=None,
+        timeout=7200,
+        env=None
     ):
     """Run a given command using subprocess module.
 
@@ -370,6 +372,7 @@ def run_command(
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 cwd=cwd,
+                env=env,
                 universal_newlines=True,
                 errors='replace',
                 preexec_fn=os.setsid)
@@ -383,6 +386,12 @@ def run_command(
                 if redis_client and soc_config:
                     _publish_to_redis_log(redis_client, soc_config, scan_id, command_obj_id, item)
                 _run_cmd_line_count += 1
+                if _run_cmd_line_count % 10 == 0:
+                    try:
+                        from reNgine.utils.task import activity_heartbeat_safe
+                        activity_heartbeat_safe(f"Command executing... line {_run_cmd_line_count}")
+                    except Exception:
+                        pass
                 if _run_cmd_line_count % 10 == 0 and scan_id:
                     try:
                         from startScan.models import ScanHistory as _SH
@@ -405,7 +414,7 @@ def run_command(
                 # Replace bare 7200 s wait with a polling loop so abort is
                 # detected even if the process is slow to produce output.
                 import time as _time
-                _deadline = _time.monotonic() + 7200
+                _deadline = _time.monotonic() + timeout
                 _timed_out = False
                 while True:
                     try:
@@ -528,17 +537,20 @@ def run_command_with_retry(cmd, results_file, max_retries=3, **kwargs):
     return return_code, output
 
 
-def save_email(email_address, scan_history=None):
+def save_email(email_address: str, scan_history=None, source: str = 'hunter'):
     if not validators.email(email_address):
-        logger.info(f'Email {email_address} is invalid. Skipping.')
+        logger.info('Email %s is invalid. Skipping.', email_address)
         return None, False
-    email, created = Email.objects.get_or_create(address=email_address)
+    email, created = Email.objects.get_or_create(
+        address=email_address,
+        defaults={'source': source},
+    )
 
     # Add email to ScanHistory
     if scan_history:
         scan_history.emails.add(email)
         scan_history.save()
-        from reNgine.osint_tasks import enrich_identities_task
+        from reNgine.tasks.osint import enrich_identities_task
         threading.Thread(
             target=enrich_identities_task,
             kwargs={'identity': email_address, 'identity_type': 'email', 'scan_history_id': scan_history.id},
@@ -556,7 +568,7 @@ def save_employee(name, designation='', scan_history=None):
     if scan_history:
         scan_history.employees.add(employee)
         scan_history.save()
-        from reNgine.osint_tasks import enrich_identities_task
+        from reNgine.tasks.osint import enrich_identities_task
         threading.Thread(
             target=enrich_identities_task,
             kwargs={'identity': name, 'identity_type': 'employee', 'scan_history_id': scan_history.id},
@@ -660,11 +672,15 @@ def save_endpoint(
     created = False
     
     if ctx.get('domain_id'):
-        domain = Domain.objects.filter(id=ctx.get('domain_id')).first()
+        # Cache resolved Domain in ctx to avoid repeated SELECT per save_endpoint() call.
+        domain = ctx.get('_domain_obj')
+        if domain is None or isinstance(domain, int):
+            domain = Domain.objects.filter(id=ctx.get('domain_id')).first()
+            ctx['_domain_obj'] = domain
         if domain and domain.name not in http_url:
             logger.error(f"{http_url} is not a URL of domain {domain.name}. Skipping.")
             return None, False
-            
+
     if crawl:
         # Avoid circular import by importing here
         from reNgine.tasks import http_crawl
@@ -685,8 +701,18 @@ def save_endpoint(
     elif not scheme:
         return None, False
     else:
-        scan = ScanHistory.objects.filter(pk=ctx.get('scan_history_id')).first()
-        domain = Domain.objects.filter(pk=ctx.get('domain_id')).first()
+        # Cache resolved ORM objects in ctx to avoid repeated queries within
+        # the same scan context (e.g., once per port in port_scan's hot loop).
+        scan = ctx.get('_scan_obj')
+        if scan is None or isinstance(scan, int):
+            scan = ScanHistory.objects.filter(pk=ctx.get('scan_history_id')).first()
+            ctx['_scan_obj'] = scan
+
+        domain = ctx.get('_domain_obj')
+        if domain is None or isinstance(domain, int):
+            domain = Domain.objects.filter(pk=ctx.get('domain_id')).first()
+            ctx['_domain_obj'] = domain
+
         if not validators.url(http_url):
             return None, False
         http_url = sanitize_url(http_url)
@@ -714,12 +740,33 @@ def save_endpoint(
         endpoint.is_default = is_default
         endpoint.discovered_date = timezone.now()
         endpoint.save()
+
+        # Centralized Brute-Force Candidate Registration
+        auth_keywords = ['login', 'admin', 'auth', 'portal', 'controlpanel', 'signin', 'manage']
+        if any(k in http_url.lower() for k in auth_keywords):
+            from reNgine.utilities import save_auth_candidate
+            try:
+                parsed = urlparse(http_url)
+                port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+                save_auth_candidate(
+                    scan_history=endpoint.scan_history,
+                    subdomain=endpoint.subdomain,
+                    endpoint=endpoint,
+                    target=parsed.hostname,
+                    protocol='http',
+                    port=port,
+                    source_tool=endpoint_data.get('source_tool', 'discovery_engine'),
+                    tech_hint=f"Discovered URL: {http_url}"
+                )
+            except Exception as e:
+                logger.error(f"Error registering AuthCandidate from endpoint {http_url}: {e}")
+
         subscan_id = ctx.get('subscan_id')
         if subscan_id:
             from startScan.models import SubScan
             if SubScan.objects.filter(pk=subscan_id).exists():
                 endpoint.endpoint_subscan_ids.add(subscan_id)
-            endpoint.save()
+            # No second save() — M2M add() writes directly to the join table
 
     return endpoint, created
 
@@ -1086,7 +1133,13 @@ def stream_command(
 	import time
 
 	def watchdog(proc, limit_sec):
-		time.sleep(limit_sec)
+		deadline = time.monotonic() + limit_sec
+		while time.monotonic() < deadline:
+			if proc.poll() is not None:
+				return  # Process finished normally before timeout
+			time.sleep(2)
+			
+		# If we reach here, it timed out
 		if proc.poll() is None:
 			logger.error(f"Watchdog: Command timed out after {limit_sec} seconds. Killing process: {cmd}")
 			try:
@@ -1095,6 +1148,13 @@ def stream_command(
 				pass
 			except Exception as ex:
 				logger.error(f"Watchdog: Failed to kill process: {ex}")
+			
+			# Force close stdout to break the blocked readline() in the main thread
+			if proc.stdout:
+				try:
+					proc.stdout.close()
+				except Exception:
+					pass
 
 	watchdog_thread = threading.Thread(
 		target=watchdog,
@@ -1421,6 +1481,65 @@ def bulk_apply_gf_pattern_from_file(gf_output_file, gf_pattern, ctx, batch_size=
 	if url_batch:
 		_flush_url_batch(url_batch)
 
+	return updated
+
+
+def bulk_apply_gf_pattern_from_urls(urls, gf_pattern, ctx, batch_size=500):
+	"""Apply a GF pattern match to endpoints given a list of matched URL strings.
+
+	Mirrors bulk_apply_gf_pattern_from_file but accepts an in-memory list instead of a file,
+	so callers that already hold matched URLs (e.g. RunGFOnAllEndpointsActivity) avoid a
+	round-trip through disk.
+	"""
+	scan_id = ctx.get('scan_history_id')
+	domain_id = ctx.get('domain_id')
+	scan = ScanHistory.objects.filter(pk=scan_id).first()
+	domain = Domain.objects.filter(pk=domain_id).first()
+	if not scan or not domain or not urls:
+		return 0
+
+	updated = 0
+
+	def _flush(batch):
+		nonlocal updated
+		if not batch:
+			return
+		sanitized = [sanitize_url(u) for u in batch if u and validators.url(sanitize_url(u))]
+		if not sanitized:
+			return
+		bulk_persist_fetch_urls(sanitized, ctx, batch_size=len(sanitized))
+		endpoints = EndPoint.objects.filter(
+			scan_history=scan,
+			target_domain=domain,
+			http_url__in=sanitized,
+		)
+		to_update = []
+		for ep in endpoints:
+			earlier = ep.matched_gf_patterns or ''
+			if earlier:
+				if gf_pattern in {p.strip() for p in earlier.split(',') if p.strip()}:
+					continue
+				ep.matched_gf_patterns = f'{earlier},{gf_pattern}'
+			else:
+				ep.matched_gf_patterns = gf_pattern
+			to_update.append(ep)
+		if to_update:
+			EndPoint.objects.bulk_update(to_update, ['matched_gf_patterns'], batch_size=batch_size)
+			updated += len(to_update)
+
+	url_batch = []
+	for i, url in enumerate(urls):
+		url = url.strip() if url else ''
+		if not url:
+			continue
+		url_batch.append(url)
+		if len(url_batch) >= batch_size:
+			_flush(url_batch)
+			url_batch = []
+		if i % 5000 == 0 and i > 0:
+			activity_heartbeat_safe(f'gf pattern {gf_pattern} url {i}')
+
+	_flush(url_batch)
 	return updated
 
 

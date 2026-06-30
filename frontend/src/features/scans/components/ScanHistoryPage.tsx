@@ -336,7 +336,7 @@ export const ScanHistoryPage: React.FC = () => {
         </Box>
       </Box>
 
-      <Card sx={{ bgcolor: 'rgba(13, 12, 20, 0.95)', border: `1px solid ${tokens.accent.primary}15`, borderRadius: '12px', position: 'relative', overflow: 'hidden' }}>
+      <Card sx={{ bgcolor: isLight ? tokens.surface.secondary : 'rgba(13, 12, 20, 0.95)', border: `1px solid ${tokens.accent.primary}15`, borderRadius: '12px', position: 'relative', overflow: 'hidden' }}>
         <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${tokens.accent.primary}15` }}>
           <TextField
             placeholder="FILTER SCAN RECORDS..."
@@ -368,14 +368,14 @@ export const ScanHistoryPage: React.FC = () => {
         </Box>
         <TableContainer>
           <Table>
-            <TableHead sx={{ bgcolor: `${tokens.accent.primary}0D` }}>
+            <TableHead sx={{ bgcolor: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(0, 243, 255, 0.03)', borderBottom: `1px solid ${theme.palette.divider}` }}>
               <TableRow>
                 <TableCell padding="checkbox" sx={{ borderBottom: `1px solid ${tokens.accent.primary}15` }}>
                   <Checkbox
                     indeterminate={selected.length > 0 && selected.length < (scans?.length || 0)}
-                    checked={(scans?.length || 0) > 0 && selected.length === scans?.length}
+                    checked={selected.length > 0 && selected.length === (scans?.length || 0)}
                     onChange={handleSelectAllClick}
-                    sx={{ color: `${tokens.accent.primary}4D`, '&.Mui-checked': { color: tokens.accent.primary } }}
+                    sx={{ color: isLight ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)', '&.Mui-checked': { color: tokens.accent.primary } }}
                   />
                 </TableCell>
                 <TableCell sx={{ color: tokens.accent.primary, fontWeight: 800, fontFamily: 'Orbitron', fontSize: '0.7rem', borderBottom: `1px solid ${tokens.accent.primary}15` }}>DOMAIN / TARGET</TableCell>
@@ -467,9 +467,9 @@ export const ScanHistoryPage: React.FC = () => {
                     </TableCell>
                     <TableCell sx={{ borderBottom: 1, borderColor: 'divider' }}>
                       <Chip
-                        label={scan.engine_name || scan.scan_type?.engine_name || 'STANDARD'}
+                        label={scan.scan_type?.engine_name || 'Standard'}
                         size="small"
-                        sx={{ bgcolor: 'action.hover', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)', fontSize: '0.6rem', fontWeight: 800, fontFamily: 'Orbitron' }}
+                        sx={{ bgcolor: 'action.hover', color: 'text.secondary', border: `1px solid ${theme.palette.divider}`, fontSize: '0.6rem', fontWeight: 800, fontFamily: 'Orbitron' }}
                       />
                     </TableCell>
                     <TableCell sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -536,8 +536,8 @@ export const ScanHistoryPage: React.FC = () => {
                     <TableCell sx={{ borderBottom: 1, borderColor: 'divider' }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Clock size={12} style={{ color: `${tokens.accent.primary}80` }} />
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: '0.65rem' }}>
-                          {scan.completed_ago || 'JUST NOW'}
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.65rem' }}>
+                          Time: {scan.elapsed_time || '0s'}
                         </Typography>
                       </Box>
                       <Typography variant="caption" sx={{ display: 'block', color: 'text.disabled', fontSize: '0.55rem', mt: 0.5 }}>
@@ -630,7 +630,7 @@ export const ScanHistoryPage: React.FC = () => {
                 fontFamily: 'Orbitron',
                 fontSize: '0.7rem',
                 fontWeight: 700,
-                color: 'rgba(255,255,255,0.8)',
+                color: 'text.primary',
                 gap: 1.5,
                 py: 1.2,
                 '&:hover': { bgcolor: `${tokens.accent.primary}0D`, color: tokens.accent.primary },
@@ -649,33 +649,6 @@ export const ScanHistoryPage: React.FC = () => {
         }}>
           <Share2 size={14} /> ATTACK SURFACE
         </MenuItem>
-        {/* <MenuItem onClick={() => {
-          if (!activeTarget) {
-            setSnackbar({
-              open: true,
-              message: 'Failed to identify target for rescan.',
-              severity: 'error'
-            });
-
-            setTimeout(() => {
-              setSnackbar({ open: false, message: '', severity: 'info' });
-              handleMenuClose();
-            }, 3000);
-
-            return;
-          }
-
-          setStartScanTargets({
-            ids: [activeScanId || 0],
-            names: [activeTarget?.name],
-          });
-          setTimeout(() => {
-            handleMenuClose();
-          }, 3000);
-          //handleMenuClose();
-        }}>
-          <RefreshCw size={14} /> RESCAN
-        </MenuItem> */}
         {activeScanId && scans?.find((s) => s.id === activeScanId)?.scan_status === 1 && (
           <MenuItem onClick={() => {
             if (activeScanId) {
@@ -789,11 +762,12 @@ export const ScanHistoryPage: React.FC = () => {
             fontFamily: 'Orbitron',
             fontSize: '0.8rem',
             fontWeight: 700,
-            bgcolor: snackbar.severity === 'success' ? `${tokens.accent.primary}E6` :
+            bgcolor: snackbar.severity === 'success' ? 'rgba(0, 255, 98, 0.9)' : 
               snackbar.severity === 'error' ? 'rgba(255, 0, 85, 0.9)' : `${tokens.accent.primary}80`,
-            color: '#000',
-            border: '1px solid rgba(255,255,255,0.1)',
-            '& .MuiAlert-icon': { color: '#000' }
+            color: '#fff',
+            border: `1px solid ${theme.palette.divider}`,
+            backdropFilter: 'blur(10px)',
+            borderRadius: 1
           }}
         >
           {snackbar.message}

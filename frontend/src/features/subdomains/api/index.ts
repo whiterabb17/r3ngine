@@ -144,3 +144,21 @@ export const useToggleSubdomainImportant = (projectSlug: string) => {
   });
 };
 
+export const useAddManualSubdomain = (projectSlug: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { target_id?: number; scan_id?: number; subdomain_name: string }) => {
+      const response = await axios.post('/api/action/subdomain/add/', params, {
+        headers: {
+          'X-CSRFToken': getCsrfToken()
+        }
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['subdomains', projectSlug] });
+    },
+  });
+};
+
+

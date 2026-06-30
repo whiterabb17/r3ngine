@@ -1,0 +1,60 @@
+# Category X — API Intelligence (5 rules)
+# Fires from APIEndpoint nodes to Capability virtual goal nodes.
+# All target_subtype values appear in schema.py NODE_TYPES["Capability"].
+rules:
+
+  - name: graphql_unauthenticated_to_data_exfil
+    mitre_id: "T1530"
+    if:
+      node.type: APIEndpoint
+      node.subtype: graphql
+    then:
+      create_edge:
+        type: LEADS_TO
+        target_subtype: data_exfil
+        confidence: 0.75
+
+  - name: unauth_rest_api_to_authenticated_access
+    mitre_id: "T1078"
+    if:
+      node.type: APIEndpoint
+      node.subtype: rest
+      node.property: "requires_auth:False"
+    then:
+      create_edge:
+        type: LEADS_TO
+        target_subtype: authenticated_access
+        confidence: 0.65
+
+  - name: soap_endpoint_to_rce_execution
+    mitre_id: "T1059"
+    if:
+      node.type: APIEndpoint
+      node.subtype: soap
+    then:
+      create_edge:
+        type: LEADS_TO
+        target_subtype: rce_execution
+        confidence: 0.60
+
+  - name: unauth_api_to_account_takeover
+    mitre_id: "T1078.001"
+    if:
+      node.type: APIEndpoint
+      node.subtype: rest
+      node.property: "requires_auth:False"
+    then:
+      create_edge:
+        type: LEADS_TO
+        target_subtype: account_takeover
+        confidence: 0.55
+
+  - name: api_endpoint_to_internal_discovery
+    mitre_id: "T1046"
+    if:
+      node.type: APIEndpoint
+    then:
+      create_edge:
+        type: LEADS_TO
+        target_subtype: internal_discovery
+        confidence: 0.45

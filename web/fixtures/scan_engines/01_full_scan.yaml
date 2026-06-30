@@ -17,6 +17,11 @@
         enable_http_crawl: true
         threads: 30
         timeout: 5
+        run_favirecon: true
+        run_sourcemapper: true
+        run_grpcurl: true
+        run_julius: true
+        run_gqlspection: true
         bbot: false
       dns_security:
         enable_axfr: true
@@ -27,6 +32,11 @@
       port_scan:
         enable_http_crawl: true
         timeout: 5
+        run_favirecon: true
+        run_sourcemapper: true
+        run_grpcurl: true
+        run_julius: true
+        run_gqlspection: true
         ports:
           - top-1000
         rate_limit: 150
@@ -85,6 +95,7 @@
       dir_file_fuzz:
         auto_calibration: true
         run_dirsearch: true
+        run_feroxbuster: false
         enable_http_crawl: true
         rate_limit: 150
         extensions:
@@ -116,9 +127,15 @@
         recursive_level: 2
         stop_on_error: false
         timeout: 5
+        run_favirecon: true
+        run_sourcemapper: true
+        run_grpcurl: true
+        run_julius: true
+        run_gqlspection: true
         threads: 30
         wordlist_name: dicc
         use_api_wordlist: false
+        max_repeat_by_signature: 10
       param_discovery:
         enabled: true
         min_confidence: 50
@@ -175,6 +192,9 @@
         use_censys: true
       vulnerability_scan:
         run_nuclei: true
+        run_smugglex: true
+        run_second_order: true
+        run_nuclei_dast: true
         run_dalfox: true
         run_crlfuzz: true
         run_acunetix: true
@@ -188,9 +208,15 @@
         rate_limit: 150
         retries: 1
         timeout: 5
+        run_favirecon: true
+        run_sourcemapper: true
+        run_grpcurl: true
+        run_julius: true
+        run_gqlspection: true
         fetch_gpt_report: true
         nuclei:
           use_nuclei_config: false
+          max_templates_per_batch: 100
           auto_update_templates: true
           severities:
             - unknown
@@ -262,6 +288,9 @@
         use_arp: false
       host_recon:
         run_nuclei: false
+        run_smugglex: false
+        run_second_order: false
+        run_nuclei_dast: false
       url_fuzz:
         fuzzers:
           - ffuf

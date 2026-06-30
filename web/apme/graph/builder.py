@@ -187,6 +187,16 @@ class GraphBuilder:
                 return "Capability", apme_id.split("::")[-1]
             elif apme_id.startswith("goal::privilege::"):
                 return "Privilege", apme_id.split("::")[-1]
+            elif apme_id.startswith("org::"):
+                return "Organization", "generic"
+            elif apme_id.startswith("app::"):
+                return "Application", "generic"
+            elif apme_id.startswith("identity_infra::"):
+                return "IdentityInfra", "generic"
+            elif apme_id.startswith("cert::"):
+                return "Certificate", "generic"
+            elif apme_id.startswith("api_endpoint::"):
+                return "APIEndpoint", "generic"
             return "Asset", "generic"
 
         from_type, from_subtype = infer_node_type(edge.from_id)

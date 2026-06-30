@@ -5,6 +5,7 @@ import glob
 import os
 import pickle
 import subprocess
+import threading
 from reNgine.validators import validate_external_url
 import random
 import shutil
@@ -18,6 +19,7 @@ import shlex
 import re
 import xmltodict
 
+import time
 from time import sleep
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs
@@ -777,43 +779,47 @@ def save_vulnerability(vuln_data=None, scan_history=None, target_domain=None, de
 		vuln.exploit_url = exploit_url
 		vuln.save()
 
-	# Save vuln tags
-	for tag_name in tags or []:
-		tag, created = VulnerabilityTags.objects.get_or_create(name=tag_name)
-		if tag:
-			vuln.tags.add(tag)
-			vuln.save()
+	# Save vuln tags — collect then add in one call; no save() needed after M2M add
+	if tags:
+		tag_objs = []
+		for tag_name in tags:
+			tag, _ = VulnerabilityTags.objects.get_or_create(name=tag_name)
+			tag_objs.append(tag)
+		vuln.tags.add(*tag_objs)
 
 	# Save CVEs
-	for cve_id in cve_ids or []:
-		# Ignore empty/null CVE IDs
-		if not cve_id or not str(cve_id).strip():
-			continue
-		normalized = str(cve_id).strip().upper()
-		# Accept bare YYYY-NNNNN values (missing the CVE- prefix)
-		if re.match(r'^\d{4}-\d+$', normalized):
-			normalized = 'CVE-' + normalized
-		cve, created = CveId.objects.get_or_create(name=normalized)
-		if cve:
-			vuln.cve_ids.add(cve)
-			vuln.save()
+	if cve_ids:
+		cve_objs = []
+		for cve_id in cve_ids:
+			if not cve_id or not str(cve_id).strip():
+				continue
+			normalized = str(cve_id).strip().upper()
+			# Accept bare YYYY-NNNNN values (missing the CVE- prefix)
+			if re.match(r'^\d{4}-\d+$', normalized):
+				normalized = 'CVE-' + normalized
+			cve, _ = CveId.objects.get_or_create(name=normalized)
+			cve_objs.append(cve)
+		if cve_objs:
+			vuln.cve_ids.add(*cve_objs)
 
 	# Save CWEs
-	for cwe_id in cwe_ids or []:
-		# Ignore empty/null CWE IDs
-		if not cwe_id or not str(cwe_id).strip():
-			continue
-		cwe, created = CweId.objects.get_or_create(name=str(cwe_id).strip())
-		if cwe:
-			vuln.cwe_ids.add(cwe)
-			vuln.save()
+	if cwe_ids:
+		cwe_objs = []
+		for cwe_id in cwe_ids:
+			if not cwe_id or not str(cwe_id).strip():
+				continue
+			cwe, _ = CweId.objects.get_or_create(name=str(cwe_id).strip())
+			cwe_objs.append(cwe)
+		if cwe_objs:
+			vuln.cwe_ids.add(*cwe_objs)
 
-	# Save vuln reference
-	for url in references or []:
-		ref, created = VulnerabilityReference.objects.get_or_create(url=url)
-		if ref:
-			vuln.references.add(ref)
-			vuln.save()
+	# Save vuln references
+	if references:
+		ref_objs = []
+		for url in references:
+			ref, _ = VulnerabilityReference.objects.get_or_create(url=url)
+			ref_objs.append(ref)
+		vuln.references.add(*ref_objs)
 
 	# Save subscan id in vuln object
 	if subscan:
@@ -821,7 +827,7 @@ def save_vulnerability(vuln_data=None, scan_history=None, target_domain=None, de
 		subscan_pk = subscan.pk if hasattr(subscan, 'pk') else subscan
 		if SubScan.objects.filter(pk=subscan_pk).exists():
 			vuln.vuln_subscan_ids.add(subscan)
-			vuln.save()
+			# No vuln.save() needed — M2M add writes directly to the join table
 
 	return vuln, created
 
@@ -856,63 +862,204 @@ def get_chaos_api_key():
 	return key_obj.key if key_obj else ''
 
 
-def check_proxy_robust(proxy_url, timeout=5):
-	"""Test if a proxy is truly working.
-	Avoids false positives from captive portals, ISP redirects, or proxy auth/block pages
-	by making a request to a public API returning a JSON payload with client IP.
-	
-	Args:
-		proxy_url (str): The proxy connection string (e.g., http://1.2.3.4:8080)
-		timeout (int): Timeout in seconds. Defaults to 5.
-		
-	Returns:
-		bool: True if proxy forwards traffic and responds successfully, False otherwise.
+# Curated pool of modern desktop browser user agents for realistic request spoofing.
+_USER_AGENT_POOL = [
+	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0',
+	'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+	'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15',
+	'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+	'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
+	'Mozilla/5.0 (Macintosh; Intel Mac OS X 14.4; rv:125.0) Gecko/20100101 Firefox/125.0',
+	'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0',
+	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 OPR/110.0.0.0',
+	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Vivaldi/6.7.3329.21',
+]
+
+_DEFAULT_USER_AGENT = _USER_AGENT_POOL[0]
+
+# 5 popular, fast public checkers in preference order
+ALL_PROXY_CHECKERS = [
+	("https://whatismyip.akamai.com/", "plain"),
+	("https://cloudflare.com/cdn-cgi/trace", "cloudflare"),
+	("https://api.ip.sb/ip", "plain"),
+	("https://ifconfig.co/ip", "plain"),
+	("https://icanhazip.com", "plain"),
+]
+
+# Cache of proxies known to be dead within this process lifetime, mapping proxy_url -> epoch timestamp.
+_failed_proxy_cache: dict = {}
+_FAILED_PROXY_TTL = 1800  # 30 minutes
+
+# Cache of proxies successfully validated and used, mapping proxy_url -> epoch timestamp.
+# Protects proxies from DB removal for 24 hours after last successful use.
+_used_proxy_cache: dict = {}
+_USED_PROXY_TTL = 86400  # 24 hours
+
+# Serialises read-modify-write operations on Proxy.proxies within this process.
+# select_for_update() handles cross-process serialisation at the DB level.
+_proxy_pool_lock = threading.Lock()
+
+# Standard exceptions suggesting proxy itself is down/unreachable (connection phase)
+_PROXY_DEAD_EXCEPTIONS = (
+	requests.exceptions.ProxyError,
+	requests.exceptions.ConnectTimeout,
+	requests.exceptions.ConnectionError,
+)
+
+_PROXY_DEAD_KEYWORDS = ('proxyerror', 'connecttimeout', 'refused', 'unreachable', 'connection reset', 'connection aborted')
+
+
+def _detect_server_ip(timeout: int = 5) -> str:
+	"""Return the server's own outbound IP by hitting an IP-reflection API
+	without a proxy. Returns '' on any failure.
+
+	Used only when OpSec transparent-proxy detection is enabled.
 	"""
 	try:
-		proxy_url = proxy_url.strip()
-		if not proxy_url:
-			return False
-		test_proxy = proxy_url
-		if not any(test_proxy.startswith(s) for s in ['http://', 'https://', 'socks4://', 'socks5://']):
-			test_proxy = 'http://' + test_proxy
-			
-		proxies = {
-			'http': test_proxy,
-			'https': test_proxy,
-		}
-		
-		# Try up to 2 different reliable JSON APIs to avoid single-point failure (e.g. rate limits)
-		check_targets = [
-			("https://api.ipify.org?format=json", "ip"),
-			("http://ip-api.com/json", "query")
-		]
-		
-		for url, expected_key in check_targets:
-			try:
-				response = requests.get(
-					url,
-					proxies=proxies,
-					headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"},
-					timeout=timeout,
-					allow_redirects=True
-				)
-				if response.status_code == 200:
-					# Verify response contains valid JSON with the expected key
-					data = response.json()
-					if expected_key in data:
-						return True
-			except Exception:
-				continue
-		return False
+		resp = requests.get(
+			'https://api.ipify.org?format=json',
+			timeout=timeout,
+			headers={'User-Agent': 'Mozilla/5.0'},
+		)
+		if resp.status_code == 200:
+			return resp.json().get('ip', '')
 	except Exception:
+		pass
+	return ''
+
+
+def mark_proxy_used(proxy_url: str) -> None:
+	"""Record that a proxy was successfully validated and used.
+
+	Proxies in this cache are shielded from remove_proxy_from_pool for
+	_USED_PROXY_TTL seconds (24 h) after last successful use, preventing
+	transient failures from evicting known-good proxies.
+	"""
+	normalized = _normalize_proxy_pool_line(proxy_url)
+	if normalized:
+		_used_proxy_cache[normalized] = time.time()
+
+
+def is_proxy_recently_used(proxy_url: str) -> bool:
+	"""Return True if the proxy was successfully used within the last 24 hours."""
+	normalized = _normalize_proxy_pool_line(proxy_url)
+	if not normalized:
 		return False
+	last_used = _used_proxy_cache.get(normalized)
+	return last_used is not None and (time.time() - last_used) < _USED_PROXY_TTL
+
+
+def check_proxy_robust(proxy_url, timeout=PROXY_VALIDATION_TIMEOUT, server_ip=''):
+	"""Test if a proxy is truly working and not transparent.
+	Avoids false positives from captive portals, ISP redirects, or proxy auth/block pages
+	by making a request to a public API returning a JSON payload or plain text with client IP.
+	"""
+	proxy_url = proxy_url.strip()
+	if not proxy_url:
+		return False
+	test_proxy = proxy_url
+	if not any(test_proxy.startswith(s) for s in ['http://', 'https://', 'socks4://', 'socks5://', 'socks5h://']):
+		test_proxy = 'http://' + test_proxy
+
+	# Select two checkers deterministically within this process lifetime.
+	# hash() is randomized per-process (PYTHONHASHSEED) so selection varies
+	# across worker restarts — this is intentional: it spreads load across
+	# checkers without requiring a PRNG or state.
+	hash_val = abs(hash(proxy_url))
+	idx1 = hash_val % len(ALL_PROXY_CHECKERS)
+	idx2 = (hash_val + 1) % len(ALL_PROXY_CHECKERS)
+	check_targets = [ALL_PROXY_CHECKERS[idx1], ALL_PROXY_CHECKERS[idx2]]
+
+	def _try_proxy(scheme_proxy):
+		"""Return (reported_ip, errors) for the given proxy URL."""
+		proxies = {'http': scheme_proxy, 'https': scheme_proxy}
+		headers = {"User-Agent": _DEFAULT_USER_AGENT}
+		errors = []
+		with requests.Session() as session:
+			session.proxies = proxies
+			session.headers.update(headers)
+			for url, expected_type in check_targets:
+				try:
+					response = session.get(
+						url,
+						timeout=timeout,
+						allow_redirects=True
+					)
+					if response.status_code == 200:
+						text = response.text.strip()
+						if expected_type == "cloudflare":
+							# Parse cloudflare trace line-by-line to extract IP
+							for line in text.splitlines():
+								if line.startswith("ip="):
+									val = line.split("=", 1)[1].strip()
+									try:
+										ipaddress.ip_address(val)
+										return val, []
+									except ValueError:
+										pass
+							errors.append("Could not parse IP from cloudflare trace")
+						elif expected_type == "plain":
+							try:
+								ipaddress.ip_address(text)
+								return text, []
+							except ValueError:
+								errors.append(f"Invalid IP address format: {text[:50]}")
+					else:
+						errors.append(f"HTTP {response.status_code}")
+				except Exception as exc:
+					errors.append(exc)
+					# If the proxy itself is unreachable or times out, stop checking further targets
+					if isinstance(exc, _PROXY_DEAD_EXCEPTIONS) or any(k in str(exc).lower() for k in _PROXY_DEAD_KEYWORDS):
+						break
+		return None, errors
+
+	# 1) Try with the original scheme
+	reported_ip, errors = _try_proxy(test_proxy)
+
+	# 2) For socks5:// only, retry with socks5h:// (remote DNS via proxy).
+	if not reported_ip and test_proxy.startswith('socks5://'):
+		is_proxy_unreachable = False
+		for err in errors:
+			if isinstance(err, _PROXY_DEAD_EXCEPTIONS) or any(k in str(err).lower() for k in _PROXY_DEAD_KEYWORDS):
+				is_proxy_unreachable = True
+				break
+		if not is_proxy_unreachable:
+			socks5h_proxy = test_proxy.replace('socks5://', 'socks5h://', 1)
+			logger.debug("check_proxy_robust: retrying with remote DNS via %s", socks5h_proxy)
+			reported_ip, _ = _try_proxy(socks5h_proxy)
+
+	if not reported_ip:
+		return False
+
+	# Optional transparent-proxy detection
+	if server_ip and reported_ip == server_ip:
+		logger.warning(
+			'Proxy %s is transparent – reported IP %s matches server IP. Rejecting.',
+			proxy_url, reported_ip,
+		)
+		return False
+
+	return True
+
+
+def merge_imported_subdomains(domain, imported_subdomains):
+	"""Merge target-persisted manual subdomains with imported ones, deduplicating."""
+	merged = []
+	seen = set()
+	for name in domain.get_manual_subdomains() + normalize_manual_subdomains(imported_subdomains):
+		if name in seen:
+			continue
+		seen.add(name)
+		merged.append(name)
+	return merged
 
 
 def validate_single_proxy(proxy_name):
 	"""Helper to validate a single proxy string.
 	Returns (proxy_name, True) if valid, otherwise (proxy_name, False).
 	"""
-	is_valid = check_proxy_robust(proxy_name, timeout=5)
+	is_valid = check_proxy_robust(proxy_name)
 	return proxy_name, is_valid
 
 
@@ -927,9 +1074,9 @@ def validate_proxies(proxy_text):
 	if not raw_proxies:
 		return ''
 	valid_proxies = []
-	max_workers = min(1000, max(1, len(raw_proxies)))
+	max_workers = min(PROXY_VALIDATION_MAX_WORKERS, max(1, len(raw_proxies)))
 	with ThreadPoolExecutor(max_workers=max_workers) as executor:
-		future_to_proxy = {executor.submit(check_proxy_robust, p, 15): p for p in raw_proxies}
+		future_to_proxy = {executor.submit(check_proxy_robust, p, PROXY_VALIDATION_TIMEOUT): p for p in raw_proxies}
 		for future in as_completed(future_to_proxy):
 			proxy_name = future_to_proxy[future]
 			try:
@@ -941,23 +1088,119 @@ def validate_proxies(proxy_text):
 	return '\n'.join(valid_proxies)
 
 
-# Curated pool of modern desktop browser user agents for realistic request spoofing.
-# Rotated when OpSec random UA is enabled.
-_USER_AGENT_POOL = [
-	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0',
-	'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-	'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15',
-	'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-	'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
-	'Mozilla/5.0 (Macintosh; Intel Mac OS X 14.4; rv:125.0) Gecko/20100101 Firefox/125.0',
-	'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0',
-	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 OPR/110.0.0.0',
-	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Vivaldi/6.7.3329.21',
-]
+def _normalize_proxy_pool_line(proxy_line):
+	"""Normalize a proxy line for consistent persistence comparisons."""
+	proxy_line = (proxy_line or '').strip()
+	if not proxy_line:
+		return ''
+	if not proxy_line.startswith('http') and not proxy_line.startswith('socks'):
+		return f"http://{proxy_line}"
+	return proxy_line
 
-# Fallback UA used when OpSec random UA is disabled.
-_DEFAULT_USER_AGENT = _USER_AGENT_POOL[0]
+
+def get_valid_proxy_count(proxy_obj=None):
+	"""Return the count of persisted non-empty proxy lines."""
+	proxy_obj = proxy_obj or Proxy.objects.first()
+	if not proxy_obj or not proxy_obj.proxies:
+		return 0
+	return len([line for line in proxy_obj.proxies.splitlines() if line.strip()])
+
+
+def remove_proxy_from_pool(proxy_value, proxy_obj=None):
+	"""Remove a proxy from the persisted pool safely and idempotently.
+
+	Proxies that were successfully used within the last 24 hours are protected
+	from removal even if they temporarily fail a liveness check.
+	"""
+	if is_proxy_recently_used(proxy_value):
+		logger.info(
+			'Proxy %s was recently used — skipping removal to honour 24-hour retention.',
+			proxy_value,
+		)
+		return False
+
+	target = _normalize_proxy_pool_line(proxy_value)
+	if not target:
+		return False
+
+	from django.db import transaction
+
+	with _proxy_pool_lock:
+		with transaction.atomic():
+			# Re-fetch inside lock+transaction; select_for_update prevents
+			# concurrent DB transactions from reading a stale pool simultaneously.
+			if proxy_obj is None:
+				locked_obj = Proxy.objects.select_for_update().first()
+			else:
+				locked_obj = Proxy.objects.select_for_update().filter(pk=proxy_obj.pk).first()
+
+			if not locked_obj or not locked_obj.proxies:
+				return False
+
+			remaining_lines = []
+			removed = False
+			for line in locked_obj.proxies.splitlines():
+				stripped = line.strip()
+				if not stripped:
+					continue
+				if not removed and _normalize_proxy_pool_line(stripped) == target:
+					removed = True
+					continue
+				remaining_lines.append(stripped)
+
+			if removed:
+				locked_obj.proxies = '\n'.join(remaining_lines)
+				locked_obj.save(update_fields=['proxies'])
+
+	return removed
+
+def remove_proxies_from_pool(proxy_values, proxy_obj=None):
+	"""Remove multiple proxies from the persisted pool safely and idempotently.
+	"""
+	targets = []
+	for pv in proxy_values:
+		if is_proxy_recently_used(pv):
+			continue
+		target = _normalize_proxy_pool_line(pv)
+		if target:
+			targets.append(target)
+			
+	if not targets:
+		return False
+
+	from django.db import transaction
+
+	with _proxy_pool_lock:
+		with transaction.atomic():
+			if proxy_obj is None:
+				locked_obj = Proxy.objects.select_for_update().first()
+			else:
+				locked_obj = Proxy.objects.select_for_update().filter(pk=proxy_obj.pk).first()
+
+			if not locked_obj or not locked_obj.proxies:
+				return False
+
+			remaining_lines = []
+			removed_count = 0
+			for line in locked_obj.proxies.splitlines():
+				stripped = line.strip()
+				if not stripped:
+					continue
+				if _normalize_proxy_pool_line(stripped) in targets:
+					removed_count += 1
+					continue
+				remaining_lines.append(stripped)
+
+			if removed_count > 0:
+				locked_obj.proxies = '\n'.join(remaining_lines)
+				locked_obj.save(update_fields=['proxies'])
+				logger.warning('Removed %d invalid proxies from pool', removed_count)
+				return True
+				
+	return False
+
+
+
 
 
 def get_random_user_agent():
@@ -980,59 +1223,157 @@ def get_random_user_agent():
 	return _DEFAULT_USER_AGENT
 
 
-def get_random_proxy():
-	"""Get a random proxy from the list of proxies input by user in the UI,
-	validating that it is alive and does not require authentication.
+def get_random_proxy(http_only=False):
+	"""Get a random proxy from the list stored in the database.
+
+	Enhancements over the old implementation:
+	  - **Freshness short-circuit**: if the proxy list was batch-verified by
+	    ``fetch_proxies_task`` within the configured TTL (default 120 min) it is
+	    trusted directly and a random entry is returned without re-validation.
+	    This prevents hundreds of milliseconds of blocking overhead on every tool
+	    call during a scan.
+	  - **Parallel re-validation**: when the list is stale, all candidate proxies
+	    are checked concurrently (up to 50 workers) instead of sequentially.
+	    The first live one wins; the rest are cancelled.
+	  - **In-process failure cache**: proxies that fail during the current scan
+	    session are recorded in ``_failed_proxy_cache`` and skipped on subsequent
+	    calls, avoiding repeated timeouts against already-dead entries.
+	  - **Transparent-proxy detection**: when the OpSec setting
+	    ``enable_transparent_proxy_detection`` is True the server's own outbound IP
+	    is detected once per call and passed to ``check_proxy_robust`` so that
+	    transparent proxies are rejected.
 
 	Returns:
-		str: Proxy name or '' if no proxy defined in db or use_proxy is False.
+		str: Proxy URL string, 'socks5://tor:9050' when TOR is enabled, or '' if
+			 no valid proxy is available.
 	"""
-	# TOR mode: when use_tor is enabled, route all scan traffic through the TOR
-	# SOCKS5 proxy. Returning a non-empty proxy string ensures run_command /
-	# stream_command enter their proxychains wrapping branch; ProxychainsWrapper
-	# then builds the 'socks5 tor 9050' config via should_wrap()/wrap_command().
-	_tor_proxy_obj = Proxy.objects.first()
-	if _tor_proxy_obj and _tor_proxy_obj.use_tor:
+	from concurrent.futures import ThreadPoolExecutor, as_completed
+	from datetime import timezone as _tz
+	import datetime as _dt
+
+	# ------------------------------------------------------------------
+	# TOR mode: bypass all proxy logic and return the TOR SOCKS5 address
+	# ------------------------------------------------------------------
+	_proxy_obj = Proxy.objects.first()
+	if _proxy_obj and _proxy_obj.use_tor and not http_only:
 		return 'socks5://tor:9050'
 
-	# Check if any Proxy records exist in the database
-	if not Proxy.objects.all().exists():
-		return ''
-	
-	# Retrieve the global proxy configuration
-	proxy = Proxy.objects.first()
-	if not proxy.use_proxy:
+	if not _proxy_obj or not _proxy_obj.use_proxy:
 		return ''
 
 	# Parse and clean the newline-separated proxy lines
-	proxies = [p.strip() for p in proxy.proxies.splitlines() if p.strip()]
-	if not proxies:
+	raw_proxies = [p.strip() for p in (_proxy_obj.proxies or '').splitlines() if p.strip()]
+	if not raw_proxies:
 		return ''
 
-	# Shuffle the proxies to distribute traffic randomly
-	random.shuffle(proxies)
+	# Normalise – ensure every entry has a scheme
+	proxies = []
+	for p in raw_proxies:
+		if not p.startswith('http') and not p.startswith('socks'):
+			p = f'http://{p}'
+		proxies.append(p)
 
-	# Validate each proxy sequentially until we find a working one.
-	# Limit to 25 checks to cap worst-case wait (25 × timeout = 125 s).
-	checked_count = 0
-	for proxy_name in proxies:
-		if checked_count >= 25:
-			logger.warning('Reached maximum sequential proxy validation limit (25). Stopping checks.')
-			break
-		checked_count += 1
-		
-		# Ensure the proxy has a valid scheme before usage
-		if not proxy_name.startswith('http') and not proxy_name.startswith('socks'):
-			proxy_name = f"http://{proxy_name}"
-			
-		logger.info("Validating proxy: %s", proxy_name)
-		if check_proxy_robust(proxy_name, timeout=5):
-			logger.warning("Using valid proxy: %s", proxy_name)
-			return proxy_name
-		logger.warning("Proxy %s validation failed.", proxy_name)
+	if http_only:
+		proxies = [p for p in proxies if p.lower().startswith('http')]
 
-	logger.error('No valid proxies found in the list!')
+	# Remove entries that have already failed this session (within TTL)
+	now_epoch = time.time()
+	candidates = [
+		p for p in proxies
+		if p not in _failed_proxy_cache or (now_epoch - _failed_proxy_cache[p]) > _FAILED_PROXY_TTL
+	]
+	if not candidates:
+		# All known proxies have failed – clear the cache and try again fresh
+		logger.warning('All cached proxies failed this session. Clearing failure cache.')
+		_failed_proxy_cache.clear()
+		candidates = proxies
+
+	# ------------------------------------------------------------------
+	# Freshness short-circuit
+	# If the batch verification is recent enough, trust it and return a
+	# random candidate without any individual re-validation.
+	# ------------------------------------------------------------------
+	ttl_minutes = getattr(_proxy_obj, 'proxy_ttl_minutes', 120) or 120
+	verified_at = getattr(_proxy_obj, 'proxies_verified_at', None)
+	if verified_at is not None:
+		now_utc = _dt.datetime.now(_tz.utc)
+		age_minutes = (now_utc - verified_at).total_seconds() / 60
+		if age_minutes <= ttl_minutes:
+			chosen = random.choice(candidates)
+			mark_proxy_used(chosen)
+			logger.info(
+				'Proxy list is fresh (%.1f min old, TTL %d min). '
+				'Returning %s without re-validation.',
+				age_minutes, ttl_minutes, chosen,
+			)
+			return chosen
+		logger.info(
+			'Proxy list is stale (%.1f min old, TTL %d min). '
+			'Falling back to parallel re-validation.',
+			age_minutes, ttl_minutes,
+		)
+	else:
+		logger.info('No proxies_verified_at timestamp found. Performing parallel re-validation.')
+
+	# ------------------------------------------------------------------
+	# Optional transparent-proxy detection (opt-in via OpSec setting)
+	# ------------------------------------------------------------------
+	server_ip = ''
+	try:
+		from scanEngine.models import OpSec as _OpSec
+		_opsec = _OpSec.objects.first()
+		if _opsec and getattr(_opsec, 'enable_transparent_proxy_detection', False):
+			server_ip = _detect_server_ip(timeout=5)
+			if server_ip:
+				logger.info('Transparent proxy detection enabled. Server IP: %s', server_ip)
+	except Exception as _e:
+		logger.warning('Could not read OpSec settings for transparent proxy detection: %s', _e)
+
+	# ------------------------------------------------------------------
+	# Parallel re-validation – first live proxy wins
+	# ------------------------------------------------------------------
+	random.shuffle(candidates)
+	# Cap workers to avoid spawning thousands of threads for a huge list
+	max_workers = min(50, len(candidates))
+
+	result_holder = [None]  # thread-safe single-slot via GIL
+
+	def _check(proxy_url):
+		"""Check a single proxy; mark it failed on the cache."""
+		if check_proxy_robust(proxy_url, timeout=PROXY_VALIDATION_TIMEOUT, server_ip=server_ip):
+			return proxy_url
+		_failed_proxy_cache[proxy_url] = time.time()
+		return None
+
+	with ThreadPoolExecutor(max_workers=max_workers) as pool:
+		future_map = {pool.submit(_check, p): p for p in candidates}
+		dead_proxies = []
+		for fut in as_completed(future_map):
+			try:
+				live = fut.result()
+			except Exception:
+				live = None
+			if live:
+				result_holder[0] = live
+				# Cancel remaining futures to stop wasting resources
+				for other in future_map:
+					if other is not fut:
+						other.cancel()
+				break
+			else:
+				dead_proxies.append(future_map[fut])
+				
+	if dead_proxies:
+		remove_proxies_from_pool(dead_proxies, _proxy_obj)
+
+	if result_holder[0]:
+		mark_proxy_used(result_holder[0])
+		logger.info('Using valid proxy (parallel validation): %s', result_holder[0])
+		return result_holder[0]
+
+	logger.error('No valid proxies found after parallel re-validation!')
 	return ''
+
 
 def get_proxy_list():
 	"""Get a list of all proxies input by the user in the UI.
@@ -1639,24 +1980,25 @@ def get_hackerone_key_username():
 
 
 def parse_llm_vulnerability_report(report):
-	report = report.replace('**', '')
+	# Do not globally strip '**' as we want to preserve markdown bolding in the Remediation playbook.
 	data = {}
-	sections = re.split(r'\n(?=(?:Description|Impact|Remediation|References):)', report.strip())
+	# Split on the main headers, optionally allowing markdown bold/italic asterisks around them.
+	sections = re.split(r'\n(?=\**(?:Description|Impact|Remediation|References)\**\s*:)', report.strip(), flags=re.IGNORECASE)
 
 	for section in sections:
 		if not section.strip():
 			continue
 
-		# Accept "Header:\ncontent", "Header:\n\ncontent", or "Header: content on same line"
+		# Accept headers with or without asterisks, and with or without spaces.
 		match = re.match(
-			r'^(Description|Impact|Remediation|References):\s*(.*)',
+			r'^\**\s*(Description|Impact|Remediation|References)\s*\**\s*:\s*(.*)',
 			section.strip(),
-			re.DOTALL,
+			re.DOTALL | re.IGNORECASE,
 		)
 		if not match:
 			continue
 
-		section_title = match.group(1)
+		section_title = match.group(1).title()
 		content = match.group(2).strip()
 
 		if section_title == 'Description':
@@ -2381,43 +2723,97 @@ def is_valid_nmap_command(cmd):
 # Vulnerability Parsing Utils  #
 #------------------------------#
 
-def clean_semgrep_check_id(check_id):
-	"""Cleans and normalizes Semgrep check IDs by removing rule path prefixes
-	and deduplicating repeating suffixes.
+_SEMGREP_LABEL_MAP = {
+	'detected-facebook-oauth': 'Facebook OAuth Token',
+	'detected-github-oauth': 'GitHub OAuth Token',
+	'detected-google-oauth': 'Google OAuth Token',
+	'detected-twitter-oauth': 'Twitter OAuth Token',
+	'generic-api-key': 'Generic API Key',
+	'detected-aws-account-id': 'AWS Account ID',
+	'detected-aws-access-key': 'AWS Access Key',
+	'detected-aws-secret-key': 'AWS Secret Key',
+	'stripe-secret-key': 'Stripe Secret Key',
+	'stripe-publishable-key': 'Stripe Publishable Key',
+	'slack-api-token': 'Slack API Token',
+	'slack-webhook-url': 'Slack Webhook URL',
+	'github-personal-access-token': 'GitHub Personal Access Token',
+	'gitlab-personal-access-token': 'GitLab Personal Access Token',
+	'sendgrid-api-token': 'SendGrid API Token',
+	'twilio-api-key': 'Twilio API Key',
+	'jwt-token': 'JWT Token',
+	'private-key': 'Private Key',
+	'rsa-private-key': 'RSA Private Key',
+	'ssh-private-key': 'SSH Private Key',
+	'password-in-url': 'Password in URL',
+	'hardcoded-password': 'Hardcoded Password',
+	'hardcoded-secret': 'Hardcoded Secret',
+	'basic-auth-credentials': 'Basic Auth Credentials',
+	'firebase-api-key': 'Firebase API Key',
+	'heroku-api-key': 'Heroku API Key',
+	'mailchimp-api-key': 'Mailchimp API Key',
+	'paypal-braintree-access-token': 'PayPal Braintree Token',
+	'shopify-access-token': 'Shopify Access Token',
+	'twitch-api-key': 'Twitch API Key',
+}
 
-	Args:
-		check_id (str): The raw check ID from Semgrep results.
+_SEMGREP_STRIP_PREFIXES = {
+	'usr', 'src', 'github', 'semgrep_rules', 'rules', 'app', 'p',
+	'semgrep_vulnerability_temp', 'semgrep_secret_temp', 'temp',
+}
 
-	Returns:
-		str: The cleaned check ID.
+_SEMGREP_BOILERPLATE = {'detected', 'generic', 'security'}
+
+
+def clean_semgrep_check_id(check_id: str) -> str:
+	"""Return a human-readable label for a Semgrep check ID.
+
+	Lookup table takes priority; unknown slugs are smart-parsed.
 	"""
 	if not check_id:
 		return ""
-	
-	# Split by dots to inspect path components
+
 	parts = check_id.split('.')
-	
-	# Common prefixes or folders to discard from check IDs
-	prefixes_to_strip = {
-		'usr', 'src', 'github', 'semgrep_rules', 'rules', 'app', 'p',
-		'semgrep_vulnerability_temp', 'semgrep_secret_temp', 'temp'
-	}
-	
-	# Filter out initial path elements that match our strip list
+
+	# Strip leading path prefixes
 	start_idx = 0
-	while start_idx < len(parts) and parts[start_idx].lower() in prefixes_to_strip:
+	while start_idx < len(parts) and parts[start_idx].lower() in _SEMGREP_STRIP_PREFIXES:
 		start_idx += 1
-		
 	clean_parts = parts[start_idx:]
-	
+
 	if not clean_parts:
 		return check_id
-		
-	# Deduplicate repeating suffix (e.g. ['react-dangerouslysetinnerhtml', 'react-dangerouslysetinnerhtml'])
+
+	# Deduplicate repeating suffix
 	if len(clean_parts) >= 2 and clean_parts[-1].lower() == clean_parts[-2].lower():
 		clean_parts.pop()
-		
-	return '.'.join(clean_parts)
+
+	# Try lookup against the final dot-segment
+	slug = clean_parts[-1]
+	if slug in _SEMGREP_LABEL_MAP:
+		return _SEMGREP_LABEL_MAP[slug]
+
+	# Smart-parse fallback: title-case words, drop boilerplate
+	words = slug.replace('-', ' ').split()
+	words = [w for w in words if w.lower() not in _SEMGREP_BOILERPLATE]
+	return ' '.join(w.title() for w in words) if words else slug
+
+
+def categorize_secret_type(label: str) -> tuple[str, str]:
+	"""Return (category_name, color_key) for a human-readable secret label.
+
+	color_key matches the frontend colorKey: 'error' | 'warning' | 'info' | 'default'.
+	"""
+	lower = label.lower()
+	if any(kw in lower for kw in ('private key', 'rsa', 'ssh')):
+		return ('Private Key', 'error')
+	# Check oauth before 'auth' to avoid 'oauth' matching the credential 'auth' substring
+	if any(kw in lower for kw in ('oauth', 'access token')):
+		return ('OAuth Token', 'info')
+	if any(kw in lower for kw in ('password', 'credential', 'auth', 'login', 'hardcoded secret')):
+		return ('Credential', 'error')
+	if any(kw in lower for kw in ('api key', 'api token', 'access key')):
+		return ('API Key', 'warning')
+	return ('Secret', 'warning')
 
 
 def parse_semgrep_result(result):
@@ -2430,6 +2826,7 @@ def parse_semgrep_result(result):
 		dict: Vulnerability data dictionary ready for saving.
 	"""
 	check_id = result.get('check_id', '')
+	# NOTE: clean_semgrep_check_id returns human-readable labels since v3.6.4; historical DB rows retain dotted-path format.
 	cleaned_check_id = clean_semgrep_check_id(check_id)
 	return {
 		'name': f"Semgrep: {cleaned_check_id}",
@@ -2556,11 +2953,15 @@ def has_graphql_endpoint(scan_id, url, proxy=None):
 	Checks existing EndPoint records first (zero network cost). Falls back to
 	HEAD-probing common GraphQL paths if the DB has no evidence.
 	"""
-	if EndPoint.objects.filter(
+	logger.info('[GATE] has_graphql_endpoint: DB query — scan_id=%s url=%s', scan_id, url)
+	db_match = EndPoint.objects.filter(
 		scan_history_id=scan_id,
 		http_url__iregex=r'/graphi?ql',
-	).exists():
+	).exists()
+	if db_match:
+		logger.info('[GATE] has_graphql_endpoint: DB hit — GraphQL endpoint already recorded for scan %s', scan_id)
 		return True
+	logger.info('[GATE] has_graphql_endpoint: DB miss — probing %d paths for %s (timeout=%ds each)', len(_GRAPHQL_PROBE_PATHS), url, _PROBE_TIMEOUT)
 
 	from urllib.parse import urlparse as _urlparse
 	parsed = _urlparse(url)
@@ -2569,6 +2970,7 @@ def has_graphql_endpoint(scan_id, url, proxy=None):
 
 	for path in _GRAPHQL_PROBE_PATHS:
 		probe_url = base + path
+		logger.info('[GATE] has_graphql_endpoint: probing %s', probe_url)
 		try:
 			resp = requests.head(
 				probe_url,
@@ -2577,12 +2979,15 @@ def has_graphql_endpoint(scan_id, url, proxy=None):
 				allow_redirects=True,
 				headers=_PROBE_HEADERS,
 			)
+			logger.info('[GATE] has_graphql_endpoint: %s → HTTP %d', probe_url, resp.status_code)
 			if resp.status_code not in (400, 404, 410):
 				logger.info('[GATE] GraphQL endpoint candidate at %s (HTTP %d)', probe_url, resp.status_code)
 				return True
-		except requests.RequestException:
+		except requests.RequestException as e:
+			logger.info('[GATE] has_graphql_endpoint: %s → error (%s)', probe_url, e)
 			continue
 
+	logger.info('[GATE] has_graphql_endpoint: no GraphQL endpoint found for %s', url)
 	return False
 
 
@@ -2599,8 +3004,10 @@ def has_openapi_spec(url, proxy=None):
 	base = '%s://%s' % (parsed.scheme, parsed.netloc)
 	proxies = {'http': proxy, 'https': proxy} if proxy else None
 
+	logger.info('[GATE] has_openapi_spec: probing %d paths for %s (timeout=%ds each)', len(_OPENAPI_PROBE_PATHS), url, _PROBE_TIMEOUT)
 	for path in _OPENAPI_PROBE_PATHS:
 		probe_url = base + path
+		logger.info('[GATE] has_openapi_spec: probing %s', probe_url)
 		try:
 			resp = requests.head(
 				probe_url,
@@ -2609,6 +3016,7 @@ def has_openapi_spec(url, proxy=None):
 				allow_redirects=True,
 				headers=_PROBE_HEADERS,
 			)
+			logger.info('[GATE] has_openapi_spec: %s → HTTP %d', probe_url, resp.status_code)
 			if resp.status_code != 200:
 				continue
 			# HEAD returned 200 — accept json/yaml content types directly
@@ -2617,6 +3025,7 @@ def has_openapi_spec(url, proxy=None):
 				logger.info('[GATE] OpenAPI spec found at %s (Content-Type: %s)', probe_url, ct)
 				return True
 			# For ambiguous content types confirm with a lightweight GET
+			logger.info('[GATE] has_openapi_spec: ambiguous Content-Type %r — issuing GET %s', ct, probe_url)
 			get_resp = requests.get(
 				probe_url,
 				timeout=_PROBE_TIMEOUT * 2,
@@ -2633,9 +3042,11 @@ def has_openapi_spec(url, proxy=None):
 					return True
 			except Exception:
 				continue
-		except requests.RequestException:
+		except requests.RequestException as e:
+			logger.info('[GATE] has_openapi_spec: %s → error (%s)', probe_url, e)
 			continue
 
+	logger.info('[GATE] has_openapi_spec: no OpenAPI spec found for %s', url)
 	return False
 
 
@@ -2648,6 +3059,8 @@ def has_jwt_tokens(scan_id, subdomain=None):
 	scoped to that subdomain; SecretLeak always covers the full scan so
 	that scan-wide secret discoveries gate per-subdomain runs correctly.
 	"""
+	subdomain_label = subdomain.name if subdomain is not None else 'scan-wide'
+	logger.info('[GATE] has_jwt_tokens: querying auth parameters — scan_id=%s scope=%s', scan_id, subdomain_label)
 	param_qs = Parameter.objects.filter(
 		endpoint__scan_history_id=scan_id,
 		is_auth_related=True,
@@ -2656,10 +3069,14 @@ def has_jwt_tokens(scan_id, subdomain=None):
 		param_qs = param_qs.filter(endpoint__subdomain=subdomain)
 	for name in param_qs.values_list('name', flat=True):
 		if _JWT_PARAM_RE.search(name):
+			logger.info('[GATE] has_jwt_tokens: JWT param match on %r — scan_id=%s scope=%s', name, scan_id, subdomain_label)
 			return True
 
+	logger.info('[GATE] has_jwt_tokens: no JWT params found, querying SecretLeak — scan_id=%s', scan_id)
 	for secret_type in SecretLeak.objects.filter(scan_history_id=scan_id).values_list('secret_type', flat=True):
 		if _JWT_SECRET_TYPE_RE.search(secret_type):
+			logger.info('[GATE] has_jwt_tokens: JWT secret match on %r — scan_id=%s', secret_type, scan_id)
 			return True
 
+	logger.info('[GATE] has_jwt_tokens: no JWT tokens found — scan_id=%s scope=%s', scan_id, subdomain_label)
 	return False

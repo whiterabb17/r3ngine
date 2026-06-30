@@ -1,6 +1,244 @@
 # Changelog
 
-### [v3.6.0]
+### [v3.7.0]
+
+#### Enhanced
+
+- **Temporal Plugin Logging & Timeline Grouping**:
+  - Implemented the `LogPluginStartActivity` and `LogPluginEndActivity` Temporal activities within `MasterScanWorkflow` to dynamically log backend execution of plugin child workflows directly to the `ScanActivity` database table.
+  - Refactored the React frontend `ScanDetailPage.tsx` to group and sort `ScanActivity` objects utilizing `anchor_step` and `runtime_position`, creating a unified, dynamically scaled timeline that supports plugin injection correctly alongside standard engine tiers.
+  - Styled Plugin specific timeline cards to visually distinguish them from regular workflow tiers via primary color highlighting.
+
+- **Distributed Remote Worker Infrastructure**:
+  - Implemented the `ScanWorker` model and Settings UI (`RemoteWorkersPage`) for managing isolated remote workers with user-defined `auth_token` secrets.
+  - Added dynamic `--worker-name`, `--worker-token`, and `--r3ngine-url` arguments to `run_temporal_orchestrator.py` allowing headless worker deployment.
+  - Developed a resilient, non-blocking `requests` + `asyncio.to_thread` heartbeat loop for workers to report health status to the central server.
+  - Built `WorkerHeartbeatAPIView` employing `constant_time_compare` to securely authenticate worker payloads.
+  - Enhanced `InitiateScan` and `InitiateSubTask` views to validate the health (heartbeat within 5 mins) and active state of remote workers before routing scans to their isolated task queues.
+  - Added standalone `docker-compose.worker.yml` and `up-worker` / `down-worker` targets to `Makefile` and `make.bat` for seamless scaling.
+
+- **Certificate Intelligence**:
+  - Added the `CertificateIntelligence` model storing per-host TLS metadata: issuer, subject, SAN list, validity window, signature algorithm, SHA-256 fingerprint, wildcard flag, and self-signed flag.
+  - New `tlsx` parser + certificate writer ingests batch output from ProjectDiscovery's `tlsx` into `CertificateIntelligence` rows, deduped per `(host, port, fingerprint)`.
+  - Registered `run_cert_intel_activity` Temporal activity scheduled inside both `MasterScanWorkflow` and `SubScanWorkflow`, gated by the cert-intel engine config flag and idempotent on retry.
+  - Added APME ingestion (`apme/ingestion/cert_intel.py`) producing `Certificate` nodes with `PROTECTS` edges to endpoint/subdomain nodes; a new `x_cert_intel.yaml` rules file adds expired-cert, self-signed, and weak-signature rules feeding the attack-path engine.
+  - Implemented `_batch_merge_certificates` in `Neo4jManager` syncing certificate nodes via UNWIND batches, plus the `/api/cert-intel/<scan_id>/` REST endpoint and a `CertIntelTab` panel under the scan detail page.
+
+- **Identity Infrastructure Intelligence**:
+  - Added the `IdentityInfraDiscovery` model capturing detected SSO/IdP/IAM endpoints (Okta, ADFS, Auth0, Ping, Azure AD, Keycloak, generic SAML/OIDC) with `host`, `infra_type`, evidence URL, response title, and identifying response headers.
+  - Implemented URL/title/header detection logic with a precedence pipeline (URL pattern → title regex → header signature) so high-confidence matches win over ambiguous ones.
+  - Wired `run_identity_infra_activity` into Temporal workflows with a 10-minute timeout and idempotent upserts.
+  - Added APME ingestion + `x_identity_infra.yaml` rules (SAML/OIDC discovery → credential harvesting / authenticated access capabilities) and a Neo4j `_batch_merge_identity_infra` sync path.
+  - Built the `/api/identity-infra/<scan_id>/` REST endpoint and a `IdentityInfraPanel` frontend component grouping discoveries by `infra_type`.
+
+- **Expanded Graph & API Intelligence**:
+  - Added the `APIIntelligenceProfile` model clustering scanned endpoints by `(base_url, api_type)` and recording `endpoint_count`, `requires_auth`, `auth_scheme`, `parameters_sample`, `graphql_schema_snippet`, and `raw_endpoints`.
+  - New `collect_api_intelligence` clustering pass detects REST/GraphQL/SOAP/generic flavours using regex heuristics and content-type hints; idempotent via `unique_together` on `(scan_history, base_url, api_type)`.
+  - Added APME ingestion producing `APIEndpoint` nodes plus `Organization` (from `Domain.project`) and `Application` (per subdomain with a webserver) nodes, with `DEPENDS_ON` and `PART_OF` edges anchoring the new top of the attack chain.
+  - Added 3 new APME edge types (`DEPENDS_ON`, `TRUSTS_DOMAIN`, `PART_OF`) registered in both `apme/graph/schema.py` and the `Edge` dataclass validator.
+  - Added `x_api_intelligence.yaml` rules (GraphQL → data exfil, unauthenticated REST → authenticated access / account takeover, SOAP → RCE, all APIs → internal discovery).
+  - Implemented `_batch_merge_api_endpoints`, `_batch_merge_applications`, and `_batch_merge_organizations` UNWIND batch writers, plus `get_full_chain_graph()` and `get_chain_nodes_by_type()` query methods on `Neo4jManager` with allowlist-validated labels.
+  - Built the `/api/graph/chain/` and `/api/graph/chain/nodes/` REST endpoints and a `FullChainGraphTab` frontend component with stat tiles, clickable type legend, and per-type drilldown.
+  - Hardened the full-chain query: split into separate node and edge passes to eliminate cartesian truncation under the prior `LIMIT 1000`, dedupe edges on `(from, to, type)`, and bound limits via `GRAPH_CHAIN_NODE_LIMIT` (2000) and `GRAPH_CHAIN_EDGE_LIMIT` (5000).
+  - Killed the per-cluster N+1 subdomain lookup in `collect_api_intelligence` by pre-fetching a single name → Subdomain index.
+
+- **Exposure Correlation Engine & Taxonomy Expansion**:
+  - New `ExposureCorrelator` consolidates duplicate exposures across tools (Nuclei, Semgrep, Trivy, Dalfox) via fuzzy URL + signature matching and writes deduped `Exposure` records.
+  - Expanded taxonomy: 18 new exposure categories with mapped MITRE techniques and remediation priorities; backed by 18 new test cases.
+  - Hardened against 14 edge cases surfaced in code review: empty evidence arrays, malformed URLs, mixed-case host normalization, score threshold boundary conditions, and string-merge correctness.
+
+- **APME Attack Trees & Scoring UX**:
+  - Added `RiskSummaryBar` aggregating critical/high/medium/low risk paths above the attack-tree viewer.
+  - Added `PriorityBadge` and a hoverable score tooltip explaining the 10-factor weights driving each path's risk number.
+  - Added a "Speculative Paths" section surfacing paths the engine considered but excluded due to constraint gates, with the failing gate annotated.
+  - Added a detectability chip on LEAF nodes in `AttackTreeViewer` showing the likelihood the chain is logged/alerted on.
+  - Fixed attack-tree 404s by URL-encoding `targetId` in `fetchAttackTree`.
+  - Replaced raw JSON dumps with a typed `ImpactAssessmentResponse`; removed `any` casts and hardcoded colours from `ImpactExplorer` (now uses `useThemeTokens` semantic colours).
+  - Refactored MITRE technique helpers into `apme.utils.mitre` and gracefully handles empty attack-tree API responses.
+
+- **Exposure UI Improvements**:
+  - Added an aggregate stats bar and status filter chips to `ExposureList`.
+  - `ExposureCard` now derives and displays an asset summary (host + path + method) and respects the theme via the `sx` prop instead of inline colour strings.
+  - `ExposureDetailsDrawer` renders `evidence_data` as a key-value list, shows per-evidence timestamps, and links related vulnerabilities inline.
+
+- **Feroxbuster Directory Fuzzing**:
+  - Added the `run_feroxbuster` engine config key to `dir_file_fuzz`. When enabled, `ffuf` and `feroxbuster` run side-by-side with shared wordlist/proxy settings; results are merged and deduped on URL before persistence. The flag is set to `false` by default in all bundled engine YAML fixtures to preserve prior behavior on upgrade.
+
+- **Proxy Validation Engine & Cache Optimization**:
+  - Rebuilt the proxy validation engine with connection-reusing `requests.Session` instances, eliminating massive TLS handshake overhead across parallel threads.
+  - Replaced ord-sum hashing with Python's C-backed `hash()` for deterministic checker selection.
+  - Replaced string-based exception scanning with class-based exception type checks (`_PROXY_DEAD_EXCEPTIONS`) for connection-level errors. Made read-time exceptions tolerant to avoid false negatives if a check server itself is slow/rate-limiting.
+  - Upgraded the process-lifetime failed proxy cache from a basic set to a timestamped dictionary with a 30-minute Time-To-Live (TTL), preventing stale blocks when dead proxies come back online.
+  - Added a maximum input limit (500) to the bulk proxy validation API endpoint (`check_proxy_bulk`) to protect the server from Denial of Service (DoS) and thread exhaustion.
+
+- **Endpoints/URLs Management Improvements**:
+  - Rebuilt the Endpoints Tab UI to support multi-select checkboxes for batch operations.
+  - Added bulk action bar actions: "COPY SELECTED" (copies all selected URLs to clipboard) and "DELETE SELECTED" (prompts with confirmation to delete all selected URLs).
+  - Added per-row action buttons for Copy, Open in Browser, and Delete.
+  - Added a page-level export button to download all visible URLs as a `.txt` file.
+
+- **Email Discovery & Import**:
+  - Added `Email.source` field (`manual`, `hunter`, `harvester`, `phonebook`, `pattern`, `crawled`) with Django migration; `save_email()` updated to accept an optional `source` parameter (backward-compatible, defaults to `hunter`).
+  - Migrated `email_security` plugin to the internal module `web/reNgine/tasks/email_security.py`; wired `run_email_security_activity` into the Tier 2 Temporal workflow (post-port-scan); added `check_ssl_cert()` for port 465 (SMTPS) and 993 (IMAPS) implicit-TLS certificate validation — expired, self-signed, hostname-mismatch, and expiring-soon findings feed into the vulnerability table.
+  - New `web/reNgine/tasks/email_discovery.py` orchestrator runs five discovery sources sequentially, pushing per-tool progress events to the `scan:logs:{scan_id}` Redis Stream: Hunter.io domain search (existing integration), theHarvester (`-b all`), phonebook.cz HTTP scrape, pattern inference (6 common formats verified via SMTP RCPT TO against the domain MX record), and crawled URL extraction from saved `Screenshot.html_path` HTML files.
+  - Four new API endpoints under `IsPenetrationTester` RBAC: `POST /api/emails/manual/` (add/import with RFC-5322 validation), `POST /api/emailDiscovery/start/` (starts background thread, returns `job_id`), `POST /api/emailDiscovery/stop/` (Redis stop signal), `GET /api/emailDiscovery/{job_id}/replay/` (stream replay from Redis for WS reconnect/page-reload).
+  - OSINT tab `EmailSection` gains an **Actions ▾** dropdown with "Add / Import Emails" and "Discover Emails"; each email row shows a source badge chip (amber for manual, muted for tool-discovered).
+  - `EmailImportModal`: paste tab (comma/semicolon/newline-separated) and file upload tab (`.txt`/`.csv`) with client-side validation, live valid/invalid count preview, and duplicate deduplication on the backend.
+  - `EmailDiscoveryModal`: live per-tool progress over `ws/logs/{scanId}/` WebSocket; hides without stopping the background run; on reconnect the REST replay endpoint restores full modal state from Redis Stream history.
+
+#### Fixed
+
+- **Scan Detail Subdomains N+1 Query & Screenshot Lookup**:
+  - Resolved a severe database N+1 query loop and slow glob search on `ScanSummaryAPIView`, allowing the Scan Detail page to load in under a second.
+  - Added prefetching relationships (`select_related` and `prefetch_related`) to the subdomains datatable viewset to speed up listing loads.
+
+- **Empty Target Summary Tabs**:
+  - Passed the latest scan ID to both `<DirectoriesTab />` and `<ParametersTab />` on the Target Summary page, fixing a bug where these tabs loaded with empty/blank results.
+
+- **Scan detail link path fixes**:
+  - Corrected Route path parameters and project slug prefixes in "Recent Scan" links in the Target List and Scan List pages.
+
+- **Exposure Correlation regression coverage**: Updated stale CPDE integration test mocks to match the new `get_js_urls_from_results_dir` signature introduced when the JS collector was refactored.
+
+### [v3.6.3]
+
+#### Enhanced
+
+- **Nuclei Batch Tag Counting Optimization**:
+  - Replaced the CLI-based `nuclei -tl` tag template counter with a lightning-fast native Python YAML parser. The previous implementation caused Out-Of-Memory (OOM) Docker kills and 30-second timeouts when enumerating 125,000+ templates. Batch template boundaries are now strictly adhered to and no longer crash the orchestration engine.
+  - Custom templates uploaded via the UI (`NUCLEI_CUSTOM_TEMPLATE`) and secondary template paths (`NUCLEI_TEMPLATE`) are now dynamically discovered and injected into the count loop, fixing a bug where only the default path was sized.
+  - Added an intelligence step to `GatherNucleiTagsActivity`: if previous scanners (e.g. Dalfox or S3Scanner) discovered vulnerabilities like XSS, LFI, or IDOR on the target, Nuclei automatically prepends the `xss`, `lfi`, or `idor` tags to its execution batch. Existing CVE IDs linked to the target also inject the `cve` tag.
+
+#### Fixed
+
+- **ffuf Proxy Compatibility**:
+  - Filtered out `socks4` and `socks5` proxies when executing directory fuzzing with `ffuf` to resolve download errors where `ffuf` was rejecting SOCKS proxies format. If a SOCKS proxy is initially selected by the randomizer, `ffuf` will re-fetch and validate an HTTP/S proxy from the pool before executing.
+
+- **CPDE SSL Verification**:
+  - Disabled SSL certificate verification in the Custom Parameter Discovery Engine (CPDE) for JavaScript file downloads and OpenAPI schema probing. This fixes widespread download failures where scanning targets with self-signed certificates threw `[SSL: CERTIFICATE_VERIFY_FAILED]` errors and skipped intelligence extraction.
+
+- **WPScan Reliability**:
+  - Removed the randomized proxy assignment from the `wpscan --update` initial sequence. Bouncing the signature update through datacenter proxies frequently caused SSL/connection failures blocking WPScan from launching. Updates now always contact WPScan APIs directly.
+
+### [v3.6.2]
+
+#### Enhanced
+
+- **Proxy Fetching & Validation System — Comprehensive Overhaul**:
+  Fixed two compounding problems that caused many proxies to appear live at fetch time but be dead by scan time:
+
+  **`check_proxy_robust` (reNgine/common_func.py)**:
+  - Both IP-reflection endpoints (`api.ipify.org` + `ip-api.com`) are now checked in **parallel** via `ThreadPoolExecutor`, halving worst-case validation latency (the first success short-circuits the other).
+  - Added **IPv4/IPv6 format validation** on the returned IP string using `ipaddress.ip_address()`. Captive-portal pages that return `{"ip": "Login Required"}` or HTML bodies no longer produce false positives.
+  - Added opt-in **transparent-proxy detection**: when `OpSec.enable_transparent_proxy_detection=True`, the server's own outbound IP is detected once and any proxy that reports the same IP is rejected.
+  - Default timeout raised from 5 s → **10 s** to reduce false negatives on slow SOCKS5 proxies.
+
+  **`get_random_proxy` (reNgine/common_func.py)**:
+  - **Freshness short-circuit**: if `Proxy.proxies_verified_at` is within the configured TTL (default 120 min), the batch-verified list is trusted directly and a random entry is returned with **zero re-validation overhead**. Previously every tool call triggered up to 125 s of sequential blocking.
+  - When the list is stale, re-validation is now **fully parallel** (up to 50 workers; first live proxy wins, rest cancelled) instead of sequential with an arbitrary 25-cap.
+  - Added module-level **`_failed_proxy_cache`** (in-process set): proxies that fail during a scan session are cached and skipped on subsequent calls within the same Celery worker, eliminating repeated timeout waits against already-dead entries.
+
+  **`fetch_proxies_task` (reNgine/tasks.py)**:
+  - Batch verification now passes `timeout=10` explicitly to `check_proxy_robust`.
+  - After saving the live proxy list, `proxy_obj.proxies_verified_at = now()` is stamped so the freshness short-circuit in `get_random_proxy` is immediately active.
+
+  **`ProxychainsWrapper.get_random_proxy` (reNgine/utils/opsec.py)**:
+  - Replaced the old sequential 5-proxy cap with the same **parallel `ThreadPoolExecutor`** pattern used in `get_random_proxy`. All candidates are checked concurrently; first live line wins.
+
+  **`Proxy` model (scanEngine/models.py)**:
+  - Added `proxies_verified_at` (`DateTimeField`, nullable) — records when the stored list was last batch-verified.
+  - Added `proxy_ttl_minutes` (`IntegerField`, default 120) — configurable TTL for the freshness short-circuit.
+
+  **`OpSec` model (scanEngine/models.py)**:
+  - Added `enable_transparent_proxy_detection` (`BooleanField`, default False) — opt-in transparent-proxy rejection.
+
+  **Migration**: `scanEngine/migrations/0015_proxy_verified_at_opsec_transparent.py`
+
+#### Fixed
+
+- **Initiate New Targets modal theme compatibility**:
+  Removed hardcoded dark backgrounds and hex colors from `AddTargetModal.tsx` and refactored it to use dynamic theme-aware properties and colors. The modal now renders with a matching background and correct text contrast on the v3 light theme.
+
+- **Scan History drawer theme compatibility**:
+  Removed hardcoded dark backgrounds and hex colors from `ScanHistoryDrawer.tsx` and updated components to use theme tokens and values. The drawer now displays with correct light/dark theme compliance and proper contrast.
+
+- **`run_param_discovery_activity` (CPDE) — ScanActivity permanently stuck at RUNNING**:
+  Refactored to use `_run_task`, which provides heartbeating, pre-flight abort-guard, and
+  `SUCCESS_TASK`/`FAILED_TASK` status updates identical to every other activity. Previously the
+  function called `param_discovery` directly with no try/except and never called
+  `update_scan_activity`, leaving the `ScanActivity` row at `RUNNING_TASK` forever after
+  completion. The no-URLs skip path now also marks the row `SUCCESS_TASK` instead of silently
+  returning.
+
+- **`run_search_vulns_activity` (CVE lookup) — all fan-out instances stuck at RUNNING**:
+  Same root cause as CPDE: direct call to `search_vulns_scan` with no status update or
+  heartbeat. Refactored to use `_run_task`. With 14+ concurrent instances per port scan, this
+  left up to 14 `ScanActivity` rows permanently at `RUNNING_TASK`.
+
+- **`web_api_discovery` — silent hang with no subprocess visible**:
+  Three bugs in the per-URL loop caused `has_graphql_endpoint` and `has_jwt_tokens` to be
+  called for every URL instead of once per subdomain, and LinkFinder to re-run for every URL
+  of the same subdomain when its output file was empty:
+  - Added `_graphql_gate_cache` (dict keyed by subdomain_name): `has_graphql_endpoint` issues
+    a DB `iregex` query against all endpoint rows plus up to 6 network probes × 5 s timeout
+    each. With 17 URLs the worst case was 17 × 2 call-sites × 30 s = **17 minutes of silent
+    Python I/O** with no subprocess spawned. Now called at most once per subdomain; both the
+    InQL and graphql-cop blocks share the same cache.
+  - Added `_jwt_gate_cache` (dict keyed by subdomain_name): `has_jwt_tokens` issues 2 DB
+    queries per call. Now called at most once per subdomain.
+  - Added `processed_linkfinder_subdomains` (set): LinkFinder previously re-ran for every URL
+    of the same subdomain when the output file was 0 bytes (no JS found). The primary dedup
+    guard is now the set (matching Arjun and ParamSpider); `os.path.exists` remains as the
+    Temporal retry guard for files written by a prior activity attempt.
+
+- **Gate-check functions — silent blocking with no log output**:
+  `has_graphql_endpoint`, `has_jwt_tokens`, and `has_openapi_spec` now log every DB query
+  and every individual network probe (URL, status code or exception) so any future slowdown
+  is immediately visible in the orchestrator log rather than appearing as a silent hang.
+
+- **`nuclei_scan` — proxy concurrency cap prevents AdaptiveWaitGroup deadlock**:
+  nuclei v3.9.0 deadlocks when concurrency is high and the proxy error rate exceeds ~60%.
+  The scan 37 post-mortem confirmed this via a `nuclei-stacktrace-*.dump` showing goroutine 1
+  stuck in `semaphore.Acquire` for 9 minutes during the `wordpress,wp,wp-plugin` batch.
+  Added `NUCLEI_PROXY_MAX_CONCURRENCY = 10` and `NUCLEI_PROXY_MAX_RATE_LIMIT = 10` constants to
+  `definitions.py`. When `proxies_file_path` is set and the file exists, `nuclei_scan()` now
+  caps both values before building the command, logging a warning when a cap is applied.
+
+- **`MasterScanWorkflow` — NucleiPlannerWorkflow failure is now isolated**:
+  Previously, any failure in `NucleiPlannerWorkflow` (e.g. nuclei deadlock exhausting all
+  retries) propagated as an unhandled exception, setting `success = False` and skipping all
+  of Tier 7 (vulnerability correlation, risk scoring, Neo4j sync, notification). Scan 37
+  had 8 of 9 nuclei batches complete successfully — those findings were never correlated.
+  The `execute_child_workflow("NucleiPlannerWorkflow")` call is now wrapped in
+  `try/except Exception`, with a `nuclei_failed` flag set on failure. Tier 7 runs
+  regardless, processing whatever findings the completed batches wrote to the database.
+
+- **`web_api_discovery` — null `endpoint_id` constraint violation from LinkFinder**:
+  `save_endpoint()` returns `(None, False)` for off-domain URLs discovered by LinkFinder
+  (CDN links, third-party assets). When such a URL also contained `?`, `save_parameter(None, …)`
+  was called, hitting the `NOT NULL` constraint on `Parameter.endpoint_id`. The parameter loop
+  now guards with `if endpoint is not None and '?' in full_url:`.
+
+- **`web/.gitignore` — nuclei hang-monitor crash dumps no longer tracked**:
+  nuclei's `-hang-monitor` flag writes `*-stacktrace-*.dump` and `crash-resume-file-*.dump`
+  to the working directory on deadlock detection. Added three patterns (`*-stacktrace-*.dump`,
+  `crash-resume-file-*.dump`, `*.dump`) to `web/.gitignore` so these diagnostic artifacts
+  are never accidentally staged or committed.
+
+#### CPDE Enhancements (Parameter Discovery)
+- Added `url_param_collector.py` sub-module to `web/reNgine/cpde/`:
+  reads `urls_*.txt` (Katana/gau/gospider/waybackurls), `arjun_*.json`,
+  `ps_*.txt` (ParamSpider), `kr_*.json` (Kiterunner), and `lf_*.txt`
+  (LinkFinder) output files from the scan results directory and converts
+  them to CPDE-format findings for the correlation engine.
+- Added noise blocklist to `correlation_engine.py`: Google Analytics
+  `utm_*`, `_ga`/`_gl`/`_gid`, ad click IDs (`fbclid`, `gclid`,
+  `msclkid`), and Cloudflare challenge tokens are now filtered from output
+  regardless of confidence score. Blocklist can be disabled per-call with
+  `apply_noise_filter=False`.
+- CPDE `param_discovery` now correlates parameters from all discovered
+  sources (JS AST, OpenAPI, + all tool output files) instead of only
+  JavaScript files and OpenAPI schemas.
 
 - **Intelligent Auth Form Extraction — Full Rewrite (`auth_discovery_tasks.py`)**:
   - Replaced the single-attempt, regex-based implementation with a robust two-helper architecture:
@@ -49,6 +287,7 @@
   - Extended wp-taint plugin discovery to support three sources of WordPress plugin slugs (legacy `WordPress Plugin: {slug}`, `WordPress Plugin: {slug} - {vuln title}`, and `WordPress Plugin Detected: {slug}`) and HTTP URLs matching the pattern `/wp-content/plugins/([^/?#]+)/` from crawled or fuzz-discovered endpoints.
   - Ensured that new findings from both WPScan and WPTaint are dynamically passed through the LLM description generator (`get_vulnerability_gpt_report`) with full PII anonymization layer. Added checks to verify if a description/GPT has already been generated (`is_gpt_used=False`) before triggering the LLM call.
   - Added comprehensive tests in `test_wpscan.py` and `test_wptaint.py`.
+  - Fixed `parse_wptaint_results` crashing with `'str' object has no attribute 'get'` for every plugin: `taint-scan` emits `{"summary": {...}, "results": [...], "errors": null}` but the parser was iterating the top-level dict (yielding string keys). Added `_CHECK_ID_MAP` mapping all 11 known `check_id` values to `(severity, canonical_name)` tuples with a keyword-based fallback for future rules, and rewrote the field extraction to use the actual schema (`check_id`, `extra.message`, `path`, `start.line`, `extra.dataflow_trace`). Validated against 256 findings across 12 plugins from a live scan.
 
 - **WPScan Execution Reliability**:
   - Automatically runs `wpscan --update --no-banner` (with rotation proxies if configured) before starting the scan loop to ensure up-to-date vulnerability definition databases.
@@ -184,9 +423,31 @@
   - Added `LinkedInSessionCard` React component: live status indicator (green/amber/red), file upload, session revocation, and helper script download — all via the API vault settings page.
   - 24 tests covering model fields, scraper authentication paths (storage_state, cookie injection, graceful fallback), all four API endpoints, and `run_linkedint` caller resilience.
 
+- **Report Settings — 2-Column Layout & Found Parameters Toggle**:
+  - Reorganized the Report Settings checkbox area into a two-column grid: left column holds "Ignore Information Vulnerabilities" and "Include Attack Surface Map"; right column holds "Include Attack Paths" and the new "Include Found Parameters".
+  - Added **Include Found Parameters** checkbox, which gates whether discovered `Parameter` records are appended to the generated report. The flag is passed as `include_found_parameters` in the report generation request to `/scan/create_report/`.
+
+- **Fix: Report Generation Respects `include_found_parameters` Checkbox** (`startScan/views.py`, `reNgine/report_tasks.py`):
+  - Previously the "Include Found Parameters" checkbox in the report generation modal had no effect — `Parameter` records were always included in the report regardless of the user's selection.
+  - Root cause: `create_report` was not persisting the `include_found_parameters` flag in `ScanReport.params`, so `generate_report_task` always ran the parameters queryset unconditionally.
+  - Fixed by reading `include_found_parameters` from the GET request in `create_report` (defaulting `True` for backward-compat) and storing it in `ScanReport.params`. `generate_report_task` now reads the flag and gates the `Parameter` queryset behind `include_found_parameters`, producing reports without a parameters section when the box is unchecked.
+
+- **Fix: Temporal Workflows No Longer Resume Aborted or Deleted Scans** (`reNgine/temporal_activities.py`):
+  - After a container restart, Temporal replays durable workflows from its own history independently of Django's database. Scans that were aborted or deleted before the restart would continue executing, causing:
+    - **Deleted scans**: `IntegrityError` FK violations (`scan_history_id` not present in `startScan_scanhistory`), triggering infinite Temporal retry loops.
+    - **Aborted scans**: `TargetProfilingActivity` was unconditionally re-arming `scan_status` back to `RUNNING_TASK`, silently undoing the abort.
+  - Root cause confirmed by container logs showing the `dalfox_xss_scan` activity for deleted scan #32 entering an infinite retry cycle after every restart.
+  - Fixed with a two-layer guard using Temporal's `ApplicationError(non_retryable=True)`:
+    - **Layer 1 — `TargetProfilingActivity`**: Acts as the primary lifecycle guard (first real activity every workflow runs). If `ScanHistory` does not exist or has `scan_status=ABORTED_TASK`, raises a non-retryable error to permanently terminate the workflow before any work is attempted. The unconditional re-arm of `ABORTED_TASK` status has been removed; only `FAILED_TASK`/other states are re-armed to `RUNNING_TASK`.
+    - **Layer 2 — `_run_task` helper**: Pre-flight guard at the entry point of every activity function. Catches activities that were in-flight mid-scan at the time of abort/delete, preventing them from proceeding and entering retry loops.
+    - **Layer 3 — `CheckScanAliveActivity` (child workflow guard)**: Child workflows (`NucleiPlannerWorkflow`, `SubScanWorkflow`) are replayed by Temporal independently of `MasterScanWorkflow` after a container restart, so they skip Layer 1 entirely. A new `CheckScanAliveActivity` is now called as the **first activity** in both child workflows. It performs the same abort/delete check and raises `ApplicationError(non_retryable=True)` to terminate the child workflow cleanly before any scan data is accessed. This closes the remaining gap in lifecycle guard coverage for replayed child workflows.
+  - Orphaned `TemporalWorkflowExecution` DB records for aborted scans (scans 4 and 8) were reconciled and marked `CANCELLED`/`TERMINATED`. The actively-looping workflow for deleted scan 32 (`master-scan-32-run-0-f36d62b1-nuclei`) was cancelled directly via the Temporal API.
+---
+
 ### [v3.5.0] - 2026-06-04
 
 - **Python 3.12 Runtime Upgrade**:
+
   - Upgraded the container execution runtime from Python 3.10 to Python 3.12 to improve performance by ~25% and ensure support until October 2028.
   - Configured the trusted deadsnakes PPA signing keyring (`/usr/share/keyrings/deadsnakes.gpg`) to install `python3.12`, `python3.12-dev`, and `python3.12-venv` in the Ubuntu 22.04 base image.
   - Avoided installing the system `python3-pip` package (which forces default Python 3.10 installation) by bootstrapping Python 3.12's `ensurepip` module directly.

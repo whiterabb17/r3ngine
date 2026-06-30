@@ -175,7 +175,8 @@ class TargetSummaryAPIView(APIView):
                 'name': target.name,
                 'id': target.id,
                 'in_scope_ips': in_scope_ips_list,
-                'secondary_domains': manual_sec_domains if target.secondary_domains else []
+                'secondary_domains': manual_sec_domains if target.secondary_domains else [],
+                'manual_subdomains': target.get_manual_subdomains(),
             },
             'domain_info': domain_info_data,
             'related_domains': related_domains,

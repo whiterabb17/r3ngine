@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { 
   Activity, 
@@ -15,12 +15,17 @@ import {
 import { KpiCard } from '../../components/KpiCard';
 import { TacticalPanel } from '../../components/TacticalPanel';
 import { useMonitoringDiscoveries, useMonitoringStats } from './api/index';
-import { Grid, Container, Box, Typography } from '@mui/material';
+import { Grid, Container, Box, Typography, alpha, useTheme, Button } from '@mui/material';
 import { formatDiscoveryContent } from './utils/formatters';
 import { Target, Shield } from 'lucide-react';
+import { useThemeTokens } from '../../theme/useThemeTokens';
+import { AddMonitoringTargetModal } from './components/AddMonitoringTargetModal';
 
 export const MonitoringPage: React.FC = () => {
+  const { tokens, isLight } = useThemeTokens();
+  const theme = useTheme();
   const { projectSlug } = useParams({ from: '/$projectSlug/monitoring' });
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const { data: stats, isLoading: statsLoading } = useMonitoringStats(projectSlug);
   const { data: discoveries, isLoading: discoveriesLoading } = useMonitoringDiscoveries(projectSlug);
@@ -58,23 +63,41 @@ export const MonitoringPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
-      {/* Top Header Row - MUI Pattern */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'between', mb: 4, width: '100%' }}>
         <Box sx={{ flex: 1 }}>
           <Typography variant="h5" sx={{
             fontWeight: 900,
             fontFamily: 'Orbitron',
             letterSpacing: 3,
-            color: '#fff',
+            color: 'text.primary',
             textTransform: 'uppercase'
           }}>
             Continuous Monitoring Dashboard
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography sx={{ fontSize: '10px', fontWeight: 800, color: 'text.secondary', letterSpacing: 2 }}>DASHBOARD</Typography>
-          <ChevronRight size={12} style={{ color: '#ff00f7' }} />
-          <Typography sx={{ fontSize: '10px', fontWeight: 800, color: '#fff', letterSpacing: 2 }}>MONITORING</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Button
+            variant="contained"
+            onClick={() => setIsAddModalOpen(true)}
+            sx={{
+              bgcolor: tokens.accent.primary,
+              color: isLight ? '#fff' : '#000',
+              fontWeight: 800,
+              fontFamily: 'Orbitron',
+              letterSpacing: 1,
+              px: 3,
+              py: 0.5,
+              fontSize: '0.75rem',
+              '&:hover': { bgcolor: alpha(tokens.accent.primary, 0.8) }
+            }}
+          >
+            ADD TARGET
+          </Button>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography sx={{ fontSize: '10px', fontWeight: 800, color: 'text.secondary', letterSpacing: 2 }}>DASHBOARD</Typography>
+            <ChevronRight size={12} style={{ color: tokens.accent.secondary }} />
+            <Typography sx={{ fontSize: '10px', fontWeight: 800, color: 'text.primary', letterSpacing: 2 }}>MONITORING</Typography>
+          </Box>
         </Box>
       </Box>
 
@@ -101,7 +124,7 @@ export const MonitoringPage: React.FC = () => {
             fontWeight: 900, 
             textTransform: 'uppercase', 
             letterSpacing: 4, 
-            color: '#00f3ff', 
+            color: tokens.accent.primary, 
             fontFamily: 'Orbitron',
             mb: 4,
             px: 2
@@ -112,11 +135,11 @@ export const MonitoringPage: React.FC = () => {
           {/* Filters Bar - Styled after Image 7 */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, px: 2, gap: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <Typography sx={{ fontSize: '10px', fontWeight: 900, color: 'rgba(255,255,255,0.4)', letterSpacing: 2 }}>RESULTS :</Typography>
+              <Typography sx={{ fontSize: '10px', fontWeight: 900, color: 'text.secondary', letterSpacing: 2 }}>RESULTS :</Typography>
               <select style={{ 
-                background: 'rgba(5, 5, 15, 0.6)', 
-                border: '1px solid rgba(255, 255, 255, 0.1)', 
-                color: '#fff', 
+                background: isLight ? theme.palette.background.paper : 'rgba(5, 5, 15, 0.6)', 
+                border: `1px solid ${isLight ? 'rgba(0, 0, 0, 0.15)' : 'rgba(255, 255, 255, 0.1)'}`, 
+                color: isLight ? 'rgba(0, 0, 0, 0.85)' : '#fff', 
                 fontSize: '11px', 
                 fontWeight: 700, 
                 borderRadius: '50px', 
@@ -135,16 +158,16 @@ export const MonitoringPage: React.FC = () => {
                 placeholder="Search discoveries..." 
                 style={{ 
                   width: '100%',
-                  background: 'rgba(5, 5, 15, 0.6)', 
-                  border: '1px solid rgba(255, 255, 255, 0.1)', 
-                  color: '#fff', 
+                  background: isLight ? theme.palette.background.paper : 'rgba(5, 5, 15, 0.6)', 
+                  border: `1px solid ${isLight ? 'rgba(0, 0, 0, 0.15)' : 'rgba(255, 255, 255, 0.1)'}`, 
+                  color: isLight ? 'rgba(0, 0, 0, 0.85)' : '#fff', 
                   fontSize: '11px', 
                   borderRadius: '50px', 
                   padding: '10px 45px 10px 20px', 
                   outline: 'none'
                 }}
               />
-              <Search size={16} style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)' }} />
+              <Search size={16} style={{ position: 'absolute', right: 15, top: '50%', transform: 'translateY(-50%)', color: isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.3)' }} />
             </Box>
           </Box>
 
@@ -154,7 +177,7 @@ export const MonitoringPage: React.FC = () => {
               <thead>
                 <tr>
                   <th style={{ padding: '8px 16px', textAlign: 'center', width: 40 }}>
-                    <Box sx={{ width: 16, height: 16, border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px' }} />
+                    <Box sx={{ width: 16, height: 16, border: `1px solid ${isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)'}`, borderRadius: '4px' }} />
                   </th>
                   {['TYPE', 'TARGET', 'DISCOVERY', 'DETAILS', 'DATE', 'ACTION'].map((head) => (
                     <th key={head} style={{ 
@@ -162,7 +185,7 @@ export const MonitoringPage: React.FC = () => {
                       textAlign: 'left', 
                       fontSize: '11px', 
                       fontWeight: 900, 
-                      color: 'rgba(255,255,255,0.4)', 
+                      color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.4)', 
                       letterSpacing: 2,
                       fontFamily: 'Orbitron'
                     }}>
@@ -175,22 +198,22 @@ export const MonitoringPage: React.FC = () => {
                 {discoveriesLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i}>
-                      <td colSpan={7} style={{ height: 60, background: 'rgba(255,255,255,0.02)', borderRadius: 8 }} />
+                      <td colSpan={7} style={{ height: 60, background: isLight ? 'rgba(0,0,0,0.01)' : 'rgba(255,255,255,0.02)', borderRadius: 8 }} />
                     </tr>
                   ))
                 ) : discoveries?.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ padding: '60px', textAlign: 'center', background: 'rgba(255,255,255,0.02)', borderRadius: 8 }}>
-                      <Typography sx={{ fontSize: '11px', fontWeight: 900, color: 'rgba(255,255,255,0.2)', fontFamily: 'Orbitron', letterSpacing: 2 }}>
+                    <td colSpan={7} style={{ padding: '60px', textAlign: 'center', background: isLight ? 'rgba(0,0,0,0.01)' : 'rgba(255,255,255,0.02)', borderRadius: 8 }}>
+                      <Typography sx={{ fontSize: '11px', fontWeight: 900, color: 'text.secondary', fontFamily: 'Orbitron', letterSpacing: 2 }}>
                         NO DATA AVAILABLE IN TABLE
                       </Typography>
                     </td>
                   </tr>
                 ) : (
                   discoveries?.map((discovery) => (
-                    <tr key={discovery.id} style={{ background: 'rgba(255,255,255,0.02)', transition: 'all 0.2s' }}>
+                    <tr key={discovery.id} style={{ background: isLight ? 'rgba(0,0,0,0.01)' : 'rgba(255,255,255,0.02)', borderBottom: `1px solid ${isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)'}`, transition: 'all 0.2s' }}>
                       <td style={{ padding: '12px 16px', textAlign: 'center', borderTopLeftRadius: 8, borderBottomLeftRadius: 8 }}>
-                        <Box sx={{ width: 16, height: 16, border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', margin: 'auto' }} />
+                        <Box sx={{ width: 16, height: 16, border: `1px solid ${isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)'}`, borderRadius: '4px', margin: 'auto' }} />
                       </td>
                       <td style={{ padding: '12px 16px' }}>
                         <Box sx={{ 
@@ -200,9 +223,9 @@ export const MonitoringPage: React.FC = () => {
                           borderRadius: '50px', 
                           fontSize: '9px', 
                           fontWeight: 900, 
-                          bgcolor: discovery.discovery_type === 'subdomain' ? 'rgba(52, 211, 153, 0.1)' : 'rgba(34, 211, 238, 0.1)',
-                          color: discovery.discovery_type === 'subdomain' ? '#10b981' : '#00f3ff',
-                          border: `1px solid ${discovery.discovery_type === 'subdomain' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(34, 211, 238, 0.2)'}`,
+                          bgcolor: discovery.discovery_type === 'subdomain' ? alpha(tokens.accent.success, 0.15) : alpha(tokens.accent.primary, 0.15),
+                          color: discovery.discovery_type === 'subdomain' ? tokens.accent.success : tokens.accent.primary,
+                          border: `1px solid ${discovery.discovery_type === 'subdomain' ? alpha(tokens.accent.success, 0.3) : alpha(tokens.accent.primary, 0.3)}`,
                           letterSpacing: 1
                         }}>
                           {discovery.discovery_type.toUpperCase()}
@@ -210,8 +233,8 @@ export const MonitoringPage: React.FC = () => {
                       </td>
                       <td style={{ padding: '12px 16px' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                          <Typography sx={{ fontSize: '13px', fontWeight: 800, color: '#fff', fontFamily: 'monospace' }}>{discovery.domain_name}</Typography>
-                          <Typography sx={{ fontSize: '9px', fontWeight: 700, color: 'rgba(0, 243, 255, 0.5)', display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', '&:hover': { color: '#00f3ff' } }}>
+                          <Typography sx={{ fontSize: '13px', fontWeight: 800, color: 'text.primary', fontFamily: 'monospace' }}>{discovery.domain_name}</Typography>
+                          <Typography sx={{ fontSize: '9px', fontWeight: 700, color: alpha(tokens.accent.primary, 0.6), display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', '&:hover': { color: tokens.accent.primary } }}>
                             RECENT SCAN <ExternalLink size={10} />
                           </Typography>
                         </Box>
@@ -219,7 +242,7 @@ export const MonitoringPage: React.FC = () => {
                       <td style={{ padding: '12px 16px' }}>
                         <Typography sx={{ 
                           fontSize: '11px', 
-                          color: 'rgba(255,255,255,0.5)', 
+                          color: 'text.secondary', 
                           fontFamily: 'monospace', 
                           maxWidth: 250, 
                           overflow: 'hidden', 
@@ -236,14 +259,14 @@ export const MonitoringPage: React.FC = () => {
                           gap: 1, 
                           px: 2, 
                           py: 0.8, 
-                          border: '1px solid rgba(0, 243, 255, 0.2)', 
+                          border: `1px solid ${alpha(tokens.accent.primary, 0.3)}`, 
                           borderRadius: '4px',
-                          color: '#00f3ff',
+                          color: tokens.accent.primary,
                           fontSize: '9px',
                           fontWeight: 800,
                           cursor: 'pointer',
                           width: 'fit-content',
-                          '&:hover': { bgcolor: 'rgba(0, 243, 255, 0.05)' }
+                          '&:hover': { bgcolor: alpha(tokens.accent.primary, 0.05) }
                         }}>
                           <Activity size={12} />
                           DETAILS
@@ -256,9 +279,9 @@ export const MonitoringPage: React.FC = () => {
                           borderRadius: '50px', 
                           fontSize: '9px', 
                           fontWeight: 700, 
-                          color: 'rgba(255,255,255,0.4)',
-                          bgcolor: 'rgba(255,255,255,0.03)',
-                          border: '1px solid rgba(255,255,255,0.05)',
+                          color: 'text.secondary',
+                          bgcolor: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)',
+                          border: `1px solid ${isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)'}`,
                           width: 'fit-content'
                         }}>
                           {new Date(discovery.discovered_at).toLocaleDateString()}
@@ -269,21 +292,21 @@ export const MonitoringPage: React.FC = () => {
                           <Box sx={{ 
                             px: 2, 
                             py: 0.8, 
-                            border: '1px solid rgba(0, 243, 255, 0.5)', 
+                            border: `1px solid ${alpha(tokens.accent.primary, 0.5)}`, 
                             borderRadius: '4px',
-                            color: '#00f3ff',
+                            color: tokens.accent.primary,
                             fontSize: '9px',
                             fontWeight: 900,
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             gap: 1,
-                            '&:hover': { bgcolor: 'rgba(0, 243, 255, 0.1)' }
+                            '&:hover': { bgcolor: alpha(tokens.accent.primary, 0.1) }
                           }}>
                             <Target size={12} />
                             SUMMARY
                           </Box>
-                          <ChevronRight size={18} style={{ color: 'rgba(255,255,255,0.2)' }} />
+                          <ChevronRight size={18} style={{ color: isLight ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)' }} />
                         </Box>
                       </td>
                     </tr>
@@ -294,24 +317,29 @@ export const MonitoringPage: React.FC = () => {
           </Box>
           
           {/* Footer - Legacy Pagination Layout */}
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 4, px: 2, pt: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-            <Box sx={{ px: 2.5, py: 1.2, bgcolor: 'rgba(5, 5, 15, 0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 2 }}>
-              <Typography sx={{ fontSize: '10px', fontWeight: 900, color: 'rgba(255,255,255,0.3)', letterSpacing: 1.5 }}>
-                SHOWING <Box component="span" sx={{ color: '#00f3ff' }}>0</Box> TO <Box component="span" sx={{ color: '#00f3ff' }}>0</Box> OF <Box component="span" sx={{ color: '#00f3ff' }}>0</Box> ENTRIES
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 4, px: 2, pt: 3, borderTop: `1px solid ${theme.palette.divider}` }}>
+            <Box sx={{ px: 2.5, py: 1.2, bgcolor: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(5, 5, 15, 0.8)', border: `1px solid ${theme.palette.divider}`, borderRadius: 2 }}>
+              <Typography sx={{ fontSize: '10px', fontWeight: 900, color: 'text.secondary', letterSpacing: 1.5 }}>
+                SHOWING <Box component="span" sx={{ color: tokens.accent.primary }}>0</Box> TO <Box component="span" sx={{ color: tokens.accent.primary }}>0</Box> OF <Box component="span" sx={{ color: tokens.accent.primary }}>0</Box> ENTRIES
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', gap: 2 }}>
-              <Box sx={{ width: 36, height: 36, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.2)', cursor: 'not-allowed' }}>
+              <Box sx={{ width: 36, height: 36, borderRadius: '50%', border: `1px solid ${theme.palette.divider}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.disabled', cursor: 'not-allowed' }}>
                 <ChevronRight size={18} style={{ transform: 'rotate(180deg)' }} />
               </Box>
-              <Box sx={{ width: 36, height: 36, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.2)', cursor: 'not-allowed' }}>
+              <Box sx={{ width: 36, height: 36, borderRadius: '50%', border: `1px solid ${theme.palette.divider}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.disabled', cursor: 'not-allowed' }}>
                 <ChevronRight size={18} />
               </Box>
             </Box>
           </Box>
         </Box>
       </TacticalPanel>
+
+      <AddMonitoringTargetModal 
+        open={isAddModalOpen} 
+        onClose={() => setIsAddModalOpen(false)} 
+        projectSlug={projectSlug} 
+      />
     </Container>
   );
 };
-

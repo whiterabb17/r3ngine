@@ -10,8 +10,10 @@ import {
   Tooltip,
   Chip,
   CircularProgress,
-  TablePagination
+  TablePagination,
+  Card
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { 
   Search, 
   Trash2, 
@@ -28,7 +30,8 @@ import { useSubScans, useBulkStopSubScans, useBulkDeleteSubScans } from '../api'
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 
 export const SubScansPage: React.FC = () => {
-  const { tokens } = useThemeTokens();
+  const theme = useTheme();
+  const { tokens, isLight } = useThemeTokens();
   const { projectSlug = 'default' } = useParams({ strict: false }) as any;
   const { data, isLoading, isError } = useSubScans(projectSlug);
   const stopMutation = useBulkStopSubScans(projectSlug);
@@ -219,16 +222,16 @@ export const SubScansPage: React.FC = () => {
       </Box>
 
       {/* Main Table */}
-      <Box sx={{ 
-        bgcolor: 'rgba(10, 15, 25, 0.7)', 
+      <Card sx={{ 
+        bgcolor: isLight ? tokens.surface.secondary : 'rgba(10, 15, 25, 0.7)', 
         borderRadius: 1, 
-        border: '1px solid rgba(188, 19, 254, 0.1)',
+        border: `1px solid ${isLight ? theme.palette.divider : 'rgba(188, 19, 254, 0.1)'}`,
         overflow: 'hidden',
         position: 'relative'
       }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
-            <tr style={{ borderBottom: '2px solid rgba(188, 19, 254, 0.2)', background: 'rgba(188, 19, 254, 0.03)' }}>
+            <tr style={{ borderBottom: `2px solid ${isLight ? theme.palette.divider : 'rgba(188, 19, 254, 0.2)'}`, background: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(188, 19, 254, 0.03)' }}>
               <th style={{ padding: '16px' }}>
                 <input 
                   type="checkbox" 
@@ -267,7 +270,7 @@ export const SubScansPage: React.FC = () => {
                     borderBottom: 1, borderColor: 'divider',
                     transition: 'background 0.2s',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(188, 19, 254, 0.02)')}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = isLight ? 'rgba(0, 0, 0, 0.01)' : 'rgba(188, 19, 254, 0.02)')}
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
                   <td style={{ padding: '12px 16px' }}>
@@ -316,7 +319,7 @@ export const SubScansPage: React.FC = () => {
                     />
                   </td>
                   <td style={{ padding: '12px 16px' }}>
-                    <Typography sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px' }}>{scan.completed_ago}</Typography>
+                    <Typography sx={{ color: 'text.primary', fontSize: '12px' }}>{scan.completed_ago}</Typography>
                     <Typography sx={{ color: 'text.secondary', fontSize: '10px', fontFamily: 'monospace' }}>
                       ({new Date(scan.start_scan_date).toLocaleString()})
                     </Typography>
@@ -371,14 +374,14 @@ export const SubScansPage: React.FC = () => {
           sx={{
             color: tokens.accent.secondary,
             fontFamily: 'monospace',
-            borderTop: '1px solid rgba(188, 19, 254, 0.1)',
+            borderTop: `1px solid ${theme.palette.divider}`,
             '& .MuiTablePagination-selectIcon': { color: tokens.accent.secondary },
             '& .MuiTablePagination-actions': { color: tokens.accent.secondary },
             '& .MuiTablePagination-select': { fontFamily: 'monospace' },
             '& .MuiTablePagination-displayedRows': { fontFamily: 'monospace' },
           }}
         />
-      </Box>
+      </Card>
 
       {/* Footer Info */}
       <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', px: 1 }}>

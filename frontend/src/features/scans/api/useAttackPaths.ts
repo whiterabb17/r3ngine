@@ -108,3 +108,37 @@ export const useExplainAttackPath = () => {
   });
 };
 
+export interface AttackTreeNode {
+  id?: string;
+  type: string; // AND, OR, LEAF
+  goal?: string;
+  description?: string;
+  action?: string;
+  mitre_id?: string;
+  cost?: string;
+  skill?: string;
+  detectability?: string;
+  mitigation?: string;
+  children?: AttackTreeNode[];
+}
+
+export interface AttackTreeResponse {
+  status: string;
+  tree: AttackTreeNode;
+}
+
+const fetchAttackTree = async (scanId: number, targetId: string): Promise<AttackTreeResponse> => {
+  const { data } = await axios.get(
+    `/api/apme/attack-trees/${scanId}/${encodeURIComponent(targetId)}/`
+  );
+  return data;
+};
+
+export const useAttackTree = (scanId: number, targetId: string) =>
+  useQuery<AttackTreeResponse>({
+    queryKey: ['attack-tree', scanId, targetId],
+    queryFn: () => fetchAttackTree(scanId, targetId),
+    enabled: !!scanId && !!targetId,
+  });
+
+

@@ -1,38 +1,40 @@
 import { useThemeTokens } from '../theme/useThemeTokens';
 import React from 'react';
-import { Box, Typography, Card, CardContent, useTheme } from '@mui/material';
+import { Box, Typography, Card, CardContent } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import type { SxProps, Theme } from '@mui/material';
+import { getSurfaceSx } from '../theme/semanticColors';
 
 export interface KpiCardProps {
   title: string;
   value: number | string;
-  icon: any;
+  icon: React.ComponentType<{ size?: number }>;
   color: string;
   subtitle?: string;
   className?: string;
   sx?: SxProps<Theme>;
+  onClick?: () => void;
 }
 
-export const KpiCard: React.FC<KpiCardProps> = ({ title, value, icon: Icon, color, subtitle, sx }) => {
-  const { tokens } = useThemeTokens();
-  const theme = useTheme();
-  const isLight = theme.palette.mode === 'light';
+export const KpiCard: React.FC<KpiCardProps> = ({ title, value, icon: Icon, color, subtitle, sx, onClick }) => {
+  const { tokens, theme, isLight } = useThemeTokens();
 
   return (
     <Card
+      onClick={onClick}
       sx={{
         height: '100%',
-        bgcolor: isLight ? theme.palette.background.paper : 'rgba(5, 5, 15, 0.4)',
+        ...getSurfaceSx(isLight, tokens, theme),
         backdropFilter: 'blur(12px)',
-        border: isLight ? `1px solid ${theme.palette.divider}` : '1px solid rgba(255, 255, 255, 0.05)',
         position: 'relative',
         overflow: 'hidden',
         borderRadius: isLight ? '8px' : '12px',
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        cursor: onClick ? 'pointer' : 'default',
         '&:hover': {
           transform: 'translateY(-4px)',
           borderColor: color,
-          boxShadow: isLight ? `0 4px 20px ${color}15` : `0 0 15px ${color}22`,
+          boxShadow: isLight ? `0 4px 20px ${alpha(color, 0.1)}` : `0 0 15px ${alpha(color, 0.13)}`,
           '& .kpi-icon-bg': { opacity: 0.15, transform: 'scale(1.1) rotate(-10deg)' }
         },
         ...sx
@@ -59,19 +61,19 @@ export const KpiCard: React.FC<KpiCardProps> = ({ title, value, icon: Icon, colo
           <Box sx={{
             p: 1.2,
             borderRadius: 2,
-            bgcolor: `${color}15`,
+            bgcolor: alpha(color, 0.08),
             color: color,
             display: 'flex',
             mr: 1.5,
-            border: `1px solid ${color}33`,
-            boxShadow: isLight ? 'none' : `0 0 15px ${color}22`
+            border: `1px solid ${alpha(color, 0.2)}`,
+            boxShadow: isLight ? 'none' : `0 0 15px ${alpha(color, 0.13)}`
           }}>
             <Icon size={22} />
           </Box>
           <Typography variant="overline" sx={{
             fontWeight: 800,
             letterSpacing: 2,
-            color: isLight ? theme.palette.text.secondary : 'rgba(255,255,255,0.5)',
+            color: tokens.text.secondary,
             fontFamily: 'var(--r3-heading-font)',
             lineHeight: 1
           }}>
@@ -85,7 +87,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({ title, value, icon: Icon, colo
           mb: 0.5,
           fontFamily: 'var(--r3-heading-font)',
           letterSpacing: -1,
-          color: isLight ? theme.palette.text.primary : '#fff'
+          color: tokens.text.primary
         }}>
           {typeof value === 'number' ? value.toLocaleString() : value}
         </Typography>
@@ -104,7 +106,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({ title, value, icon: Icon, colo
               }}
             />
             <Typography variant="caption" sx={{
-              color: isLight ? theme.palette.text.secondary : 'rgba(255,255,255,0.4)',
+              color: tokens.text.muted,
               fontWeight: 800,
               fontSize: '0.65rem',
               letterSpacing: 1

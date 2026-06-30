@@ -99,13 +99,13 @@ class TestSubscanSeverityStability(TestCase):
             vuln = Vulnerability.objects.get(scan_history=self.scan, name=vuln_name)
             self.assertEqual(vuln.severity, expected_int)
 
-    @patch('reNgine.vulnerability_tasks.logger')
+    @patch('reNgine.tasks.vulnerability.logger')
     def test_parse_react2shell_results_severity(self, mock_logger):
         """
         Verify that parse_react2shell_results successfully parses severity strings and
         correctly invokes save_vulnerability with corresponding integer values.
         """
-        from reNgine.vulnerability_tasks import parse_react2shell_results
+        from reNgine.tasks.vulnerability import parse_react2shell_results
         
         mock_task = MagicMock()
         mock_task.domain = self.domain

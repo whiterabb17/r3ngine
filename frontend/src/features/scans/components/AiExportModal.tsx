@@ -81,7 +81,7 @@ export const AiExportModal: React.FC<AiExportModalProps> = ({
               EXPORT FOR AI
             </Typography>
             <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
-              Best for external LLM-assisted analysis on `{targetName}`
+              Best for external LLM-assisted analysis on {targetName}
             </Typography>
           </Box>
         </Stack>
@@ -142,9 +142,14 @@ export const AiExportModal: React.FC<AiExportModalProps> = ({
             }}
           >
             <Typography sx={{ fontSize: '0.72rem', color: 'text.secondary', lineHeight: 1.6 }}>
-              Bundle contents: `ai_bundle.md`, `ai_bundle.json`, `findings.ndjson`, `prompt.txt`, `manifest.json`
-              {includeSidecars ? ', `assets.ndjson`' : ''}
-              {includeRawOutputs ? ', `commands.ndjson`' : ''}.
+              {'Bundle contents: '}
+              <code>ai_bundle.md</code>{', '}
+              <code>ai_bundle.json</code>{', '}
+              <code>findings.ndjson</code>{', '}
+              <code>prompt.txt</code>{', '}
+              <code>manifest.json</code>
+              {includeSidecars ? <>{', '}<code>assets.ndjson</code></> : ''}
+              {includeRawOutputs ? <>{', '}<code>commands.ndjson</code></> : ''}{'.'}
             </Typography>
           </Box>
         </Stack>

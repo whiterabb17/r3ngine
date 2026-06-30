@@ -23,6 +23,10 @@ if "%1" == "setup" %DOCKER_COMPOSE% --env-file .env -f docker/docker-compose.set
 if "%1" == "up" set DEBUG=0 && %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% up -d --build %SERVICES%
 :: Build and start all services in development mode.
 if "%1" == "devup" set DEBUG=1 && %DOCKER_COMPOSE% %COMPOSE_DEV_FILES% up -d --build %SERVICES%
+:: Build and start the remote worker.
+if "%1" == "up-worker" set DEBUG=0 && %DOCKER_COMPOSE% --env-file .env -f docker/docker-compose.worker.yml up -d --build
+:: Stop the remote worker.
+if "%1" == "down-worker" %DOCKER_COMPOSE% --env-file .env -f docker/docker-compose.worker.yml down
 :: Build all services.
 if "%1" == "build" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% build %SERVICES%
 :: Build all services no cache.

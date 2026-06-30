@@ -16,10 +16,13 @@ import {
   FormControlLabel,
   Collapse,
   Divider,
+  alpha
 } from '@mui/material';
 import { X, Target, Globe, Building2, Terminal, Activity, Clock, Settings2, Search, Zap, ListX, Map } from 'lucide-react';
 import { useAddTarget, useOrganizations, useEngines, useResolveIP } from '../api';
 import { Checkbox, List, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
+import { useThemeTokens } from '../../../theme/useThemeTokens';
+import { getDialogPaperSx, getFieldSx } from '../../../theme/semanticColors';
 
 const TARGET_TYPES = [
   { value: 'domain',         label: 'Domain',            placeholder: 'example.com',                     description: 'Full domain scan (7-tier pipeline)' },
@@ -42,6 +45,7 @@ interface AddTargetModalProps {
 }
 
 export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, projectSlug }) => {
+  const { tokens, isLight, isCyber, theme } = useThemeTokens();
   const [formData, setFormData] = useState({
     domain_name: '',
     description: '',
@@ -137,6 +141,22 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
     reset();
   };
 
+  const fieldStyles = {
+    ...getFieldSx(isLight, tokens, tokens.accent.primary),
+    '& .MuiOutlinedInput-root': {
+      color: 'text.primary',
+      '& fieldset': { borderColor: isLight ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.1)' },
+      '&:hover fieldset': { borderColor: alpha(tokens.accent.primary, 0.4) },
+      '&.Mui-focused fieldset': { borderColor: tokens.accent.primary },
+      bgcolor: isLight ? 'rgba(0,0,0,0.01)' : 'rgba(255,255,255,0.03)',
+    },
+    '& .MuiInputLabel-root': { 
+      color: 'text.secondary',
+      '&.Mui-focused': { color: tokens.accent.primary }
+    },
+    '& .MuiSelect-icon': { color: 'text.secondary' },
+  };
+
   return (
     <Dialog 
       open={open} 
@@ -144,13 +164,12 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
       slotProps={{
         paper: {
           sx: {
-            bgcolor: 'rgba(10, 10, 20, 0.95)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(0, 243, 255, 0.2)',
+            ...getDialogPaperSx(isLight, theme, tokens),
             borderRadius: 4,
-            backgroundImage: 'radial-gradient(circle at top right, rgba(0, 243, 255, 0.05), transparent)',
             maxWidth: 600,
-            width: '100%'
+            width: '100%',
+            backgroundImage: isLight ? 'none' : 'radial-gradient(circle at top right, rgba(0, 243, 255, 0.05), transparent)',
+            border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : `${tokens.accent.primary}33`}`,
           }
         }
       }}
@@ -159,15 +178,15 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center',
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
+        borderBottom: `1px solid ${isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)'}`,
         pb: 2
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Box sx={{ 
             p: 1, 
             borderRadius: 2, 
-            bgcolor: 'rgba(0, 243, 255, 0.1)', 
-            color: '#00f3ff',
+            bgcolor: alpha(tokens.accent.primary, 0.1), 
+            color: tokens.accent.primary,
             display: 'flex'
           }}>
             <Target size={20} />
@@ -176,12 +195,12 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
             fontFamily: 'Orbitron', 
             fontWeight: 800, 
             letterSpacing: 1,
-            color: '#fff'
+            color: tokens.text.primary
           }}>
             INITIATE NEW TARGETS
           </Typography>
         </Box>
-        <IconButton onClick={handleClose} sx={{ color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#ff003c' } }}>
+        <IconButton onClick={handleClose} sx={{ color: 'text.disabled', '&:hover': { color: tokens.accent.error } }}>
           <X size={20} />
         </IconButton>
       </DialogTitle>
@@ -191,10 +210,10 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
           {error && (
             <Alert severity="error" sx={{ 
               mb: 3, 
-              bgcolor: 'rgba(255, 0, 60, 0.1)', 
-              color: '#ff003c',
-              border: '1px solid rgba(255, 0, 60, 0.2)',
-              '& .MuiAlert-icon': { color: '#ff003c' }
+              bgcolor: alpha(tokens.accent.error, 0.1), 
+              color: tokens.accent.error,
+              border: `1px solid ${alpha(tokens.accent.error, 0.2)}`,
+              '& .MuiAlert-icon': { color: tokens.accent.error }
             }}>
               {error.message}
             </Alert>
@@ -210,17 +229,17 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
               sx={fieldStyles}
               slotProps={{
                 input: {
-                  startAdornment: <Target size={18} style={{ marginRight: 12, color: '#00f3ff' }} />
+                  startAdornment: <Target size={18} style={{ marginRight: 12, color: tokens.accent.primary }} />
                 }
               }}
             >
               {TARGET_TYPES.map((type) => (
                 <MenuItem key={type.value} value={type.value}>
                   <Box>
-                    <Typography sx={{ fontSize: '0.85rem', color: '#fff', lineHeight: 1.2 }}>
+                    <Typography sx={{ fontSize: '0.85rem', color: 'text.primary', lineHeight: 1.2 }}>
                       {type.label}
                     </Typography>
-                    <Typography sx={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', lineHeight: 1.2 }}>
+                    <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', lineHeight: 1.2 }}>
                       {type.description}
                     </Typography>
                   </Box>
@@ -240,9 +259,9 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
               sx={fieldStyles}
               helperText="Enter multiple targets separated by newlines"
               slotProps={{
-                formHelperText: { sx: { color: 'rgba(255,255,255,0.3)' } },
+                formHelperText: { sx: { color: 'text.disabled' } },
                 input: {
-                  startAdornment: <Globe size={18} style={{ marginRight: 12, marginTop: -60, color: '#00f3ff' }} />,
+                  startAdornment: <Globe size={18} style={{ marginRight: 12, marginTop: -60, color: tokens.accent.primary }} />,
                   endAdornment: (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, position: 'absolute', right: 8, top: 8 }}>
                       <Button
@@ -251,10 +270,10 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
                         startIcon={<Zap size={14} />}
                         sx={{
                           fontSize: '0.65rem',
-                          bgcolor: isResolverOpen ? 'rgba(0, 243, 255, 0.2)' : 'rgba(255,255,255,0.05)',
-                          color: '#00f3ff',
-                          borderColor: 'rgba(0, 243, 255, 0.3)',
-                          '&:hover': { bgcolor: 'rgba(0, 243, 255, 0.3)' }
+                          bgcolor: isResolverOpen ? alpha(tokens.accent.primary, 0.2) : 'action.hover',
+                          color: tokens.accent.primary,
+                          borderColor: alpha(tokens.accent.primary, 0.3),
+                          '&:hover': { bgcolor: alpha(tokens.accent.primary, 0.3) }
                         }}
                         variant="outlined"
                       >
@@ -270,11 +289,11 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
               <Box sx={{ 
                 p: 2, 
                 borderRadius: 2, 
-                bgcolor: 'rgba(0, 243, 255, 0.05)',
-                border: '1px solid rgba(0, 243, 255, 0.1)',
+                bgcolor: alpha(tokens.accent.primary, 0.05),
+                border: `1px solid ${alpha(tokens.accent.primary, 0.15)}`,
                 mb: 2
               }}>
-                <Typography variant="caption" sx={{ color: '#00f3ff', mb: 1, display: 'block', fontWeight: 600 }}>
+                <Typography variant="caption" sx={{ color: tokens.accent.primary, mb: 1, display: 'block', fontWeight: 600 }}>
                   IP / CIDR RESOLVER TOOL
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
@@ -291,24 +310,29 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
                     size="small"
                     disabled={isResolving}
                     onClick={handleResolve}
-                    sx={{ bgcolor: '#00f3ff', color: '#000', fontWeight: 900 }}
+                    sx={{ 
+                      bgcolor: tokens.accent.primary, 
+                      color: isLight ? '#fff' : '#000', 
+                      fontWeight: 900,
+                      '&:hover': { bgcolor: alpha(tokens.accent.primary, 0.8) }
+                    }}
                   >
-                    {isResolving ? <CircularProgress size={16} sx={{ color: '#000' }} /> : 'RESOLVE'}
+                    {isResolving ? <CircularProgress size={16} sx={{ color: isLight ? '#fff' : '#000' }} /> : 'RESOLVE'}
                   </Button>
                 </Box>
                 
                 {resolvedDomains.length > 0 && (
                   <Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)' }}>
+                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                         Resolved {resolvedDomains.length} domains
                       </Typography>
                       <Box>
-                        <Button size="small" sx={{ fontSize: '0.6rem', color: '#00f3ff' }} onClick={() => setSelectedDomains(resolvedDomains)}>All</Button>
-                        <Button size="small" sx={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)' }} onClick={() => setSelectedDomains([])}>None</Button>
+                        <Button size="small" sx={{ fontSize: '0.6rem', color: tokens.accent.primary }} onClick={() => setSelectedDomains(resolvedDomains)}>All</Button>
+                        <Button size="small" sx={{ fontSize: '0.6rem', color: 'text.disabled' }} onClick={() => setSelectedDomains([])}>None</Button>
                       </Box>
                     </Box>
-                    <Box sx={{ maxHeight: 200, overflowY: 'auto', bgcolor: 'rgba(0,0,0,0.2)', borderRadius: 1 }}>
+                    <Box sx={{ maxHeight: 200, overflowY: 'auto', bgcolor: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.2)', borderRadius: 1 }}>
                       <List dense>
                         {resolvedDomains.map((domain) => (
                           <ListItem key={domain} disablePadding>
@@ -320,12 +344,12 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
                                   tabIndex={-1}
                                   disableRipple
                                   size="small"
-                                  sx={{ color: 'rgba(0, 243, 255, 0.3)', '&.Mui-checked': { color: '#00f3ff' } }}
+                                  sx={{ color: alpha(tokens.accent.primary, 0.3), '&.Mui-checked': { color: tokens.accent.primary } }}
                                 />
                               </ListItemIcon>
                               <ListItemText 
                                 primary={
-                                  <Typography sx={{ fontSize: '0.75rem', color: '#fff' }}>
+                                  <Typography sx={{ fontSize: '0.75rem', color: 'text.primary' }}>
                                     {domain}
                                   </Typography>
                                 } 
@@ -340,7 +364,12 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
                       variant="outlined" 
                       size="small" 
                       onClick={addSelectedToTargets}
-                      sx={{ mt: 2, color: '#00f3ff', borderColor: 'rgba(0, 243, 255, 0.4)' }}
+                      sx={{ 
+                        mt: 2, 
+                        color: tokens.accent.primary, 
+                        borderColor: alpha(tokens.accent.primary, 0.4),
+                        '&:hover': { borderColor: tokens.accent.primary, bgcolor: alpha(tokens.accent.primary, 0.05) }
+                      }}
                     >
                       ADD {selectedDomains.length} SELECTED TO TARGETS
                     </Button>
@@ -359,7 +388,7 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
                 sx={fieldStyles}
                 slotProps={{
                   input: {
-                    startAdornment: <Building2 size={18} style={{ marginRight: 12, color: 'rgba(255,255,255,0.4)' }} />
+                    startAdornment: <Building2 size={18} style={{ marginRight: 12, color: tokens.text.secondary }} />
                   }
                 }}
               >
@@ -382,7 +411,7 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
                 sx={fieldStyles}
                 slotProps={{
                   input: {
-                    startAdornment: <Terminal size={18} style={{ marginRight: 12, color: 'rgba(255,255,255,0.4)' }} />
+                    startAdornment: <Terminal size={18} style={{ marginRight: 12, color: tokens.text.secondary }} />
                   }
                 }}
               />
@@ -399,7 +428,7 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
               sx={fieldStyles}
             />
 
-            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+            <Divider sx={{ borderColor: 'divider' }} />
 
             <Box>
               <Button
@@ -409,10 +438,10 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
                 startIcon={<Settings2 size={16} />}
                 sx={{ 
                   justifyContent: 'flex-start',
-                  color: 'rgba(255,255,255,0.4)',
+                  color: 'text.secondary',
                   fontSize: '0.75rem',
                   fontFamily: 'Orbitron',
-                  '&:hover': { color: '#00f3ff', bgcolor: 'transparent' }
+                  '&:hover': { color: tokens.accent.primary, bgcolor: 'transparent' }
                 }}
               >
                 {showAdvanced ? 'HIDE' : 'SHOW'} ADVANCED SCAN CONFIGURATION
@@ -430,7 +459,7 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
                     sx={fieldStyles}
                     slotProps={{
                       input: {
-                        startAdornment: <Map size={16} style={{ marginRight: 12, color: 'rgba(255,255,255,0.4)' }} />
+                        startAdornment: <Map size={16} style={{ marginRight: 12, color: 'text.secondary' }} />
                       }
                     }}
                     helperText="Initial path to start scanning from"
@@ -447,7 +476,7 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
                     sx={fieldStyles}
                     slotProps={{
                       input: {
-                        startAdornment: <ListX size={16} style={{ marginRight: 12, marginTop: -20, color: 'rgba(255,255,255,0.4)' }} />
+                        startAdornment: <ListX size={16} style={{ marginRight: 12, marginTop: -20, color: 'text.secondary' }} />
                       }
                     }}
                     helperText="Paths to ignore during scanning (newline separated)"
@@ -456,7 +485,7 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
               </Collapse>
             </Box>
 
-            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+            <Divider sx={{ borderColor: 'divider' }} />
 
             <Box>
               <FormControlLabel
@@ -465,19 +494,19 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
                     checked={formData.is_monitored}
                     onChange={(e) => setFormData({ ...formData, is_monitored: e.target.checked })}
                     sx={{
-                      '& .MuiSwitch-switchBase.Mui-checked': { color: '#00f3ff' },
-                      '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: '#00f3ff' },
+                      '& .MuiSwitch-switchBase.Mui-checked': { color: tokens.accent.primary },
+                      '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: tokens.accent.primary },
                     }}
                   />
                 }
                 label={
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Activity size={16} color={formData.is_monitored ? '#00f3ff' : 'rgba(255,255,255,0.4)'} />
+                    <Activity size={16} color={formData.is_monitored ? tokens.accent.primary : tokens.text.disabled} />
                     <Typography sx={{ 
                       fontFamily: 'Orbitron', 
                       fontSize: '0.75rem', 
                       fontWeight: 600,
-                      color: formData.is_monitored ? '#fff' : 'rgba(255,255,255,0.4)'
+                      color: formData.is_monitored ? 'text.primary' : 'text.disabled'
                     }}>
                       CONTINUOUS MONITORING
                     </Typography>
@@ -490,8 +519,9 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
                   mt: 2, 
                   p: 2, 
                   borderRadius: 2, 
-                  bgcolor: 'rgba(255,255,255,0.02)',
-                  border: '1px solid rgba(255,255,255,0.05)',
+                  bgcolor: isLight ? 'rgba(0,0,0,0.01)' : 'rgba(255,255,255,0.02)',
+                  border: '1px solid',
+                  borderColor: 'divider',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 2
@@ -507,7 +537,7 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
                       sx={fieldStyles}
                       slotProps={{
                         input: {
-                          startAdornment: <Clock size={16} style={{ marginRight: 8, color: 'rgba(255,255,255,0.4)' }} />
+                          startAdornment: <Clock size={16} style={{ marginRight: 8, color: 'text.secondary' }} />
                         }
                       }}
                     >
@@ -527,7 +557,7 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
                       sx={fieldStyles}
                       slotProps={{
                         input: {
-                          startAdornment: <Search size={16} style={{ marginRight: 8, color: 'rgba(255,255,255,0.4)' }} />
+                          startAdornment: <Search size={16} style={{ marginRight: 8, color: 'text.secondary' }} />
                         }
                       }}
                     >
@@ -548,7 +578,7 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
                     sx={fieldStyles}
                     slotProps={{
                       input: {
-                        startAdornment: <Settings2 size={16} style={{ marginRight: 8, color: 'rgba(255,255,255,0.4)' }} />
+                        startAdornment: <Settings2 size={16} style={{ marginRight: 8, color: 'text.secondary' }} />
                       }
                     }}
                   >
@@ -564,14 +594,15 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
           </Box>
         </DialogContent>
 
-        <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <DialogActions sx={{ p: 3, borderTop: '1px solid', borderColor: 'divider' }}>
           <Button 
             onClick={handleClose} 
             sx={{ 
-              color: 'rgba(255,255,255,0.5)',
+              color: 'text.secondary',
               fontFamily: 'Orbitron',
               fontSize: '0.7rem',
-              fontWeight: 800
+              fontWeight: 800,
+              '&:hover': { color: tokens.accent.error }
             }}
           >
             ABORT
@@ -581,41 +612,26 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
             variant="contained"
             disabled={isPending || (formData.is_monitored && !formData.monitor_engine_id)}
             sx={{
-              bgcolor: '#00f3ff',
-              color: '#000',
+              bgcolor: tokens.accent.primary,
+              color: isLight ? '#fff' : '#000',
               fontWeight: 900,
               fontFamily: 'Orbitron',
               letterSpacing: 1,
               px: 4,
               '&:hover': {
-                bgcolor: '#00d1db',
-                boxShadow: '0 0 20px rgba(0, 243, 255, 0.4)'
+                bgcolor: alpha(tokens.accent.primary, 0.8),
+                boxShadow: isCyber ? `0 0 20px ${alpha(tokens.accent.primary, 0.4)}` : 'none'
               },
               '&.Mui-disabled': {
-                bgcolor: 'rgba(0, 243, 255, 0.2)',
-                color: 'rgba(0, 0, 0, 0.5)'
+                bgcolor: alpha(tokens.accent.primary, 0.2),
+                color: isLight ? 'rgba(0,0,0,0.26)' : 'rgba(255,255,255,0.3)'
               }
             }}
           >
-            {isPending ? <CircularProgress size={20} sx={{ color: '#000' }} /> : 'DEPLOY TARGETS'}
+            {isPending ? <CircularProgress size={20} sx={{ color: isLight ? '#fff' : '#000' }} /> : 'DEPLOY TARGETS'}
           </Button>
         </DialogActions>
       </form>
     </Dialog>
   );
-};
-
-const fieldStyles = {
-  '& .MuiOutlinedInput-root': {
-    color: '#fff',
-    '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
-    '&:hover fieldset': { borderColor: 'rgba(0, 243, 255, 0.3)' },
-    '&.Mui-focused fieldset': { borderColor: '#00f3ff' },
-    bgcolor: 'rgba(255,255,255,0.03)',
-  },
-  '& .MuiInputLabel-root': { 
-    color: 'rgba(255,255,255,0.4)',
-    '&.Mui-focused': { color: '#00f3ff' }
-  },
-  '& .MuiSelect-icon': { color: 'rgba(255,255,255,0.4)' },
 };

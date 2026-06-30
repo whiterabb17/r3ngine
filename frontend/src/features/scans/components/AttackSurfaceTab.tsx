@@ -16,7 +16,7 @@ interface AttackSurfaceTabProps {
 }
 
 const AttackSurfaceContent: React.FC<AttackSurfaceTabProps> = ({ projectSlug, scanId, targetId }) => {
-  const { tokens } = useThemeTokens();
+  const { tokens, isLight } = useThemeTokens();
   const [searchQuery, setSearchQuery] = useState('');
   const [layoutName, setLayoutName] = useState<'fcose' | 'klay' | 'cose'>('fcose');
   const cyRef = useRef<cytoscape.Core | null>(null);
@@ -47,12 +47,12 @@ const AttackSurfaceContent: React.FC<AttackSurfaceTabProps> = ({ projectSlug, sc
 
   const exportPNG = useCallback(() => {
     if (!cyRef.current) return;
-    const pngContent = cyRef.current.png({ full: true, bg: '#0f172a' });
+    const pngContent = cyRef.current.png({ full: true, bg: tokens.surface.primary });
     const link = document.createElement('a');
     link.href = pngContent;
     link.download = `attack-surface-${targetId ? 'target-' + targetId : 'scan-' + scanId}.png`;
     link.click();
-  }, [scanId, targetId]);
+  }, [scanId, targetId, tokens.surface.primary]);
 
   return (
     <TacticalPanel title="GRAPH CONTROLS" icon={<MapIcon size={14} />}>
@@ -66,7 +66,7 @@ const AttackSurfaceContent: React.FC<AttackSurfaceTabProps> = ({ projectSlug, sc
           onChangeLayout={setLayoutName}
       />
 
-      <Box sx={{ position: 'relative', bgcolor: '#0f172a', height: '600px', overflow: 'hidden' }}>
+      <Box sx={{ position: 'relative', bgcolor: tokens.surface.primary, height: '600px', overflow: 'hidden' }}>
         <GraphCanvas 
           data={data} 
           layoutName={layoutName} 
@@ -78,11 +78,11 @@ const AttackSurfaceContent: React.FC<AttackSurfaceTabProps> = ({ projectSlug, sc
           position: 'absolute', 
           bottom: 20, 
           left: 20, 
-          bgcolor: 'rgba(30, 41, 59, 0.8)', 
-          backdropFilter: 'blur(8px)',
+          bgcolor: tokens.surface.glass, 
+          backdropFilter: tokens.effects.blur,
           p: 1.5,
           borderRadius: 1,
-          border: '1px solid rgba(255,255,255,0.1)',
+          border: `1px solid ${tokens.border.subtle}`,
           zIndex: 2,
           pointerEvents: 'none'
         }}>
@@ -91,10 +91,10 @@ const AttackSurfaceContent: React.FC<AttackSurfaceTabProps> = ({ projectSlug, sc
               <Stack spacing={0.5}>
                   <Typography sx={{ fontSize: '0.55rem', color: `${tokens.accent.primary}99`, fontWeight: 800 }}>NODE TYPES</Typography>
                   {[
-                    { label: 'Domain', color: '#3b82f6', shape: 'hexagon' },
-                    { label: 'Subdomain', color: '#10b981', shape: 'circle' },
-                    { label: 'IP Address', color: '#f59e0b', shape: 'circle' },
-                    { label: 'Vulnerability', color: '#ef4444', shape: 'diamond' }
+                    { label: 'Domain', color: tokens.accent.info, shape: 'hexagon' },
+                    { label: 'Subdomain', color: tokens.accent.success, shape: 'circle' },
+                    { label: 'IP Address', color: tokens.accent.warning, shape: 'circle' },
+                    { label: 'Vulnerability', color: tokens.accent.error, shape: 'diamond' }
                   ].map(item => (
                     <Stack key={item.label} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                       <Box sx={{ 
@@ -103,7 +103,7 @@ const AttackSurfaceContent: React.FC<AttackSurfaceTabProps> = ({ projectSlug, sc
                         borderRadius: item.shape === 'circle' ? '50%' : 0,
                         transform: item.shape === 'diamond' ? 'rotate(45deg)' : 'none'
                       }} />
-                      <Typography sx={{ fontSize: '0.7rem', color: '#e2e8f0', fontWeight: 600 }}>{item.label}</Typography>
+                      <Typography sx={{ fontSize: '0.7rem', color: 'text.primary', fontWeight: 600 }}>{item.label}</Typography>
                     </Stack>
                   ))}
               </Stack>
@@ -130,7 +130,7 @@ export const AttackSurfaceTab: React.FC<AttackSurfaceTabProps> = (props) => {
       <Box sx={{ mb: 4, px: { xs: 2, sm: 0 } }}>
         <Typography variant="h5" sx={{ 
           fontWeight: 900, 
-          fontFamily: 'Orbitron', 
+          fontFamily: tokens.headingFont === 'orbitron' ? 'Orbitron' : 'Inter', 
           letterSpacing: { xs: 1, sm: 3 }, 
           color: 'text.primary',
           textTransform: 'uppercase',
@@ -144,7 +144,7 @@ export const AttackSurfaceTab: React.FC<AttackSurfaceTabProps> = (props) => {
       </Box>
 
       <Suspense fallback={
-        <Box sx={{ height: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#0f172a', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+        <Box sx={{ height: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: tokens.surface.primary, borderRadius: 1, border: 1, borderColor: 'divider' }}>
           <CircularProgress sx={{ color: tokens.accent.primary }} />
         </Box>
       }>

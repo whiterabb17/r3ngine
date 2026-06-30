@@ -37,6 +37,12 @@ from reNgine.definitions import NUCLEI_DEFAULT_SEVERITIES
 # can dispatch by name without touching real infrastructure.
 # ---------------------------------------------------------------------------
 
+@activity.defn(name="CheckScanAliveActivity")
+async def _mock_check_scan_alive(scan_id: int, subscan_id: int = None) -> bool:
+    """Lifecycle guard mock — always reports scan alive."""
+    return True
+
+
 @activity.defn(name="CreateProxyListActivity")
 async def _mock_create_proxy_list(ctx: Dict[str, Any]) -> str:
     return "/tmp/mock_proxies.txt"
@@ -46,9 +52,9 @@ async def _mock_cleanup_proxy_list(file_path: str) -> bool:
     return True
 
 @activity.defn(name="GatherNucleiTagsActivity")
-async def _mock_gather_tags(ctx: Dict[str, Any]) -> List[str]:
-    """Default mock: no tech detected → empty tag list (no -tags flag)."""
-    return []
+async def _mock_gather_tags(ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Default mock: no tech detected → empty batches (no -tags flag)."""
+    return {'tags': [], 'batches': []}
 
 
 @activity.defn(name="RunCRLFuzzActivity")
@@ -107,6 +113,7 @@ async def _mock_wptaint_scan(ctx: Dict[str, Any]) -> Dict:
 
 
 _NOOP_SUPPORT_ACTIVITIES = [
+    _mock_check_scan_alive,
     _mock_create_proxy_list,
     _mock_cleanup_proxy_list,
     _mock_gather_tags,
@@ -304,20 +311,19 @@ class TestNucleiPlannerWorkflowSequential(IsolatedAsyncioTestCase):
 
 
 class TestNucleiPlannerTagBatching(IsolatedAsyncioTestCase):
-    """Verify tag-batch sequential execution added in v3.5.0.
+    """Verify NucleiPlannerWorkflow passes activity-provided batches through to RunNucleiActivity.
 
-    GatherNucleiTagsActivity produces the tag list; NucleiPlannerWorkflow
-    groups them into batches of 3 and runs one RunNucleiActivity per
-    (severity, batch) pair sequentially.
+    Batching logic moved to GatherNucleiTagsActivity in v3.7.0. The workflow
+    consumes pre-built batches; it does not split tags itself.
     """
 
-    async def _run_with_tags(self, severities, tags, wf_id):
-        """Run the workflow with a controlled tag list and collect (severity, batch) pairs."""
+    async def _run_with_batches(self, severities, batches, wf_id):
+        """Run the workflow with controlled pre-built batches and collect (severity, batch) pairs."""
         call_log: List[tuple] = []
 
         @activity.defn(name="GatherNucleiTagsActivity")
-        async def mock_gather(ctx: Dict[str, Any]) -> List[str]:
-            return tags
+        async def mock_gather(ctx: Dict[str, Any]) -> Dict[str, Any]:
+            return {'tags': [t for batch in batches for t in batch], 'batches': batches}
 
         @activity.defn(name="RunNucleiActivity")
         async def track_nuclei(ctx: Dict[str, Any], severity: str, tag_batch: Optional[List[str]] = None) -> Dict:
@@ -343,67 +349,63 @@ class TestNucleiPlannerTagBatching(IsolatedAsyncioTestCase):
 
         return call_log
 
-    async def test_no_tags_produces_one_call_per_severity_with_none_batch(self):
-        """With no tags, each severity gets exactly one call with tag_batch=None."""
-        call_log = await self._run_with_tags(
+    async def test_no_batches_produces_one_unfiltered_call_per_severity(self):
+        """Empty batches from activity → one RunNucleiActivity call per severity with tag_batch=None."""
+        call_log = await self._run_with_batches(
             severities=["critical", "high"],
-            tags=[],
-            wf_id="test-tags-none",
+            batches=[],
+            wf_id="test-no-batches",
         )
         self.assertEqual(call_log, [("critical", None), ("high", None)])
 
-    async def test_three_tags_produces_one_batch_per_severity(self):
-        """Exactly 3 tags → one batch per severity (no split needed)."""
-        tags = ["wordpress", "joomla", "drupal"]
-        call_log = await self._run_with_tags(
+    async def test_single_batch_fires_once_per_severity(self):
+        """One batch → one RunNucleiActivity call per severity with that batch."""
+        batch = ["wordpress", "wp-plugin", "wp-theme"]
+        call_log = await self._run_with_batches(
             severities=["critical", "high"],
-            tags=tags,
-            wf_id="test-tags-one-batch",
+            batches=[batch],
+            wf_id="test-single-batch",
         )
         self.assertEqual(call_log, [
-            ("critical", ["wordpress", "joomla", "drupal"]),
-            ("high",     ["wordpress", "joomla", "drupal"]),
+            ("critical", batch),
+            ("high", batch),
         ])
 
-    async def test_five_tags_produces_two_batches_per_severity_in_order(self):
-        """5 tags → 2 batches ([0:3], [3:]) per severity, severity-first ordering."""
-        tags = ["apache", "drupal", "joomla", "nginx", "wordpress"]
-        call_log = await self._run_with_tags(
+    async def test_two_batches_fire_in_order_per_severity(self):
+        """Two batches → two calls per severity, severity-first ordering preserved."""
+        batch_a = ["wordpress"]
+        batch_b = ["wp-plugin", "wp-theme"]
+        call_log = await self._run_with_batches(
             severities=["critical", "high"],
-            tags=tags,
-            wf_id="test-tags-two-batches",
+            batches=[batch_a, batch_b],
+            wf_id="test-two-batches",
         )
         expected = [
-            ("critical", ["apache", "drupal", "joomla"]),
-            ("critical", ["nginx", "wordpress"]),
-            ("high",     ["apache", "drupal", "joomla"]),
-            ("high",     ["nginx", "wordpress"]),
+            ("critical", batch_a),
+            ("critical", batch_b),
+            ("high",     batch_a),
+            ("high",     batch_b),
         ]
         self.assertEqual(call_log, expected)
 
-    async def test_seven_tags_three_batches_per_severity(self):
-        """7 tags → 3 batches ([0:3], [3:6], [6:]) per severity."""
-        tags = ["a", "b", "c", "d", "e", "f", "g"]
-        call_log = await self._run_with_tags(
+    async def test_workflow_does_not_split_batches(self):
+        """Workflow passes batches through as-is; it does not sub-split large batches."""
+        large_batch = ["wordpress", "wp-plugin", "wp-theme", "wp", "joomla", "drupal", "apache"]
+        call_log = await self._run_with_batches(
             severities=["critical"],
-            tags=tags,
-            wf_id="test-tags-three-batches",
+            batches=[large_batch],
+            wf_id="test-passthrough",
         )
-        expected = [
-            ("critical", ["a", "b", "c"]),
-            ("critical", ["d", "e", "f"]),
-            ("critical", ["g"]),
-        ]
-        self.assertEqual(call_log, expected)
+        self.assertEqual(call_log, [("critical", large_batch)])
 
     async def test_gather_tags_called_once_before_severity_loop(self):
         """GatherNucleiTagsActivity fires exactly once regardless of severity/batch count."""
         gather_count: List[int] = []
 
         @activity.defn(name="GatherNucleiTagsActivity")
-        async def counting_gather(ctx: Dict[str, Any]) -> List[str]:
+        async def counting_gather(ctx: Dict[str, Any]) -> Dict[str, Any]:
             gather_count.append(1)
-            return ["wordpress", "apache", "nginx", "joomla"]
+            return {'tags': ['wordpress', 'apache'], 'batches': [['wordpress'], ['apache']]}
 
         @activity.defn(name="RunNucleiActivity")
         async def noop_nuclei(ctx: Dict[str, Any], severity: str, tag_batch: Optional[List[str]] = None) -> Dict:

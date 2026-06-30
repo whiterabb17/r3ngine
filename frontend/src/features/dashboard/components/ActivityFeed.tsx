@@ -10,16 +10,17 @@ import {
 import { Activity } from 'lucide-react';
 import type { DashboardData } from '../api';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import { getSeverityColor, getSurfaceSx } from '../../../theme/semanticColors';
 
 const SeverityChip: React.FC<{ severity: number }> = ({ severity }) => {
-  const { isLight } = useThemeTokens();
-  const configs: Record<number, { label: string; color: string; glow: string }> = {
-    4: { label: 'CRITICAL', color: '#ff003c', glow: 'rgba(255, 0, 60, 0.5)' },
-    3: { label: 'HIGH', color: '#ff9f00', glow: 'rgba(255, 159, 0, 0.5)' },
-    2: { label: 'MEDIUM', color: isLight ? '#b8b500' : '#fffc00', glow: 'rgba(255, 252, 0, 0.5)' },
-    1: { label: 'LOW', color: isLight ? '#00ad42' : '#00ff62', glow: 'rgba(0, 255, 98, 0.5)' },
-    0: { label: 'INFO', color: '#00f3ff', glow: 'rgba(0, 243, 255, 0.5)' },
-    [-1]: { label: 'UNKNOWN', color: '#7000ff', glow: 'rgba(112, 0, 255, 0.5)' }
+  const { isLight, tokens } = useThemeTokens();
+  const configs: Record<number, { label: string; color: string }> = {
+    4: { label: 'CRITICAL', color: getSeverityColor('critical', tokens) },
+    3: { label: 'HIGH', color: getSeverityColor('high', tokens) },
+    2: { label: 'MEDIUM', color: getSeverityColor('medium', tokens) },
+    1: { label: 'LOW', color: getSeverityColor('low', tokens) },
+    0: { label: 'INFO', color: getSeverityColor('info', tokens) },
+    [-1]: { label: 'UNKNOWN', color: getSeverityColor('unknown', tokens) }
   };
   const config = configs[severity] || configs[-1];
   return (
@@ -33,7 +34,7 @@ const SeverityChip: React.FC<{ severity: number }> = ({ severity }) => {
         bgcolor: 'transparent',
         border: `1px solid ${config.color}`,
         color: config.color,
-        boxShadow: isLight ? 'none' : `0 0 8px ${config.glow}`
+        boxShadow: isLight ? 'none' : `0 0 8px ${config.color}80`
       }} 
     />
   );
@@ -44,9 +45,7 @@ const FeedCard: React.FC<{ title: string; icon: React.ReactNode; iconColor: stri
   return (
     <Card sx={{ 
       height: 500, 
-      bgcolor: isLight ? 'background.paper' : 'rgba(5, 5, 15, 0.6)', 
-      backdropFilter: 'blur(10px)', 
-      border: isLight ? '1px solid rgba(0, 0, 0, 0.08)' : '1px solid rgba(0, 243, 255, 0.1)',
+      ...getSurfaceSx(isLight, tokens),
       position: 'relative',
       '&::after': {
         content: '""',
@@ -67,12 +66,12 @@ const FeedCard: React.FC<{ title: string; icon: React.ReactNode; iconColor: stri
             textTransform: 'uppercase', 
             letterSpacing: 1.5,
             fontFamily: 'Orbitron',
-            color: isLight ? 'text.primary' : '#fff'
+            color: 'text.primary'
           }}>
             {title}
           </Typography>
         </Box>
-        <Box sx={{ mt: 1, flexGrow: 1, overflow: 'auto', pr: 1, '&::-webkit-scrollbar': { width: 4 }, '&::-webkit-scrollbar-thumb': { bgcolor: isLight ? 'rgba(0,0,0,0.1)' : 'rgba(0, 243, 255, 0.2)', borderRadius: 2 } }}>
+        <Box sx={{ mt: 1, flexGrow: 1, overflow: 'auto', pr: 1, '&::-webkit-scrollbar': { width: 4 }, '&::-webkit-scrollbar-thumb': { bgcolor: isLight ? 'rgba(0,0,0,0.1)' : tokens.border.subtle, borderRadius: 2 } }}>
           {children}
         </Box>
       </CardContent>
@@ -86,7 +85,7 @@ export const ActivityFeed: React.FC<{ data: DashboardData }> = ({ data }) => {
     <FeedCard 
       title="OPERATIONAL SCAN ACTIVITY" 
       icon={<Activity size={20} />} 
-      iconColor="#00f3ff"
+      iconColor={tokens.accent.primary}
     >
       <List sx={{ p: 0 }}>
         {data.activity_feed.length === 0 ? (
@@ -99,15 +98,15 @@ export const ActivityFeed: React.FC<{ data: DashboardData }> = ({ data }) => {
                 mb: 1, 
                 p: 1.2, 
                 borderRadius: 2, 
-                bgcolor: isLight ? 'action.hover' : 'rgba(255,255,255,0.02)', 
-                border: isLight ? '1px solid rgba(0, 0, 0, 0.05)' : '1px solid rgba(0, 243, 255, 0.1)',
+                bgcolor: 'action.hover',
+                border: `1px solid ${tokens.border.subtle}`,
                 position: 'relative',
                 overflow: 'hidden',
                 transition: 'all 0.2s',
                 '&:hover': {
-                  bgcolor: isLight ? 'action.selected' : 'rgba(0, 243, 255, 0.05)',
-                  borderColor: isLight ? 'rgba(0, 0, 0, 0.15)' : 'rgba(0, 243, 255, 0.4)',
-                  boxShadow: isLight ? 'none' : '0 0 10px rgba(0, 243, 255, 0.1)'
+                  bgcolor: 'action.selected',
+                  borderColor: tokens.accent.primary,
+                  boxShadow: isLight ? 'none' : `0 0 10px ${tokens.accent.primary}33`
                 }
               }}
             >
@@ -117,12 +116,12 @@ export const ActivityFeed: React.FC<{ data: DashboardData }> = ({ data }) => {
                     width: 6, 
                     height: 6, 
                     borderRadius: '50%', 
-                    bgcolor: scan.status === 2 ? '#00ff62' : '#ff9f00', 
+                    bgcolor: scan.status === 2 ? tokens.accent.success : tokens.accent.warning, 
                     mr: 1.2, 
-                    boxShadow: isLight ? 'none' : (scan.status === 2 ? '0 0 8px #00ff62' : '0 0 8px #ff9f00')
+                    boxShadow: isLight ? 'none' : (scan.status === 2 ? `0 0 8px ${tokens.accent.success}` : `0 0 8px ${tokens.accent.warning}`)
                   }} 
                 />
-                <Typography variant="body2" sx={{ fontWeight: 800, color: isLight ? 'text.primary' : '#fff', fontSize: '0.8rem', flex: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 800, color: 'text.primary', fontSize: '0.8rem', flex: 1 }}>
                   {scan.title}
                 </Typography>
               </Box>
@@ -134,15 +133,15 @@ export const ActivityFeed: React.FC<{ data: DashboardData }> = ({ data }) => {
                   px: 1, 
                   py: 0.2, 
                   borderRadius: 0.5, 
-                  bgcolor: isLight ? `${tokens.accent.primary}1A` : 'rgba(0, 243, 255, 0.05)', 
-                  border: `1px solid ${isLight ? tokens.accent.primary + '33' : 'rgba(0, 243, 255, 0.2)'}`,
+                  bgcolor: `${tokens.accent.primary}1A`, 
+                  border: `1px solid ${tokens.accent.primary}33`,
                 }}>
-                  <Typography variant="body2" sx={{ color: isLight ? 'primary.main' : '#00f3ff', fontWeight: 700, fontSize: '0.65rem' }}>
+                  <Typography variant="body2" sx={{ color: tokens.accent.primary, fontWeight: 700, fontSize: '0.65rem' }}>
                     {scan.domain}
                   </Typography>
                 </Box>
 
-                <Typography variant="caption" sx={{ color: isLight ? 'text.secondary' : 'rgba(255,255,255,0.3)', fontSize: '0.65rem' }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem' }}>
                   {scan.completed_ago}
                 </Typography>
               </Box>

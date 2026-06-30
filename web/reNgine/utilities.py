@@ -253,6 +253,8 @@ def get_screenshot_path(subdomain):
 
 	# Construct full absolute path for existence check
 	full_results_dir = os.path.join(settings.MEDIA_ROOT, results_dir)
+	if results_dir and not os.path.isdir(full_results_dir):
+		return None
 	
 	# If the path doesn't contain the results_dir prefix, try to find it
 	final_path = path
@@ -264,13 +266,17 @@ def get_screenshot_path(subdomain):
 		else:
 			# Not in main directory, check subscans directory
 			# Pattern: results_dir/subscans/*/path
-			subscan_pattern = os.path.join(full_results_dir, 'subscans', '*', path)
-			matches = glob.glob(subscan_pattern)
-			if matches:
-				# Use the first match and convert back to relative path
-				final_path = os.path.relpath(matches[0], settings.MEDIA_ROOT)
+			subscans_dir = os.path.join(full_results_dir, 'subscans')
+			if os.path.isdir(subscans_dir):
+				subscan_pattern = os.path.join(subscans_dir, '*', path)
+				matches = glob.glob(subscan_pattern)
+				if matches:
+					# Use the first match and convert back to relative path
+					final_path = os.path.relpath(matches[0], settings.MEDIA_ROOT)
+				else:
+					# Fallback to default prepending if nothing found
+					final_path = test_path
 			else:
-				# Fallback to default prepending if nothing found
 				final_path = test_path
 	
 	if final_path:

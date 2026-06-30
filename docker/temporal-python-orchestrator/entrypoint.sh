@@ -29,6 +29,46 @@ sed -i 's/purge()/truncate()/g' "$(python3 -c "import whatportis.cli; print(what
 # Temporary fix for Sublist3r get_csrftoken bug
 if [ -f "/usr/src/github/Sublist3r/sublist3r.py" ]; then
   sed -i "s/token = csrf_regex.findall(resp)\[0\]/token = csrf_regex.findall(resp)[0] if csrf_regex.findall(resp) else ''/g" /usr/src/github/Sublist3r/sublist3r.py
+
+  # Temporary fix for Sublist3r and subbrute invalid escape sequences in Python 3.12
+  python3 << 'EOF'
+import os
+sublist3r_path = '/usr/src/github/Sublist3r/sublist3r.py'
+subbrute_path = '/usr/src/github/Sublist3r/subbrute/subbrute.py'
+if os.path.exists(sublist3r_path):
+    with open(sublist3r_path, 'r', encoding='utf-8') as f:
+        code = f.read()
+    if 'print(r"""%' not in code:
+        targets = [
+            ('print("""%', 'print(r"""%'),
+            ("re.compile('<cite.*?>(.*?)<\\/cite>')", "re.compile(r'<cite.*?>(.*?)<\\/cite>')"),
+            ('re.sub("<(\\/)?b>", "", link)', 're.sub(r"<(\\/)?b>", "", link)'),
+            ("re.sub('<(\\/)?strong>|<span.*?>|<|>', '', link)", "re.sub(r'<(\\/)?strong>|<span.*?>|<|>', '', link)"),
+            ("re.compile('<a name=\"hostanchor\"><\\/a>Host Records.*?<table.*?>(.*?)</table>', re.S)", "re.compile(r'<a name=\"hostanchor\"><\\/a>Host Records.*?<table.*?>(.*?)</table>', re.S)"),
+            ('re.compile("^(http|https)?[a-zA-Z0-9]+([\\-\\.]{1}[a-zA-Z0-9]+)*\\.[a-zA-Z]{2,}$")', 're.compile(r"^(http|https)?[a-zA-Z0-9]+([\\-\\.]{1}[a-zA-Z0-9]+)*\\.[a-zA-Z]{2,}$")'),
+        ]
+        for old, new in targets:
+            code = code.replace(old, new)
+        with open(sublist3r_path, 'w', encoding='utf-8') as f:
+            f.write(code)
+if os.path.exists(subbrute_path):
+    with open(subbrute_path, 'r', encoding='utf-8') as f:
+        code = f.read()
+    sb_old = 'domain_match = re.compile("([a-zA-Z0-9_-]*\\.[a-zA-Z0-9_-]*\\.[a-zA-Z0-9_-]*)+")'
+    sb_new = 'domain_match = re.compile(r"([a-zA-Z0-9_-]*\\.[a-zA-Z0-9_-]*\\.[a-zA-Z0-9_-]*)+")'
+    if sb_old in code:
+        code = code.replace(sb_old, sb_new)
+        with open(subbrute_path, 'w', encoding='utf-8') as f:
+            f.write(code)
+EOF
+fi
+
+# Temporary fix for ctfr invalid escape sequences in Python 3.12
+if [ -f "/usr/src/github/ctfr/ctfr.py" ]; then
+  grep -qF "b = r'''" /usr/src/github/ctfr/ctfr.py || \
+    sed -i "s/b = '''/b = r'''/g" /usr/src/github/ctfr/ctfr.py
+  grep -qF "r'.*www\\.'" /usr/src/github/ctfr/ctfr.py || \
+    sed -i "s/'.*www\\\\.'/r'.*www\\\\.'/g" /usr/src/github/ctfr/ctfr.py
 fi
 
 
@@ -190,16 +230,39 @@ if [ ! -d "/root/nuclei-templates/kayala-custom" ]; then
     /root/nuclei-templates/kayala-custom
 fi
 
+# topscoder/nuclei-wordfence-cve — 70k+ WordPress CVE templates (daily-updated)
+# Pre-loaded so WordPress scans don't incur a git clone mid-scan.
+if [ ! -d "/root/nuclei-templates/wordfence/.git" ]; then
+  echo "Installing Wordfence nuclei templates"
+  git clone --depth 1 https://github.com/topscoder/nuclei-wordfence-cve.git \
+    /root/nuclei-templates/wordfence
+else
+  echo "Updating Wordfence nuclei templates"
+  git -C /root/nuclei-templates/wordfence pull --quiet || true
+fi
+
 # httpx alias
 echo 'alias httpx="/usr/local/bin/httpx"' >> ~/.bashrc
 
-
+# Install spiderfoot packages
+if [ -d '/usr/src/github/spiderfoot' ]; then
+  echo "Installing Spiderfoot dependencies..."
+  pip3 install -r /usr/src/github/spiderfoot/requirements.txt
+  # Python 3.12 removed the 'imp' module. SpiderFoot's sfp_whois uses python-whois
+  # which depends on the 'future' package — old versions of future still import imp.
+  # Upgrade future and python-whois to Python 3.12-compatible releases.
+  pip3 install 'future>=1.0.0' 'python-whois>=0.9.4' --upgrade
+fi
 
 vulnx update
 
 # Configure vigolium to scan all severity levels for known issues
 vigolium config set known_issue_scan.severities "critical,high,medium,low,info" || true
 
+# Split oversized nuclei tags
+echo "[entrypoint] Running Nuclei tag splitter..."
+python3 /usr/src/app/scripts/nuclei_tag_splitter.py &
+
 # wait $INTERNAL_TOOLS_PID
 echo "[entrypoint] Starting Temporal Python Orchestrator..."
-exec python3 /usr/src/app/manage.py run_temporal_orchestrator
+exec python3 /usr/src/app/manage.py run_temporal_orchestrator "$@"

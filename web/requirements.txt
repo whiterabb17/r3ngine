@@ -54,6 +54,8 @@ stem>=1.8.0
 setuptools==70.0.0
 playwright==1.42.0
 playwright-stealth==1.0.6
+undetected-chromedriver==3.5.5
+pyvirtualdisplay==3.0
 djangorestframework-simplejwt==5.3.1
 channels==4.2.2
 channels-redis==4.2.0

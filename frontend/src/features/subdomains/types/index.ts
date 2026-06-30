@@ -20,6 +20,7 @@ export interface Waf {
 }
 
 export interface DirectoryFile {
+  id: number;
   name: string; // base64 encoded
   url: string;
   http_status: number;

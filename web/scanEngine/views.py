@@ -1,4 +1,5 @@
 import glob
+import json
 import os
 import re
 import shutil
@@ -369,6 +370,7 @@ def proxy_settings(request, slug):
 
     if request.method == "POST":
         old_use_tor = proxy.use_tor if proxy else False
+        skip_validation = str(request.POST.get('skip_validation', '')).lower() == 'true'
         if proxy:
             form = ProxyForm(request.POST, instance=proxy)
         else:
@@ -376,13 +378,15 @@ def proxy_settings(request, slug):
 
         if form.is_valid():
             proxy_instance = form.save(commit=False)
-            if proxy_instance.use_proxy and proxy_instance.proxies:
+            if proxy_instance.use_proxy and proxy_instance.proxies and not skip_validation:
                 from reNgine.common_func import validate_proxies
                 original_count = len([line for line in proxy_instance.proxies.splitlines() if line.strip()])
                 validated = validate_proxies(proxy_instance.proxies)
                 proxy_instance.proxies = validated
                 saved_count = len([line for line in validated.splitlines() if line.strip()])
                 message = f'Proxies updated. Validated {saved_count}/{original_count} live proxies.'
+            elif proxy_instance.use_proxy and proxy_instance.proxies and skip_validation:
+                message = 'Proxies updated without server-side validation.'
             else:
                 message = 'Proxies updated.'
             proxy_instance.save()
@@ -642,8 +646,49 @@ def check_proxy_single(request, slug):
     if not proxy_url:
         return http.JsonResponse({'error': 'No proxy provided'}, status=400)
     from reNgine.common_func import check_proxy_robust
-    is_valid = check_proxy_robust(proxy_url, timeout=10)
+    is_valid = check_proxy_robust(proxy_url)
     return http.JsonResponse({'proxy': proxy_url, 'valid': bool(is_valid)})
+
+
+@has_permission_decorator(PERM_MODIFY_SCAN_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
+def check_proxy_bulk(request, slug):
+    """Validate multiple proxy URLs concurrently. POST {proxies: list} → {results: dict}"""
+    if request.method != 'POST':
+        return http.JsonResponse({'error': 'Method not allowed'}, status=405)
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return http.JsonResponse({'error': 'Invalid JSON'}, status=400)
+    proxies = body.get('proxies', [])
+    if not isinstance(proxies, list):
+        return http.JsonResponse({'error': 'No proxies list provided'}, status=400)
+
+    # Prevent potential resource exhaustion by capping target list
+    proxies = proxies[:500]
+
+    from reNgine.common_func import check_proxy_robust, PROXY_VALIDATION_TIMEOUT, PROXY_VALIDATION_MAX_WORKERS
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    max_workers = min(PROXY_VALIDATION_MAX_WORKERS, max(1, len(proxies)))
+    results = {}
+
+    # Each proxy URL is used as the outbound proxy for external IP-check requests.
+    # SSRF surface: only authenticated users with PERM_MODIFY_SCAN_CONFIGURATIONS can
+    # reach this endpoint (enforced by @has_permission_decorator above).
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_proxy = {
+            executor.submit(check_proxy_robust, p, PROXY_VALIDATION_TIMEOUT): p 
+            for p in proxies if p.strip()
+        }
+        for future in as_completed(future_to_proxy):
+            proxy = future_to_proxy[future]
+            try:
+                is_valid = future.result()
+            except Exception:
+                is_valid = False
+            results[proxy] = bool(is_valid)
+
+    return http.JsonResponse({'results': results})
 
 
 @has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)

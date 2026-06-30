@@ -76,6 +76,7 @@ osint: {
 dir_file_fuzz: {
   'auto_calibration': true,
   'run_dirsearch': true,
+  'run_feroxbuster': false,
   'enable_http_crawl': true,
   'rate_limit': 150,
   'extensions': ['html', 'php','git','yaml','conf','cnf','config','gz','env','log','db','mysql','bak','asp','aspx','txt','conf','sql','json','yml','pdf'],
@@ -86,7 +87,8 @@ dir_file_fuzz: {
   'stop_on_error': false,
   'timeout': 5,
   'threads': 30,
-  'wordlist_name': 'dicc'
+  'wordlist_name': 'dicc',
+  'max_repeat_by_signature': 10
 }
 fetch_url: {
   'uses_tools': ['gospider', 'hakrawler', 'waybackurls', 'katana', 'gau'],
@@ -106,6 +108,9 @@ vulnerability_scan: {
   'run_acunetix': true,
   'run_wpscan': true,
   'run_wptaint_scan': true,
+  'run_smugglex': true,
+  'run_second_order': true,
+  'run_nuclei_dast': true,
   'wpscan_enumeration': 'vp,vt,u',
   'wpscan_detection_mode': 'mixed',
   'enable_http_crawl': true,
@@ -170,11 +175,16 @@ screenshot: {
   'threads': 40
 }
 web_api_discovery: {
-  'uses_tools': ['kiterunner', 'arjun', 'linkfinder', 'paramspider', 'aquatone', 'semgrep', 'retire'],
+  'uses_tools': ['kiterunner', 'arjun', 'linkfinder', 'paramspider', 'aquatone', 'semgrep', 'retire', 'jwt_tool', 'graphql-cop', 'favirecon', 'sourcemapper', 'grpcurl', 'julius', 'gqlspection'],
   'scan_only_active': true,
   'threads': 30,
   'timeout': 5,
-  'kr_wordlist': 'routes-small.kite'
+  'kr_wordlist': 'routes-small.kite',
+  'run_favirecon': true,
+  'run_sourcemapper': true,
+  'run_grpcurl': true,
+  'run_julius': true,
+  'run_gqlspection': true
 }
 param_discovery: {
   'enabled': true,

@@ -1,3 +1,4 @@
+{% load custom_tags %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -1244,6 +1245,98 @@
         {% endfor %}
     </article>
     {% endif %}
+
+    {% if email_breaches_count > 0 %}
+    <article style="page-break-before: always">
+        <h2 class="page-title primary">Email Breaches & Leaks</h2>
+        <p>
+            The following email addresses discovered during the scan were matched against known public data breaches on HaveIBeenPwned.
+        </p>
+        <div class="interesting-subdomain-table-container" style="margin-top: 10px;">
+            <table class="interesting-subdomain-table">
+                <tr>
+                    <th style="width: 25%;">Email Address</th>
+                    <th style="width: 20%;">Breach Name</th>
+                    <th style="width: 15%;">Breach Date</th>
+                    <th style="width: 40%;">Compromised Data</th>
+                </tr>
+                {% for breach in email_breaches %}
+                <tr>
+                    <td style="width: 25%; font-family: monospace; word-break: break-all;">{{ breach.email_address }}</td>
+                    <td style="width: 20%; font-weight: bold;">{{ breach.breach_name }}</td>
+                    <td style="width: 15%;">{{ breach.breach_date|default:"Unknown" }}</td>
+                    <td style="width: 40%;">
+                        {% for item in breach.compromised_data %}
+                        <span style="font-size: 8pt; margin: 2px; padding: 2px 6px; border-radius: 4px; display: inline-block; background-color: #e2e8f0; color: #1e293b;">{{ item }}</span>
+                        {% endfor %}
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="4" style="font-size: 9pt; color: #475569; padding: 8px 12px; background-color: #f8fafc; border-top: none;">
+                        <strong>Description:</strong> {{ breach.description }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </article>
+    {% endif %}
+
+    {% if secret_leaks_count > 0 %}
+    <article style="page-break-before: always">
+        <h2 class="page-title primary">Secret & Credential Findings</h2>
+        <p>
+            The following secrets and credentials were detected by Semgrep static analysis
+            on JavaScript, configuration, and source files crawled during the scan.
+            Findings are grouped by type and source.
+        </p>
+        {% for type_key, group in secret_findings_by_type.items %}
+        <div style="margin-bottom: 1.5rem;">
+            <h4 style="margin-bottom: 0.5rem;">
+                {{ group.display_name }}
+                <span style="
+                    display: inline-block;
+                    padding: 2px 8px;
+                    border-radius: 3px;
+                    font-size: 9pt;
+                    font-weight: 600;
+                    margin-left: 8px;
+                    {% with cat=group.display_name|categorize_secret %}
+                    {% if cat.1 == 'error' %}background:#fee2e2;color:#b91c1c;{% endif %}
+                    {% if cat.1 == 'warning' %}background:#fef3c7;color:#92400e;{% endif %}
+                    {% if cat.1 == 'info' %}background:#e0f2fe;color:#0369a1;{% endif %}
+                ">
+                    {{ cat.0 }}
+                    {% endwith %}
+                </span>
+            </h4>
+            <table style="width:100%; border-collapse:collapse; font-size:9pt;">
+                <thead>
+                    <tr style="background:#f1f5f9;">
+                        <th style="padding:6px 8px; text-align:left; border:1px solid #e2e8f0; width:40%;">Source URL</th>
+                        <th style="padding:6px 8px; text-align:center; border:1px solid #e2e8f0; width:8%;">Count</th>
+                        <th style="padding:6px 8px; text-align:left; border:1px solid #e2e8f0; width:37%;">Sample Match</th>
+                        <th style="padding:6px 8px; text-align:left; border:1px solid #e2e8f0; width:15%;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% regroup group.leaks by source_url as url_groups %}
+                    {% for url_group in url_groups %}
+                    <tr>
+                        <td style="padding:5px 8px; border:1px solid #e2e8f0; font-family:monospace; font-size:8pt; word-break:break-all;">{{ url_group.grouper|truncatechars:80 }}</td>
+                        <td style="padding:5px 8px; border:1px solid #e2e8f0; text-align:center; font-weight:bold;">{{ url_group.list|length }}</td>
+                        <td style="padding:5px 8px; border:1px solid #e2e8f0; font-family:monospace; font-size:8pt; color:#888; word-break:break-all;">{{ url_group.list.0.match_content|truncatechars:100 }}</td>
+                        <td style="padding:5px 8px; border:1px solid #e2e8f0; text-transform:uppercase; font-size:8pt;">{{ url_group.list.0.status }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </article>
+    {% endif %}
+    {% include 'report/technical_data_sections.html' %}
+
     {% if show_vuln %}
     <article id="vulnerabilities-discovered" style="page-break-before: always">
         <h2 class="page-title primary">Vulnerabilities Discovered</h2>
@@ -1327,7 +1420,7 @@
                 {% if vulnerability.remediation %}
                 <div class="vuln-section">
                     <p class="section-title">Remediation</p>
-                    <p>{{vulnerability.remediation|linebreaks}}</p>
+                    <div>{{vulnerability.remediation|render_markdown}}</div>
                 </div>
                 {% endif %}
                 <div class="vuln-section">

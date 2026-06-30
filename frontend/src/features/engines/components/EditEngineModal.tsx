@@ -12,10 +12,13 @@ import {
   CircularProgress,
   Tooltip,
   useTheme,
+  alpha
 } from '@mui/material';
 import { X, Cpu, Save, BookOpen } from 'lucide-react';
 import { fetchEngineDetails, useUpdateEngine } from '../api';
 import { EngineConfigReferenceModal } from './EngineConfigReferenceModal';
+import { useThemeTokens } from '../../../theme/useThemeTokens';
+import { getDialogPaperSx, getFieldSx } from '../../../theme/semanticColors';
 
 interface EditEngineModalProps {
   open: boolean;
@@ -31,7 +34,8 @@ export const EditEngineModal: React.FC<EditEngineModalProps> = ({ open, onClose,
   const updateEngine = useUpdateEngine();
   const backgroundRef = React.useRef<HTMLPreElement>(null);
   const theme = useTheme();
-  const isLight = theme.palette.mode === 'light';
+  const { tokens } = useThemeTokens();
+  const isLight = tokens.mode === 'light';
 
   const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
     if (backgroundRef.current) {
@@ -78,11 +82,13 @@ export const EditEngineModal: React.FC<EditEngineModalProps> = ({ open, onClose,
       slotProps={{
         paper: {
           sx: {
-            bgcolor: isLight ? 'background.paper' : '#0a0a0c',
-            border: isLight ? '1px solid rgba(0, 0, 0, 0.1)' : '1px solid rgba(0, 243, 255, 0.2)',
-            boxShadow: isLight ? 'none' : '0 0 30px rgba(0, 243, 255, 0.1)',
-            backgroundImage: isLight ? 'none' : 'linear-gradient(rgba(0, 243, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 243, 255, 0.05) 1px, transparent 1px)',
+            ...getDialogPaperSx(isLight, theme, tokens),
+            backgroundImage: isLight
+              ? 'none'
+              : `linear-gradient(${alpha(tokens.accent.primary, 0.05)} 1px, transparent 1px), linear-gradient(90deg, ${alpha(tokens.accent.primary, 0.05)} 1px, transparent 1px)`,
             backgroundSize: '20px 20px',
+            border: `1px solid ${alpha(tokens.accent.primary, 0.2)}`,
+            boxShadow: isLight ? 'none' : `0 0 30px ${alpha(tokens.accent.primary, 0.1)}`,
           }
         }
       }}
@@ -96,12 +102,12 @@ export const EditEngineModal: React.FC<EditEngineModalProps> = ({ open, onClose,
         pb: 2
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Cpu size={20} style={{ color: isLight ? theme.palette.primary.main : '#00f3ff' }} />
+          <Cpu size={20} style={{ color: tokens.accent.primary }} />
           <Typography sx={{ fontFamily: 'Orbitron', fontWeight: 800, color: 'text.primary', letterSpacing: 1 }}>
             MODIFY ENGINE CONFIG
           </Typography>
         </Box>
-        <IconButton onClick={onClose} size="small" sx={{ color: 'text.secondary' }}>
+        <IconButton onClick={onClose} size="small" sx={{ color: tokens.text.muted, '&:hover': { color: tokens.accent.error } }}>
           <X size={20} />
         </IconButton>
       </DialogTitle>
@@ -109,7 +115,7 @@ export const EditEngineModal: React.FC<EditEngineModalProps> = ({ open, onClose,
       <DialogContent sx={{ mt: 2, minHeight: 400, display: 'flex', flexDirection: 'column' }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1 }}>
-            <CircularProgress sx={{ color: isLight ? 'primary.main' : '#00f3ff' }} />
+            <CircularProgress sx={{ color: tokens.accent.primary }} />
           </Box>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -118,142 +124,131 @@ export const EditEngineModal: React.FC<EditEngineModalProps> = ({ open, onClose,
               fullWidth
               value={name}
               onChange={(e) => setName(e.target.value)}
-              variant="filled"
-              sx={{
-                '& .MuiFilledInput-root': {
-                  bgcolor: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.03)',
-                  '&:before, &:after': { display: 'none' },
-                  border: isLight ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.1)',
-                  color: 'text.primary',
-                  fontFamily: 'monospace'
-                },
-                '& .MuiInputLabel-root': { color: isLight ? 'text.secondary' : 'rgba(0, 243, 255, 0.5)', fontFamily: 'Orbitron', fontSize: '0.7rem' }
-              }}
+              variant="outlined"
+              sx={getFieldSx(isLight, tokens)}
             />
 
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-              <Typography sx={{ color: isLight ? 'text.secondary' : 'rgba(0,243,255,0.5)', fontFamily: 'Orbitron', fontSize: '0.7rem' }}>
-                YAML CONFIGURATION BLUEPRINT
-              </Typography>
-              <Tooltip title="View configuration reference">
-                <IconButton
-                  size="small"
-                  onClick={() => setRefOpen(true)}
-                  sx={{
-                    color: isLight ? 'text.secondary' : 'rgba(0,243,255,0.6)',
-                    p: 0.5,
-                    '&:hover': { color: isLight ? 'primary.main' : '#00f3ff', bgcolor: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(0,243,255,0.08)' },
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                <Typography sx={{ color: tokens.text.secondary, fontFamily: 'Orbitron', fontSize: '0.7rem' }}>
+                  YAML CONFIGURATION BLUEPRINT
+                </Typography>
+                <Tooltip title="View configuration reference">
+                  <IconButton
+                    size="small"
+                    onClick={() => setRefOpen(true)}
+                    sx={{
+                      color: tokens.text.secondary,
+                      p: 0.5,
+                      '&:hover': { color: tokens.accent.primary, bgcolor: alpha(tokens.accent.primary, 0.08) },
+                    }}
+                  >
+                    <BookOpen size={14} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              <Box sx={{
+                position: 'relative',
+                width: '100%',
+                height: 500,
+                bgcolor: isLight ? 'transparent' : alpha(tokens.text.primary, 0.02),
+                border: `1px solid ${tokens.border.subtle}`,
+                borderRadius: 1,
+                overflow: 'hidden'
+              }}>
+                <pre
+                  ref={backgroundRef}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    margin: 0,
+                    padding: '16px',
+                    pointerEvents: 'none',
+                    overflow: 'hidden',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                    fontFamily: 'monospace',
+                    fontSize: '14px',
+                    lineHeight: '1.5',
+                    color: 'transparent',
+                    boxSizing: 'border-box',
                   }}
                 >
-                  <BookOpen size={14} />
-                </IconButton>
-              </Tooltip>
-            </Box>
-            <Box sx={{
-              position: 'relative',
-              width: '100%',
-              height: 500,
-              bgcolor: isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.03)',
-              border: isLight ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.1)',
-              borderRadius: 1,
-              overflow: 'hidden'
-            }}>
-              <pre
-                ref={backgroundRef}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  margin: 0,
-                  padding: '16px',
-                  pointerEvents: 'none',
-                  overflow: 'hidden',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-all',
-                  fontFamily: 'monospace',
-                  fontSize: '14px',
-                  lineHeight: '1.5',
-                  color: 'transparent',
-                  boxSizing: 'border-box',
-                }}
-              >
-                {yaml.split('\n').map((line, i) => {
-                  const cleanLine = line.replace('\r', '');
-                  const isComment = cleanLine.trim().startsWith('#');
-                  const keyMatch = cleanLine.match(/^(\s*)([^#\s][^:]+:)(.*)$/);
+                  {yaml.split('\n').map((line, i) => {
+                    const cleanLine = line.replace('\r', '');
+                    const isComment = cleanLine.trim().startsWith('#');
+                    const keyMatch = cleanLine.match(/^(\s*)([^#\s][^:]+:)(.*)$/);
 
-                  if (isComment) {
+                    if (isComment) {
+                      return (
+                        <span key={i} style={{ color: tokens.text.muted }}>
+                          {cleanLine}{i === yaml.split('\n').length - 1 ? '' : '\n'}
+                        </span>
+                      );
+                    }
+
+                    if (keyMatch) {
+                      const [full, indent, key, rest] = keyMatch;
+                      const isTopLevel = indent.length === 0;
+
+                      return (
+                        <span key={i}>
+                          <span>{indent}</span>
+                          <span style={{
+                            color: isTopLevel 
+                              ? (isLight ? '#c2410c' : tokens.accent.error) 
+                              : (isLight ? '#b45309' : tokens.accent.warning),
+                            fontWeight: isTopLevel ? 900 : 400
+                          }}>
+                            {key}
+                          </span>
+                          <span style={{ color: tokens.text.primary }}>{rest}</span>
+                          {i === yaml.split('\n').length - 1 ? '' : '\n'}
+                        </span>
+                      );
+                    }
+
                     return (
-                      <span key={i} style={{ color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.3)' }}>
+                      <span key={i} style={{ color: tokens.text.primary }}>
                         {cleanLine}{i === yaml.split('\n').length - 1 ? '' : '\n'}
                       </span>
                     );
-                  }
-
-                  if (keyMatch) {
-                    const [full, indent, key, rest] = keyMatch;
-                    const isTopLevel = indent.length === 0;
-
-                    return (
-                      <span key={i}>
-                        <span>{indent}</span>
-                        <span style={{
-                          color: isTopLevel 
-                            ? (isLight ? '#c2410c' : '#ff3333') 
-                            : (isLight ? '#b45309' : '#e5c07b'),
-                          fontWeight: isTopLevel ? 900 : 400
-                        }}>
-                          {key}
-                        </span>
-                        <span style={{ color: isLight ? '#0f172a' : '#fff' }}>{rest}</span>
-                        {i === yaml.split('\n').length - 1 ? '' : '\n'}
-                      </span>
-                    );
-                  }
-
-                  return (
-                    <span key={i} style={{ color: isLight ? '#0f172a' : '#fff' }}>
-                      {cleanLine}{i === yaml.split('\n').length - 1 ? '' : '\n'}
-                    </span>
-                  );
-                })}
-              </pre>
-              <textarea
-                value={yaml}
-                onChange={(e) => setYaml(e.target.value)}
-                onScroll={(e) => {
-                  if (backgroundRef.current) {
-                    backgroundRef.current.scrollTop = e.currentTarget.scrollTop;
-                  }
-                }}
-                spellCheck={false}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  width: '100%',
-                  height: '100%',
-                  margin: 0,
-                  padding: '16px',
-                  background: 'transparent',
-                  border: 'none',
-                  outline: 'none',
-                  resize: 'none',
-                  fontFamily: 'monospace',
-                  fontSize: '14px',
-                  lineHeight: '1.5',
-                  color: 'transparent',
-                  caretColor: isLight ? theme.palette.primary.main : '#fff',
-                  boxSizing: 'border-box',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-all',
-                  overflowY: 'auto',
-                }}
-              />
+                  })}
+                </pre>
+                <textarea
+                  value={yaml}
+                  onChange={(e) => setYaml(e.target.value)}
+                  onScroll={handleScroll}
+                  spellCheck={false}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    width: '100%',
+                    height: '100%',
+                    margin: 0,
+                    padding: '16px',
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    resize: 'none',
+                    fontFamily: 'monospace',
+                    fontSize: '14px',
+                    lineHeight: '1.5',
+                    color: 'transparent',
+                    caretColor: tokens.accent.primary,
+                    boxSizing: 'border-box',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                    overflowY: 'auto',
+                  }}
+                />
+              </Box>
             </Box>
           </Box>
         )}
@@ -262,7 +257,7 @@ export const EditEngineModal: React.FC<EditEngineModalProps> = ({ open, onClose,
       <DialogActions sx={{ p: 3, borderTop: '1px solid', borderColor: 'divider' }}>
         <Button
           onClick={onClose}
-          sx={{ color: 'text.secondary', fontFamily: 'Orbitron', fontSize: '0.7rem' }}
+          sx={{ color: tokens.text.secondary, fontFamily: 'Orbitron', fontSize: '0.7rem', '&:hover': { color: tokens.text.primary } }}
         >
           CANCEL
         </Button>
@@ -272,14 +267,14 @@ export const EditEngineModal: React.FC<EditEngineModalProps> = ({ open, onClose,
           variant="contained"
           startIcon={<Save size={16} />}
           sx={{
-            bgcolor: isLight ? 'primary.main' : '#00f3ff',
-            color: isLight ? '#fff' : '#000',
+            bgcolor: tokens.accent.primary,
+            color: theme.palette.getContrastText(tokens.accent.primary),
             fontFamily: 'Orbitron',
             fontWeight: 900,
             fontSize: '0.75rem',
             px: 4,
-            '&:hover': { bgcolor: isLight ? 'primary.dark' : '#00d8e6' },
-            '&.Mui-disabled': { bgcolor: isLight ? 'action.disabledBackground' : 'rgba(0,243,255,0.1)', color: 'action.disabled' }
+            '&:hover': { bgcolor: alpha(tokens.accent.primary, 0.85) },
+            '&.Mui-disabled': { bgcolor: alpha(tokens.text.primary, 0.1), color: tokens.text.disabled }
           }}
         >
           {updateEngine.isPending ? 'SYNCHRONIZING...' : 'COMMIT CHANGES'}

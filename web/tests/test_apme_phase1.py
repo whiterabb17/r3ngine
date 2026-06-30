@@ -402,9 +402,9 @@ class ScorerTests(TestCase):
         result = self.scorer.deduplicate([p1, p2])
         self.assertEqual(len(result), 2)
 
-    def test_score_below_015_dropped_in_dedup(self):
+    def test_score_below_005_dropped_in_dedup(self):
         p = _make_path("P1", [_make_step()])
-        p.score = 0.10
+        p.score = 0.04
         result = self.scorer.deduplicate([p])
         self.assertEqual(len(result), 0)
 

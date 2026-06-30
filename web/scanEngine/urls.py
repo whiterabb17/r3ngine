@@ -137,4 +137,8 @@ urlpatterns = [
         '<slug:slug>/check_proxy/',
         views.check_proxy_single,
         name='check_proxy_single'),
+    path(
+        '<slug:slug>/check_proxy_bulk/',
+        views.check_proxy_bulk,
+        name='check_proxy_bulk'),
 ]

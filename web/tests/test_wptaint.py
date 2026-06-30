@@ -86,13 +86,13 @@ class TestWptaintPluginDiscovery(TestCase):
     # Existing behaviour — must not break
     # ------------------------------------------------------------------
 
-    @patch('reNgine.wptaint_tasks.stream_command', return_value=iter([]))
+    @patch('reNgine.tasks.wptaint.stream_command', return_value=iter([]))
     def test_legacy_plugin_vuln_name_discovered(self, mock_stream):
         """Existing 'WordPress Plugin: {slug}' vuln names are still discovered."""
         self._make_vuln('WordPress Plugin: akismet')
         proxy = _make_proxy(self.scan)
 
-        from reNgine.wptaint_tasks import wptaint_scan
+        from reNgine.tasks.wptaint import wptaint_scan
         with patch('os.path.exists', return_value=False):
             wptaint_scan(proxy)
 
@@ -101,13 +101,13 @@ class TestWptaintPluginDiscovery(TestCase):
         self.assertTrue(any('akismet' in c for c in calls),
                         f"Expected akismet download attempt. Calls: {calls}")
 
-    @patch('reNgine.wptaint_tasks.stream_command', return_value=iter([]))
+    @patch('reNgine.tasks.wptaint.stream_command', return_value=iter([]))
     def test_plugin_detected_name_discovered(self, mock_stream):
         """'WordPress Plugin Detected: {slug}' vuln names are discovered."""
         self._make_vuln('WordPress Plugin Detected: woocommerce')
         proxy = _make_proxy(self.scan)
 
-        from reNgine.wptaint_tasks import wptaint_scan
+        from reNgine.tasks.wptaint import wptaint_scan
         with patch('os.path.exists', return_value=False):
             wptaint_scan(proxy)
 
@@ -115,7 +115,7 @@ class TestWptaintPluginDiscovery(TestCase):
         self.assertTrue(any('woocommerce' in c for c in calls),
                         f"Expected woocommerce download attempt. Calls: {calls}")
 
-    @patch('reNgine.wptaint_tasks.stream_command', return_value=iter([]))
+    @patch('reNgine.tasks.wptaint.stream_command', return_value=iter([]))
     def test_plugin_discovered_from_endpoint_url(self, mock_stream):
         """Plugin slug extracted from /wp-content/plugins/{slug}/ in EndPoint URLs."""
         self._make_endpoint(
@@ -123,7 +123,7 @@ class TestWptaintPluginDiscovery(TestCase):
         )
         proxy = _make_proxy(self.scan)
 
-        from reNgine.wptaint_tasks import wptaint_scan
+        from reNgine.tasks.wptaint import wptaint_scan
         with patch('os.path.exists', return_value=False):
             wptaint_scan(proxy)
 
@@ -131,7 +131,7 @@ class TestWptaintPluginDiscovery(TestCase):
         self.assertTrue(any('contact-form-7' in c for c in calls),
                         f"Expected contact-form-7 download attempt. Calls: {calls}")
 
-    @patch('reNgine.wptaint_tasks.stream_command', return_value=iter([]))
+    @patch('reNgine.tasks.wptaint.stream_command', return_value=iter([]))
     def test_slug_not_duplicated_from_multiple_sources(self, mock_stream):
         """Same slug from both Vulnerability and EndPoint is not scanned twice."""
         self._make_vuln('WordPress Plugin Detected: woocommerce')
@@ -140,7 +140,7 @@ class TestWptaintPluginDiscovery(TestCase):
         )
         proxy = _make_proxy(self.scan)
 
-        from reNgine.wptaint_tasks import wptaint_scan
+        from reNgine.tasks.wptaint import wptaint_scan
         with patch('os.path.exists', return_value=False):
             wptaint_scan(proxy)
 
@@ -149,13 +149,13 @@ class TestWptaintPluginDiscovery(TestCase):
                           and 'woocommerce' in str(c)]
         self.assertEqual(len(download_calls), 1, "Plugin should only be downloaded once")
 
-    @patch('reNgine.wptaint_tasks.stream_command', return_value=iter([]))
+    @patch('reNgine.tasks.wptaint.stream_command', return_value=iter([]))
     def test_plugin_with_vuln_suffix_slug_extracted_correctly(self, mock_stream):
         """'WordPress Plugin: {slug} - {vuln title}' correctly extracts just the slug."""
         self._make_vuln('WordPress Plugin: contact-form-7 - Reflected XSS via _wpcf7')
         proxy = _make_proxy(self.scan)
 
-        from reNgine.wptaint_tasks import wptaint_scan
+        from reNgine.tasks.wptaint import wptaint_scan
         with patch('os.path.exists', return_value=False):
             wptaint_scan(proxy)
 
@@ -166,12 +166,12 @@ class TestWptaintPluginDiscovery(TestCase):
         self.assertFalse(any('Reflected' in c and 'downloads.wordpress.org' in c for c in calls),
                          "Vuln title must not appear in download URL")
 
-    @patch('reNgine.wptaint_tasks.stream_command', return_value=iter([]))
+    @patch('reNgine.tasks.wptaint.stream_command', return_value=iter([]))
     def test_no_plugins_skips_scan(self, mock_stream):
         """With no plugins from any source, scan is skipped."""
         proxy = _make_proxy(self.scan)
 
-        from reNgine.wptaint_tasks import wptaint_scan
+        from reNgine.tasks.wptaint import wptaint_scan
         result = wptaint_scan(proxy)
 
         self.assertIsNone(result)

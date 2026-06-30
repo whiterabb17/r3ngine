@@ -22,6 +22,7 @@ export interface Endpoint {
   techs: Technology[];
   parameters: Parameter[];
   discovered_date: string;
+  auth_candidates?: any[];
 }
 
 export interface EndpointResponse {

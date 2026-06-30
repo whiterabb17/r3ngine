@@ -1,23 +1,23 @@
 import { useThemeTokens } from '../theme/useThemeTokens';
 import React from 'react';
-import { MenuItem, Typography, Box, Divider } from '@mui/material';
+import { MenuItem, Typography, Box } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { Palette, Check } from 'lucide-react';
 import { useAppTheme } from '../context/ThemeContext';
+import { selectableThemes, themeDefinitions } from '../theme/tokens';
 
 export const ThemeSwitcher: React.FC = () => {
-  const { tokens } = useThemeTokens();
+  const { tokens, isLight } = useThemeTokens();
   const { themeName, setTheme } = useAppTheme();
 
-
-  const themes = [
-    { id: 'hacker', label: 'V3 Hacker', color: tokens.accent.primary },
-    { id: 'clean', label: 'V3 Clean', color: '#00d2ff' },
-    { id: 'script_kiddie', label: 'V3 Script Kiddie', color: tokens.accent.secondary },
-  ] as const;
+  const themes = selectableThemes.map((item) => ({
+    ...item,
+    color: themeDefinitions[item.id].accent.primary,
+  }));
 
   return (
     <>
-      <Box sx={{ px: 2.5, py: 1.5, display: 'flex', alignItems: 'center', gap: 1.5, color: 'rgba(255,255,255,0.4)' }}>
+      <Box sx={{ px: 2.5, py: 1.5, display: 'flex', alignItems: 'center', gap: 1.5, color: 'text.secondary' }}>
         <Palette size={14} />
         <Typography sx={{ fontSize: '0.7rem', fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
           Interface Theme
@@ -32,11 +32,15 @@ export const ThemeSwitcher: React.FC = () => {
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'space-between',
-            bgcolor: themeName === t.id ? 'rgba(0, 243, 255, 0.05) !important' : 'transparent',
+            bgcolor: themeName === t.id ? alpha(tokens.accent.primary, isLight ? 0.08 : 0.12) : 'transparent',
+            color: themeName === t.id ? tokens.accent.primary : 'text.primary',
+            '&:hover': {
+              bgcolor: alpha(tokens.accent.primary, isLight ? 0.08 : 0.14),
+            },
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: t.color, boxShadow: `0 0 5px ${t.color}` }} />
+            <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: t.color, boxShadow: isLight ? 'none' : `0 0 5px ${t.color}` }} />
             <Typography sx={{ fontSize: 'inherit', fontFamily: 'inherit', fontWeight: 600 }}>
               {t.label}
             </Typography>

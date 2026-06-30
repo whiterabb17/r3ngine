@@ -101,7 +101,7 @@ class LLMPathOrchestrator:
             })
 
         # Fetch Endpoints
-        endpoints = EndPoint.objects.filter(scan_history=scan)[:50] # Limit to avoid token overflow
+        endpoints = EndPoint.objects.filter(scan_history=scan)[:200] # Limit to avoid token overflow
         ep_list = []
         for e in endpoints:
             ep_list.append({

@@ -43,6 +43,7 @@ class EngineType(models.Model):
         try:
             config = yaml.safe_load(self.yaml_configuration)
             if isinstance(config, dict):
+                # Tasks are the top level keys in the YAML config
                 return list(config.keys())
         except Exception:
             pass
@@ -108,6 +109,20 @@ class Proxy(models.Model):
     proxies = models.TextField(blank=True, null=True)
     use_proxychains = models.BooleanField(default=False)
     use_tor = models.BooleanField(default=False)
+    # Timestamp of the last batch-verification run (set by fetch_proxies_task).
+    # Used by get_random_proxy() to skip redundant re-validation while the list
+    # is still fresh.
+    proxies_verified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When the stored proxy list was last batch-verified as live.',
+    )
+    # How many minutes the batch-verified list is considered trustworthy before
+    # get_random_proxy() falls back to individual re-validation.
+    proxy_ttl_minutes = models.IntegerField(
+        default=120,
+        help_text='Minutes before the verified proxy list is considered stale (default 120).',
+    )
 
 
 class OpSec(models.Model):
@@ -125,6 +140,13 @@ class OpSec(models.Model):
     http_protocol = models.CharField(max_length=10, default='http2') # http1.1, http2
     custom_dns_servers = models.TextField(blank=True, null=True)
     enable_metadata_stripping = models.BooleanField(default=False)
+    # When True, check_proxy_robust() will compare the proxy's reported outbound
+    # IP against the server's real IP and reject transparent proxies that expose
+    # it.  Opt-in because it requires an extra HTTP call to detect the server IP.
+    enable_transparent_proxy_detection = models.BooleanField(
+        default=False,
+        help_text='Reject proxies that do not change the outbound IP (transparent proxies). Opt-in.',
+    )
 
 
 class Hackerone(models.Model):
@@ -300,3 +322,18 @@ class ScanProfile(models.Model):
             if getattr(self, flag):
                 d[flag] = True
         return d
+
+
+class ScanWorker(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(null=True, blank=True)
+    auth_token = models.CharField(max_length=255, unique=True) # Used to secure worker access
+    task_queue = models.CharField(max_length=100)
+    hostname = models.CharField(max_length=100, null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    last_heartbeat = models.DateTimeField(null=True, blank=True)
+    
+    def __str__(self):
+        return self.name

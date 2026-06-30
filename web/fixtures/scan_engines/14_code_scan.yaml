@@ -18,6 +18,9 @@
         timeout: 3600
       vulnerability_scan:
         run_nuclei: false
+        run_smugglex: false
+        run_second_order: false
+        run_nuclei_dast: false
         run_dalfox: false
         run_crlfuzz: false
         run_acunetix: false
@@ -32,6 +35,7 @@
         fetch_gpt_report: false
         nuclei:
           use_nuclei_config: false
+          max_templates_per_batch: 100
           severities:
             - medium
             - high

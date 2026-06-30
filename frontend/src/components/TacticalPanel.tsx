@@ -1,7 +1,9 @@
 import React from 'react';
 import { Box, Card, CardContent, Typography, useTheme } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import clsx from 'clsx';
 import { useThemeTokens } from '../theme/useThemeTokens';
+import { getElevatedSurfaceSx } from '../theme/semanticColors';
 
 interface TacticalPanelProps {
   title?: string;
@@ -18,31 +20,31 @@ export const TacticalPanel: React.FC<TacticalPanelProps> = ({
   icon, 
   children, 
   className,
-  borderColor = '#00f0ff',
+  borderColor,
   sx = {},
   headerAction
 }) => {
   const { theme, isLight, tokens } = useThemeTokens();
+  const accentBorder = borderColor || tokens.accent.primary;
+  const surfaceSx = getElevatedSurfaceSx(isLight, theme, tokens);
 
   return (
     <Card 
       className={clsx("relative overflow-hidden group transition-all duration-500", className)}
       sx={{ 
-        background: isLight 
-          ? tokens.bg.secondary
-          : 'linear-gradient(135deg, rgba(20, 15, 30, 0.7) 0%, rgba(10, 10, 15, 0.9) 100%)',
-        backdropFilter: 'blur(25px) saturate(180%)',
-        border: isLight 
-          ? `1px solid rgba(0,0,0,0.1)` 
-          : '1px solid rgba(255, 255, 255, 0.06)',
-        borderRadius: isLight ? '8px' : '18px',
+        ...surfaceSx,
+        background: isLight
+          ? surfaceSx.bgcolor
+          : `linear-gradient(135deg, ${alpha(tokens.surface.secondary, 0.72)} 0%, ${alpha(tokens.surface.elevated, 0.92)} 100%)`,
+        backdropFilter: isLight ? surfaceSx.backdropFilter : 'blur(25px) saturate(180%)',
+        borderRadius: theme.spacing(1),
         position: 'relative',
-        boxShadow: isLight 
-          ? '0 1px 3px rgba(0, 0, 0, 0.05)' 
-          : 'inset 0 0 30px rgba(0, 0, 0, 0.5), 0 15px 35px rgba(0, 0, 0, 0.8)',
+        boxShadow: isLight
+          ? surfaceSx.boxShadow
+          : `inset 0 0 30px ${alpha('#000', 0.45)}, 0 15px 35px ${alpha('#000', 0.72)}`,
         /* Minimal hover effect to prevent huge tables from getting too hectic */
         '&:hover': {
-          borderColor: isLight ? theme.palette.primary.main : 'rgba(0, 240, 255, 0.2)',
+          borderColor: isLight ? theme.palette.primary.main : alpha(accentBorder, 0.28),
         },
         ...sx,
         /* Dual Gradient Glow - Disabled in light mode */
@@ -51,7 +53,7 @@ export const TacticalPanel: React.FC<TacticalPanelProps> = ({
           position: 'absolute',
           inset: 0,
           borderRadius: 'inherit',
-          background: 'radial-gradient(circle at 20% 20%, rgba(255, 43, 214, 0.15), transparent 50%), radial-gradient(circle at 80% 80%, rgba(0, 240, 255, 0.1), transparent 50%)',
+          background: `radial-gradient(circle at 20% 20%, ${alpha(tokens.accent.secondary, 0.14)}, transparent 50%), radial-gradient(circle at 80% 80%, ${alpha(tokens.accent.primary, 0.1)}, transparent 50%)`,
           opacity: isLight ? 0 : 0.6,
           pointerEvents: 'none',
           zIndex: 0
@@ -65,7 +67,7 @@ export const TacticalPanel: React.FC<TacticalPanelProps> = ({
                 <Box sx={{ 
                   mr: 1.5, 
                   display: 'flex', 
-                  filter: isLight ? 'none' : 'drop-shadow(0 0 5px rgba(0, 240, 255, 0.5))' 
+                  filter: isLight ? 'none' : `drop-shadow(0 0 5px ${alpha(tokens.accent.primary, 0.5)})`
                 }}>
                   {icon}
                 </Box>
@@ -76,8 +78,8 @@ export const TacticalPanel: React.FC<TacticalPanelProps> = ({
                 textTransform: 'uppercase', 
                 letterSpacing: 2.5,
                 fontFamily: 'var(--r3-heading-font)',
-                color: isLight ? theme.palette.text.primary : '#8ba4c0',
-                textShadow: isLight ? 'none' : '0 0 10px rgba(255, 43, 214, 0.4)'
+                color: isLight ? theme.palette.text.primary : tokens.text.secondary,
+                textShadow: isLight ? 'none' : `0 0 10px ${alpha(tokens.accent.secondary, 0.38)}`
               }}>
                 {title}
               </Typography>
@@ -89,4 +91,3 @@ export const TacticalPanel: React.FC<TacticalPanelProps> = ({
     </Card>
   );
 };
-

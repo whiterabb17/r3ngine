@@ -63,11 +63,13 @@ from reNgine.temporal_workflows import (
     GoExecutorTaskWorkflow,
     ApmeTaskWorkflow,
     RecalculateApmeWorkflow,
+    CertificateResyncWorkflow,
     IdentityEnrichmentWorkflow,
     GeoLocalizeWorkflow,
     HackerOneImportWorkflow,
     HackerOneSyncBookmarkedWorkflow,
     ProxyFetchWorkflow,
+    SingleTaskRetryWorkflow,
     # Phase 2 — rengine-ng standalone workflows
     UserHuntWorkflow,
     URLBypassWorkflow,
@@ -82,7 +84,10 @@ from reNgine.temporal_workflows import (
     URLFuzzWorkflow,
     URLParamsFuzzWorkflow,
     URLVulnWorkflow,
+    URLAuthExtractWorkflow,
 )
+
+from reNgine.temporal.workflows.assessment_workflow import AssessmentWorkflow
 
 # Activities (all Python-side activities are registered here)
 from reNgine.temporal_activities import (
@@ -90,11 +95,13 @@ from reNgine.temporal_activities import (
     finalize_subscan_activity,
     finalize_failed_scan_activity,
     update_scan_status_activity,
+    get_scan_final_status_activity,
     # Step 0: Task initialization & Target Profiling
     initialize_scan_tasks_activity,
     load_checkpoint_activity,
     save_checkpoint_activity,
     target_profiling_activity,
+    check_scan_alive_activity,
     check_scan_queue_status_activity,
     get_enabled_plugins_for_tier_activity,
 
@@ -120,6 +127,7 @@ from reNgine.temporal_activities import (
     # Tier 3/4: Fuzzing
     run_dir_file_fuzz_activity,
     parse_fuzz_results_activity,
+    run_gf_on_all_endpoints_activity,
 
     # Tier 5: Analysis
     run_web_api_discovery_activity,
@@ -138,9 +146,11 @@ from reNgine.temporal_activities import (
     run_react2shell_activity,
     run_wpscan_activity,
     run_semgrep_activity,
+    run_vigolium_harvest_activity,
     run_vigolium_scan_activity,
     run_vigolium_discovery_activity,
     run_vigolium_analysis_activity,
+    post_scan_processing_activity,
     mark_vulnerability_scan_complete_activity,
     run_waf_bypass_activity,
 
@@ -148,6 +158,7 @@ from reNgine.temporal_activities import (
 
     # Tier 7: Post-Processing & Intel
     correlate_vulnerabilities_activity,
+    correlate_exposures_activity,
     enrich_scan_cves_activity,
     calculate_risk_scores_activity,
     generate_impact_assessment_activity,
@@ -166,7 +177,11 @@ from reNgine.temporal_activities import (
     setup_scheduled_scan_activity,
     run_monitoring_check_activity,
     run_llm_apme_activity,
+    run_certificate_intel_activity,
+    run_identity_infra_activity,
+    run_api_intel_activity,
     recalculate_apme_activity,
+    resync_certificate_activity,
     enrich_identities_activity,
     geo_localize_activity,
     import_hackerone_programs_activity,
@@ -205,6 +220,14 @@ from reNgine.temporal_activities import (
     run_wptaint_scan_activity,
     run_param_discovery_activity,
     run_http_crawl_bridge_activity,
+    extract_auth_for_url_activity,
+    
+    # Plugin lifecycle
+    log_plugin_start_activity,
+    log_plugin_end_activity,
+
+    # Email security (internal module — Tier 2 post-scan)
+    run_email_security_activity,
 )
 
 
@@ -313,7 +336,16 @@ async def _register_daily_cron_schedule(
 class Command(BaseCommand):
     help = 'Runs the Python Temporal Orchestrator Worker on python-orchestrator-queue.'
 
+    def add_arguments(self, parser):
+        parser.add_argument('--worker-name', type=str, help='Name of the remote worker')
+        parser.add_argument('--worker-token', type=str, help='Authentication token for the remote worker')
+        parser.add_argument('--r3ngine-url', type=str, help='URL of the central r3ngine instance')
+
     def handle(self, *args, **options):
+        worker_name = options.get('worker_name')
+        worker_token = options.get('worker_token')
+        r3ngine_url = options.get('r3ngine_url')
+        task_queue = worker_name if worker_name else "python-orchestrator-queue"
         # Install plugin tools in THIS container before starting the worker.
         # Tools must be present in the orchestrator — not the web container — because
         # activities (swaks, smtp-user-enum, etc.) run here. This is the only place
@@ -337,7 +369,35 @@ class Command(BaseCommand):
         except Exception as cache_err:
             logger.error(f"Failed to clear needs_restart flags: {cache_err}")
 
+        async def heartbeat_loop():
+            if not worker_name or not worker_token or not r3ngine_url:
+                return
+            import requests
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            
+            def send_heartbeat():
+                return requests.post(
+                    f"{r3ngine_url.rstrip('/')}/api/settings/workers/heartbeat/", 
+                    json={"worker_name": worker_name, "token": worker_token},
+                    verify=False,
+                    timeout=10
+                )
+            
+            while True:
+                try:
+                    resp = await asyncio.to_thread(send_heartbeat)
+                    if resp.status_code == 403:
+                        logger.error("Worker authentication failed. Shutting down...")
+                        os.kill(os.getpid(), signal.SIGTERM)
+                        break
+                except Exception as e:
+                    logger.error(f"Failed to send heartbeat: {e}")
+                await asyncio.sleep(60)
+
         async def main():
+            if worker_name and worker_token and r3ngine_url:
+                asyncio.create_task(heartbeat_loop())
 
             temporal_host = os.environ.get("TEMPORAL_HOST", "temporal:7233")
             namespace = os.environ.get("TEMPORAL_NAMESPACE", "default")
@@ -413,12 +473,14 @@ class Command(BaseCommand):
                 finalize_subscan_activity,
                 finalize_failed_scan_activity,
                 update_scan_status_activity,
+                get_scan_final_status_activity,
 
                 # Step 0
                 initialize_scan_tasks_activity,
                 load_checkpoint_activity,
                 save_checkpoint_activity,
                 target_profiling_activity,
+                check_scan_alive_activity,
                 check_scan_queue_status_activity,
                 get_enabled_plugins_for_tier_activity,
 
@@ -446,6 +508,7 @@ class Command(BaseCommand):
                 run_param_discovery_activity,
                 run_dir_file_fuzz_activity,
                 parse_fuzz_results_activity,
+                run_gf_on_all_endpoints_activity,
 
                 # Tier 5
                 run_web_api_discovery_activity,
@@ -465,9 +528,11 @@ class Command(BaseCommand):
                 run_wpscan_activity,
                 run_semgrep_activity,
                 run_wptaint_scan_activity,
+                run_vigolium_harvest_activity,
                 run_vigolium_scan_activity,
                 run_vigolium_discovery_activity,
                 run_vigolium_analysis_activity,
+                post_scan_processing_activity,
                 mark_vulnerability_scan_complete_activity,
                 run_waf_bypass_activity,
 
@@ -475,6 +540,7 @@ class Command(BaseCommand):
 
                 # Tier 7
                 correlate_vulnerabilities_activity,
+                correlate_exposures_activity,
                 enrich_scan_cves_activity,
                 calculate_risk_scores_activity,
                 generate_impact_assessment_activity,
@@ -497,7 +563,11 @@ class Command(BaseCommand):
                 
                 # New utility / integration activities
                 run_llm_apme_activity,
+                run_certificate_intel_activity,
+                run_identity_infra_activity,
+                run_api_intel_activity,
                 recalculate_apme_activity,
+                resync_certificate_activity,
                 enrich_identities_activity,
                 geo_localize_activity,
                 import_hackerone_programs_activity,
@@ -533,6 +603,14 @@ class Command(BaseCommand):
                 run_trivy_secret_scan_activity,
                 run_vigolium_audit_activity,
                 run_urlparser_activity,
+                extract_auth_for_url_activity,
+                
+                # Plugin lifecycle
+                log_plugin_start_activity,
+                log_plugin_end_activity,
+
+                # Email security (internal module — Tier 2 post-scan)
+                run_email_security_activity,
             ]
 
             # -------------------------------------------------------------------
@@ -550,8 +628,8 @@ class Command(BaseCommand):
                                  HostReconWorkflow, CIDRReconWorkflow, CodeScanWorkflow,
                                  DomainReconWorkflow, SubdomainReconWorkflow, URLCrawlWorkflow,
                                  URLDirSearchWorkflow, URLFuzzWorkflow, URLParamsFuzzWorkflow,
-                                 URLVulnWorkflow]
-                all_workflows = [MasterScanWorkflow, NucleiPlannerWorkflow, SubScanWorkflow, StressTestWorkflow, StartupSyncWorkflow, ScheduledScanWorkflow, MonitoringWorkflow, GoExecutorTaskWorkflow, ApmeTaskWorkflow, RecalculateApmeWorkflow, IdentityEnrichmentWorkflow, GeoLocalizeWorkflow, HackerOneImportWorkflow, HackerOneSyncBookmarkedWorkflow, ProxyFetchWorkflow] + _p2_workflows + plugin_workflows
+                                 URLVulnWorkflow, URLAuthExtractWorkflow, AssessmentWorkflow]
+                all_workflows = [MasterScanWorkflow, NucleiPlannerWorkflow, SubScanWorkflow, StressTestWorkflow, StartupSyncWorkflow, ScheduledScanWorkflow, MonitoringWorkflow, GoExecutorTaskWorkflow, ApmeTaskWorkflow, RecalculateApmeWorkflow, CertificateResyncWorkflow, IdentityEnrichmentWorkflow, GeoLocalizeWorkflow, HackerOneImportWorkflow, HackerOneSyncBookmarkedWorkflow, ProxyFetchWorkflow, SingleTaskRetryWorkflow] + _p2_workflows + plugin_workflows
                 all_activities.extend(plugin_activities)
             except Exception as e:
                 logger.error(f"Failed to load dynamic plugin temporal exports: {e}")
@@ -559,8 +637,8 @@ class Command(BaseCommand):
                                  HostReconWorkflow, CIDRReconWorkflow, CodeScanWorkflow,
                                  DomainReconWorkflow, SubdomainReconWorkflow, URLCrawlWorkflow,
                                  URLDirSearchWorkflow, URLFuzzWorkflow, URLParamsFuzzWorkflow,
-                                 URLVulnWorkflow]
-                all_workflows = [MasterScanWorkflow, NucleiPlannerWorkflow, SubScanWorkflow, StressTestWorkflow, StartupSyncWorkflow, ScheduledScanWorkflow, MonitoringWorkflow, GoExecutorTaskWorkflow, ApmeTaskWorkflow, RecalculateApmeWorkflow, IdentityEnrichmentWorkflow, GeoLocalizeWorkflow, HackerOneImportWorkflow, HackerOneSyncBookmarkedWorkflow, ProxyFetchWorkflow] + _p2_workflows
+                                 URLVulnWorkflow, URLAuthExtractWorkflow, AssessmentWorkflow]
+                all_workflows = [MasterScanWorkflow, NucleiPlannerWorkflow, SubScanWorkflow, StressTestWorkflow, StartupSyncWorkflow, ScheduledScanWorkflow, MonitoringWorkflow, GoExecutorTaskWorkflow, ApmeTaskWorkflow, RecalculateApmeWorkflow, CertificateResyncWorkflow, IdentityEnrichmentWorkflow, GeoLocalizeWorkflow, HackerOneImportWorkflow, HackerOneSyncBookmarkedWorkflow, ProxyFetchWorkflow, SingleTaskRetryWorkflow] + _p2_workflows
 
             # -------------------------------------------------------------------
             # Start the Temporal Worker
@@ -568,7 +646,7 @@ class Command(BaseCommand):
             with DjangoAwareThreadPoolExecutor(max_workers=10) as executor:
                 worker = Worker(
                     client,
-                    task_queue="python-orchestrator-queue",
+                    task_queue=task_queue,
                     workflows=all_workflows,
                     activities=all_activities,
                     activity_executor=executor,
@@ -578,7 +656,7 @@ class Command(BaseCommand):
 
                 self.stdout.write(self.style.SUCCESS(
                     f"Temporal Python Worker started. "
-                    f"Listening on python-orchestrator-queue "
+                    f"Listening on {task_queue} "
                     f"with {len(all_activities)} registered activities..."
                 ))
 

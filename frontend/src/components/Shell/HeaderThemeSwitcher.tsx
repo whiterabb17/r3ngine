@@ -8,16 +8,20 @@ import {
   Tooltip,
   useTheme
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { Palette, Check } from 'lucide-react';
 import type { ThemeType } from '../../theme/tokens';
-import { themeDefinitions } from '../../theme/tokens';
+import { selectableThemes, themeDefinitions } from '../../theme/tokens';
+import { getMenuPaperSx } from '../../theme/semanticColors';
 
 import { useAppTheme } from '../../context/ThemeContext';
+import { useThemeTokens } from '../../theme/useThemeTokens';
 
 
 
 export const HeaderThemeSwitcher: React.FC = () => {
   const { themeName, setTheme } = useAppTheme();
+  const { tokens, isLight } = useThemeTokens();
   const theme = useTheme();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
@@ -34,14 +38,19 @@ export const HeaderThemeSwitcher: React.FC = () => {
     handleClose();
   };
 
-  const themes: { id: ThemeType; label: string; color: string }[] = [
-    { id: 'hacker', label: 'V3 Hacker', color: themeDefinitions.hacker.accent.secondary },
-    { id: 'modern', label: 'V3 Hybrid', color: themeDefinitions.modern.accent.primary },
-    { id: 'enterprise', label: 'V3 Enterprise', color: themeDefinitions.enterprise.accent.primary },
-    { id: 'v3_light', label: 'V3 Light', color: themeDefinitions.v3_light.accent.primary },
-  ];
+  const getThemeDotColor = (id: ThemeType) => {
+    switch (id) {
+      case 'hacker': return '#bc13fe'; // Purple
+      case 'modern': return '#0284c7'; // Blue (Enterprise blue)
+      case 'v3_light': return '#f8fafc'; // Off-white
+      default: return themeDefinitions[id].accent.primary;
+    }
+  };
 
-
+  const themes: { id: ThemeType; label: string; color: string }[] = selectableThemes.map((item) => ({
+    ...item,
+    color: getThemeDotColor(item.id),
+  }));
   return (
     <>
       <Tooltip title="Switch Theme">
@@ -68,13 +77,9 @@ export const HeaderThemeSwitcher: React.FC = () => {
         slotProps={{
           paper: {
             sx: {
-              bgcolor: alpha(theme.palette.background.paper, 0.95),
-              backdropFilter: 'blur(15px)',
-              border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
-              borderRadius: 2,
+              ...getMenuPaperSx(isLight, theme, tokens),
               minWidth: 200,
               mt: 1.5,
-              boxShadow: themeName === 'enterprise' ? theme.shadows[4] : `0 8px 32px ${alpha('#000', 0.8)}`,
               overflow: 'hidden',
             }
           }
@@ -117,7 +122,7 @@ export const HeaderThemeSwitcher: React.FC = () => {
               height: 10,
               borderRadius: '50%',
               bgcolor: t.color,
-              boxShadow: themeName !== 'enterprise' ? `0 0 5px ${t.color}` : 'none'
+              boxShadow: isLight ? 'none' : `0 0 5px ${t.color}`
             }} />
             <Typography sx={{ fontSize: 'inherit', fontFamily: 'inherit', fontWeight: 600, flexGrow: 1 }}>
               {t.label}
@@ -129,8 +134,3 @@ export const HeaderThemeSwitcher: React.FC = () => {
     </>
   );
 };
-
-// Helper since alpha isn't imported from mui
-function alpha(color: string, value: number) {
-  return color.startsWith('rgb') ? color.replace(')', `, ${value})`).replace('rgb', 'rgba') : `${color}${Math.floor(value * 255).toString(16).padStart(2, '0')}`;
-}

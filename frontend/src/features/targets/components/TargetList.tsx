@@ -23,7 +23,8 @@ import {
   Checkbox,
   Select,
   FormControl,
-  TablePagination
+  TablePagination,
+  alpha
 } from '@mui/material';
 import {
   Search,
@@ -53,6 +54,7 @@ import type { Domain } from '../types';
 import type { ExtendedDomain } from './EditTargetModal';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 import { useTheme } from '@mui/material/styles';
+import { getFieldSx, getMenuPaperSx, getSurfaceSx } from '../../../theme/semanticColors';
 
 const ScanStatusCell: React.FC<{ status?: string, progress?: number }> = ({ status, progress = 0 }) => {
   const { tokens } = useThemeTokens();
@@ -61,6 +63,14 @@ const ScanStatusCell: React.FC<{ status?: string, progress?: number }> = ({ stat
     return (
       <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
         new
+      </Typography>
+    );
+  }
+
+  if (status === 'NEVER_SCANNED') {
+    return (
+      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, letterSpacing: 0.2 }}>
+        Never scanned
       </Typography>
     );
   }
@@ -146,7 +156,7 @@ const ScanStatusCell: React.FC<{ status?: string, progress?: number }> = ({ stat
   }
 
   return (
-    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
       {status.toLowerCase()}
     </Typography>
   );
@@ -154,7 +164,7 @@ const ScanStatusCell: React.FC<{ status?: string, progress?: number }> = ({ stat
 
 export const TargetList: React.FC = () => {
   const theme = useTheme();
-  const { tokens } = useThemeTokens();
+  const { tokens, isLight } = useThemeTokens();
   const headerStyles = {
     color: theme.palette.text.secondary,
     fontWeight: 800,
@@ -229,7 +239,7 @@ export const TargetList: React.FC = () => {
     }
   };
 
-  if (isLoading) return <LinearProgress sx={{ bgcolor: 'rgba(0, 243, 255, 0.1)', '& .MuiLinearProgress-bar': { bgcolor: '#00f3ff' } }} />;
+  if (isLoading) return <LinearProgress sx={{ bgcolor: `${tokens.accent.primary}1A`, '& .MuiLinearProgress-bar': { bgcolor: tokens.accent.primary } }} />;
 
   return (
     <Box sx={{ p: 3 }}>
@@ -245,8 +255,7 @@ export const TargetList: React.FC = () => {
 
       {/* Action Bar */}
       <Card sx={{ 
-        bgcolor: 'rgba(20, 20, 35, 0.4)', 
-        border: '1px solid rgba(255,255,255,0.05)',
+        ...getSurfaceSx(isLight, tokens, theme),
         borderRadius: 2,
         p: 1.5,
         mb: 3,
@@ -258,12 +267,12 @@ export const TargetList: React.FC = () => {
           variant="outlined"
           startIcon={<Filter size={18} />}
           sx={{
-            borderColor: '#00f3ff',
-            color: '#00f3ff',
+            borderColor: tokens.accent.primary,
+            color: tokens.accent.primary,
             fontFamily: 'Orbitron',
             fontWeight: 800,
             px: 3,
-            '&:hover': { borderColor: '#00f3ff', bgcolor: 'rgba(0, 243, 255, 0.05)' }
+            '&:hover': { borderColor: tokens.accent.primary, bgcolor: alpha(tokens.accent.primary, 0.05) }
           }}
         >
           FILTER
@@ -274,12 +283,12 @@ export const TargetList: React.FC = () => {
             variant="contained"
             onClick={() => setIsAddModalOpen(true)}
             sx={{
-              bgcolor: 'rgba(0, 243, 255, 0.1)',
-              color: '#00f3ff',
+              bgcolor: alpha(tokens.accent.primary, 0.15),
+              color: tokens.accent.primary,
               fontFamily: 'Orbitron',
               fontWeight: 700,
               fontSize: '0.75rem',
-              '&:hover': { bgcolor: 'rgba(0, 243, 255, 0.2)' }
+              '&:hover': { bgcolor: alpha(tokens.accent.primary, 0.25) }
             }}
           >
             Add Targets
@@ -295,13 +304,16 @@ export const TargetList: React.FC = () => {
               });
             }}
             sx={{
-              bgcolor: 'rgba(0, 243, 255, 0.1)',
-              color: '#00f3ff',
+              bgcolor: alpha(tokens.accent.primary, 0.15),
+              color: tokens.accent.primary,
               fontFamily: 'Orbitron',
               fontWeight: 700,
               fontSize: '0.75rem',
-              '&:hover': { bgcolor: 'rgba(0, 243, 255, 0.2)' },
-              '&.Mui-disabled': { bgcolor: 'rgba(255,255,255,0.02)', color: 'rgba(255,255,255,0.1)' }
+              '&:hover': { bgcolor: alpha(tokens.accent.primary, 0.25) },
+              '&.Mui-disabled': { 
+                bgcolor: 'action.hover', 
+                color: 'text.disabled' 
+              }
             }}
           >
             Scan Multiple Targets
@@ -311,13 +323,16 @@ export const TargetList: React.FC = () => {
             onClick={handleDeleteMultiple}
             disabled={selectedIds.length === 0}
             sx={{
-              bgcolor: 'rgba(255, 0, 60, 0.1)',
-              color: '#ff003c',
+              bgcolor: alpha(tokens.accent.error, 0.15),
+              color: tokens.accent.error,
               fontFamily: 'Orbitron',
               fontWeight: 700,
               fontSize: '0.75rem',
-              '&:hover': { bgcolor: 'rgba(255, 0, 60, 0.2)' },
-              '&.Mui-disabled': { bgcolor: 'rgba(255,255,255,0.02)', color: 'rgba(255,255,255,0.1)' }
+              '&:hover': { bgcolor: alpha(tokens.accent.error, 0.25) },
+              '&.Mui-disabled': { 
+                bgcolor: 'action.hover', 
+                color: 'text.disabled' 
+              }
             }}
           >
             Delete Multiple Targets
@@ -327,14 +342,19 @@ export const TargetList: React.FC = () => {
 
       {/* Main Content Card */}
       <Card sx={{ 
-        bgcolor: 'rgba(10, 10, 25, 0.8)', 
-        backdropFilter: 'blur(10px)', 
-        border: '1px solid rgba(255,255,255,0.05)',
+        ...getSurfaceSx(isLight, tokens, theme),
         borderRadius: 3,
         overflow: 'hidden'
       }}>
         {/* Table Controls */}
-        <Box sx={{ p: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'rgba(255,255,255,0.02)' }}>
+        <Box sx={{ 
+          p: 2.5, 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          bgcolor: 'action.hover',
+          borderBottom: `1px solid ${theme.palette.divider}`
+        }}>
           <TextField 
             placeholder="Search..."
             variant="outlined"
@@ -346,24 +366,21 @@ export const TargetList: React.FC = () => {
             }}
             sx={{ 
               width: 280,
-              '& .MuiOutlinedInput-root': {
-                color: '#fff',
-                bgcolor: 'action.hover',
-                '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
-              }
+              ...getFieldSx(isLight, tokens),
+              '& .MuiOutlinedInput-root': { bgcolor: 'action.hover' }
             }}
             slotProps={{
               input: {
                 startAdornment: (
                   <InputAdornment position="start">
-                    <Search size={16} style={{ color: 'rgba(255,255,255,0.3)' }} />
+                    <Search size={16} style={{ color: theme.palette.text.secondary }} />
                   </InputAdornment>
                 ),
               }
             }}
           />
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', fontFamily: 'Orbitron' }}>Results :</Typography>
+            <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem', fontFamily: 'Orbitron' }}>Results :</Typography>
             <Select
               value={resultsPerPage}
               onChange={(e) => {
@@ -372,12 +389,12 @@ export const TargetList: React.FC = () => {
               }}
               size="small"
               sx={{ 
-                color: '#fff',
+                color: 'text.primary',
                 bgcolor: 'action.hover',
                 height: 32,
                 fontSize: '0.75rem',
                 fontFamily: 'Orbitron',
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' }
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: tokens.border.subtle }
               }}
             >
               <MenuItem value={10}>10</MenuItem>
@@ -390,14 +407,14 @@ export const TargetList: React.FC = () => {
 
         <TableContainer>
           <Table>
-            <TableHead sx={{ bgcolor: 'rgba(50, 20, 80, 0.3)' }}>
+            <TableHead sx={{ bgcolor: 'action.hover' }}>
               <TableRow>
-                <TableCell padding="checkbox" sx={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <TableCell padding="checkbox" sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
                   <Checkbox 
                     indeterminate={selectedIds.length > 0 && selectedIds.length < (domains?.length || 0)}
                     checked={selectedIds.length > 0 && selectedIds.length === (domains?.length || 0)}
                     onChange={handleSelectAll}
-                    sx={{ color: 'rgba(255,255,255,0.3)', '&.Mui-checked': { color: '#00f3ff' } }} 
+                    sx={{ color: theme.palette.text.secondary, '&.Mui-checked': { color: tokens.accent.primary } }} 
                   />
                 </TableCell>
                 <TableCell sx={headerStyles}>TARGET</TableCell>
@@ -414,30 +431,31 @@ export const TargetList: React.FC = () => {
                   key={domain.id!} 
                   selected={selectedIds.includes(domain.id!)}
                   sx={{ 
-                    '&:hover': { bgcolor: 'rgba(255,255,255,0.03)' }, 
-                    '&.Mui-selected': { bgcolor: 'rgba(0, 243, 255, 0.05)' },
+                    '&:hover': { bgcolor: 'action.hover' }, 
+                    '&.Mui-selected': { bgcolor: alpha(tokens.accent.primary, 0.05) },
                     transition: 'all 0.2s' 
                   }}
                 >
-                  <TableCell padding="checkbox" sx={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <TableCell padding="checkbox" sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
                     <Checkbox 
                       checked={selectedIds.includes(domain.id!)}
                       onChange={() => handleSelectOne(domain.id!)}
-                      sx={{ color: 'rgba(255,255,255,0.3)', '&.Mui-checked': { color: '#00f3ff' } }} 
+                      sx={{ color: theme.palette.text.secondary, '&.Mui-checked': { color: tokens.accent.primary } }} 
                     />
                   </TableCell>
-                  <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <TableCell sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
                     <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography variant="body2" sx={{ fontWeight: 800, color: 'text.primary' }}>{domain.name}</Typography>
+                      </Box>
                       {domain.most_recent_scan ? (
                         <Typography 
                           variant="caption" 
                           component="a"
-                          href={`/${projectSlug}/detail/${domain.most_recent_scan}`}
+                          href={`/${projectSlug}/scan/detail/${domain.most_recent_scan}`}
                           target="_blank"
                           sx={{ 
-                            color: '#00aaff', 
+                            color: tokens.accent.info, 
                             display: 'flex', 
                             alignItems: 'center', 
                             gap: 0.5, 
@@ -450,55 +468,54 @@ export const TargetList: React.FC = () => {
                           Recent Scan <ExternalLink size={10} />
                         </Typography>
                       ) : (
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', mt: 0.5 }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', opacity: 0.5, mt: 0.5 }}>
                           No Recent Scans
                         </Typography>
                       )}
                     </Box>
-                  </Box>
-                </TableCell>
-                <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                  </TableCell>
+                  <TableCell sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       {domain.organization || 'No Organization'}
                     </Typography>
                   </TableCell>
-                  <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <TableCell sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
                     <Chip 
                       label={domain.insert_date_humanized} 
                       size="small"
                       sx={{ 
-                        bgcolor: 'rgba(0, 170, 255, 0.15)', 
-                        color: '#00aaff', 
+                        bgcolor: `${tokens.accent.info}26`, 
+                        color: tokens.accent.info, 
                         fontWeight: 700,
                         fontSize: '0.65rem',
                         borderRadius: 1,
                         height: 24,
-                        border: '1px solid rgba(0, 170, 255, 0.3)'
+                        border: `1px solid ${tokens.accent.info}4D`
                       }}
                     />
                   </TableCell>
-                  <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <TableCell sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
                     <Chip 
                       label={domain.start_scan_date_humanized || 'Never scanned'} 
                       size="small"
                       sx={{ 
-                        bgcolor: 'rgba(0, 170, 255, 0.1)', 
-                        color: '#00aaff', 
+                        bgcolor: `${tokens.accent.info}1A`, 
+                        color: tokens.accent.info, 
                         fontWeight: 700,
                         fontSize: '0.65rem',
                         borderRadius: 1,
                         height: 24,
-                        border: '1px solid rgba(0, 170, 255, 0.2)'
+                        border: `1px solid ${tokens.accent.info}33`
                       }}
                     />
                   </TableCell>
-                  <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <TableCell sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
                     <ScanStatusCell 
                       status={(domain as any).most_recent_scan_status} 
                       progress={(domain as any).most_recent_scan_progress} 
                     />
                   </TableCell>
-                  <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.05)', textAlign: 'right' }}>
+                  <TableCell sx={{ borderBottom: `1px solid ${theme.palette.divider}`, textAlign: 'right' }}>
                     <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                       <Button
                         size="small"
@@ -506,13 +523,13 @@ export const TargetList: React.FC = () => {
                         to={`/${projectSlug}/target/${domain.id!}/summary`}
                         startIcon={<Target size={14} />}
                         sx={{
-                          bgcolor: 'rgba(0, 170, 255, 0.05)',
-                          color: '#00aaff',
+                          bgcolor: alpha(tokens.accent.info, 0.05),
+                          color: tokens.accent.info,
                           fontFamily: 'Orbitron',
                           fontSize: '0.65rem',
                           fontWeight: 700,
-                          border: '1px solid rgba(0, 170, 255, 0.1)',
-                          '&:hover': { bgcolor: 'rgba(0, 170, 255, 0.15)' },
+                          border: `1px solid ${alpha(tokens.accent.info, 0.1)}`,
+                          '&:hover': { bgcolor: alpha(tokens.accent.info, 0.15) },
                         }}
                       >
                         Target Summary
@@ -522,13 +539,13 @@ export const TargetList: React.FC = () => {
                         startIcon={<Play size={14} />}
                         onClick={() => setStartScanTargets({ ids: [domain.id!], names: [domain.name] })}
                         sx={{
-                          bgcolor: 'rgba(0, 170, 255, 0.05)',
-                          color: '#00aaff',
+                          bgcolor: alpha(tokens.accent.info, 0.05),
+                          color: tokens.accent.info,
                           fontFamily: 'Orbitron',
                           fontSize: '0.65rem',
                           fontWeight: 700,
-                          border: '1px solid rgba(0, 170, 255, 0.1)',
-                          '&:hover': { bgcolor: 'rgba(0, 170, 255, 0.15)' }
+                          border: `1px solid ${alpha(tokens.accent.info, 0.1)}`,
+                          '&:hover': { bgcolor: alpha(tokens.accent.info, 0.15) }
                         }}
                       >
                         Initiate Scan
@@ -537,10 +554,10 @@ export const TargetList: React.FC = () => {
                         size="small"
                         onClick={() => setEditTarget(domain as ExtendedDomain)}
                         sx={{
-                          color: 'rgba(255, 165, 0, 0.6)',
-                          bgcolor: 'rgba(255, 165, 0, 0.05)',
+                          color: tokens.accent.warning,
+                          bgcolor: alpha(tokens.accent.warning, 0.08),
                           borderRadius: 1,
-                          '&:hover': { color: '#ffa500', bgcolor: 'rgba(255, 165, 0, 0.12)' },
+                          '&:hover': { color: tokens.accent.warning, bgcolor: alpha(tokens.accent.warning, 0.16) },
                         }}
                       >
                         <Pencil size={16} />
@@ -548,7 +565,7 @@ export const TargetList: React.FC = () => {
                       <IconButton
                         size="small"
                         onClick={(e) => handleMenuOpen(e, { id: domain.id!, name: domain.name })}
-                        sx={{ color: 'rgba(0, 170, 255, 0.5)', bgcolor: 'rgba(0, 170, 255, 0.05)', borderRadius: 1 }}
+                        sx={{ color: tokens.accent.info, bgcolor: alpha(tokens.accent.info, 0.08), borderRadius: 1 }}
                       >
                         <MoreVertical size={18} />
                       </IconButton>
@@ -570,10 +587,10 @@ export const TargetList: React.FC = () => {
             setPage(0);
           }}
           sx={{
-            color: 'rgba(255,255,255,0.4)',
-            borderTop: '1px solid rgba(255,255,255,0.05)',
-            '.MuiTablePagination-selectIcon': { color: 'rgba(255,255,255,0.4)' },
-            '.MuiTablePagination-actions': { color: 'rgba(255,255,255,0.4)' },
+            color: 'text.secondary',
+            borderTop: `1px solid ${theme.palette.divider}`,
+            '.MuiTablePagination-selectIcon': { color: 'text.secondary' },
+            '.MuiTablePagination-actions': { color: 'text.secondary' },
             '.MuiTablePagination-toolbar': { minHeight: 48 }
           }}
         />
@@ -586,20 +603,18 @@ export const TargetList: React.FC = () => {
         slotProps={{
           paper: {
             sx: {
-              bgcolor: '#0d0c14',
-              border: '1px solid rgba(0, 170, 255, 0.2)',
+              ...getMenuPaperSx(isLight, theme, tokens),
               borderRadius: 0,
-              boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
               minWidth: 180,
               '& .MuiMenuItem-root': {
                 fontFamily: 'Orbitron',
                 fontSize: '0.7rem',
                 fontWeight: 700,
-                color: 'rgba(255,255,255,0.8)',
+                color: theme.palette.text.primary,
                 gap: 1.5,
                 py: 1.2,
-                '&:hover': { bgcolor: 'rgba(0, 170, 255, 0.05)', color: '#00f3ff' },
-                '& svg': { color: 'rgba(0, 170, 255, 0.5)' }
+                '&:hover': { bgcolor: alpha(tokens.accent.info, 0.08), color: tokens.accent.info },
+                '& svg': { color: tokens.accent.info }
               }
             }
           }
@@ -611,7 +626,7 @@ export const TargetList: React.FC = () => {
             if (domain) setEditTarget(domain as ExtendedDomain);
           }
           handleMenuClose();
-        }} sx={{ color: '#ffa500 !important', '& svg': { color: '#ffa500 !important' } }}>
+        }} sx={{ color: `${tokens.accent.warning} !important`, '& svg': { color: `${tokens.accent.warning} !important` } }}>
           <Pencil size={14} /> EDIT TARGET
         </MenuItem>
         <MenuItem onClick={() => {
@@ -627,7 +642,7 @@ export const TargetList: React.FC = () => {
             pauseScanMutation.mutate({ target_id: activeTarget.id });
           }
           handleMenuClose();
-        }} sx={{ color: '#ffab00 !important', '& svg': { color: '#ffab00 !important' } }}>
+        }} sx={{ color: `${tokens.accent.warning} !important`, '& svg': { color: `${tokens.accent.warning} !important` } }}>
           <PauseCircle size={14} /> PAUSE ALL SCANS
         </MenuItem>
         <MenuItem onClick={() => {
@@ -635,7 +650,7 @@ export const TargetList: React.FC = () => {
             unpauseScanMutation.mutate({ target_id: activeTarget.id });
           }
           handleMenuClose();
-        }} sx={{ color: '#00ff62 !important', '& svg': { color: '#00ff62 !important' } }}>
+        }} sx={{ color: `${tokens.accent.success} !important`, '& svg': { color: `${tokens.accent.success} !important` } }}>
           <Play size={14} /> RESUME ALL SCANS
         </MenuItem>
         <MenuItem onClick={() => {
@@ -645,7 +660,7 @@ export const TargetList: React.FC = () => {
             }
           }
           handleMenuClose();
-        }} sx={{ color: '#ff003c !important', '& svg': { color: '#ff003c !important' } }}>
+        }} sx={{ color: `${tokens.accent.error} !important`, '& svg': { color: `${tokens.accent.error} !important` } }}>
           <Trash2 size={14} /> DELETE TARGET
         </MenuItem>
       </Menu>

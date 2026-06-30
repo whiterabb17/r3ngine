@@ -17,7 +17,7 @@ from startScan.models import (
 )
 from recon_note.models import TodoNote
 from reNgine.utilities import get_screenshot_path
-from reNgine.definitions import RUNNING_TASK
+from reNgine.definitions import RUNNING_TASK, INITIATED_TASK
 from reNgine.exporters.ai_bundle import AiExportOptions, FORMAT_VERSION, build_ai_export_zip
 from api.scan_task_counts import get_task_counts
 
@@ -175,10 +175,12 @@ class ScanSummaryAPIView(APIView):
                 scan_data['subdomain_diff'] = 0
             recent_scans_data.append(scan_data)
 
-        # Timeline/Activities — ordered by tier then time_started, PENDING rows last within tier
-        activities = ScanActivity.objects.filter(scan_of=scan).order_by(
-            'tier', 'time_started', 'time'
-        )
+        # Timeline/Activities — ordered by tier then time_started, PENDING rows last within tier.
+        # Exclude ghost INITIATED rows (time_started=None) left over from a previous failed
+        # workflow run that were never claimed; a successful re-run creates fresh records.
+        activities = ScanActivity.objects.filter(scan_of=scan).exclude(
+            status=INITIATED_TASK, time_started__isnull=True
+        ).order_by('tier', 'time_started', 'time')
         timeline_data = []
         _STATUS_MAP = {
             2: 'SUCCESS',
@@ -265,30 +267,17 @@ class ScanSummaryAPIView(APIView):
             'vulnerability_highlights': list(vulnerabilities.order_by('-severity', '-discovered_date')[:10].values(
                 'id', 'name', 'severity', 'http_url', 'discovered_date', 'description', 'impact', 'remediation', 'is_gpt_used'
             )),
-            'subdomains': [
-                {
-                    'name': sub.name,
-                    'http_status': sub.http_status,
-                    'page_title': sub.page_title,
-                    'http_url': sub.http_url,
-                    'origin_ip': sub.origin_ip,
-                    'response_time': sub.response_time,
-                    'screenshot_path': get_screenshot_path(sub),
-                    'critical_count': sub.get_critical_count,
-                    'high_count': sub.get_high_count,
-                    'medium_count': sub.get_medium_count,
-                    'low_count': sub.get_low_count,
-                    'info_count': sub.get_info_count,
-                    'content_length': sub.content_length,
-                    'ip_addresses': [
-                        {
-                            'address': ip.address,
-                            'is_cdn': ip.is_cdn,
-                            'ports': list(ip.ports.all().values('number', 'service_name', 'is_uncommon'))
-                        } for ip in sub.ip_addresses.all()
-                    ]
-                } for sub in subdomain_qs.order_by('name')[:100]
-            ],
+            # Intentionally minimal: only id/name/origin_ip for subdomains with a known IP.
+            # Consumer is IpAddressesWidget in ScanDetailPage.tsx which only reads origin_ip.
+            # Returning full rich objects here (screenshot_path, vuln counts, ip_addresses list)
+            # caused N+1 queries on large scans. Do not add fields back without prefetch_related.
+            'subdomains': list(
+                subdomain_qs
+                .exclude(origin_ip=None)
+                .exclude(origin_ip='')
+                .order_by('name')[:100]
+                .values('id', 'name', 'origin_ip')
+            ),
             'endpoints': list(endpoint_qs.order_by('http_url')[:100].values('id', 'http_url', 'http_status', 'content_type', 'techs__name')),
             'vulnerabilities': [
                 {

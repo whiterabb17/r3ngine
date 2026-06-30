@@ -116,6 +116,12 @@ NUCLEI_TAGS = 'tags'
 NUCLEI_TEMPLATE = 'templates'
 NUCLEI_SEVERITY = 'severities'
 NUCLEI_CONCURRENCY = 'concurrency'
+# Maximum concurrency and rate when routing nuclei through a proxy file.
+# nuclei v3.9.0 AdaptiveWaitGroup deadlocks at high concurrency when the
+# proxy error rate exceeds ~60% — these caps prevent the semaphore hang.
+NUCLEI_PROXY_MAX_CONCURRENCY = 10
+NUCLEI_PROXY_MAX_RATE_LIMIT = 10
+NUCLEI_MAX_TEMPLATES_PER_BATCH = 'max_templates_per_batch'
 OSINT = 'osint'
 OSINT_DOCUMENTS_LIMIT = 'documents_limit'
 OSINT_DISCOVER = 'discover'
@@ -183,6 +189,7 @@ USERNAME_ANARCHY = 'username-anarchy'
 AMASS_INTEL = 'amass_intel'
 DIRSEARCH = 'dirsearch'
 RUN_DIRSEARCH = 'run_dirsearch'
+RUN_FEROXBUSTER = 'run_feroxbuster'
 
 # TLS deep audit
 ENABLE_TESTSSL = 'enable_testssl'
@@ -218,9 +225,11 @@ WPSCAN_SCAN_DEFAULT_CONFIG = {
 
 # ─── Vigolium ─────────────────────────────────────────────────────────────────
 RUN_VIGOLIUM = 'run_vigolium'
+RUN_VIGOLIUM_HARVEST = 'run_vigolium_harvest'
 RUN_VIGOLIUM_DISCOVERY = 'run_vigolium_discovery'
 RUN_VIGOLIUM_ANALYSIS = 'run_vigolium_analysis'
 VIGOLIUM = 'vigolium'
+VIGOLIUM_HARVEST = 'vigolium_harvest'
 VIGOLIUM_STRATEGY = 'strategy'
 VIGOLIUM_CONCURRENCY = 'concurrency'
 VIGOLIUM_RATE_LIMIT = 'rate_limit'
@@ -236,12 +245,22 @@ VIGOLIUM_DEFAULT_CONFIG = {
     'timeout': '15s',
 }
 
+# Tier 1 — passive ingestion harvest (works with root domain only, no subdomains needed)
+VIGOLIUM_DEFAULT_HARVEST_CONFIG = {
+    'run_vigolium_harvest': True,
+    'strategy': 'thorough',
+    'concurrency': 30,
+    'rate_limit': 100,
+    'timeout': '60s',
+}
+
+# Tier 1 — active discovery (falls back to root domain if no subdomains yet)
 VIGOLIUM_DEFAULT_DISCOVERY_CONFIG = {
     'run_vigolium_discovery': True,
-    'strategy': 'balanced',
-    'concurrency': 20,
-    'rate_limit': 50,
-    'timeout': '10s',
+    'strategy': 'thorough',
+    'concurrency': 40,
+    'rate_limit': 100,
+    'timeout': '30s',
 }
 
 VIGOLIUM_DEFAULT_ANALYSIS_CONFIG = {
@@ -250,6 +269,14 @@ VIGOLIUM_DEFAULT_ANALYSIS_CONFIG = {
     'concurrency': 20,
     'rate_limit': 50,
     'timeout': '10s',
+}
+
+# Tier 3 — spidering within fetch_url against fetched URL set
+VIGOLIUM_DEFAULT_SPIDER_CONFIG = {
+    'strategy': 'balanced',
+    'concurrency': 30,
+    'rate_limit': 80,
+    'timeout': '20s',
 }
 
 RUN_VIGOLIUM_AUDIT = 'run_vigolium_audit'
@@ -264,6 +291,9 @@ VIGOLIUM_DEFAULT_AUDIT_CONFIG = {
     'use_ai': False,
     'timeout': 3600,
 }
+
+# ─── Post-Scan Processing ──────────────────────────────────────────────────────
+RUN_POST_SCAN_PROCESSING = 'run_post_scan_processing'
 
 ATTACK_PATH_MODELING = 'attack_path_modeling'
 ATTACK_PATH_MODELING_DEFAULT_CONFIG = {
@@ -765,7 +795,11 @@ Impact:
 A thorough assessment of the vulnerability's potential impact on web applications, including: Data confidentiality breaches, System integrity compromises, Service availability disruptions, Potential for further exploitation
 
 Remediation:
-A prioritized list of specific, actionable steps to address the vulnerability, such as: Code modifications, Configuration changes, Security patch applications, Implementation of security controls
+A detailed playbook containing prioritized, actionable steps to address the vulnerability. It MUST include the following sub-sections:
+- Short-Term Strategy: Immediate mitigations and workarounds.
+- Long-Term Strategy: Permanent fixes, architectural changes, or codebase refactors.
+- Verification: How to test and ensure the vulnerability is properly remediated.
+- Risk/Rollback: Potential side effects of the remediation and rollback procedures if issues occur.
 
 References:
 Relevant, authoritative sources supporting your analysis, such as: Official CVE database entries, Vendor security advisories, Respected security research publications, Applicable industry standards or guidelines
@@ -775,7 +809,7 @@ Ensure that:
 1. Each section (Description, Impact, Remediation, References) is separated by ONLY ONE blank line and no multiple new lines. The content must be immediately after the section title.
 2. Do not make title as bold, italic or underline. It must be Title ending with a colon. Example: Description:
 3. All URLs in the 'references' section begin with 'http://' or 'https://'.
-4. Remediation steps should be specific and actionable and should not contain any ambiguous or general recommendations.
+4. Remediation steps should be specific and actionable and should not contain any ambiguous or general recommendations. Format the remediation sub-sections clearly using bold text (e.g. **Short-Term Strategy:**) and bullet points.
 5. Refrain from including any personal opinions or subjective assessments in your report.
 """
 

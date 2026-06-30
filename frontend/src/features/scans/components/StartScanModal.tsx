@@ -18,15 +18,19 @@ import {
   FormGroup,
   Collapse,
   Divider,
-  Grid
+  Grid,
+  useTheme,
+  alpha
 } from '@mui/material';
-import { X, Zap, Shield, Cpu, Terminal, ChevronDown, ChevronUp, Puzzle } from 'lucide-react';
+import { X, Zap, Shield, Cpu, Terminal, ChevronDown, ChevronUp, Puzzle, Server } from 'lucide-react';
 import { useEngines, useHardwareProfiles } from '../../engines/api';
 import { usePlugins } from '../../plugins/api/pluginsApi';
 import { useInitiateScan } from '../api';
+import { useRemoteWorkers } from '../../settings/api';
 import { useNavigate } from '@tanstack/react-router';
 import { generateDorks } from '../utils/dorkUtils';
-import { ProfileSelector } from '../../profiles/components/ProfileSelector';
+import { useThemeTokens } from '../../../theme/useThemeTokens';
+import { getDialogPaperSx, getFieldSx } from '../../../theme/semanticColors';
 import { WorkflowLauncher } from '../../workflows/components/WorkflowLauncher';
 
 interface StartScanModalProps {
@@ -44,6 +48,10 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
   domainNames,
   projectSlug
 }) => {
+  const { tokens } = useThemeTokens();
+  const theme = useTheme();
+  const isLight = tokens.mode === 'light';
+
   const [formData, setFormData] = useState({
     engine_id: '' as number | '',
     hardware_profile_id: '' as number | '',
@@ -53,6 +61,7 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
     importSubdomainTextArea: '',
     outOfScopeSubdomainTextarea: '',
     profile_name: '',
+    worker_name: '',
   });
   const [selectedPlugins, setSelectedPlugins] = useState<string[]>([]);
   const [pluginSectionOpen, setPluginSectionOpen] = useState(false);
@@ -62,6 +71,7 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
   const { data: hardwareProfiles } = useHardwareProfiles();
   const { data: allPlugins } = usePlugins();
   const enabledPlugins = (allPlugins ?? []).filter(p => p.is_enabled);
+  const { data: remoteWorkers } = useRemoteWorkers();
   const { mutate: initiateScan, isPending, error, reset } = useInitiateScan(projectSlug);
   const navigate = useNavigate();
 
@@ -94,6 +104,7 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
       outOfScopeSubdomainTextarea: formData.outOfScopeSubdomainTextarea.split('\n').filter(s => s.trim()),
       selected_plugins: selectedPlugins,
       ...(formData.profile_name ? { profile_name: formData.profile_name } : {}),
+      ...(formData.worker_name ? { worker_name: formData.worker_name } : {}),
     }, {
       onSuccess: () => {
         onClose();
@@ -117,6 +128,24 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
     ? `${domainNames.length} SELECTED TARGETS`
     : domainNames[0]?.toUpperCase() || 'N/A';
 
+  const fieldStyles = {
+    ...getFieldSx(isLight, tokens),
+    '& .MuiOutlinedInput-root': {
+      ...getFieldSx(isLight, tokens)['& .MuiOutlinedInput-root'],
+      bgcolor: isLight ? 'transparent' : alpha(tokens.text.primary, 0.03),
+    },
+    '& .MuiFormHelperText-root': { color: tokens.text.muted }
+  };
+
+  const switchStyles = {
+    '& .MuiSwitch-switchBase.Mui-checked': {
+      color: tokens.accent.primary,
+      '& + .MuiSwitch-track': {
+        backgroundColor: tokens.accent.primary,
+      },
+    },
+  };
+
   return (
     <Dialog
       open={open}
@@ -126,12 +155,11 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
       slotProps={{
         paper: {
           sx: {
-            bgcolor: 'rgba(10, 10, 20, 0.95)',
-            color: 'rgba(255, 255, 255, 0.92)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(0, 255, 98, 0.2)',
-            borderRadius: 4,
-            backgroundImage: 'radial-gradient(circle at top right, rgba(0, 255, 98, 0.05), transparent)',
+            ...getDialogPaperSx(isLight, theme, tokens),
+            backgroundImage: isLight
+              ? 'none'
+              : `radial-gradient(circle at top right, ${alpha(tokens.accent.primary, 0.05)}, transparent)`,
+            border: `1px solid ${alpha(tokens.accent.primary, 0.2)}`,
           }
         }
       }}
@@ -140,16 +168,16 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        borderBottom: 1, borderColor: 'divider',
+        borderBottom: `1px solid ${tokens.border.subtle}`,
         pb: 2,
-        color: 'rgba(255, 255, 255, 0.92)'
+        color: tokens.text.primary
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Box sx={{
             p: 1,
             borderRadius: 2,
-            bgcolor: 'rgba(0, 255, 98, 0.1)',
-            color: '#00ff62',
+            bgcolor: alpha(tokens.accent.primary, 0.1),
+            color: tokens.accent.primary,
             display: 'flex'
           }}>
             <Zap size={20} />
@@ -159,30 +187,30 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
               fontFamily: 'Orbitron',
               fontWeight: 800,
               letterSpacing: 1,
-              color: 'rgba(255, 255, 255, 0.95)',
+              color: tokens.text.primary,
               lineHeight: 1.2
             }}>
               LAUNCH RECONNAISSANCE
             </Typography>
-            <Typography variant="caption" sx={{ color: '#00ff62', fontWeight: 700, letterSpacing: 1 }}>
+            <Typography variant="caption" sx={{ color: tokens.accent.primary, fontWeight: 700, letterSpacing: 1 }}>
               TARGET: {targetLabel}
             </Typography>
           </Box>
         </Box>
-        <IconButton onClick={handleClose} sx={{ color: 'rgba(255,255,255,0.45)', '&:hover': { color: '#ff003c' } }}>
+        <IconButton onClick={handleClose} sx={{ color: tokens.text.muted, '&:hover': { color: tokens.accent.error } }}>
           <X size={20} />
         </IconButton>
       </DialogTitle>
 
       <form onSubmit={handleSubmit}>
-        <DialogContent sx={{ mt: 2, color: 'rgba(255,255,255,0.9)' }}>
+        <DialogContent sx={{ mt: 2, color: tokens.text.primary }}>
           {error && (
             <Alert severity="error" sx={{
               mb: 3,
-              bgcolor: 'rgba(255, 0, 60, 0.1)',
-              color: '#ff003c',
-              border: '1px solid rgba(255, 0, 60, 0.2)',
-              '& .MuiAlert-icon': { color: '#ff003c' }
+              bgcolor: alpha(tokens.accent.error, 0.1),
+              color: tokens.accent.error,
+              border: `1px solid ${alpha(tokens.accent.error, 0.2)}`,
+              '& .MuiAlert-icon': { color: tokens.accent.error }
             }}>
               {error.message}
             </Alert>
@@ -190,7 +218,7 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
 
           <Grid container spacing={3}>
             <Grid size={{ xs: 12, md: 6 }} >
-              <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.65)', fontWeight: 800, mb: 1, display: 'block' }}>
+              <Typography variant="overline" sx={{ color: tokens.text.secondary, fontWeight: 800, mb: 1, display: 'block' }}>
                 PRIMARY CONFIGURATION
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -204,7 +232,7 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
                   sx={fieldStyles}
                   slotProps={{
                     input: {
-                      startAdornment: <Shield size={18} style={{ marginRight: 12, color: '#00ff62' }} />
+                      startAdornment: <Shield size={18} style={{ marginRight: 12, color: tokens.accent.primary }} />
                     }
                   }}
                 >
@@ -225,7 +253,7 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
                   sx={fieldStyles}
                   slotProps={{
                     input: {
-                      startAdornment: <Cpu size={18} style={{ marginRight: 12, color: '#00ff62' }} />
+                      startAdornment: <Cpu size={18} style={{ marginRight: 12, color: tokens.accent.primary }} />
                     }
                   }}
                   helperText={
@@ -241,12 +269,29 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
                   ))}
                 </TextField>
 
-                {/*
-                <ProfileSelector
-                  value={formData.profile_name || null}
-                  onChange={(name) => setFormData(prev => ({ ...prev, profile_name: name ?? '' }))}
-                />
-                */}
+                <TextField
+                  label="Scan Worker (Optional)"
+                  select
+                  fullWidth
+                  value={formData.worker_name}
+                  onChange={(e) => setFormData({ ...formData, worker_name: e.target.value })}
+                  sx={fieldStyles}
+                  slotProps={{
+                    input: {
+                      startAdornment: <Server size={18} style={{ marginRight: 12, color: tokens.accent.primary }} />
+                    }
+                  }}
+                  helperText="Leave empty to use the default worker pool"
+                >
+                  <MenuItem value="">
+                    <em>Default Worker Pool</em>
+                  </MenuItem>
+                  {remoteWorkers?.map((worker) => (
+                    <MenuItem key={worker.id} value={worker.name}>
+                      {worker.name} {worker.ip_address ? `(${worker.ip_address})` : ''}
+                    </MenuItem>
+                  ))}
+                </TextField>
 
                 <FormControlLabel
                   control={
@@ -257,13 +302,13 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
                     />
                   }
                   label={
-                    <Typography sx={{ color: 'rgba(255,255,255,0.92)', fontSize: '0.85rem', fontWeight: 600 }}>
+                    <Typography sx={{ color: tokens.text.primary, fontSize: '0.85rem', fontWeight: 600 }}>
                       Enable SpiderFoot OSINT
                     </Typography>
                   }
                 />
 
-                <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+                <Divider sx={{ borderColor: tokens.border.subtle }} />
 
                 <FormControlLabel
                   control={
@@ -274,7 +319,7 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
                     />
                   }
                   label={
-                    <Typography sx={{ color: 'rgba(255,255,255,0.92)', fontSize: '0.85rem', fontWeight: 600 }}>
+                    <Typography sx={{ color: tokens.text.primary, fontSize: '0.85rem', fontWeight: 600 }}>
                       Custom Github Dorks
                     </Typography>
                   }
@@ -291,14 +336,14 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
                         })}
                         startIcon={<Terminal size={14} />}
                         sx={{
-                          color: '#00ff62',
+                          color: tokens.accent.primary,
                           fontFamily: 'Orbitron',
                           fontSize: '0.65rem',
                           fontWeight: 800,
-                          border: '1px solid rgba(0, 255, 98, 0.2)',
+                          border: `1px solid ${alpha(tokens.accent.primary, 0.2)}`,
                           '&:hover': {
-                            bgcolor: 'rgba(0, 255, 98, 0.05)',
-                            border: '1px solid #00ff62',
+                            bgcolor: alpha(tokens.accent.primary, 0.05),
+                            border: `1px solid ${tokens.accent.primary}`,
                           }
                         }}
                       >
@@ -322,7 +367,7 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }} >
-              <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.65)', fontWeight: 800, mb: 1, display: 'block' }}>
+              <Typography variant="overline" sx={{ color: tokens.text.secondary, fontWeight: 800, mb: 1, display: 'block' }}>
                 ADVANCED SCOPE
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -355,20 +400,20 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
 
           {enabledPlugins.length > 0 && (
             <Box sx={{ mt: 3 }}>
-              <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)', mb: 2 }} />
+              <Divider sx={{ borderColor: tokens.border.subtle, mb: 2 }} />
               <Button
                 fullWidth
                 onClick={() => setPluginSectionOpen(prev => !prev)}
                 endIcon={pluginSectionOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 sx={{
                   justifyContent: 'space-between',
-                  color: 'rgba(255,255,255,0.6)',
+                  color: tokens.text.secondary,
                   fontFamily: 'Orbitron',
                   fontSize: '0.7rem',
                   fontWeight: 800,
                   letterSpacing: 1,
                   px: 0,
-                  '&:hover': { color: '#00ff62', bgcolor: 'transparent' },
+                  '&:hover': { color: tokens.accent.primary, bgcolor: 'transparent' },
                 }}
                 startIcon={<Puzzle size={16} />}
               >
@@ -378,8 +423,8 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
                     ml: 1,
                     px: 1,
                     py: 0.25,
-                    bgcolor: 'rgba(0, 255, 98, 0.15)',
-                    color: '#00ff62',
+                    bgcolor: alpha(tokens.accent.primary, 0.15),
+                    color: tokens.accent.primary,
                     borderRadius: 1,
                     fontSize: '0.65rem',
                     fontWeight: 900,
@@ -390,7 +435,7 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
               </Button>
               <Collapse in={pluginSectionOpen}>
                 <Box sx={{ mt: 1.5 }}>
-                  <Typography sx={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.68rem', mb: 1.5, fontFamily: 'monospace' }}>
+                  <Typography sx={{ color: tokens.text.muted, fontSize: '0.68rem', mb: 1.5, fontFamily: 'monospace' }}>
                     Select which enabled plugins to include in this scan. Leave all unchecked to run all enabled plugins.
                   </Typography>
                   <FormGroup row sx={{ gap: 1 }}>
@@ -406,18 +451,18 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
                                 e.target.checked
                                   ? [...prev, plugin.slug]
                                   : prev.filter(s => s !== plugin.slug)
-                              );
+                                );
                             }}
-                            sx={{ color: 'rgba(0, 255, 98, 0.2)', '&.Mui-checked': { color: '#00ff62' } }}
+                            sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}
                           />
                         }
                         label={
                           <Box>
-                            <Typography sx={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.92)', fontWeight: 700 }}>
+                            <Typography sx={{ fontSize: '0.8rem', color: tokens.text.primary, fontWeight: 700 }}>
                               {plugin.name}
                             </Typography>
                             {plugin.description && (
-                              <Typography sx={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)' }}>
+                              <Typography sx={{ fontSize: '0.65rem', color: tokens.text.secondary }}>
                                 {plugin.description}
                               </Typography>
                             )}
@@ -429,12 +474,12 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
                           py: 0.75,
                           border: '1px solid',
                           borderColor: selectedPlugins.includes(plugin.slug)
-                            ? 'rgba(0, 255, 98, 0.3)'
-                            : 'rgba(255,255,255,0.06)',
+                            ? alpha(tokens.accent.primary, 0.3)
+                            : tokens.border.subtle,
                           borderRadius: 2,
                           bgcolor: selectedPlugins.includes(plugin.slug)
-                            ? 'rgba(0, 255, 98, 0.05)'
-                            : 'rgba(255,255,255,0.02)',
+                            ? alpha(tokens.accent.primary, 0.05)
+                            : alpha(tokens.text.primary, 0.02),
                           transition: 'all 0.15s',
                           alignItems: 'flex-start',
                         }}
@@ -452,7 +497,7 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
             variant="text"
             size="small"
             onClick={() => setShowWorkflows(v => !v)}
-            sx={{ color: 'rgba(255,255,255,0.72)', textTransform: 'none' }}
+            sx={{ color: tokens.text.secondary, textTransform: 'none' }}
           >
             {showWorkflows ? '▲ Hide Quick Workflows' : '▼ Quick Workflow Launch'}
           </Button>
@@ -466,14 +511,15 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
           </Collapse>
         </Box>
 
-        <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <DialogActions sx={{ p: 3, borderTop: `1px solid ${tokens.border.subtle}` }}>
           <Button
             onClick={handleClose}
             sx={{
-              color: 'rgba(255,255,255,0.72)',
+              color: tokens.text.secondary,
               fontFamily: 'Orbitron',
               fontSize: '0.7rem',
-              fontWeight: 800
+              fontWeight: 800,
+              '&:hover': { color: tokens.text.primary }
             }}
           >
             CANCEL
@@ -483,54 +529,26 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
             variant="contained"
             disabled={isPending || !formData.engine_id || domainIds.length === 0}
             sx={{
-              bgcolor: '#00ff62',
-              color: '#000',
+              bgcolor: tokens.accent.primary,
+              color: theme.palette.getContrastText(tokens.accent.primary),
               fontWeight: 900,
               fontFamily: 'Orbitron',
               letterSpacing: 1,
               px: 4,
               '&:hover': {
-                bgcolor: '#00cc4f',
-                boxShadow: '0 0 20px rgba(0, 255, 98, 0.4)'
+                bgcolor: alpha(tokens.accent.primary, 0.85),
+                boxShadow: `0 0 20px ${alpha(tokens.accent.primary, 0.4)}`
               },
               '&.Mui-disabled': {
-                bgcolor: 'rgba(0, 255, 98, 0.2)',
-                color: 'rgba(0, 0, 0, 0.5)'
+                bgcolor: alpha(tokens.accent.primary, 0.2),
+                color: alpha(theme.palette.getContrastText(tokens.accent.primary), 0.5)
               }
             }}
           >
-            {isPending ? <CircularProgress size={20} sx={{ color: '#000' }} /> : 'START MISSION'}
+            {isPending ? <CircularProgress size={20} sx={{ color: theme.palette.getContrastText(tokens.accent.primary) }} /> : 'START MISSION'}
           </Button>
         </DialogActions>
       </form>
     </Dialog>
   );
-};
-
-const fieldStyles = {
-  '& .MuiOutlinedInput-root': {
-    color: 'rgba(255,255,255,0.92)',
-    '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
-    '&:hover fieldset': { borderColor: 'rgba(0, 255, 98, 0.3)' },
-    '&.Mui-focused fieldset': { borderColor: '#00ff62' },
-    bgcolor: 'rgba(255,255,255,0.03)',
-    '& input': { color: 'rgba(255,255,255,0.92)' },
-    '& textarea': { color: 'rgba(255,255,255,0.92)' },
-  },
-  '& .MuiInputLabel-root': {
-    color: 'rgba(255,255,255,0.7)',
-    '&.Mui-focused': { color: '#00ff62' }
-  },
-  '& .MuiSelect-select': { color: 'rgba(255,255,255,0.92)' },
-  '& .MuiSelect-icon': { color: 'rgba(255,255,255,0.7)' },
-  '& .MuiFormHelperText-root': { color: 'rgba(255,255,255,0.55)' }
-};
-
-const switchStyles = {
-  '& .MuiSwitch-switchBase.Mui-checked': {
-    color: '#00ff62',
-    '& + .MuiSwitch-track': {
-      backgroundColor: '#00ff62',
-    },
-  },
 };

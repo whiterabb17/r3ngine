@@ -17,6 +17,11 @@
         enable_http_crawl: true
         threads: 30
         timeout: 5
+        run_favirecon: true
+        run_sourcemapper: true
+        run_grpcurl: true
+        run_julius: true
+        run_gqlspection: true
       dns_security:
         enable_axfr: true
         enable_dnssec_check: true
@@ -44,6 +49,7 @@
       dir_file_fuzz:
         auto_calibration: true
         run_dirsearch: true
+        run_feroxbuster: false
         enable_http_crawl: true
         rate_limit: 150
         extensions:
@@ -75,9 +81,15 @@
         recursive_level: 2
         stop_on_error: false
         timeout: 5
+        run_favirecon: true
+        run_sourcemapper: true
+        run_grpcurl: true
+        run_julius: true
+        run_gqlspection: true
         threads: 30
         wordlist_name: dicc
         use_api_wordlist: true
+        max_repeat_by_signature: 10
       vulnerability_scan:
         run_acunetix: true
         run_wpscan: true

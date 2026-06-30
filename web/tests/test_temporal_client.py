@@ -37,3 +37,20 @@ class TestTemporalClientProvider(TestCase):
         mock_connect.assert_called_once_with("myhost:7233", namespace="mynamespace")
         mock_client.get_workflow_handle.assert_called_once_with("wf-123")
         mock_handle.cancel.assert_awaited_once()
+
+    @patch("reNgine.temporal_client.asyncio.wait_for", side_effect=asyncio.TimeoutError)
+    @patch("reNgine.temporal_client.Client.connect", new_callable=AsyncMock)
+    def test_get_client_timeout_raises_temporal_connection_error(self, mock_connect, mock_wait):
+        """A timeout must raise TemporalConnectionError, not the built-in ConnectionError."""
+        from reNgine.temporal_client import TemporalConnectionError
+        with self.assertRaises(TemporalConnectionError):
+            asyncio.run(TemporalClientProvider.get_client())
+
+    @patch("reNgine.temporal_client.asyncio.wait_for", side_effect=asyncio.TimeoutError)
+    @patch("reNgine.temporal_client.Client.connect", new_callable=AsyncMock)
+    def test_get_client_timeout_not_builtin_connection_error(self, mock_connect, mock_wait):
+        """TemporalConnectionError must NOT be a subclass of the built-in ConnectionError."""
+        from reNgine.temporal_client import TemporalConnectionError
+        with self.assertRaises(TemporalConnectionError) as cm:
+            asyncio.run(TemporalClientProvider.get_client())
+        self.assertNotIsInstance(cm.exception, ConnectionError)

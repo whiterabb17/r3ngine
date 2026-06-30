@@ -14,6 +14,8 @@ from playwright_stealth import stealth_sync
 
 import requests as req
 
+from reNgine.osint.hunter_lookup import _hunter_domain_search
+
 logger = logging.getLogger(__name__)
 
 LINKEDIN_FEED_URL = "https://www.linkedin.com/feed/"
@@ -175,14 +177,9 @@ class LinkedInScraper:
 
     def get_hunter_pattern(self, domain: str) -> str:
         try:
-            url = (
-                f"https://api.hunter.io/v2/domain-search"
-                f"?domain={domain}&api_key={self.hunter_key}"
-            )
-            res = req.get(url, timeout=10)
-            data = res.json()
-            if "data" in data and "pattern" in data["data"]:
-                return data["data"]["pattern"]
+            _emails, pattern = _hunter_domain_search(self.hunter_key, domain, max_results=1)
+            if pattern:
+                return pattern
         except Exception as exc:
             logger.warning("Failed to fetch Hunter.io pattern: %s", exc)
         return "{first}.{last}"

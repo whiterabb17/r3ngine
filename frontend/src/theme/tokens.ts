@@ -26,6 +26,22 @@ export interface ThemeTokenSet {
     subtle: string;
     strong: string;
   };
+  /** Sidebar + header surface — may diverge from content surface (e.g. enterprise's black chrome on an off-white content area) */
+  chrome: {
+    bg: string;
+    text: string;
+    textMuted: string;
+    border: string;
+    navDefault: string;
+    navActive: string;
+    navActiveBg: string;
+    navLabel: string;
+    navLabelActive: string;
+    iconMuted: string;
+    navChildActive: string;
+    navChildActiveBg: string;
+    headerBorder: string;
+  };
   accent: {
     primary: string;
     secondary: string;
@@ -127,6 +143,21 @@ const hackerSet: ThemeTokenSet = {
     subtle: 'rgba(0, 243, 255, 0.2)',
     strong: 'rgba(0, 243, 255, 0.4)',
   },
+  chrome: {
+    bg: '#12121a',
+    text: '#e0e0e0',
+    textMuted: 'rgba(224, 224, 224, 0.7)',
+    border: 'rgba(0, 243, 255, 0.1)',
+    navDefault: '#00f3ff',
+    navActive: '#bc13fe',
+    navActiveBg: 'rgba(0, 243, 255, 0.15)',
+    navLabel: 'rgba(224, 224, 224, 0.6)',
+    navLabelActive: '#00f3ff',
+    iconMuted: 'rgba(224, 224, 224, 0.5)',
+    navChildActive: '#7000ff',
+    navChildActiveBg: 'rgba(0, 243, 255, 0.1)',
+    headerBorder: 'rgba(0, 243, 255, 0.1)',
+  },
   accent: {
     primary: '#00f3ff',
     secondary: '#bc13fe',
@@ -176,6 +207,21 @@ const modernSet: ThemeTokenSet = {
     subtle: 'rgba(0, 243, 255, 0.15)',
     strong: 'rgba(0, 243, 255, 0.35)',
   },
+  chrome: {
+    bg: '#1e293b',
+    text: '#f8fafc',
+    textMuted: 'rgba(248, 250, 252, 0.7)',
+    border: 'rgba(0, 243, 255, 0.1)',
+    navDefault: '#00f3ff',
+    navActive: '#bc13fe',
+    navActiveBg: 'rgba(0, 243, 255, 0.15)',
+    navLabel: 'rgba(248, 250, 252, 0.6)',
+    navLabelActive: '#00f3ff',
+    iconMuted: 'rgba(248, 250, 252, 0.5)',
+    navChildActive: '#7000ff',
+    navChildActiveBg: 'rgba(0, 243, 255, 0.1)',
+    headerBorder: 'rgba(0, 243, 255, 0.1)',
+  },
   effects: {
     ...sharedEffects,
     glowPrimary: '0 0 10px rgba(0, 243, 255, 0.2)',
@@ -186,24 +232,39 @@ const modernSet: ThemeTokenSet = {
 const enterpriseSet: ThemeTokenSet = {
   mode: 'light',
   surface: {
-    primary: '#f8fafc',
+    primary: '#f5f3ef',
     secondary: '#ffffff',
-    glass: 'rgba(255, 255, 255, 0.8)',
+    glass: 'rgba(245, 243, 239, 0.85)',
     elevated: '#ffffff',
   },
   text: {
-    primary: '#0f172a',
-    secondary: 'rgba(15, 23, 42, 0.7)',
-    muted: 'rgba(15, 23, 42, 0.5)',
-    disabled: 'rgba(15, 23, 42, 0.38)',
+    primary: '#141414',
+    secondary: 'rgba(20, 20, 20, 0.7)',
+    muted: 'rgba(20, 20, 20, 0.5)',
+    disabled: 'rgba(20, 20, 20, 0.38)',
   },
   border: {
-    subtle: '#e2e8f0',
-    strong: '#cbd5e1',
+    subtle: '#e5e0d8',
+    strong: '#d8d3ca',
+  },
+  chrome: {
+    bg: '#141414',
+    text: '#f5f3ef',
+    textMuted: 'rgba(245, 243, 239, 0.55)',
+    border: 'rgba(245, 243, 239, 0.1)',
+    navDefault: 'rgba(245, 243, 239, 0.55)',
+    navActive: '#f5f3ef',
+    navActiveBg: '#9c1c2e',
+    navLabel: 'rgba(245, 243, 239, 0.55)',
+    navLabelActive: '#f5f3ef',
+    iconMuted: 'rgba(245, 243, 239, 0.4)',
+    navChildActive: '#f5f3ef',
+    navChildActiveBg: 'rgba(156, 28, 46, 0.1)',
+    headerBorder: 'rgba(245, 243, 239, 0.1)',
   },
   accent: {
-    primary: '#0284c7',
-    secondary: '#475569',
+    primary: '#9c1c2e',
+    secondary: '#57534e',
     success: '#059669',
     warning: '#d97706',
     error: '#dc2626',
@@ -218,10 +279,10 @@ const enterpriseSet: ThemeTokenSet = {
     unknown: '#6d28d9',
   },
   chart: {
-    series: ['#0284c7', '#0ea5e9', '#38bdf8', '#0369a1', '#7dd3fc', '#075985', '#bae6fd', '#0c4a6e'],
-    grid: 'rgba(15, 23, 42, 0.08)',
+    series: ['#9c1c2e', '#57534e', '#78716c', '#dc2626', '#a8a29e', '#44403c', '#d6d3d1', '#1c1917'],
+    grid: 'rgba(20, 20, 20, 0.08)',
     tooltipBg: '#ffffff',
-    tooltipText: '#0f172a',
+    tooltipText: '#141414',
   },
   effects: {
     blur: 'blur(8px)',
@@ -251,6 +312,21 @@ const v3LightSet: ThemeTokenSet = {
   border: {
     subtle: 'rgba(15, 23, 42, 0.08)',
     strong: 'rgba(15, 23, 42, 0.16)',
+  },
+  chrome: {
+    bg: '#ffffff',
+    text: '#0f172a',
+    textMuted: 'rgba(15, 23, 42, 0.65)',
+    border: 'rgba(14, 165, 233, 0.1)',
+    navDefault: 'rgba(15, 23, 42, 0.65)',
+    navActive: '#0ea5e9',
+    navActiveBg: 'rgba(14, 165, 233, 0.15)',
+    navLabel: 'rgba(15, 23, 42, 0.6)',
+    navLabelActive: '#0ea5e9',
+    iconMuted: 'rgba(15, 23, 42, 0.5)',
+    navChildActive: '#0ea5e9',
+    navChildActiveBg: 'rgba(14, 165, 233, 0.1)',
+    headerBorder: 'rgba(15, 23, 42, 0.1)',
   },
   accent: {
     primary: '#0ea5e9',
@@ -292,6 +368,13 @@ export const themeDefinitions: Record<ThemeType, ThemeTokenSet> = {
   clean: modernSet,
   script_kiddie: hackerSet,
 };
+
+export const selectableThemes: Array<{ id: ThemeType; label: string }> = [
+  { id: 'hacker', label: 'V3 Hacker' },
+  { id: 'modern', label: 'V3 Hybrid' },
+  { id: 'enterprise', label: 'V3 Enterprise' },
+  { id: 'v3_light', label: 'V3 Light' },
+];
 
 export const sharedThemeEffects = sharedEffects;
 

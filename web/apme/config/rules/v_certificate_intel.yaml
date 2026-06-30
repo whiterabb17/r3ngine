@@ -1,0 +1,59 @@
+# Category V — Certificate Intelligence (5 rules)
+# Fires from Certificate nodes to Capability virtual goal nodes.
+# All target_subtype values must appear in schema.py NODE_TYPES["Capability"].
+rules:
+
+  - name: weak_cipher_to_credential_harvesting
+    mitre_id: "T1557.001"
+    if:
+      node.type: Certificate
+      node.property: "has_weak_cipher:True"
+    then:
+      create_edge:
+        type: LEADS_TO
+        target_subtype: credential_harvesting
+        confidence: 0.70
+
+  - name: expired_cert_to_phishing_amplification
+    mitre_id: "T1598"
+    if:
+      node.type: Certificate
+      node.property: "is_expired:True"
+    then:
+      create_edge:
+        type: LEADS_TO
+        target_subtype: phishing_amplification
+        confidence: 0.60
+
+  - name: self_signed_cert_to_authenticated_access
+    mitre_id: "T1553.004"
+    if:
+      node.type: Certificate
+      node.property: "self_signed:True"
+    then:
+      create_edge:
+        type: LEADS_TO
+        target_subtype: authenticated_access
+        confidence: 0.55
+
+  - name: expired_cert_to_lateral_movement
+    mitre_id: "T1550"
+    if:
+      node.type: Certificate
+      node.property: "is_expired:True"
+    then:
+      create_edge:
+        type: LEADS_TO
+        target_subtype: lateral_movement
+        confidence: 0.45
+
+  - name: mismatched_cert_to_credential_harvesting
+    mitre_id: "T1557.002"
+    if:
+      node.type: Certificate
+      node.property: "mismatched:True"
+    then:
+      create_edge:
+        type: LEADS_TO
+        target_subtype: credential_harvesting
+        confidence: 0.65
