@@ -28,6 +28,7 @@ import {
 } from '@mui/material';
 import Chart from 'react-apexcharts';
 import type { DashboardData } from '../api';
+import ReactMarkdown from 'react-markdown';
 
 interface CWEInfo {
   name: string;
@@ -476,7 +477,7 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
                       },
                       dataLabels: {
                         enabled: true,
-                        style: { fontSize: '10px', fontFamily: 'Inter, sans-serif', colors: [theme.palette.text.secondary] },
+                        style: { fontSize: '10px', fontFamily: 'Inter, sans-serif' },
                         formatter: (text: string, op: any) => [text, `×${op.value}`],
                       },
                       plotOptions: {
@@ -563,7 +564,7 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
                       },
                       dataLabels: {
                         enabled: true,
-                        style: { fontSize: '10px', fontFamily: 'Inter, sans-serif', colors: [theme.palette.text.secondary] },
+                        style: { fontSize: '10px', fontFamily: 'Inter, sans-serif' },
                         formatter: (text: string, op: any) => [text, `×${op.value}`],
                       },
                       plotOptions: {
@@ -938,9 +939,20 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
                     {descGenError}
                   </Typography>
                 )}
-                <Typography variant="body2" sx={{ fontFamily: 'Inter', fontSize: '0.8rem', color: tokens.text.primary, lineHeight: 1.6 }}>
-                  {cveInfo.summary || 'No description summary available. Click ? to generate with AI.'}
-                </Typography>
+                <Box sx={{ 
+                  fontFamily: 'Inter', 
+                  fontSize: '0.8rem', 
+                  color: tokens.text.primary, 
+                  lineHeight: 1.6,
+                  '& p': { margin: 0, mb: 1 },
+                  '& ul, & ol': { margin: 0, paddingLeft: 2, mb: 1 },
+                  '& strong': { color: tokens.accent.primary, fontWeight: 700 },
+                  '& *:last-child': { mb: 0 }
+                }}>
+                  <ReactMarkdown>
+                    {cveInfo.summary || 'No description summary available. Click ? to generate with AI.'}
+                  </ReactMarkdown>
+                </Box>
               </Box>
 
               {/* References */}
