@@ -358,7 +358,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
             overflowY: 'auto',
             boxSizing: 'border-box',
             borderRight: 'none',
-            bgcolor: alpha(theme.palette.background.paper, 0.8),
+            bgcolor: alpha(tokens.chrome.bg, 0.8),
             backdropFilter: 'blur(10px)',
             backgroundImage: 'none',
             borderRadius: '0 30px 30px 0',
@@ -366,7 +366,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
             maxHeight: 'calc(100vh - 40px)',
             top: '50%',
             transform: 'translateY(-50%)',
-            border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+            border: `1px solid ${tokens.chrome.border}`,
             boxShadow: theme.shadows[10],
             py: 2,
             /* Custom Scrollbar */
@@ -391,9 +391,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
             const hasChildren = item.children && item.children.length > 0;
             const isOpen = openItems.includes(item.title);
             const isActive = activePath.startsWith(item.path);
-            const itemColor = isLight
-              ? (isActive ? theme.palette.primary.main : theme.palette.text.secondary)
-              : (isActive ? tokens.accent.secondary : tokens.accent.primary);
+            const itemColor = isActive ? tokens.chrome.navActive : tokens.chrome.navDefault;
 
             return (
               <React.Fragment key={item.title}>
@@ -411,7 +409,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                       minHeight: 48,
                       justifyContent: isHovered ? 'initial' : 'center',
                       px: 2.5,
-                      bgcolor: isActive ? alpha(theme.palette.primary.main, 0.15) : 'transparent',
+                      bgcolor: isActive ? tokens.chrome.navActiveBg : 'transparent',
                       '&:hover': {
                         bgcolor: isActive ? alpha(theme.palette.primary.main, 0.2) : alpha(theme.palette.primary.main, 0.05),
                       }
@@ -433,7 +431,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                           primary={
                             <Typography variant="body2" sx={{
                               fontWeight: 600,
-                              color: isActive ? theme.palette.primary.main : alpha(theme.palette.text.primary, 0.6),
+                              color: itemColor,
                               fontSize: '0.85rem'
                             }}>
                               {item.title}
@@ -453,8 +451,8 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                     <List component="div" disablePadding sx={{ ml: 2 }}>
                       {item.children?.map((child) => {
                         const isChildActive = activePath === child.path;
-                        const subActiveColor = isLight ? theme.palette.primary.main : tokens.severity.unknown;
-                        const subInactiveColor = theme.palette.text.secondary;
+                        const subActiveColor = tokens.chrome.navActive;
+                        const subInactiveColor = tokens.chrome.textMuted;
                         return (
                           <ListItemButton
                             key={child.title}
@@ -465,7 +463,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                               py: 0.5,
                               borderRadius: 1,
                               mb: 0.2,
-                              bgcolor: isChildActive ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
+                              bgcolor: isChildActive ? tokens.chrome.navActiveBg : 'transparent',
                               '&:hover': {
                                 bgcolor: alpha(theme.palette.primary.main, 0.05),
                               }
@@ -498,9 +496,9 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {/* Floating Topbar */}
         <AppBar position="fixed" sx={{
-          bgcolor: alpha(theme.palette.background.paper, 0.95),
+          bgcolor: alpha(tokens.chrome.bg, 0.95),
           backdropFilter: 'blur(12px)',
-          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+          border: `1px solid ${tokens.chrome.border}`,
           borderRadius: 4,
           mt: 1.5,
           mx: 2,
@@ -567,7 +565,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
               <Box sx={{
                 display: 'flex',
                 alignItems: 'center',
-                bgcolor: isLight ? alpha(theme.palette.text.primary, 0.05) : alpha(theme.palette.text.primary, 0.03),
+                bgcolor: isLight ? alpha(tokens.chrome.text, 0.05) : alpha(tokens.chrome.text, 0.03),
                 px: 2,
                 py: 0.5,
                 borderRadius: 10,
@@ -577,7 +575,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
               }}>
                 <InputBase
                   placeholder="Universal Search..."
-                  sx={{ color: theme.palette.text.secondary, fontSize: '0.75rem', flex: 1, ml: 1 }}
+                  sx={{ color: tokens.chrome.textMuted, fontSize: '0.75rem', flex: 1, ml: 1 }}
                 />
                 <Search size={14} style={{ color: theme.palette.primary.main, opacity: 0.8 }} />
               </Box>
@@ -589,17 +587,17 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                     to={`/${projectSlug}/projects`}
                     sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: 0.5, textDecoration: 'none' }}
                   >
-                    <Typography variant="body2" sx={{ fontSize: '0.8rem', color: theme.palette.text.secondary }}>Projects</Typography>
-                    <ChevronDown size={14} style={{ opacity: 0.5, color: theme.palette.text.secondary }} />
+                    <Typography variant="body2" sx={{ fontSize: '0.8rem', color: tokens.chrome.textMuted }}>Projects</Typography>
+                    <ChevronDown size={14} style={{ opacity: 0.5, color: tokens.chrome.textMuted }} />
                   </Box>
 
                   <Box
                     onClick={handleQuickAddOpen}
                     sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: 0.5 }}
                   >
-                    <Plus size={14} style={{ opacity: 0.6, color: theme.palette.text.secondary }} />
-                    <Typography variant="body2" sx={{ fontSize: '0.8rem', color: theme.palette.text.secondary }}>Quick Add</Typography>
-                    <ChevronDown size={14} style={{ opacity: 0.5, color: theme.palette.text.secondary }} />
+                    <Plus size={14} style={{ opacity: 0.6, color: tokens.chrome.textMuted }} />
+                    <Typography variant="body2" sx={{ fontSize: '0.8rem', color: tokens.chrome.textMuted }}>Quick Add</Typography>
+                    <ChevronDown size={14} style={{ opacity: 0.5, color: tokens.chrome.textMuted }} />
                   </Box>
 
                   <Box sx={{ display: 'flex', gap: 1, mx: 2 }}>
@@ -608,7 +606,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                       onClick={handleToolboxOpen}
                       size="small"
                       sx={{
-                        color: toolboxAnchorEl ? theme.palette.primary.main : alpha(theme.palette.text.secondary, 0.5),
+                        color: toolboxAnchorEl ? theme.palette.primary.main : tokens.chrome.textMuted,
                         bgcolor: toolboxAnchorEl ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
                         boxShadow: toolboxAnchorEl && theme.palette.mode === 'dark' ? `0 0 15px ${alpha(theme.palette.primary.main, 0.3)}` : 'none',
                         '&:hover': {
@@ -623,7 +621,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                       onClick={handleNotificationOpen}
                       size="small"
                       sx={{
-                        color: notificationAnchorEl ? theme.palette.primary.main : alpha(theme.palette.text.secondary, 0.5),
+                        color: notificationAnchorEl ? theme.palette.primary.main : tokens.chrome.textMuted,
                         bgcolor: notificationAnchorEl ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
                         '&:hover': {
                           color: theme.palette.primary.main,
@@ -639,7 +637,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                       onClick={handleScanHistoryOpen}
                       size="small"
                       sx={{
-                        color: scanHistoryAnchorEl ? theme.palette.primary.main : alpha(theme.palette.text.secondary, 0.5),
+                        color: scanHistoryAnchorEl ? theme.palette.primary.main : tokens.chrome.textMuted,
                         bgcolor: scanHistoryAnchorEl ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
                         '&:hover': {
                           color: theme.palette.primary.main,
@@ -687,14 +685,14 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                       sx={{
                         width: 32,
                         height: 32,
-                        bgcolor: alpha(theme.palette.text.primary, 0.05),
+                        bgcolor: alpha(tokens.chrome.text, 0.05),
                         border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
                         p: 0.2
                       }}
                     />
                     <Box sx={{ ml: 1, display: 'flex', alignItems: 'center' }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem', color: theme.palette.text.primary }}>root</Typography>
-                      <ChevronDown size={14} style={{ opacity: 0.4, marginLeft: 4, color: theme.palette.text.secondary }} />
+                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem', color: tokens.chrome.text }}>root</Typography>
+                      <ChevronDown size={14} style={{ opacity: 0.4, marginLeft: 4, color: tokens.chrome.textMuted }} />
                     </Box>
                   </Box>
                 </>
