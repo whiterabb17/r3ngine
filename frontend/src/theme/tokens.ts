@@ -35,6 +35,8 @@ export interface ThemeTokenSet {
     navDefault: string;
     navActive: string;
     navActiveBg: string;
+    navLabel: string;
+    navLabelActive: string;
     iconMuted: string;
     navChildActive: string;
     navChildActiveBg: string;
@@ -149,6 +151,8 @@ const hackerSet: ThemeTokenSet = {
     navDefault: '#00f3ff',
     navActive: '#bc13fe',
     navActiveBg: 'rgba(0, 243, 255, 0.15)',
+    navLabel: 'rgba(224, 224, 224, 0.6)',
+    navLabelActive: '#00f3ff',
     iconMuted: 'rgba(224, 224, 224, 0.5)',
     navChildActive: '#7000ff',
     navChildActiveBg: 'rgba(0, 243, 255, 0.1)',
@@ -211,6 +215,8 @@ const modernSet: ThemeTokenSet = {
     navDefault: '#00f3ff',
     navActive: '#bc13fe',
     navActiveBg: 'rgba(0, 243, 255, 0.15)',
+    navLabel: 'rgba(248, 250, 252, 0.6)',
+    navLabelActive: '#00f3ff',
     iconMuted: 'rgba(248, 250, 252, 0.5)',
     navChildActive: '#7000ff',
     navChildActiveBg: 'rgba(0, 243, 255, 0.1)',
@@ -249,6 +255,8 @@ const enterpriseSet: ThemeTokenSet = {
     navDefault: 'rgba(245, 243, 239, 0.55)',
     navActive: '#f5f3ef',
     navActiveBg: '#9c1c2e',
+    navLabel: 'rgba(245, 243, 239, 0.55)',
+    navLabelActive: '#f5f3ef',
     iconMuted: 'rgba(245, 243, 239, 0.4)',
     navChildActive: '#f5f3ef',
     navChildActiveBg: 'rgba(156, 28, 46, 0.1)',
@@ -313,6 +321,8 @@ const v3LightSet: ThemeTokenSet = {
     navDefault: 'rgba(15, 23, 42, 0.65)',
     navActive: '#0ea5e9',
     navActiveBg: 'rgba(14, 165, 233, 0.15)',
+    navLabel: 'rgba(15, 23, 42, 0.6)',
+    navLabelActive: '#0ea5e9',
     iconMuted: 'rgba(15, 23, 42, 0.5)',
     navChildActive: '#0ea5e9',
     navChildActiveBg: 'rgba(14, 165, 233, 0.1)',

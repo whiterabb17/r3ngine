@@ -431,7 +431,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                           primary={
                             <Typography variant="body2" sx={{
                               fontWeight: 600,
-                              color: itemColor,
+                              color: isActive ? tokens.chrome.navLabelActive : tokens.chrome.navLabel,
                               fontSize: '0.85rem'
                             }}>
                               {item.title}
