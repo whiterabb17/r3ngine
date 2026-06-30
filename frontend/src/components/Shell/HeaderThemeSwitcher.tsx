@@ -42,7 +42,6 @@ export const HeaderThemeSwitcher: React.FC = () => {
     switch (id) {
       case 'hacker': return '#bc13fe'; // Purple
       case 'modern': return '#0284c7'; // Blue (Enterprise blue)
-      case 'enterprise': return '#94a3b8'; // Gray
       case 'v3_light': return '#f8fafc'; // Off-white
       default: return themeDefinitions[id].accent.primary;
     }
