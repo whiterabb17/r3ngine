@@ -236,3 +236,27 @@ class ProjectDiscoveryAPIKey(models.Model):
 
 	def __str__(self):
 		return self.key
+
+
+class GitHubAPIKey(models.Model):
+	id = models.AutoField(primary_key=True)
+	key = models.CharField(max_length=500)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		verbose_name = 'GitHub API Key'
+
+	def __str__(self):
+		return f"GitHub API Key ({self.key[:8]}...)"
+
+
+class LeakSearchAPIKey(models.Model):
+	id = models.AutoField(primary_key=True)
+	key = models.CharField(max_length=500)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		verbose_name = 'LeakSearch API Key'
+
+	def __str__(self):
+		return f"LeakSearch API Key ({self.key[:8]}...)"
