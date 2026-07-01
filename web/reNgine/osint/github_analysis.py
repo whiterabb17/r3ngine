@@ -15,6 +15,7 @@ Private helpers:
 import json
 import logging
 import os
+import re as _re
 import subprocess
 
 import requests
@@ -40,6 +41,16 @@ _GITHUB_API = 'https://api.github.com/orgs/{}'
 
 # gato is installed into its own uv venv
 _GATO_BIN = '/usr/src/github/gato/.venv/bin/gato'
+
+
+def _safe_slug(value: str) -> str:
+    """Reduce an externally-sourced org/repo name to a safe filesystem slug.
+
+    Strips any character that is not alphanumeric, a hyphen, a dot, or an
+    underscore, then truncates to 64 characters.  This prevents path-traversal
+    attacks when the value is used as a component inside os.path.join().
+    """
+    return _re.sub(r'[^a-zA-Z0-9._-]', '_', value)[:64]
 
 
 # ---------------------------------------------------------------------------
@@ -141,9 +152,10 @@ def _run_gitleaks_github(repos: list[str], scan_history, results_dir: str) -> No
     """Clone and scan each repo with gitleaks, persist JSON findings."""
     env = _get_proxy_env()
     for repo in repos:
-        clone_dir = os.path.join(results_dir, 'gitleaks_clone', repo.replace('/', '_'))
+        safe_repo = _safe_slug(repo.replace('/', '_'))
+        clone_dir = os.path.join(results_dir, 'gitleaks_clone', safe_repo)
         os.makedirs(clone_dir, exist_ok=True)
-        report_path = os.path.join(results_dir, f'gitleaks_{repo.replace("/", "_")}.json')
+        report_path = os.path.join(results_dir, f'gitleaks_{safe_repo}.json')
         clone_cmd = ['git', 'clone', '--depth', '1',
                      f'https://github.com/{repo}', clone_dir]
         try:
@@ -195,18 +207,34 @@ def _run_noseyparker(repos: list[str], scan_history, results_dir: str) -> None:
     ]
     try:
         result = subprocess.run(report_cmd, capture_output=True, env=env, timeout=60)
+        # noseyparker v0.24.0 JSON report is a list of finding objects.
+        # Each finding: {'rule_name': str, 'matches': [{'snippet': {'before': str,
+        #   'matching': str, 'after': str}, 'provenance': [{'kind': 'file'|'git_repo',
+        #   'path'|'repo_path': str, ...}], ...}], ...}
         data = json.loads(result.stdout.decode('utf-8', errors='replace'))
-        for finding in data.get('findings', []):
-            provenance = finding.get('provenance') or {}
-            source_url = provenance.get('url', 'github')
-            snippet = str(finding.get('snippet', ''))
-            save_secret_leak(
-                scan_history=scan_history,
-                tool_name='noseyparker',
-                secret_type='git_secret',
-                source_url=source_url,
-                match_content=snippet[:2000],
-            )
+        findings = data if isinstance(data, list) else []
+        for finding in findings:
+            rule_name = finding.get('rule_name', 'git_secret')
+            for match in finding.get('matches', []):
+                # Extract a source URL from the first provenance entry that has
+                # a repo_path (git_repo kind) or a file path.
+                source_url = 'github'
+                for prov in match.get('provenance', []):
+                    if prov.get('kind') == 'git_repo':
+                        source_url = prov.get('repo_path', 'github')
+                        break
+                    if prov.get('kind') == 'file':
+                        source_url = prov.get('path', 'github')
+                        break
+                snippet_obj = match.get('snippet') or {}
+                snippet = str(snippet_obj.get('matching', ''))
+                save_secret_leak(
+                    scan_history=scan_history,
+                    tool_name='noseyparker',
+                    secret_type=rule_name,
+                    source_url=source_url,
+                    match_content=snippet[:2000],
+                )
     except Exception as exc:
         logger.warning("noseyparker report failed: %s", exc)
 
@@ -244,12 +272,11 @@ def _run_gato(orgs: list[str], token: str | None, results_dir: str) -> None:
     env['GITHUB_TOKEN'] = token
 
     for org in orgs:
-        output_json = os.path.join(results_dir, f'gato_{org}.json')
+        output_json = os.path.join(results_dir, f'gato_{_safe_slug(org)}.json')
         cmd = [
             _GATO_BIN,
             'enumerate',
             '--target', org,
-            '--enum_wf_artifacts',
             '--skip_sh_runner_enum',
             '--output-json', output_json,
         ]

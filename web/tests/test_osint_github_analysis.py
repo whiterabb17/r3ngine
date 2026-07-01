@@ -93,16 +93,31 @@ class TestGitHubAnalysis(TestCase):
     @patch('reNgine.osint.github_analysis.save_secret_leak')
     @patch('reNgine.osint.github_analysis.subprocess.run')
     def test_run_noseyparker_parses_json(self, mock_subproc, mock_save):
-        """_run_noseyparker calls save_secret_leak for each finding in report."""
+        """_run_noseyparker calls save_secret_leak for each finding in report.
+
+        Mock data uses the noseyparker v0.24.0 JSON schema: a list of finding
+        objects, each with 'rule_name' and 'matches' (not a dict with 'findings').
+        Each match has 'snippet.matching' and 'provenance' list.
+        """
         from reNgine.osint.github_analysis import _run_noseyparker
-        scan_json = json.dumps({
-            'findings': [
-                {
-                    'provenance': {'url': 'https://github.com/acme/repo1'},
-                    'snippet': 'AKIA1234SECRET',
-                }
-            ]
-        }).encode()
+        # noseyparker v0.24.0: top-level list, not a dict with a 'findings' key
+        scan_json = json.dumps([
+            {
+                'rule_name': 'AWS API Credentials',
+                'matches': [
+                    {
+                        'snippet': {
+                            'before': 'AWS_ACCESS_KEY_ID=',
+                            'matching': 'AKIAIOSFODNN7EXAMPLE',
+                            'after': '\n',
+                        },
+                        'provenance': [
+                            {'kind': 'git_repo', 'repo_path': '/tmp/acme_repo1'},
+                        ],
+                    }
+                ],
+            }
+        ]).encode()
         # First call (scan) returns 0; second call (report) returns JSON
         mock_subproc.side_effect = [
             MagicMock(returncode=0, stdout=b'', stderr=b''),
@@ -112,6 +127,8 @@ class TestGitHubAnalysis(TestCase):
         mock_save.assert_called_once()
         call_kwargs = mock_save.call_args[1]
         self.assertEqual(call_kwargs['tool_name'], 'noseyparker')
+        self.assertEqual(call_kwargs['secret_type'], 'AWS API Credentials')
+        self.assertEqual(call_kwargs['source_url'], '/tmp/acme_repo1')
 
     @patch('reNgine.osint.github_analysis.subprocess.run')
     def test_gato_runs_with_token(self, mock_subproc):
