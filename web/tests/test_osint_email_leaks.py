@@ -21,9 +21,8 @@ class TestEmailLeaks(TestCase):
         from reNgine.osint.email_leaks import run_emailfinder
 
         mock_run.return_value = (
-            'test@example-test.local\ninfo@example-test.local\n',
-            '',
             0,
+            'test@example-test.local\ninfo@example-test.local\n',
         )
 
         class FakeSelf:
@@ -36,7 +35,7 @@ class TestEmailLeaks(TestCase):
     def test_run_emailfinder_invalid_emails_skipped(self, mock_run):
         from reNgine.osint.email_leaks import run_emailfinder
 
-        mock_run.return_value = ('notanemail\ntest@example-test.local\n', '', 0)
+        mock_run.return_value = (0, 'notanemail\ntest@example-test.local\n')
 
         class FakeSelf:
             scan = self.scan
@@ -61,7 +60,7 @@ class TestEmailLeaks(TestCase):
         from reNgine.osint.email_leaks import run_leaksearch
 
         LeakSearchAPIKey.objects.create(key='test_api_key_12345')
-        mock_run.return_value = ('', '', 0)
+        mock_run.return_value = (0, '')
 
         class FakeSelf:
             scan = self.scan

@@ -20,14 +20,14 @@ def run_emailfinder(self, host: str, scan_history, results_dir: str) -> None:
         cmd = ['proxychains4', '-q'] + cmd
 
     logger.info("emailfinder starting for %s", host)
-    output, err, rc = run_command(cmd, cwd=results_dir)
+    return_code, output = run_command(cmd, cwd=results_dir)
 
     for line in output.splitlines():
         line = line.strip()
         if '@' in line and '.' in line:
             save_email(line, scan_history, source='emailfinder')
 
-    logger.info("emailfinder finished for %s — exit_code=%s", host, rc)
+    logger.info("emailfinder finished for %s — exit_code=%s", host, return_code)
 
 
 def run_leaksearch(self, host: str, scan_history, results_dir: str) -> None:
@@ -48,7 +48,7 @@ def run_leaksearch(self, host: str, scan_history, results_dir: str) -> None:
         cmd = ['proxychains4', '-q'] + cmd
 
     logger.info("LeakSearch starting for %s", host)
-    output, err, rc = run_command(cmd, cwd=results_dir)
+    return_code, output = run_command(cmd, cwd=results_dir)
 
     try:
         results = json.loads(output) if output.strip() else []
@@ -68,4 +68,4 @@ def run_leaksearch(self, host: str, scan_history, results_dir: str) -> None:
         count = len([line for line in output.splitlines() if line.strip()])
         logger.info("LeakSearch raw output for %s: %d lines", host, count)
 
-    logger.info("LeakSearch finished for %s — exit_code=%s", host, rc)
+    logger.info("LeakSearch finished for %s — exit_code=%s", host, return_code)
