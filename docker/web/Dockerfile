@@ -531,6 +531,14 @@ RUN git clone https://github.com/UndeadSec/SwaggerSpy /usr/src/github/SwaggerSpy
     && uv venv \
     && uv pip install -r requirements.txt
 
+# Spoofy — SPF/DMARC email spoofability check (confirmed working 2026-07-01)
+# Not on PyPI; installed via git clone + uv venv into /usr/src/github/Spoofy
+# Invoked as: /usr/src/github/Spoofy/.venv/bin/python3 spoofy.py -d <domain> -o json
+RUN git clone https://github.com/MattKeeley/Spoofy /usr/src/github/Spoofy \
+    && cd /usr/src/github/Spoofy \
+    && uv venv \
+    && uv pip install -r requirements.txt
+
 # noseyparker — secret scanning in git repos (pre-built musl binary, no libc dependency)
 ARG NOSEYPARKER_VERSION=v0.24.0
 RUN curl -sL "https://github.com/praetorian-inc/noseyparker/releases/download/${NOSEYPARKER_VERSION}/noseyparker-${NOSEYPARKER_VERSION}-x86_64-unknown-linux-musl.tar.gz" \

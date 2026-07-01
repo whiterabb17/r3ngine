@@ -41,6 +41,7 @@ from reNgine.osint.cloud_recon import run_msftrecon
 from reNgine.osint.api_leaks import run_porch_pirate, run_postleaks, run_swaggerspy_internet
 from reNgine.osint.github_analysis import run_github_analysis
 from reNgine.osint.misconfig import run_misconfig_mapper
+from reNgine.osint.domain_security import run_spoofcheck
 from reNgine.utils.graph import Neo4jManager
 from redis import Redis
 from scanEngine.models import Proxy
@@ -280,6 +281,10 @@ def osint_discovery(
 
     if config.get(MISCONFIG):
         run_misconfig_mapper(self, host, scan_history, results_dir)
+
+    domain_security_config = config.get(DOMAIN_SECURITY, {})
+    if domain_security_config and domain_security_config.get(SPOOFCHECK):
+        run_spoofcheck(self, host, scan_history, results_dir)
 
     finish_osint_discovery([results], results_dir=results_dir)
 
