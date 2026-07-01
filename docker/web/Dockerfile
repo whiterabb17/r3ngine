@@ -70,6 +70,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go install -ldflags="-s -w" -v github.com/hueristiq/xurlfind3r/cmd/xurlfind3r@latest && \
     go install -ldflags="-s -w" -v github.com/edoardottt/cariddi/cmd/cariddi@latest && \
     go install -ldflags="-s -w" -v github.com/dimasma0305/wp-taint-scan/cmd/taint-scan@latest && \
+    go install -ldflags="-s -w" -v github.com/trickest/enumerepo@latest && \
+    go install -ldflags="-s -w" -v github.com/praetorian-inc/titus/cmd/titus@latest && \
     curl -sSfL https://github.com/praetorian-inc/brutus/releases/download/v1.5.1/brutus-linux-amd64.tar.gz | tar -C /go/bin -xz brutus
 
 # betterleaks has no published go install path — clone and build directly.
@@ -527,6 +529,18 @@ RUN git clone https://github.com/UndeadSec/SwaggerSpy /usr/src/github/SwaggerSpy
     && cd /usr/src/github/SwaggerSpy \
     && uv venv \
     && uv pip install -r requirements.txt
+
+# noseyparker — secret scanning in git repos (pre-built musl binary, no libc dependency)
+ARG NOSEYPARKER_VERSION=v0.24.0
+RUN curl -sL "https://github.com/praetorian-inc/noseyparker/releases/download/${NOSEYPARKER_VERSION}/noseyparker-${NOSEYPARKER_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+    | tar xz --strip-components=2 -C /usr/local/bin ./bin/noseyparker
+
+# gato — GitHub Actions CI/CD audit (Python, isolated uv venv)
+# Invoked as: /usr/src/github/gato/.venv/bin/gato enumerate --target <org> ...
+RUN git clone https://github.com/praetorian-inc/gato /usr/src/github/gato \
+    && cd /usr/src/github/gato \
+    && uv venv \
+    && uv pip install -e .
 
 # Ensure pipx is available and install baddns
 RUN --mount=type=cache,target=/root/.cache/pip \
