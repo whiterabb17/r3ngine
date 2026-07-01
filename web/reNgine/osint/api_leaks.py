@@ -144,7 +144,7 @@ def run_swaggerspy_path_mode(self, host: str, scan_history, results_dir: str) ->
                     scan_history.dorks.add(dork)
                     found += 1
                     logger.info("SwaggerSpy path found: %s", probe_url)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("swaggerspy_path probe failed for %s: %s", probe_url, exc)
 
     logger.info("SwaggerSpy (path mode) finished for %s — %d specs found", host, found)

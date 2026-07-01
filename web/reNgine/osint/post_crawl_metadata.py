@@ -59,11 +59,6 @@ def run_post_crawl_exifray(self, host: str, ctx: dict, results_dir: str) -> None
         if not url:
             continue
         doc_name = os.path.basename(url.split('?')[0]) or 'unknown'
-        # Map exifray keys to MetaFinderDocument fields where names align;
-        # anything not directly mapped is serialised into meta_data for reference.
-        known_fields = {'url', 'title', 'author', 'producer', 'creator', 'os',
-                        'creation_date', 'modified_date'}
-        extra = {k: v for k, v in doc.items() if k not in known_fields}
         defaults = {
             'doc_name': doc_name,
             'title': doc.get('title', ''),
@@ -71,10 +66,6 @@ def run_post_crawl_exifray(self, host: str, ctx: dict, results_dir: str) -> None
             'producer': doc.get('producer', ''),
             'creator': doc.get('creator', ''),
         }
-        if extra:
-            # Store leftover keys as JSON in the title field is wrong —
-            # there is no free-text blob field, so drop unmapped keys silently.
-            pass
         MetaFinderDocument.objects.get_or_create(
             scan_history=self.scan,
             url=url,

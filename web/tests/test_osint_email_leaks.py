@@ -54,6 +54,79 @@ class TestEmailLeaks(TestCase):
         run_leaksearch(FakeSelf(), 'example-test.local', self.scan, '/tmp/test_results')
         mock_run.assert_not_called()
 
+    # ------------------------------------------------------------------
+    # emailfinder config flag (Finding 1 fix)
+    # ------------------------------------------------------------------
+
+    @patch('reNgine.tasks.osint.run_emailfinder')
+    def test_emailfinder_suppressed_when_config_false(self, mock_ef):
+        """osint_discovery must NOT call run_emailfinder when emailfinder: false."""
+        from reNgine.tasks.osint import osint_discovery
+
+        class FakeSelf:
+            scan = self.scan
+            notify = lambda self, **kw: None  # noqa: E731
+
+        config = {
+            'discover': ['emails'],
+            'emailfinder': False,
+        }
+        osint_discovery(
+            FakeSelf(),
+            config=config,
+            host='example-test.local',
+            scan_history_id=self.scan.id,
+            activity_id=None,
+            results_dir='/tmp',
+        )
+        mock_ef.assert_not_called()
+
+    @patch('reNgine.tasks.osint.run_emailfinder')
+    def test_emailfinder_called_when_config_true(self, mock_ef):
+        """osint_discovery calls run_emailfinder when emailfinder: true and emails in discover."""
+        from reNgine.tasks.osint import osint_discovery
+
+        class FakeSelf:
+            scan = self.scan
+            notify = lambda self, **kw: None  # noqa: E731
+
+        config = {
+            'discover': ['emails'],
+            'emailfinder': True,
+        }
+        osint_discovery(
+            FakeSelf(),
+            config=config,
+            host='example-test.local',
+            scan_history_id=self.scan.id,
+            activity_id=None,
+            results_dir='/tmp',
+        )
+        mock_ef.assert_called_once()
+
+    @patch('reNgine.tasks.osint.run_emailfinder')
+    def test_emailfinder_called_when_config_key_absent(self, mock_ef):
+        """emailfinder defaults to enabled when key is absent from config."""
+        from reNgine.tasks.osint import osint_discovery
+
+        class FakeSelf:
+            scan = self.scan
+            notify = lambda self, **kw: None  # noqa: E731
+
+        config = {
+            'discover': ['emails'],
+            # 'emailfinder' key intentionally absent — should default to True
+        }
+        osint_discovery(
+            FakeSelf(),
+            config=config,
+            host='example-test.local',
+            scan_history_id=self.scan.id,
+            activity_id=None,
+            results_dir='/tmp',
+        )
+        mock_ef.assert_called_once()
+
     @patch('reNgine.osint.email_leaks.run_command')
     def test_run_leaksearch_uses_key(self, mock_run):
         from dashboard.models import LeakSearchAPIKey

@@ -1,5 +1,6 @@
 import json
 import logging
+import shlex
 
 from startScan.models import Dork
 from reNgine.utils.task import run_command
@@ -40,7 +41,7 @@ def run_misconfig_mapper(self, host: str, scan_history, results_dir: str) -> Non
         # apply_stealth works on a string command; rebuild as string for opsec then re-split.
         cmd_str = ' '.join(cmd)
         cmd_str = opsec.apply_stealth('misconfig_mapper', cmd_str, proxy)
-        cmd = cmd_str.split()
+        cmd = shlex.split(cmd_str)
 
     if proxy and not opsec.is_enabled():
         cmd = ['proxychains4', '-q'] + cmd

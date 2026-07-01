@@ -235,7 +235,7 @@ def osint_discovery(
             ctx=ctx,
         )
 
-    if "emails" in osint_lookup:
+    if "emails" in osint_lookup and config.get(EMAILFINDER, True):
         run_emailfinder(self, host, scan_history, results_dir)
 
     leaks_config = config.get(LEAKS_AND_SECRETS, {})
