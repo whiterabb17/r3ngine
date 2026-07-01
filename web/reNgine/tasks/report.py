@@ -275,6 +275,7 @@ def generate_report_task(report_id):
                 ImpactAssessment.objects.filter(scan_history_id=scan.id)
                 .exclude(potential_attack_chain__isnull=True)
                 .exclude(potential_attack_chain={})
+                .select_related('vulnerability')
                 .order_by('-remediation_priority')
             )
             for a in assessments:
@@ -289,6 +290,8 @@ def generate_report_task(report_id):
                     'explanation': chain.get('explanation', ''),
                     'potential_impact': a.potential_impact,
                     'remediation_priority': a.remediation_priority,
+                    'vuln_remediation': (a.vulnerability.remediation or '') if a.vulnerability_id and a.vulnerability else '',
+                    'remediation': '',
                 })
             logger.log_line("[REPORT]", "FETCH", "attack paths: %d" % len(attack_paths))
         else:
@@ -577,6 +580,32 @@ def generate_report_task(report_id):
                     extensions=['extra', 'nl2br', 'sane_lists'],
                 )
                 logger.log_line("[REPORT]", "LLM", "conclusion done (%d chars)" % len(data['llm_conclusion']))
+
+                if attack_paths:
+                    logger.log_line("[REPORT]", "LLM", "generating attack path remediation (%d paths)" % len(attack_paths))
+                    for path in attack_paths:
+                        path_ctx = "Risk Level: %s (Score: %s)\n" % (path['risk'].upper(), path['score'])
+                        path_ctx += "Potential Impact: %s\n" % (path['potential_impact'] or 'Not specified')
+                        path_ctx += "Attack Steps:\n"
+                        for i, step in enumerate(path['steps'], 1):
+                            action = step.get('action', 'Unknown action')
+                            edge = step.get('edge_type', '')
+                            mitre = step.get('mitre_technique', '')
+                            line = "  %d. %s" % (i, action)
+                            if edge:
+                                line += " (via %s)" % edge
+                            if mitre:
+                                line += " [MITRE %s]" % mitre
+                            path_ctx += line + "\n"
+                        try:
+                            raw = llm_gen.generate_path_remediation(path['path_id'], path_ctx)
+                            path['remediation'] = markdown.markdown(
+                                _normalize_llm_markdown(raw or ''),
+                                extensions=['extra', 'nl2br', 'sane_lists'],
+                            )
+                            logger.log_line("[REPORT]", "LLM", "remediation done for path %s (%d chars)" % (path['path_id'], len(path['remediation'])))
+                        except Exception as e:
+                            logger.log_line("[REPORT]", "ERROR", "remediation failed for path %s: %s" % (path['path_id'], format_exception_for_log(e)), level="error")
 
                 data['enable_llm_report_generation'] = True
                 logger.log_line("[REPORT]", "LLM", "all LLM sections complete")
