@@ -611,7 +611,7 @@ def dorking(
                 results.append(url)
 
     if 'xnldorker' in dork_engines:
-        cmd = ['xnldorker', '-d', host]
+        cmd = ['xnldorker', '-i', f'site:{host}', '-nb']
         proxy_obj = Proxy.objects.first()
         proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
         if proxy:
