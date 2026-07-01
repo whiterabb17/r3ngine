@@ -36,6 +36,7 @@ from reNgine.tasks.vuln import semgrep_scan
 from reNgine.osint.hibp_scraper import check_hibp_for_email_task
 from reNgine.osint.linkedin_intelligence import LinkedInScraper
 from reNgine.osint.hunter_lookup import run_hunter_lookup
+from reNgine.osint.email_leaks import run_emailfinder, run_leaksearch
 from reNgine.utils.graph import Neo4jManager
 from redis import Redis
 from scanEngine.models import Proxy
@@ -228,6 +229,9 @@ def osint_discovery(
             ctx=ctx,
         )
 
+    if "emails" in osint_lookup:
+        run_emailfinder(self, host, scan_history, results_dir)
+
     leaks_config = config.get(LEAKS_AND_SECRETS, {})
     if leaks_config:
         if leaks_config.get(LEAKLOOKUP):
@@ -239,6 +243,9 @@ def osint_discovery(
                 results_dir=results_dir,
                 ctx=ctx,
             )
+
+        if leaks_config.get(LEAKSEARCH):
+            run_leaksearch(self, host, scan_history, results_dir)
 
         if leaks_config.get(GITLEAKS) or leaks_config.get(TRUFFLEHOG):
             secret_scanning(

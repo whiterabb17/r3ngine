@@ -499,6 +499,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install --upgrade pip setuptools wheel pyOpenSSL h8mail && \
     pip3 install --upgrade fierce dirsearch meson ninja arjun inql netlas holehe smtp-user-enum
 
+# emailfinder — email discovery from public sources (confirmed installable 2026-07-01)
+# LeakSearch is not on PyPI; no Dockerfile line added (binary unavailable, module degrades gracefully)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install emailfinder
+
 # Ensure pipx is available and install baddns
 RUN --mount=type=cache,target=/root/.cache/pip \
     python3 -m pip install pipx && \
