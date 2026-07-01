@@ -1141,6 +1141,7 @@ class InterestingSubdomainSerializer(serializers.ModelSerializer):
 
 
 class EmailSerializer(serializers.ModelSerializer):
+	breach_count = serializers.IntegerField(read_only=True, required=False)
 
 	class Meta:
 		model = Email
