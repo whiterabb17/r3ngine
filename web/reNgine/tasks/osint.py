@@ -40,6 +40,7 @@ from reNgine.osint.email_leaks import run_emailfinder, run_leaksearch
 from reNgine.osint.cloud_recon import run_msftrecon
 from reNgine.osint.api_leaks import run_porch_pirate, run_postleaks, run_swaggerspy_internet
 from reNgine.osint.github_analysis import run_github_analysis
+from reNgine.osint.misconfig import run_misconfig_mapper
 from reNgine.utils.graph import Neo4jManager
 from redis import Redis
 from scanEngine.models import Proxy
@@ -276,6 +277,9 @@ def osint_discovery(
     github_config = config.get(GITHUB_ANALYSIS, {})
     if github_config:
         run_github_analysis(self, host, scan_history, results_dir, config)
+
+    if config.get(MISCONFIG):
+        run_misconfig_mapper(self, host, scan_history, results_dir)
 
     finish_osint_discovery([results], results_dir=results_dir)
 

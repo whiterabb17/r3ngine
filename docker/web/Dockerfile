@@ -72,6 +72,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go install -ldflags="-s -w" -v github.com/dimasma0305/wp-taint-scan/cmd/taint-scan@latest && \
     go install -ldflags="-s -w" -v github.com/trickest/enumerepo@latest && \
     go install -ldflags="-s -w" -v github.com/praetorian-inc/titus/cmd/titus@latest && \
+    go install -ldflags="-s -w" -v github.com/intigriti/misconfig-mapper/cmd/misconfig-mapper@latest && \
     curl -sSfL https://github.com/praetorian-inc/brutus/releases/download/v1.5.1/brutus-linux-amd64.tar.gz | tar -C /go/bin -xz brutus
 
 # betterleaks has no published go install path — clone and build directly.
