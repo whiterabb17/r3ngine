@@ -584,6 +584,46 @@ def dorking(
 
     except Exception as e:
         logger.exception(e)
+
+    # --- Extended dork engines ---
+    _DORKS_HUNTER_PYTHON = '/usr/src/github/dorks_hunter/.venv/bin/python3'
+    _DORKS_HUNTER_SCRIPT = '/usr/src/github/dorks_hunter/dorks_hunter.py'
+    dork_engines = config.get(DORK_ENGINES, [])
+
+    if 'dorks_hunter' in dork_engines:
+        dorks_output_file = f'{results_dir}/dorks_hunter_{host}.txt'
+        cmd = [_DORKS_HUNTER_PYTHON, _DORKS_HUNTER_SCRIPT, '-d', host, '-o', dorks_output_file]
+        proxy_obj = Proxy.objects.first()
+        proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
+        if proxy:
+            cmd = ['proxychains4', '-q'] + cmd
+        return_code, output = run_command(cmd, cwd=results_dir)
+        try:
+            with open(dorks_output_file, 'r') as _f:
+                file_output = _f.read()
+        except OSError:
+            file_output = output or ''
+        for line in file_output.splitlines():
+            url = line.strip()
+            if url.startswith('http'):
+                dork, _ = Dork.objects.get_or_create(type='dorks_hunter', url=url)
+                scan_history.dorks.add(dork)
+                results.append(url)
+
+    if 'xnldorker' in dork_engines:
+        cmd = ['xnldorker', '-d', host]
+        proxy_obj = Proxy.objects.first()
+        proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
+        if proxy:
+            cmd = ['proxychains4', '-q'] + cmd
+        return_code, output = run_command(cmd, cwd=results_dir)
+        for line in (output or '').splitlines():
+            url = line.strip()
+            if url.startswith('http'):
+                dork, _ = Dork.objects.get_or_create(type='xnldorker', url=url)
+                scan_history.dorks.add(dork)
+                results.append(url)
+
     return results
 
 

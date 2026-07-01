@@ -523,6 +523,19 @@ RUN uv tool install git+https://github.com/MandConsultingGroup/porch-pirate --fo
 # Binary installed as: postleaksNg (capital N and G)
 RUN uv tool install git+https://github.com/six2dez/postleaksNG --force --with 'jellyfish>=1.1.3'
 
+# dorks_hunter — Google dork automation (confirmed working 2026-07-01)
+# Not on PyPI; installed via git clone + uv venv into /usr/src/github/dorks_hunter
+# Invoked as: /usr/src/github/dorks_hunter/.venv/bin/python3 dorks_hunter.py -d <domain> -o <output_file>
+RUN git clone https://github.com/six2dez/dorks_hunter /usr/src/github/dorks_hunter \
+    && cd /usr/src/github/dorks_hunter \
+    && uv venv \
+    && uv pip install -r requirements.txt
+
+# xnldorker — extended Google dorking engine (confirmed working 2026-07-01)
+# Installed via uv tool install; binary available as xnldorker on PATH
+# Invoked as: xnldorker -d <domain>
+RUN uv tool install git+https://github.com/xnl-h4ck3r/xnldorker --force
+
 # SwaggerSpy — Swagger/OpenAPI spec discovery (confirmed working 2026-07-01)
 # Not on PyPI; installed via git clone + uv venv into /usr/src/github/SwaggerSpy
 # Invoked as: /usr/src/github/SwaggerSpy/.venv/bin/python3 swaggerspy.py <domain>
