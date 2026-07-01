@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { SelectChangeEvent } from '@mui/material';
 import {
   Box,
@@ -19,7 +19,7 @@ import {
   CircularProgress,
   Collapse,
   Alert,
-  TablePagination,
+  Pagination,
   Select,
   MenuItem,
   FormControl
@@ -49,6 +49,11 @@ import { useThemeTokens } from '../../../../theme/useThemeTokens';
 import { StagingTypeBadge } from './StagingTypeBadge';
 import { StagingMetadataPanel } from './StagingMetadataPanel';
 
+const stripAnsi = (str: string) => {
+  if (!str) return '';
+  return str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '').replace(/\[0m/g, '');
+};
+
 interface OsintStagingSectionProps {
   scanId: number;
 }
@@ -56,7 +61,7 @@ interface OsintStagingSectionProps {
 export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId }) => {
   const { tokens } = useThemeTokens();
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selected, setSelected] = useState<number[]>([]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -65,16 +70,31 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
   const { data, isLoading, refetch } = useOsintStaging({
     scan_id: scanId,
     search: search,
-    page: page + 1,
+    page: page,
     osint_type: typeFilter || undefined
   });
 
   const discardMutation = useBulkDiscardOsint();
   const promoteMutation = useBulkPromoteOsint();
 
+  const paginatedData = useMemo(() => {
+    if (!data?.results) return [];
+    
+    let resultsToPaginate = data.results;
+    if (data.results.length > rowsPerPage) {
+      const startIndex = (page - 1) * rowsPerPage;
+      resultsToPaginate = data.results.slice(startIndex, startIndex + rowsPerPage);
+    }
+    
+    return resultsToPaginate.map((item: OsintStaging) => ({
+      ...item,
+      content: stripAnsi(item.content || '')
+    }));
+  }, [data?.results, page, rowsPerPage]);
+
   const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked && data) {
-      setSelected(data.results.map((item: OsintStaging) => item.id));
+      setSelected(paginatedData.map((item: OsintStaging) => item.id));
     } else {
       setSelected([]);
     }
@@ -90,7 +110,7 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
 
   const handleTypeFilterChange = (event: SelectChangeEvent) => {
     setTypeFilter(event.target.value);
-    setPage(0);
+    setPage(1);
   };
 
   const handleBulkDiscard = async () => {
@@ -139,7 +159,7 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
             value={search}
             onChange={(e) => {
                 setSearch(e.target.value);
-                setPage(0);
+                setPage(1);
             }}
             slotProps={{
               input: {
@@ -238,8 +258,8 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
                   <TableCell padding="checkbox">
                     <Checkbox
                       size="small"
-                      indeterminate={selected.length > 0 && selected.length < (data?.results?.length || 0)}
-                      checked={(data?.results?.length || 0) > 0 && selected.length === (data?.results?.length || 0)}
+                      indeterminate={selected.length > 0 && selected.length < paginatedData.length}
+                      checked={paginatedData.length > 0 && paginatedData.every((item: OsintStaging) => selected.includes(item.id))}
                       onChange={handleSelectAll}
                       sx={{ color: 'text.disabled', '&.Mui-checked': { color: tokens.accent.primary } }}
                     />
@@ -252,7 +272,7 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
                 </TableRow>
               </TableHead>
               <TableBody>
-                {data?.results?.map((item: OsintStaging) => (
+                {paginatedData.map((item: OsintStaging) => (
                   <React.Fragment key={item.id}>
                     <TableRow 
                       hover 
@@ -358,23 +378,67 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
                 )}
               </TableBody>
             </Table>
-            <TablePagination
-              component="div"
-              count={data?.count || 0}
-              page={page}
-              onPageChange={(_, newPage) => setPage(newPage)}
-              rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={(e) => {
-                setRowsPerPage(parseInt(e.target.value, 10));
-                setPage(0);
-              }}
-              sx={{
-                borderTop: '1px solid rgba(255,255,255,0.05)',
-                color: 'rgba(255,255,255,0.6)',
-                '& .MuiTablePagination-select': { color: 'text.primary' },
-                '& .MuiIconButton-root': { color: tokens.accent.primary }
-              }}
-            />
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2, px: 1, pb: 2 }}>
+              <Box sx={{ color: 'rgba(0, 243, 255, 0.5)', fontSize: '0.78rem', fontFamily: 'monospace', minWidth: 160 }}>
+                {data?.count
+                  ? `${(page - 1) * rowsPerPage + 1}–${Math.min(page * rowsPerPage, data.count)} of ${data.count}`
+                  : '0 results'}
+              </Box>
+
+              <Pagination
+                count={Math.ceil((data?.count || 0) / rowsPerPage)}
+                page={page}
+                onChange={(_: React.ChangeEvent<unknown>, p: number) => setPage(p)}
+                shape="rounded"
+                sx={{
+                  '& .MuiPaginationItem-root': {
+                    color: 'rgba(0, 243, 255, 0.6)',
+                    borderColor: 'rgba(0, 243, 255, 0.2)',
+                    fontFamily: 'monospace',
+                    fontSize: '0.8rem',
+                    '&.Mui-selected': {
+                      bgcolor: 'rgba(0, 243, 255, 0.2)',
+                      color: '#00f3ff',
+                      borderColor: '#00f3ff',
+                    },
+                    '&:hover': {
+                      bgcolor: 'rgba(0, 243, 255, 0.1)',
+                      borderColor: 'rgba(0, 243, 255, 0.4)',
+                    }
+                  }
+                }}
+              />
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 160, justifyContent: 'flex-end' }}>
+                <Box sx={{ color: 'rgba(0, 243, 255, 0.4)', fontSize: '0.75rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                  per page
+                </Box>
+                <FormControl size="small" variant="outlined" sx={{ minWidth: 80 }}>
+                  <Select
+                    value={rowsPerPage}
+                    onChange={(e) => {
+                      setRowsPerPage(Number(e.target.value));
+                      setPage(1);
+                    }}
+                    sx={{
+                      color: '#00f3ff',
+                      bgcolor: 'rgba(0, 243, 255, 0.05)',
+                      fontFamily: 'monospace',
+                      fontSize: '0.8rem',
+                      '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0, 243, 255, 0.2)' },
+                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(0, 243, 255, 0.4)' },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#00f3ff' },
+                      '& .MuiSvgIcon-root': { color: '#00f3ff' },
+                    }}
+                  >
+                    <MenuItem value={10}>10</MenuItem>
+                    <MenuItem value={25}>25</MenuItem>
+                    <MenuItem value={50}>50</MenuItem>
+                    <MenuItem value={100}>100</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
+            </Box>
           </>
         )}
       </TableContainer>
