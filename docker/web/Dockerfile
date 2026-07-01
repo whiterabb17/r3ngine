@@ -512,6 +512,22 @@ RUN git clone https://github.com/Arcanum-Sec/msftrecon /usr/src/github/msftrecon
     && uv venv \
     && uv pip install -r requirements.txt
 
+# porch-pirate — Postman workspace leak discovery (confirmed working 2026-07-01)
+# Binary installed as: porch-pirate
+RUN uv tool install git+https://github.com/MandConsultingGroup/porch-pirate --force
+
+# postleaksNg — Postman workspace credential leaks (confirmed working 2026-07-01)
+# Binary installed as: postleaksNg (capital N and G)
+RUN uv tool install git+https://github.com/six2dez/postleaksNG --force --with 'jellyfish>=1.1.3'
+
+# SwaggerSpy — Swagger/OpenAPI spec discovery (confirmed working 2026-07-01)
+# Not on PyPI; installed via git clone + uv venv into /usr/src/github/SwaggerSpy
+# Invoked as: /usr/src/github/SwaggerSpy/.venv/bin/python3 swaggerspy.py <domain>
+RUN git clone https://github.com/UndeadSec/SwaggerSpy /usr/src/github/SwaggerSpy \
+    && cd /usr/src/github/SwaggerSpy \
+    && uv venv \
+    && uv pip install -r requirements.txt
+
 # Ensure pipx is available and install baddns
 RUN --mount=type=cache,target=/root/.cache/pip \
     python3 -m pip install pipx && \

@@ -38,6 +38,7 @@ from reNgine.osint.linkedin_intelligence import LinkedInScraper
 from reNgine.osint.hunter_lookup import run_hunter_lookup
 from reNgine.osint.email_leaks import run_emailfinder, run_leaksearch
 from reNgine.osint.cloud_recon import run_msftrecon
+from reNgine.osint.api_leaks import run_porch_pirate, run_postleaks, run_swaggerspy_internet
 from reNgine.utils.graph import Neo4jManager
 from redis import Redis
 from scanEngine.models import Proxy
@@ -261,6 +262,15 @@ def osint_discovery(
 
     if config.get(MICROSOFT_RECON):
         run_msftrecon(self, host, scan_history, results_dir)
+
+    api_leaks_config = config.get(API_LEAKS, {})
+    if api_leaks_config:
+        if api_leaks_config.get(PORCH_PIRATE):
+            run_porch_pirate(self, host, scan_history, results_dir)
+        if api_leaks_config.get(POSTLEAKS):
+            run_postleaks(self, host, scan_history, results_dir)
+        if api_leaks_config.get(SWAGGERSPY):
+            run_swaggerspy_internet(self, host, scan_history, results_dir)
 
     finish_osint_discovery([results], results_dir=results_dir)
 
