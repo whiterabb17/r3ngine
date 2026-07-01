@@ -1246,12 +1246,19 @@ def save_semgrep_secret_finding(result, ctx, base_dir, file_to_url_map=None):
 		mapped_url = file_to_url_map.get(os.path.basename(source_file)) if file_to_url_map else None
 		final_url = mapped_url if mapped_url else source_file
 
+		match_content = extra.get('lines', '').strip()
+
+		# Filter out excessively broad generic.secrets.security.detected-facebook-oauth false positives 
+		# where semgrep line extraction catches unrelated small strings (like "requires login")
+		if 'detected-facebook-oauth' in cleaned_check_id and len(match_content) < 32:
+			return None
+
 		leak_data = {
 			'scan_history': scan,
 			'tool_name': 'Semgrep',
 			'secret_type': cleaned_check_id or 'Secret',
 			'source_url': final_url,
-			'match_content': extra.get('lines', '').strip(),
+			'match_content': match_content,
 			'status': 'unverified'
 		}
 		save_secret_leak(**leak_data)
