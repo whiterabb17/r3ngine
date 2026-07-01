@@ -29,5 +29,35 @@
             lookup_extensions: php
         intensity: normal
         documents_limit: 50
+        emailfinder: true
+        microsoft_recon: true
+        leaks_and_secrets:
+          leaklookup: true
+          gitleaks: true
+          trufflehog: true
+          leaksearch: false
+        api_leaks:
+          porch_pirate: true
+          postleaks: true
+          swaggerspy: true
+        github_analysis:
+          uses_tools:
+            - enumerepo
+            - trufflehog
+            - gitleaks
+            - noseyparker
+            - titus
+          gato: false
+          github_orgs: []
+        misconfig: true
+        domain_security:
+          spoofcheck: true
+        dork_engines:
+          - gofuzz
+          - dorks_hunter
+          - xnldorker
+      post_crawl_osint:
+        metagoofil: true
+        swaggerspy: true
       spiderfoot_scan:
         modules: all
