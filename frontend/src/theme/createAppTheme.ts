@@ -98,9 +98,13 @@ function createEnterpriseComponents(tokens: ThemeTokenSet) {
         root: {
           backgroundColor: tokens.surface.secondary,
           border: `1px solid ${tokens.border.subtle}`,
-          borderRadius: 8,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          transition: 'none',
+          borderRadius: tokens.effects.radius,
+          boxShadow: '0px 8px 30px rgba(0,0,0,0.04)',
+          transition: `all 0.3s ${tokens.effects.bezier}`,
+          '&:hover': {
+            boxShadow: '0px 12px 40px rgba(0,0,0,0.06)',
+            borderColor: tokens.border.strong,
+          },
         },
       },
     },
@@ -109,7 +113,14 @@ function createEnterpriseComponents(tokens: ThemeTokenSet) {
         root: {
           textTransform: 'none' as const,
           fontWeight: 600,
-          borderRadius: 6,
+          borderRadius: tokens.effects.radius,
+          transition: `all 0.2s ${tokens.effects.bezier}`,
+        },
+        contained: {
+          boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+          '&:hover': {
+            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          },
         },
       },
     },
@@ -118,7 +129,7 @@ function createEnterpriseComponents(tokens: ThemeTokenSet) {
 
 export function createAppTheme(tokens: ThemeTokenSet, variant: 'cyber' | 'light-cyber' | 'enterprise'): Theme {
   const isLight = tokens.mode === 'light';
-  const shapeRadius = variant === 'enterprise' ? 4 : parseInt(tokens.effects.radius, 10) || 18;
+  const shapeRadius = variant === 'enterprise' ? parseInt(tokens.effects.radius, 10) || 12 : parseInt(tokens.effects.radius, 10) || 18;
 
   const componentFactory =
     variant === 'enterprise'
@@ -164,7 +175,17 @@ export function createAppTheme(tokens: ThemeTokenSet, variant: 'cyber' | 'light-
         selected: isLight ? alpha(tokens.accent.primary, 0.08) : alpha(tokens.accent.primary, 0.15),
       },
     },
-    typography: baseTypography,
+    typography: {
+      ...baseTypography,
+      ...(variant === 'enterprise' && {
+        h1: { ...baseTypography.h1, letterSpacing: '-0.02em' },
+        h2: { ...baseTypography.h2, letterSpacing: '-0.01em' },
+        h3: { ...baseTypography.h3, letterSpacing: '-0.01em' },
+        h4: { ...baseTypography.h4, letterSpacing: '0em' },
+        h5: { ...baseTypography.h5, letterSpacing: '0.01em' },
+        h6: { ...baseTypography.h6, letterSpacing: '0.02em' },
+      })
+    },
     shape: { borderRadius: shapeRadius },
     components: {
       ...componentFactory(tokens),
