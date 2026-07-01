@@ -42,7 +42,7 @@ def run_msftrecon(self, host: str, scan_history, results_dir: str) -> None:
         )
         return
 
-    ctx = {'scan_history_id': scan_history.id}
+    ctx = {'scan_history_id': scan_history.id, 'source': 'msftrecon'}
 
     # Persist domains discovered by msftrecon as subdomains
     for domain_name in data.get('domains', []):
