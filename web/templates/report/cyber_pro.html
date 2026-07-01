@@ -430,7 +430,7 @@
                 <a href="#finding-summary">Summary of Findings</a>
                 <span class="toc-page" data-href="#finding-summary"></span>
             </div>
-            {% if show_recon %}
+            {% if show_recon and parameters %}
             <div class="toc-item">
                 <a href="#recon-findings">Asset Inventory</a>
                 <span class="toc-page" data-href="#recon-findings"></span>
@@ -442,10 +442,12 @@
                 <span class="toc-page" data-href="#detailed-findings"></span>
             </div>
             {% endif %}
+            {% if attack_surface_map_image %}
             <div class="toc-item">
                 <a href="#attack-surface-map">Attack Surface Map</a>
                 <span class="toc-page" data-href="#attack-surface-map"></span>
             </div>
+            {% endif %}
             {% if attack_paths %}
             <div class="toc-item">
                 <a href="#attack-paths">Attack Paths</a>

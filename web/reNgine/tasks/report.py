@@ -39,7 +39,12 @@ def build_vuln_context(scan, ignore_info=False):
     if ignore_info:
         base_qs = base_qs.exclude(severity=0)
 
-    non_vulners = base_qs.exclude(source='VULNERS').order_by('-severity')
+    # Must order by (name, -severity) so that {% regroup by name %} in the
+    # template receives consecutive runs of the same name — without 'name' in
+    # the ORDER BY, the same vuln name can appear non-contiguously at the same
+    # severity level (DB ordering), causing {% regroup %} to emit duplicate
+    # groups and WeasyPrint to flag duplicate anchor IDs.
+    non_vulners = base_qs.exclude(source='VULNERS').order_by('-severity', 'name')
     vulners = base_qs.filter(source='VULNERS').order_by('group_key', '-cvss_score')
 
     bucket = defaultdict(list)
