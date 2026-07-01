@@ -38,7 +38,8 @@ from reNgine.osint.linkedin_intelligence import LinkedInScraper
 from reNgine.osint.hunter_lookup import run_hunter_lookup
 from reNgine.osint.email_leaks import run_emailfinder, run_leaksearch
 from reNgine.osint.cloud_recon import run_msftrecon
-from reNgine.osint.api_leaks import run_porch_pirate, run_postleaks, run_swaggerspy_internet
+from reNgine.osint.api_leaks import run_porch_pirate, run_postleaks, run_swaggerspy_internet, run_swaggerspy_path_mode
+from reNgine.osint.post_crawl_metadata import run_post_crawl_exifray
 from reNgine.osint.github_analysis import run_github_analysis
 from reNgine.osint.misconfig import run_misconfig_mapper
 from reNgine.osint.domain_security import run_spoofcheck
@@ -2112,3 +2113,29 @@ def osint_orchestrator(scan_history_id):
     # Wait for all threads to complete to ensure the Temporal activity blocks appropriately
     for t in threads:
         t.join()
+
+
+def post_crawl_osint(self, ctx={}, description=None):
+    """Run OSINT tasks that benefit from post-fuzz data (discovered documents, live subdomains).
+
+    Runs after dir_file_fuzz (Temporal Tier 4a). Reads fuzz-discovered documents
+    from the DB and runs exifray + SwaggerSpy path probe against confirmed live hosts.
+    """
+    config = self.yaml_configuration.get(POST_CRAWL_OSINT, {})
+    if not config:
+        logger.info("post_crawl_osint: no config — skipping for scan_id=%s", self.scan_id)
+        return True
+
+    host = self.domain.name if self.domain else ''
+
+    if config.get(METAGOOFIL):
+        run_post_crawl_exifray(self, host, ctx, self.results_dir)
+
+    if config.get(SWAGGERSPY):
+        run_swaggerspy_path_mode(self, host, self.scan, self.results_dir)
+
+    opsec = get_opsec_manager()
+    opsec.strip_directory(self.results_dir)
+
+    logger.info("post_crawl_osint finished for scan_id=%s", self.scan_id)
+    return True

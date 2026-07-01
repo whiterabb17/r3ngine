@@ -145,6 +145,7 @@ from reNgine.tasks.osint import (
     get_and_save_dork_results,
     run_holehe, run_maigret, run_linkedint,
     enrich_identities_task, db_conn_safe_wrapper, osint_orchestrator,
+    post_crawl_osint,
 )
 from reNgine.tasks.subdomain import (
     subdomain_discovery, amass_intel_discovery, save_imported_subdomains,
