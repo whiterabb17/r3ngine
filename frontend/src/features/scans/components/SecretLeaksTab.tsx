@@ -20,8 +20,11 @@ import {
   Card,
   CardContent,
   Collapse,
+  Dialog,
+  DialogTitle,
+  DialogContent,
 } from '@mui/material';
-import { Shield, ExternalLink, Copy, AlertTriangle, Fingerprint, Mail, ShieldAlert, ChevronDown, ChevronUp } from 'lucide-react';
+import { Shield, ExternalLink, Copy, AlertTriangle, Fingerprint, Mail, ShieldAlert, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { useSecretLeaks, useScanSummary, useEmailBreaches, useCheckEmailBreach } from '../api';
 import { TacticalPanel } from '../../../components/TacticalPanel';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
@@ -77,6 +80,7 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
 
   const [manualEmail, setManualEmail] = React.useState('');
   const [checkingEmails, setCheckingEmails] = React.useState<Record<string, boolean>>({});
+  const [selectedBreaches, setSelectedBreaches] = React.useState<any[] | null>(null);
   const [leaksPage, setLeaksPage] = React.useState(0);
   const [leaksRowsPerPage, setLeaksRowsPerPage] = React.useState(10);
   const [expandedKeys, setExpandedKeys] = React.useState<Set<string>>(new Set());
@@ -306,7 +310,7 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
               <TableContainer sx={{ maxHeight: '280px' }}>
                 <Table size="small" stickyHeader>
                   <TableHead>
-                    <TableRow sx={{ '& th': { borderBottom: '2px solid #7000ff', bgcolor: 'action.hover', color: tokens.accent.primary, fontSize: '0.7rem', fontWeight: 900, py: 1 } }}>
+                    <TableRow sx={{ '& th': { borderBottom: `2px solid ${tokens.accent.primary}`, bgcolor: 'background.paper', color: tokens.accent.primary, fontSize: '0.7rem', fontWeight: 900, py: 1 } }}>
                       <TableCell sx={{ color: tokens.accent.primary, fontSize: '10px', fontWeight: 900, fontFamily: 'Orbitron' }}>EMAIL ADDRESS</TableCell>
                       <TableCell sx={{ color: tokens.accent.primary, fontSize: '10px', fontWeight: 900, fontFamily: 'Orbitron' }}>STATUS</TableCell>
                       <TableCell align="right" sx={{ color: tokens.accent.primary, fontSize: '10px', fontWeight: 900, fontFamily: 'Orbitron' }}>ACTIONS</TableCell>
@@ -326,7 +330,20 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
                                 <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary' }}>CHECKING HIBP...</Typography>
                               </Stack>
                             ) : matchedBreaches.length > 0 ? (
-                              <Chip label={`${matchedBreaches.length} BREACHES`} size="small" sx={{ bgcolor: 'rgba(255,0,60,0.1)', color: '#ff003c', fontWeight: 900, fontSize: '0.6rem', border: '1px solid rgba(255,0,60,0.2)' }} />
+                              <Chip 
+                                label={`${matchedBreaches.length} BREACHES`} 
+                                size="small" 
+                                onClick={() => setSelectedBreaches(matchedBreaches)}
+                                sx={{ 
+                                  bgcolor: 'rgba(255,0,60,0.1)', 
+                                  color: '#ff003c', 
+                                  fontWeight: 900, 
+                                  fontSize: '0.6rem', 
+                                  border: '1px solid rgba(255,0,60,0.2)',
+                                  cursor: 'pointer',
+                                  '&:hover': { bgcolor: 'rgba(255,0,60,0.2)' }
+                                }} 
+                              />
                             ) : (
                               <Chip label="CLEAN" size="small" sx={{ bgcolor: 'rgba(0,255,98,0.1)', color: '#00ff62', fontWeight: 900, fontSize: '0.6rem', border: '1px solid rgba(0,255,98,0.2)' }} />
                             )}
@@ -398,6 +415,68 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
           </Grid>
         </Box>
       )}
+
+      <Dialog 
+        open={Boolean(selectedBreaches)} 
+        onClose={() => setSelectedBreaches(null)}
+        maxWidth="md"
+        fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            bgcolor: 'background.paper',
+            border: `1px solid ${tokens.border.subtle}`,
+            backgroundImage: 'none'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          fontFamily: 'Orbitron', 
+          fontWeight: 900, 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          color: tokens.accent.primary
+        }}>
+          BREACH DETAILS
+          <IconButton size="small" onClick={() => setSelectedBreaches(null)} sx={{ color: 'text.secondary' }}>
+            <X size={16} />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ borderColor: tokens.border.subtle }}>
+          <Grid container spacing={2}>
+            {selectedBreaches?.map((breach: any) => (
+              <Grid size={{ xs: 12, sm: 6 }} key={breach.id}>
+                <Card sx={{ bgcolor: 'background.paper', border: `1px solid ${tokens.border.subtle}`, borderRadius: 1 }}>
+                  <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+                    <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: tokens.accent.primary }}>{breach.breach_name}</Typography>
+                        <Typography sx={{ fontSize: '0.65rem', fontFamily: 'monospace', color: 'text.secondary' }}>Target: {breach.email_address}</Typography>
+                      </Box>
+                      <Chip label={breach.breach_date || 'Unknown Date'} size="small" sx={{ bgcolor: 'action.hover', color: 'text.primary', fontSize: '0.65rem', fontWeight: 700 }} />
+                    </Stack>
+                    <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mb: 2, lineHeight: 1.4 }}>{breach.description}</Typography>
+                    <Box sx={{ mb: 2 }}>
+                      <Typography sx={{ fontSize: '10px', fontWeight: 800, color: 'text.primary', mb: 0.5, letterSpacing: 0.5 }}>COMPROMISED DATA:</Typography>
+                      <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                        {breach.compromised_data?.map((dataClass: string) => (
+                          <Chip key={dataClass} label={dataClass} size="small" sx={{ bgcolor: 'rgba(112,0,255,0.05)', color: 'text.primary', fontSize: '0.6rem', fontWeight: 600, height: '18px', borderRadius: 0.5 }} />
+                        ))}
+                      </Stack>
+                    </Box>
+                    <Button size="small" variant="outlined" component="a"
+                      href={`https://haveibeenpwned.com/Breach/${encodeURIComponent(breach.breach_name)}`}
+                      target="_blank" endIcon={<ExternalLink size={10} />}
+                      sx={{ fontSize: '0.65rem', fontWeight: 900, fontFamily: 'Orbitron', color: tokens.accent.primary, borderColor: 'rgba(112,0,255,0.3)', '&:hover': { borderColor: tokens.accent.primary, bgcolor: 'rgba(112,0,255,0.05)' } }}>
+                      View Details
+                    </Button>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };
