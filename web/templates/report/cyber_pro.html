@@ -762,35 +762,43 @@
         {% for group in grouped_vulners_findings %}
         <div class="finding-card" id="vuln_{{ group.group_key|slugify }}">
           <div class="finding-header {% if group.max_severity == 4 %}severity-critical{% elif group.max_severity == 3 %}severity-high{% elif group.max_severity == 2 %}severity-medium{% elif group.max_severity == 1 %}severity-low{% else %}severity-info{% endif %}">
-            <h4 class="finding-title" style="color: white;">{{ group.group_key }}</h4>
-            <span class="severity-badge {% if group.max_severity == 4 %}severity-critical{% elif group.max_severity == 3 %}severity-high{% elif group.max_severity == 2 %}severity-medium{% elif group.max_severity == 1 %}severity-low{% else %}severity-info{% endif %}">
+            <h4 class="finding-title" style="color: white; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ group.display_name }}</h4>
+            <span class="severity-badge" style="display: inline-block; margin-left: 4mm; white-space: nowrap; background: rgba(0,0,0,0.25); color: white; flex-shrink: 0;">
               {% if group.max_severity == 4 %}Critical{% elif group.max_severity == 3 %}High{% elif group.max_severity == 2 %}Medium{% elif group.max_severity == 1 %}Low{% else %}Info{% endif %}
             </span>
-            <span style="opacity: 0.8; font-size: 8pt;">{{ group.count }} CVE/ID Entries | Max CVSS: {{ group.max_cvss }}</span>
+            <span style="opacity: 0.8; font-size: 8pt; white-space: nowrap; flex-shrink: 0; margin-left: 4mm;">{{ group.count }} CVE(s) | CVSS {{ group.max_cvss }}</span>
           </div>
           <div class="finding-body">
-            <div class="meta-item"><b>Source:</b> VULNERS (nmap NSE)</div>
-            <table style="width:100%; border-collapse: collapse; font-size: 8pt; margin-top: 4mm;">
+            <div class="meta-item" style="margin-bottom: 3mm;"><b>Source:</b> VULNERS (nmap NSE)</div>
+            <table style="table-layout: fixed; width: 100%; border-collapse: collapse; font-size: 8pt; margin-top: 2mm;">
+              <colgroup>
+                <col style="width: 35mm;">
+                <col style="width: 14mm;">
+                <col style="width: 18mm;">
+                <col>
+              </colgroup>
               <thead>
                 <tr>
-                  <th style="text-align:left; padding: 3px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">ID / CVE</th>
+                  <th style="text-align:left; padding: 3px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">ID / Software</th>
                   <th style="text-align:center; padding: 3px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">CVSS</th>
                   <th style="text-align:center; padding: 3px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Severity</th>
-                  <th style="text-align:left; padding: 3px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Reference</th>
+                  <th style="text-align:left; padding: 3px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">References (top 5)</th>
                 </tr>
               </thead>
               <tbody>
                 {% for item in group.items %}
                 <tr>
-                  <td style="padding: 3px 6px; font-family: monospace; word-break: break-all;">{{ item.name }}</td>
-                  <td style="text-align:center; padding: 3px 6px;">{{ item.cvss_score|default:"N/A" }}</td>
+                  <td style="padding: 3px 6px; font-family: monospace; font-size: 7.5pt; word-break: break-word; overflow-wrap: break-word;">{{ item.name }}</td>
+                  <td style="text-align:center; padding: 3px 6px;">{{ item.cvss_score|default:"—" }}</td>
                   <td style="text-align:center; padding: 3px 6px;">
                     {% if item.severity == 4 %}Critical{% elif item.severity == 3 %}High{% elif item.severity == 2 %}Medium{% elif item.severity == 1 %}Low{% else %}Info{% endif %}
                   </td>
-                  <td style="padding: 3px 6px; word-break: break-all;">
-                    {% for ref in item.references.all %}
-                      {{ ref.url|truncatechars:70 }}{% if not forloop.last %}, {% endif %}
+                  <td style="padding: 3px 6px; word-break: break-all; font-size: 7.5pt;">
+                    {% for ref in item.references.all|slice:":5" %}
+                      {{ ref.url|truncatechars:80 }}{% if not forloop.last %}<br>{% endif %}
+                    {% empty %}—
                     {% endfor %}
+                    {% if item.references.count > 5 %}<br><span style="color:#64748b;">+ {{ item.references.count|add:"-5" }} more</span>{% endif %}
                   </td>
                 </tr>
                 {% endfor %}

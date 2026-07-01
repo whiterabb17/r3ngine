@@ -55,6 +55,9 @@ def build_vuln_context(scan, ignore_info=False):
         [
             {
                 'group_key': gk,
+                # Use the product name from the first item when available;
+                # group_key is often an opaque hash from the Vulners NSE scan.
+                'display_name': next((i.name for i in items if i.name and i.name != '(Vulners NSE)'), None) or items[0].name if items else gk,
                 'items': items,
                 'count': len(items),
                 'max_severity': max(i.severity for i in items),
@@ -72,7 +75,7 @@ def build_vuln_context(scan, ignore_info=False):
         .order_by('-severity', '-count')
     )
     vulners_unique = [
-        {'name': g['group_key'], 'severity': g['max_severity'], 'count': g['count']}
+        {'name': g['display_name'], 'severity': g['max_severity'], 'count': g['count']}
         for g in grouped_vulners_findings
     ]
 
@@ -555,10 +558,22 @@ def generate_report_task(report_id):
                     llm_context += f"- Low: {vulns.filter(severity=1).count()}\n"
                     llm_context += f"- Info: {vulns.filter(severity=0).count()}\n"
 
-                    if vulns.exists():
+                    severity_label = {4: 'Critical', 3: 'High', 2: 'Medium', 1: 'Low', 0: 'Info'}
+                    non_vulners_list = [v for v in unique_vulns if not any(
+                        v['name'] == g['display_name'] for g in vuln_ctx['grouped_vulners_findings']
+                    )]
+                    if non_vulners_list:
                         llm_context += "Top Vulnerabilities:\n"
-                        for v in unique_vulns[:10]:
-                            llm_context += f"- {v['name']} ({v['count']})\n"
+                        for v in non_vulners_list[:10]:
+                            sev = severity_label.get(v['severity'], 'Unknown')
+                            llm_context += f"- {v['name']} ({sev}, {v['count']} instance(s))\n"
+
+                    vulners_groups = vuln_ctx['grouped_vulners_findings']
+                    if vulners_groups:
+                        llm_context += f"Vulners NSE (nmap) findings: {len(vulners_groups)} affected software group(s)\n"
+                        for g in vulners_groups[:5]:
+                            sev = severity_label.get(g['max_severity'], 'Unknown')
+                            llm_context += f"- {g['display_name']}: {g['count']} CVE(s), Max CVSS {g['max_cvss']}, Severity: {sev}\n"
 
                 logger.log_line("[REPORT]", "LLM", "generating overview section")
                 data['llm_overview'] = markdown.markdown(
