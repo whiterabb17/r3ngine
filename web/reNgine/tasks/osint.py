@@ -37,6 +37,7 @@ from reNgine.osint.hibp_scraper import check_hibp_for_email_task
 from reNgine.osint.linkedin_intelligence import LinkedInScraper
 from reNgine.osint.hunter_lookup import run_hunter_lookup
 from reNgine.osint.email_leaks import run_emailfinder, run_leaksearch
+from reNgine.osint.cloud_recon import run_msftrecon
 from reNgine.utils.graph import Neo4jManager
 from redis import Redis
 from scanEngine.models import Proxy
@@ -257,6 +258,9 @@ def osint_discovery(
                 results_dir=results_dir,
                 ctx=ctx,
             )
+
+    if config.get(MICROSOFT_RECON):
+        run_msftrecon(self, host, scan_history, results_dir)
 
     finish_osint_discovery([results], results_dir=results_dir)
 

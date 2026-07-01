@@ -504,6 +504,14 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install emailfinder
 
+# msftrecon — Microsoft 365 / Azure tenant mapping (confirmed working 2026-07-01)
+# Not on PyPI; installed via git clone + uv venv into /usr/src/github/msftrecon
+# Invoked as: /usr/src/github/msftrecon/.venv/bin/python3 msftrecon/msftrecon.py -d <domain> -j
+RUN git clone https://github.com/Arcanum-Sec/msftrecon /usr/src/github/msftrecon \
+    && cd /usr/src/github/msftrecon \
+    && uv venv \
+    && uv pip install -r requirements.txt
+
 # Ensure pipx is available and install baddns
 RUN --mount=type=cache,target=/root/.cache/pip \
     python3 -m pip install pipx && \
