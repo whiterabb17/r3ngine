@@ -23,6 +23,7 @@ const TargetSummary = lazyRouteComponent(() => import("./features/targets").then
 const EndpointsPage = lazyRouteComponent(() => import("./features/endpoints").then(m => ({ default: m.EndpointsPage })));
 const SubdomainsPage = lazyRouteComponent(() => import("./features/subdomains").then(m => ({ default: m.SubdomainsPage })));
 const AssessmentsPage = lazyRouteComponent(() => import("./features/assessments").then(m => ({ default: m.AssessmentsPage })));
+const AssessmentExecutionDashboard = lazyRouteComponent(() => import("./features/assessments").then(m => ({ default: m.AssessmentExecutionDashboard })));
 const TodoPage = lazyRouteComponent(() => import("./features/todos").then(m => ({ default: m.TodoPage })));
 const VulnerabilityList = lazyRouteComponent(() => import("./features/vulnerabilities").then(m => ({ default: m.VulnerabilityList })));
 const BountyHubPage = lazyRouteComponent(() => import("./features/bounty/components/BountyHubPage").then(m => ({ default: m.BountyHubPage })));
@@ -141,6 +142,13 @@ const assessmentsRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: "assessments",
   component: AssessmentsPage,
+});
+
+// Assessment Execution Route
+const assessmentExecutionRoute = createRoute({
+  getParentRoute: () => projectRoute,
+  path: "assessments/$id/execution",
+  component: AssessmentExecutionDashboard,
 });
 
 // Target Summary Route
@@ -592,6 +600,7 @@ const routeTree = rootRoute.addChildren([
     todoRoute,
     organizationsRoute,
     assessmentsRoute,
+    assessmentExecutionRoute,
     vulnsRoute,
     profileSettingsRoute,
     proxySettingsRoute,

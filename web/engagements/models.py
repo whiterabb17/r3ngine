@@ -77,10 +77,15 @@ class Assessment(models.Model):
     STATUS_CHOICES = (
         ('Draft', 'Draft'),
         ('Ready', 'Ready'),
-        ('Running', 'Running'),
+        ('Discovery', 'Discovery'),
+        ('Enumeration', 'Enumeration'),
+        ('Analysis', 'Analysis'),
+        ('Validation', 'Validation'),
+        ('Reporting', 'Reporting'),
         ('Review', 'Review'),
-        ('Completed', 'Completed'),
-        ('Archived', 'Archived'),
+        ('Complete', 'Complete'),
+        ('Failed', 'Failed'),
+        ('Cancelled', 'Cancelled'),
     )
 
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
@@ -93,6 +98,10 @@ class Assessment(models.Model):
     
     started_at = models.DateTimeField(blank=True, null=True)
     completed_at = models.DateTimeField(blank=True, null=True)
+    
+    active_duration = models.DurationField(blank=True, null=True)
+    paused_duration = models.DurationField(blank=True, null=True)
+    total_duration = models.DurationField(blank=True, null=True)
     
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_assessments')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -145,3 +154,26 @@ class AssessmentAsset(models.Model):
 
     def __str__(self):
         return f"{self.assessment.name} - {self.asset}"
+
+class AssessmentWorkflowState(models.Model):
+    assessment = models.OneToOneField(Assessment, on_delete=models.CASCADE, related_name='workflow_state')
+    workflow_id = models.CharField(max_length=255, blank=True, null=True)
+    run_id = models.CharField(max_length=255, blank=True, null=True)
+    current_stage = models.CharField(max_length=100, blank=True, null=True)
+    progress_percent = models.PositiveIntegerField(default=0)
+    asset_count = models.PositiveIntegerField(default=0)
+    finding_count = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"State for {self.assessment.name}: {self.current_stage} ({self.progress_percent}%)"
+
+class AssessmentEvent(models.Model):
+    assessment = models.ForeignKey(Assessment, on_delete=models.CASCADE, related_name='events')
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assessment_events')
+    event_type = models.CharField(max_length=100)
+    event_data = models.JSONField(blank=True, null=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Event {self.event_type} on {self.assessment.name}"
