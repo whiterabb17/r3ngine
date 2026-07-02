@@ -2,6 +2,9 @@ from temporalio import activity
 from asgiref.sync import sync_to_async
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
+from reNgine.utils.logger import get_module_logger
+
+logger = get_module_logger(__name__)
 
 @dataclass
 class StateTransitionInput:
@@ -32,7 +35,7 @@ async def update_assessment_state_activity(input: StateTransitionInput) -> bool:
             )
             return True
         except Exception as e:
-            activity.logger.error(f"State transition failed: {e}")
+            logger.log_line("[ASSESSMENT]", "ERROR", f"State transition failed: {e}", level="error", exc_info=True)
             raise e
             
     return await _do_transition()
@@ -43,7 +46,7 @@ async def scan_orchestrator_activity(input: ScanOrchestratorInput) -> bool:
     from reNgine.temporal.workflows import MasterScanWorkflow
     import uuid
     
-    activity.logger.info(f"Orchestrating scan for assessment {input.assessment_id}")
+    logger.log_line("[ASSESSMENT]", "ORCHESTRATE", f"Orchestrating scan for assessment {input.assessment_id}")
     
     client = await TemporalClientProvider.get_client()
     

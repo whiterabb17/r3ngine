@@ -2,6 +2,9 @@ from django.utils import timezone
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from engagements.models import Assessment, AssessmentEvent, AssessmentWorkflowState
+from reNgine.utils.logger import get_module_logger
+
+logger = get_module_logger(__name__)
 
 class AssessmentEventPublisher:
     """Helper class to publish real-time assessment events over WebSockets."""
@@ -47,7 +50,10 @@ class AssessmentStateMachine:
         current_status = assessment.status
         
         if new_status not in cls.VALID_TRANSITIONS.get(current_status, []):
+            logger.log_line("[ASSESSMENT]", "ERROR", f"Invalid transition for {assessment.uuid} from {current_status} to {new_status}", level="error")
             raise ValueError(f"Invalid transition from {current_status} to {new_status}")
+            
+        logger.log_line("[ASSESSMENT]", "TRANSITION", f"Transitioning {assessment.uuid} from {current_status} to {new_status}")
             
         # Update the Assessment status
         assessment.status = new_status

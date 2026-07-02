@@ -7,6 +7,9 @@ from .serializers import (
     AssessmentScopeSerializer, AssessmentAssetSerializer
 )
 from api.serializers import ScanHistorySerializer
+from reNgine.utils.logger import get_module_logger
+
+logger = get_module_logger(__name__)
 
 class ClientViewSet(viewsets.ModelViewSet):
     queryset = Client.objects.all().order_by('-created_at')
@@ -56,6 +59,7 @@ class AssessmentViewSet(viewsets.ModelViewSet):
         assessment = self.get_object()
         
         try:
+            logger.log_line("[ASSESSMENT]", "START", f"Starting assessment {assessment.uuid} by user {request.user}")
             AssessmentStateMachine.transition_to(assessment, 'Ready', user=request.user)
             
             client = async_to_sync(TemporalClientProvider.get_client)()
@@ -83,6 +87,7 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             
             return Response({'status': 'Assessment started', 'workflow_id': workflow_id})
         except Exception as e:
+            logger.log_line("[ASSESSMENT]", "ERROR", f"Failed to start assessment {assessment.uuid}: {e}", level="error", exc_info=True)
             return Response({'error': str(e)}, status=400)
 
     @action(detail=True, methods=['post'])
@@ -92,12 +97,14 @@ class AssessmentViewSet(viewsets.ModelViewSet):
         
         assessment = self.get_object()
         try:
+            logger.log_line("[ASSESSMENT]", "PAUSE", f"Pausing assessment {assessment.uuid} by user {request.user}")
             client = async_to_sync(TemporalClientProvider.get_client)()
             workflow_id = f"assessment-{assessment.uuid}"
             handle = client.get_workflow_handle(workflow_id)
             async_to_sync(handle.signal)("pause_assessment")
             return Response({'status': 'Assessment pause signal sent'})
         except Exception as e:
+            logger.log_line("[ASSESSMENT]", "ERROR", f"Failed to pause assessment {assessment.uuid}: {e}", level="error", exc_info=True)
             return Response({'error': str(e)}, status=400)
 
     @action(detail=True, methods=['post'])
@@ -107,12 +114,14 @@ class AssessmentViewSet(viewsets.ModelViewSet):
         
         assessment = self.get_object()
         try:
+            logger.log_line("[ASSESSMENT]", "RESUME", f"Resuming assessment {assessment.uuid} by user {request.user}")
             client = async_to_sync(TemporalClientProvider.get_client)()
             workflow_id = f"assessment-{assessment.uuid}"
             handle = client.get_workflow_handle(workflow_id)
             async_to_sync(handle.signal)("resume_assessment")
             return Response({'status': 'Assessment resume signal sent'})
         except Exception as e:
+            logger.log_line("[ASSESSMENT]", "ERROR", f"Failed to resume assessment {assessment.uuid}: {e}", level="error", exc_info=True)
             return Response({'error': str(e)}, status=400)
 
     @action(detail=True, methods=['post'])
@@ -123,6 +132,7 @@ class AssessmentViewSet(viewsets.ModelViewSet):
         
         assessment = self.get_object()
         try:
+            logger.log_line("[ASSESSMENT]", "CANCEL", f"Cancelling assessment {assessment.uuid} by user {request.user}")
             AssessmentStateMachine.transition_to(assessment, 'Cancelled', user=request.user)
             
             client = async_to_sync(TemporalClientProvider.get_client)()
@@ -131,6 +141,7 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             async_to_sync(handle.signal)("cancel_assessment")
             return Response({'status': 'Assessment cancel signal sent'})
         except Exception as e:
+            logger.log_line("[ASSESSMENT]", "ERROR", f"Failed to cancel assessment {assessment.uuid}: {e}", level="error", exc_info=True)
             return Response({'error': str(e)}, status=400)
 
 class AssessmentScopeViewSet(viewsets.ModelViewSet):
