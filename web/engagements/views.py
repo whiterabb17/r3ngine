@@ -76,7 +76,7 @@ class AssessmentViewSet(viewsets.ModelViewSet):
                     scope_ids=[str(scope.uuid) for scope in assessment.scopes.all()]
                 ),
                 id=workflow_id,
-                task_queue="rengine-tasks"
+                task_queue="python-orchestrator-queue"
             )
             
             # Save workflow ID in state
@@ -142,6 +142,31 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             return Response({'status': 'Assessment cancel signal sent'})
         except Exception as e:
             logger.log_line("[ASSESSMENT]", "ERROR", f"Failed to cancel assessment {assessment.uuid}: {e}", level="error", exc_info=True)
+            return Response({'error': str(e)}, status=400)
+
+    @action(detail=True, methods=['post'], url_path='approve-validation')
+    def approve_validation(self, request, pk=None):
+        """Send validation_approved signal to the ValidationWorkflow child.
+
+        This unblocks the ValidationWorkflow wait state and allows the assessment
+        to proceed to the Reporting phase.
+        """
+        from asgiref.sync import async_to_sync
+        from reNgine.temporal_client import TemporalClientProvider
+        from .services.state_machine import AssessmentStateMachine
+
+        assessment = self.get_object()
+        try:
+            logger.log_line("[ASSESSMENT]", "APPROVE", f"Validation approved for {assessment.uuid} by {request.user}")
+            client = async_to_sync(TemporalClientProvider.get_client)()
+            # The ValidationWorkflow child ID is deterministic: parent-id + "-validation"
+            validation_wf_id = f"assessment-{assessment.uuid}-validation"
+            handle = client.get_workflow_handle(validation_wf_id)
+            async_to_sync(handle.signal)("validation_approved")
+            AssessmentStateMachine.transition_to(assessment, 'Reporting', user=request.user)
+            return Response({'status': 'Validation approved, proceeding to Reporting'})
+        except Exception as e:
+            logger.log_line("[ASSESSMENT]", "ERROR", f"Failed to approve validation for {assessment.uuid}: {e}", level="error", exc_info=True)
             return Response({'error': str(e)}, status=400)
 
 class AssessmentScopeViewSet(viewsets.ModelViewSet):

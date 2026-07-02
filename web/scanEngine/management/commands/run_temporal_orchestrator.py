@@ -98,6 +98,7 @@ from reNgine.temporal.workflows.assessment_workflow import (
 from reNgine.temporal.activities.assessment_activities import (
     update_assessment_state_activity,
     scan_orchestrator_activity,
+    prepare_assessment_context_activity,
 )
 
 # Activities (all Python-side activities are registered here)
@@ -619,6 +620,7 @@ class Command(BaseCommand):
                 # Assessment Orchestration
                 update_assessment_state_activity,
                 scan_orchestrator_activity,
+                prepare_assessment_context_activity,
                 
                 # Plugin lifecycle
                 log_plugin_start_activity,

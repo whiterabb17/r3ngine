@@ -103,6 +103,27 @@ class Assessment(models.Model):
     paused_duration = models.DurationField(blank=True, null=True)
     total_duration = models.DurationField(blank=True, null=True)
     
+    preferred_engine = models.ForeignKey(
+        'scanEngine.EngineType',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assessments',
+        help_text='Override engine; defaults to assessment-type default engine if unset.'
+    )
+
+    RETENTION_CHOICES = [
+        (90, '90 Days'),
+        (180, '180 Days'),
+        (365, '1 Year'),
+        (0, 'Forever'),
+    ]
+    retention_days = models.IntegerField(
+        choices=RETENTION_CHOICES,
+        default=365,
+        help_text='How long evidence for this assessment is retained before archiving.'
+    )
+
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_assessments')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
