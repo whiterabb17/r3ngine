@@ -121,3 +121,37 @@ class TestSafeChromeCleanup(unittest.TestCase):
         safe_chrome_cleanup(driver=driver, display=display)
         # Only display pid killed
         mock_kill.assert_called_once_with(7777)
+
+
+class TestHibpScraperCleanup(unittest.TestCase):
+    """Verify hibp_scraper always cleans up Chrome and display regardless of errors."""
+
+    @patch('reNgine.osint.hibp_scraper.safe_chrome_cleanup')
+    @patch('reNgine.osint.hibp_scraper.uc.Chrome')
+    @patch('reNgine.osint.hibp_scraper.Display')
+    def test_cleanup_called_when_chrome_raises(self, mock_display_cls, mock_chrome_cls, mock_cleanup):
+        mock_display_cls.return_value.start.return_value = None
+        mock_chrome_cls.side_effect = Exception("chromedriver not found")
+
+        from reNgine.osint.hibp_scraper import check_email_on_hibp_uc
+        result = check_email_on_hibp_uc("test@example.com")
+
+        mock_cleanup.assert_called_once()
+        self.assertFalse(result["success"])
+
+    @patch('reNgine.osint.hibp_scraper.safe_chrome_cleanup')
+    @patch('reNgine.osint.hibp_scraper.uc.Chrome')
+    @patch('reNgine.osint.hibp_scraper.Display')
+    def test_cleanup_called_on_success_path(self, mock_display_cls, mock_chrome_cls, mock_cleanup):
+        mock_display = MagicMock()
+        mock_display_cls.return_value = mock_display
+
+        mock_driver = MagicMock()
+        mock_chrome_cls.return_value = mock_driver
+
+        # Simulate WebDriverWait raising so we get to finally quickly
+        with patch('reNgine.osint.hibp_scraper.WebDriverWait', side_effect=Exception("timeout")):
+            from reNgine.osint.hibp_scraper import check_email_on_hibp_uc
+            check_email_on_hibp_uc("test@example.com")
+
+        mock_cleanup.assert_called_once_with(mock_driver, mock_display)
