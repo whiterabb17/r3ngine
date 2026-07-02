@@ -106,6 +106,7 @@ class TargetSummarySerializer(serializers.Serializer):
     secret_leaks = serializers.ListField(required=False)
     
     # OSINT Data
+    osint_staging = serializers.ListField(required=False)
     emails = serializers.ListField(required=False)
     employees = serializers.ListField(required=False)
     dorks = serializers.ListField(required=False)

@@ -141,7 +141,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const navItems: NavItem[] = [
     { title: 'Dashboard', icon: <Home size={20} />, path: `/${projectSlug}/dashboard`, color: theme.palette.primary.main },
     { title: 'Projects', icon: <Folder size={20} />, path: `/${projectSlug}/projects`, color: theme.palette.primary.main },
-    { title: 'Assessments', icon: <Briefcase size={20} />, path: `/${projectSlug}/assessments`, color: theme.palette.primary.main },
+    // { title: 'Assessments', icon: <Briefcase size={20} />, path: `/${projectSlug}/assessments`, color: theme.palette.primary.main },
     { title: 'Targets', icon: <Target size={20} />, path: `/${projectSlug}/targets`, color: theme.palette.primary.main },
     { title: 'Monitoring', icon: <Monitor size={20} />, path: `/${projectSlug}/monitoring`, color: theme.palette.primary.main },
     {
@@ -358,8 +358,8 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
             overflowY: 'auto',
             boxSizing: 'border-box',
             borderRight: 'none',
-            bgcolor: alpha(tokens.chrome.bg, 0.8),
-            backdropFilter: 'blur(10px)',
+            bgcolor: alpha(tokens.chrome.bg, 0.95),
+            backdropFilter: 'blur(12px)',
             backgroundImage: 'none',
             borderRadius: '0 30px 30px 0',
             height: 'fit-content',
@@ -514,8 +514,8 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                 fontWeight: 900,
                 fontFamily: "'Bangers', cursive",
                 letterSpacing: 2,
-                color: '#d846cb !important', /* #db4224 */
-                textShadow: "#8018c7c2 0px 0px 21px !important",
+                color: `${theme.palette.primary.main} !important`,
+                textShadow: `${alpha(theme.palette.primary.main, 0.5)} 0px 0px 21px !important`,
                 fontSize: '1.4rem',
                 mr: 1.5,
                 ml: 12,
@@ -532,8 +532,8 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                     fontSize: '0.6rem',
                     fontWeight: 800,
                     bgcolor: 'transparent',
-                    border: '1px solid #8c2a83 !important',
-                    color: '#d846cb !important',
+                    border: `1px solid ${alpha(theme.palette.primary.main, 0.5)} !important`,
+                    color: `${theme.palette.primary.main} !important`,
                     borderRadius: 1
                   }}
                 />
@@ -548,8 +548,8 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                     fontWeight: 900,
                     fontFamily: "'Bangers', cursive",
                     letterSpacing: 2,
-                    color: '#ff4d6d',
-                    textShadow: '#8b000080 0px 0px 14px',
+                    color: theme.palette.error.main,
+                    textShadow: `${alpha(theme.palette.error.main, 0.5)} 0px 0px 14px`,
                     fontSize: '1.2rem',
                     textTransform: 'uppercase',
                   }}>

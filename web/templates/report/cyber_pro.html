@@ -430,7 +430,7 @@
                 <a href="#finding-summary">Summary of Findings</a>
                 <span class="toc-page" data-href="#finding-summary"></span>
             </div>
-            {% if show_recon %}
+            {% if show_recon and parameters %}
             <div class="toc-item">
                 <a href="#recon-findings">Asset Inventory</a>
                 <span class="toc-page" data-href="#recon-findings"></span>
@@ -442,10 +442,12 @@
                 <span class="toc-page" data-href="#detailed-findings"></span>
             </div>
             {% endif %}
+            {% if attack_surface_map_image %}
             <div class="toc-item">
                 <a href="#attack-surface-map">Attack Surface Map</a>
                 <span class="toc-page" data-href="#attack-surface-map"></span>
             </div>
+            {% endif %}
             {% if attack_paths %}
             <div class="toc-item">
                 <a href="#attack-paths">Attack Paths</a>
@@ -556,22 +558,28 @@
     <!-- Summary Table -->
     <article class="page-break" id="finding-summary">
         <h1>Summary of Findings</h1>
-        <table>
+        <table style="table-layout: fixed;">
+            <colgroup>
+                <col style="width: 10mm;">
+                <col>
+                <col style="width: 28mm;">
+                <col style="width: 22mm;">
+            </colgroup>
             <thead>
                 <tr>
-                    <th style="width: 10mm;">#</th>
+                    <th>#</th>
                     <th>Vulnerability Name</th>
-                    <th style="width: 25mm; text-align: center;">Severity</th>
-                    <th style="width: 20mm; text-align: center;">Instances</th>
+                    <th style="text-align: center;">Severity</th>
+                    <th style="text-align: center;">Instances</th>
                 </tr>
             </thead>
             <tbody>
                 {% for vulnerability in unique_vulnerabilities %}
                 <tr>
                     <td>{{ forloop.counter }}</td>
-                    <td><a href="#vuln_{{ vulnerability.name|slugify }}">{{ vulnerability.name }}</a></td>
+                    <td style="word-break: break-word;"><a href="#vuln_{{ vulnerability.name|slugify }}">{{ vulnerability.name }}</a></td>
                     <td style="text-align: center;">
-                        <span class="severity-badge {% if vulnerability.severity == 4 %}severity-critical{% elif vulnerability.severity == 3 %}severity-high{% elif vulnerability.severity == 2 %}severity-medium{% elif vulnerability.severity == 1 %}severity-low{% elif vulnerability.severity == 0 %}severity-info{% else %}severity-unknown{% endif %}">
+                        <span class="severity-badge {% if vulnerability.severity == 4 %}severity-critical{% elif vulnerability.severity == 3 %}severity-high{% elif vulnerability.severity == 2 %}severity-medium{% elif vulnerability.severity == 1 %}severity-low{% elif vulnerability.severity == 0 %}severity-info{% else %}severity-unknown{% endif %}" style="display: inline-block; margin-left: 0;">
                             {% if vulnerability.severity == 4 %}Critical{% elif vulnerability.severity == 3 %}High{% elif vulnerability.severity == 2 %}Medium{% elif vulnerability.severity == 1 %}Low{% elif vulnerability.severity == 0 %}Info{% else %}Unknown{% endif %}
                         </span>
                     </td>
@@ -754,35 +762,43 @@
         {% for group in grouped_vulners_findings %}
         <div class="finding-card" id="vuln_{{ group.group_key|slugify }}">
           <div class="finding-header {% if group.max_severity == 4 %}severity-critical{% elif group.max_severity == 3 %}severity-high{% elif group.max_severity == 2 %}severity-medium{% elif group.max_severity == 1 %}severity-low{% else %}severity-info{% endif %}">
-            <h4 class="finding-title" style="color: white;">{{ group.group_key }}</h4>
-            <span class="severity-badge {% if group.max_severity == 4 %}severity-critical{% elif group.max_severity == 3 %}severity-high{% elif group.max_severity == 2 %}severity-medium{% elif group.max_severity == 1 %}severity-low{% else %}severity-info{% endif %}">
+            <h4 class="finding-title" style="color: white; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ group.display_name }}</h4>
+            <span class="severity-badge" style="display: inline-block; margin-left: 4mm; white-space: nowrap; background: rgba(0,0,0,0.25); color: white; flex-shrink: 0;">
               {% if group.max_severity == 4 %}Critical{% elif group.max_severity == 3 %}High{% elif group.max_severity == 2 %}Medium{% elif group.max_severity == 1 %}Low{% else %}Info{% endif %}
             </span>
-            <span style="opacity: 0.8; font-size: 8pt;">{{ group.count }} CVE/ID Entries | Max CVSS: {{ group.max_cvss }}</span>
+            <span style="opacity: 0.8; font-size: 8pt; white-space: nowrap; flex-shrink: 0; margin-left: 4mm;">{{ group.count }} CVE(s) | CVSS {{ group.max_cvss }}</span>
           </div>
           <div class="finding-body">
-            <div class="meta-item"><b>Source:</b> VULNERS (nmap NSE)</div>
-            <table style="width:100%; border-collapse: collapse; font-size: 8pt; margin-top: 4mm;">
+            <div class="meta-item" style="margin-bottom: 3mm;"><b>Source:</b> VULNERS (nmap NSE)</div>
+            <table style="table-layout: fixed; width: 100%; border-collapse: collapse; font-size: 8pt; margin-top: 2mm;">
+              <colgroup>
+                <col style="width: 35mm;">
+                <col style="width: 14mm;">
+                <col style="width: 18mm;">
+                <col>
+              </colgroup>
               <thead>
                 <tr>
-                  <th style="text-align:left; padding: 3px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">ID / CVE</th>
+                  <th style="text-align:left; padding: 3px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">ID / Software</th>
                   <th style="text-align:center; padding: 3px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">CVSS</th>
                   <th style="text-align:center; padding: 3px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Severity</th>
-                  <th style="text-align:left; padding: 3px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">Reference</th>
+                  <th style="text-align:left; padding: 3px 6px; border-bottom: 1px solid rgba(128,128,128,0.3);">References (top 5)</th>
                 </tr>
               </thead>
               <tbody>
                 {% for item in group.items %}
                 <tr>
-                  <td style="padding: 3px 6px; font-family: monospace; word-break: break-all;">{{ item.name }}</td>
-                  <td style="text-align:center; padding: 3px 6px;">{{ item.cvss_score|default:"N/A" }}</td>
+                  <td style="padding: 3px 6px; font-family: monospace; font-size: 7.5pt; word-break: break-word; overflow-wrap: break-word;">{{ item.name }}</td>
+                  <td style="text-align:center; padding: 3px 6px;">{{ item.cvss_score|default:"—" }}</td>
                   <td style="text-align:center; padding: 3px 6px;">
                     {% if item.severity == 4 %}Critical{% elif item.severity == 3 %}High{% elif item.severity == 2 %}Medium{% elif item.severity == 1 %}Low{% else %}Info{% endif %}
                   </td>
-                  <td style="padding: 3px 6px; word-break: break-all;">
-                    {% for ref in item.references.all %}
-                      {{ ref.url|truncatechars:70 }}{% if not forloop.last %}, {% endif %}
+                  <td style="padding: 3px 6px; word-break: break-all; font-size: 7.5pt;">
+                    {% for ref in item.references.all|slice:":5" %}
+                      {{ ref.url|truncatechars:80 }}{% if not forloop.last %}<br>{% endif %}
+                    {% empty %}—
                     {% endfor %}
+                    {% if item.references.count > 5 %}<br><span style="color:#64748b;">+ {{ item.references.count|add:"-5" }} more</span>{% endif %}
                   </td>
                 </tr>
                 {% endfor %}
@@ -810,13 +826,13 @@
     {% if attack_paths %}
     <article class="page-break" id="attack-paths">
         <h1>Attack Paths</h1>
-        <p>The following sequence of steps details the Attack Paths derived by the Attack Path Modeling Engine (APME).</p>
-        
+        <p>The following sequence of steps details the Attack Paths derived by the Attack Path Modeling Engine (APME), together with targeted remediation steps to break each chain.</p>
+
         {% for path in attack_paths %}
-        <div class="finding-card">
+        <div class="finding-card" style="margin-bottom: 8mm;">
             <div class="finding-header" style="background-color: #f8fafc;">
                 <h4 class="finding-title" style="color: #1e293b !important;">Path ID: {{ path.path_id }}</h4>
-                <span class="severity-badge" style="background-color: {% if path.risk == 'critical' %}#991b1b{% elif path.risk == 'high' %}#dc2626{% elif path.risk == 'medium' %}#f97316{% elif path.risk == 'low' %}#eab308{% else %}#3b82f6{% endif %}; color: white;">
+                <span class="severity-badge" style="display: inline-block; margin-left: 0; background-color: {% if path.risk == 'critical' %}#991b1b{% elif path.risk == 'high' %}#dc2626{% elif path.risk == 'medium' %}#f97316{% elif path.risk == 'low' %}#eab308{% else %}#3b82f6{% endif %}; color: {% if path.risk == 'low' %}black{% else %}white{% endif %};">
                     Risk: {{ path.risk|upper }}
                 </span>
             </div>
@@ -824,8 +840,9 @@
                 <div class="finding-meta" style="margin-bottom: 4mm;">
                     <div class="meta-item"><b>Score:</b> {{ path.score }}</div>
                     <div class="meta-item"><b>Steps:</b> {{ path.steps|length }}</div>
+                    <div class="meta-item"><b>Remediation Priority:</b> {{ path.remediation_priority }}</div>
                 </div>
-                
+
                 <div class="finding-section">
                     <span class="section-label">Impact Summary</span>
                     <p>{{ path.potential_impact }}</p>
@@ -839,20 +856,60 @@
                     </div>
                 </div>
                 {% endif %}
-                
-                <div class="mt-4">
-                    <span class="section-label">Exploitation Steps</span>
-                    <ol style="margin: 0; padding-left: 5mm; font-size: 9pt;">
-                        {% for step in path.steps %}
-                        <li style="margin-bottom: 2mm;">
-                            From <b>{% if step.from_node %}{{ step.from_node.name }}{% else %}{{ step.from }}{% endif %}</b>
-                            &rarr; To <b>{% if step.to_node %}{{ step.to_node.name }}{% else %}{{ step.to }}{% endif %}</b>
-                            via <span style="color: #be123c;">{{ step.action|default:"Exploitation" }}</span>
-                            (Confidence: {{ step.confidence|default:"1.0" }})
-                        </li>
-                        {% endfor %}
-                    </ol>
+
+                <!-- Exploitation chain -->
+                <div style="margin-top: 4mm;">
+                    <span class="section-label">Exploitation Chain</span>
+                    <table style="margin-top: 2mm; font-size: 8.5pt;">
+                        <thead>
+                            <tr>
+                                <th style="width: 6mm;">#</th>
+                                <th>Action</th>
+                                <th style="width: 30mm;">Edge Type</th>
+                                <th style="width: 20mm; text-align: center;">Confidence</th>
+                                <th style="width: 20mm;">MITRE</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for step in path.steps %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>
+                                    <b>{% if step.from_node %}{{ step.from_node.name }}{% else %}{{ step.from }}{% endif %}</b>
+                                    &rarr;
+                                    <b>{% if step.to_node %}{{ step.to_node.name }}{% else %}{{ step.to }}{% endif %}</b>
+                                    {% if step.action %}<br><span style="color: #be123c; font-size: 8pt;">{{ step.action }}</span>{% endif %}
+                                </td>
+                                <td>{{ step.edge_type|default:"—" }}</td>
+                                <td style="text-align: center;">{{ step.confidence|default:"1.0" }}</td>
+                                <td>
+                                    {% if step.mitre_technique %}
+                                    <span style="font-family: monospace; font-size: 7.5pt; background: #f1f5f9; padding: 0 2mm; border-radius: 1mm;">{{ step.mitre_technique }}</span>
+                                    {% else %}—{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
+
+                <!-- Remediation -->
+                {% if path.remediation %}
+                <div class="finding-section" style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 4mm; margin-top: 5mm;">
+                    <span class="section-label" style="color: #15803d;">Remediation Steps</span>
+                    <div style="font-size: 9pt;">{{ path.remediation | safe }}</div>
+                </div>
+                {% elif path.vuln_remediation %}
+                <div class="finding-section" style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 4mm; margin-top: 5mm;">
+                    <span class="section-label" style="color: #15803d;">Remediation Guidance</span>
+                    <p style="font-size: 9pt;">{{ path.vuln_remediation }}</p>
+                </div>
+                {% else %}
+                <div class="finding-section" style="background-color: #fefce8; border-left: 4px solid #ca8a04; padding: 4mm; margin-top: 5mm;">
+                    <span class="section-label" style="color: #a16207;">Recommended Actions</span>
+                    <p style="font-size: 9pt;">Address each node in the exploitation chain starting from the highest-confidence steps. Prioritise patching or hardening the entry point to prevent the chain from being initiated, then apply defence-in-depth controls at each subsequent step.</p>
+                </div>
+                {% endif %}
             </div>
         </div>
         {% endfor %}

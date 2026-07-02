@@ -2074,6 +2074,7 @@ _PERMITTED_GENERIC_TASKS = frozenset({
     "acunetix_scan", "cpanel_scan", "wpscan_scan", "react2shell_scan",
     "semgrep_scan", "correlate_vulnerabilities", "calculate_risk_scores",
     "generate_impact_assessment", "run_apme", "attack_path_modeling",
+    "post_crawl_osint",
 })
 
 
@@ -4221,7 +4222,7 @@ def _run_email_security_sync(ctx: dict) -> dict:
 
     enum_targets = list(checked_pairs)
     if enum_targets:
-        enum = smtp_user_enum(enum_targets)
+        enum = smtp_user_enum(enum_targets, domain=domain_name)
         for host_port_key, users in enum['users_found'].items():
             if users:
                 _vuln('SMTP User Enumeration (VRFY/EXPN)', 2,

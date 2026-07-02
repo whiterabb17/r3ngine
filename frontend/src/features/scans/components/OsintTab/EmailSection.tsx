@@ -17,10 +17,12 @@ import Typography from '@mui/material/Typography';
 import { Copy, Check, Key, Plus, Search, ChevronDown } from 'lucide-react';
 import { useThemeTokens } from '../../../../theme/useThemeTokens';
 import type { EmailRecord } from '../../api';
+import { useEmailBreaches } from '../../api';
 import { useEmailDiscoveryStore } from '../../../../store/emailDiscoveryStore';
 import { EmailImportModal } from './EmailImportModal';
 import { EmailDiscoveryModal } from './EmailDiscoveryModal';
 import { TacticalPanel } from '../../../../components/TacticalPanel';
+import { BreachDetailsModal } from '../BreachDetailsModal';
 
 interface EmailSectionProps {
   emails: EmailRecord[];
@@ -43,7 +45,9 @@ export const EmailSection: React.FC<EmailSectionProps> = ({ emails, scanId, refe
   const [importOpen, setImportOpen] = useState(false);
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [selectedBreaches, setSelectedBreaches] = useState<any[] | null>(null);
   const running = useEmailDiscoveryStore((s) => s.running);
+  const { data: emailBreaches } = useEmailBreaches(scanId);
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -107,6 +111,8 @@ export const EmailSection: React.FC<EmailSectionProps> = ({ emails, scanId, refe
                 {emails.map((email) => {
                   const srcInfo = SOURCE_LABELS[email.source] ?? null;
                   const holehe = (email.metadata?.holehe as string[] | undefined) ?? [];
+                  const matchedBreaches = emailBreaches?.filter((b: any) => b.email_address === email.address) || [];
+
                   return (
                     <TableRow key={email.id} hover>
                       <TableCell>
@@ -120,6 +126,14 @@ export const EmailSection: React.FC<EmailSectionProps> = ({ emails, scanId, refe
                               color={srcInfo.color}
                               size="small"
                               sx={{ fontSize: '0.6rem', height: 16 }}
+                            />
+                          )}
+                          {matchedBreaches.length > 0 && (
+                            <Chip
+                              label={`${matchedBreaches.length} BREACHES`}
+                              size="small"
+                              onClick={() => setSelectedBreaches(matchedBreaches)}
+                              sx={{ bgcolor: 'rgba(255,0,60,0.1)', color: '#ff003c', fontWeight: 900, fontSize: '0.6rem', border: '1px solid rgba(255,0,60,0.2)', cursor: 'pointer', height: 16 }}
                             />
                           )}
                         </Box>
@@ -192,6 +206,12 @@ export const EmailSection: React.FC<EmailSectionProps> = ({ emails, scanId, refe
         onClose={() => setDiscoveryOpen(false)}
         scanId={scanId}
         onComplete={refetchEmails}
+      />
+
+      <BreachDetailsModal 
+        open={Boolean(selectedBreaches)} 
+        onClose={() => setSelectedBreaches(null)} 
+        breaches={selectedBreaches} 
       />
     </>
   );

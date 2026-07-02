@@ -86,6 +86,45 @@
   - `EmailImportModal`: paste tab (comma/semicolon/newline-separated) and file upload tab (`.txt`/`.csv`) with client-side validation, live valid/invalid count preview, and duplicate deduplication on the backend.
   - `EmailDiscoveryModal`: live per-tool progress over `ws/logs/{scanId}/` WebSocket; hides without stopping the background run; on reconnect the REST replay endpoint restores full modal state from Redis Stream history.
 
+- **Modular Backend Refactor**:
+  - Split the monolithic `web/reNgine/tasks.py`, `web/api/views.py`, `web/reNgine/temporal_workflows.py`, and `web/reNgine/temporal_activities.py` into domain packages: `reNgine/tasks/` (scan_init, subdomain, crawl, vuln, osint, port_scan, persistence, notifications, geo, llm, waf, screenshot, parsers, acunetix, proxies, dns, network, firewall, cpde, identity, wptaint, certificate, recon, api, auth_discovery, vigolium, monitor, report, vulnerability, wpscan, fuzzing), `api/views/` (scan, targets, vulns, recon, llm, tools, settings, notifications, hackerone, workers, misc), and `reNgine/temporal/{workflows,activities}/`.
+  - `temporal_workflows.py` and `temporal_activities.py` remain as backward-compatible shims re-exporting from the new package paths; no external call sites needed to change.
+  - Fixed dozens of stale `@patch` targets, f-string log calls, and missing imports surfaced by the migration across the test suite; full suite remains green throughout.
+
+- **Semgrep Secret & Credential Leak Findings**:
+  - Replaced raw Semgrep check-ID strings with a 30-entry label map (`clean_semgrep_check_id` in `common_func.py`) covering AWS, Stripe, Slack, GitHub/GitLab, SendGrid, Twilio, JWT, SSH/RSA keys, Firebase, Heroku, Shopify, and more, with a smart-parse fallback for unmapped slugs.
+  - Added `categorize_secret_type()` bucketing every label into Private Key / OAuth Token / Credential / API Key / Secret, exposed as the `categorize_secret` Django template filter.
+  - Reworked `SecretLeaksTab` into a grouped table (by type + source URL) with expand/collapse, per-group counts, and category-colored chips; hardened the external "open source" link to validate the URL scheme before use.
+  - Added an "Include Secret & Credential Findings" checkbox (default on) to the report modal; `generate_report_task` now builds a `secret_findings_by_type` context and a dedicated, color-coded "Secret & Credential Findings" section renders across all four report templates (`cyber_pro`, `enterprise`, `modern`, `default`) — also fixing three pre-existing unrelated `{% endif %}` omissions in `default.html`.
+
+- **OSINT Staging — Full SpiderFoot Type Coverage**:
+  - Replaced the `persist_osint_item()` if/elif chain with a 15-entry `TYPE_ROUTER` dispatch table, wiring up SSL, DNS, Phone, Social, OS, Crypto, and Hosting findings that were previously silently dropped.
+  - Added the `DnsRecord` model (`record_type`, `value`, `source`, `raw_metadata`, unique per scan/type/value) for DNS staging promotion; SSL findings now run certificate intel or create a `CertificateIntelligence` stub; Phone/Social findings create `Employee` records; OS findings attach `Technology` to the matched subdomain; Hosting findings save the co-hosted domain as a new target.
+  - Fixed `promote`/`bulk_promote` in `api/views/recon.py` to actually pass `metadata` through to handlers (previously dropped, silently no-opping the new types).
+  - Added `StagingTypeBadge` (per-type color/icon across 14 known types) and `StagingMetadataPanel` (type-specific structured detail, including a "Confirm & Rescan" action for SSL findings) frontend components, plus a type-filter dropdown on the OSINT staging table.
+  - Switched SpiderFoot output handling from buffering the full CSV into a DB field to streaming via `Popen`, fixing PostgreSQL allocation errors on large OSINT runs.
+
+- **Comprehensive PDF Report Generation**:
+  - Added 11 granular section toggles (Endpoints, Directories, S3 Buckets, WAF, Technologies, API Intelligence, Identity Infrastructure, Exposures, Dorks/Metadata, Certificates, Employees) to `generate_report_task`, each gating its own intelligence model and rendered via a shared `technical_data_sections.html` partial across the Cyber Pro, Enterprise, Modern, and AD report templates.
+  - Split the report modal into separate **Executive** and **Technical** toggle groups in `ScanReportModal`.
+  - Restructured the LLM remediation prompt to require four mandatory sub-sections (Short-Term Strategy, Long-Term Strategy, Verification, Risk/Rollback); `parse_llm_vulnerability_report` now preserves markdown bold instead of stripping it, and a new `render_markdown` template tag renders the formatted output in both the UI and WeasyPrint PDFs.
+
+- **Web API Discovery & Additional Vulnerability Scanners**:
+  - Added a web API discovery pass (`favirecon`, `sourcemapper`, `GQLSpection`, `grpcurl`, `julius`) with dedicated parsers feeding standard `Vulnerability` records (favicon fingerprinting, exposed JS source maps, GraphQL introspection, gRPC reflection enumeration, and LLM/AI endpoint exposure detection respectively).
+  - Added `Smugglex` (HTTP request smuggling) and `Second Order` (subdomain takeover via second-order links) scanners as new Temporal activities; fixed Smugglex to parse proper JSON output instead of stdout substring matching, and implemented real JSON-output parsing for Second Order (previously an unimplemented stub).
+  - Added `Nuclei DAST` (headless `-dast` mode) with corrected CLI flags and full proxy/rate-limit/retry wiring matching the standard Nuclei scanners.
+
+- **Engagement & Assessment Foundation (Phase 1)**:
+  - Added the `engagements` Django app with `Client`, `Engagement`, `Assessment`, `AssessmentScope`, and `AssessmentAsset` (generically linked to Domain/Subdomain/EndPoint/IpAddress/Technology) models, plus full CRUD REST endpoints under `/api/engagements/`.
+  - Added nullable `assessment` foreign keys on `ScanHistory` and `SubScan`, a read-only Assessments list page, and a stub `AssessmentWorkflow` Temporal workflow that tracks lifecycle state — active scan execution from assessments is planned for a future phase.
+
+- **Enterprise Theme Redesign**:
+  - Redesigned the Enterprise theme around a cream/black/oxblood palette with dedicated chrome tokens driving the sidebar and header, replacing hardcoded swatch colors with token-derived values for visual consistency with the rest of the theme system.
+
+- **Continuous Monitoring & Vulnerability UI**:
+  - Added `AddMonitoringTargetModal`, letting users configure continuous monitoring directly from the Monitoring page for any existing target.
+  - Weak/deprecated TLS cipher findings are now grouped by domain in `VulnerabilityTable` instead of one row per cipher.
+
 #### Fixed
 
 - **Scan Detail Subdomains N+1 Query & Screenshot Lookup**:
@@ -99,6 +138,12 @@
   - Corrected Route path parameters and project slug prefixes in "Recent Scan" links in the Target List and Scan List pages.
 
 - **Exposure Correlation regression coverage**: Updated stale CPDE integration test mocks to match the new `get_js_urls_from_results_dir` signature introduced when the JS collector was refactored.
+
+- **Subscan Queue Status — Missing `TemporalWorkflowExecution`**: `check_scan_queue_status_activity` queried `TemporalWorkflowExecution` for subscans, but those rows are only ever created for `ScanHistory`, so the filter always returned nothing. Now reads the workflow ID directly from `SubScan.workflow_ids[-1]`.
+
+- **Hardening & Stability Fixes**: Fixed scan queue blocking caused by dead Temporal workflows; resolved a `SynchronousOnlyOperation` error in `check_scan_queue_status_activity`; fixed an infinite impact-assessment generation loop in the frontend along with suppressed-vulnerability handling; fixed a `NameError` in `RunGFOnAllEndpointsActivity` and a type error in the Censys search call; fixed zero-attack-paths in APME with added diagnostic logging; fixed an `int`/name error in subscan Nuclei tasks; replaced `workflow.sleep` with `asyncio.sleep` in Temporal workflows; fixed proxy connection exhaustion in scanning tasks; fixed the broken `smtp-user-enum` command after its migration into the internal email-security module.
+
+- **CVE Modal & Treemap Rendering**: Fixed CVE modal markdown rendering and improved treemap label contrast.
 
 ### [v3.6.3]
 

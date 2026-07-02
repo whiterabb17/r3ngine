@@ -13,7 +13,7 @@ from startScan.models import (
     VulnerabilityTags, IpAddress, Port, Technology, 
     MonitoringDiscovery, CountryISO, CveId, CweId,
     Email, Employee, ScanHistory, SubScan, ScanActivity, SecretLeak, Command,
-    Dork, MetaFinderDocument, S3Bucket
+    Dork, MetaFinderDocument, S3Bucket, OsintStaging
 )
 from recon_note.models import TodoNote
 from reNgine.utilities import get_screenshot_path
@@ -25,7 +25,7 @@ from api.target_summary_serializers import TargetSummarySerializer, TacticalScan
 from api.serializers import (
     MonitoringDiscoverySerializer, SubScanSerializer, 
     SecretLeakSerializer, EmailSerializer, EmployeeSerializer, 
-    DorkSerializer, MetafinderDocumentSerializer, S3BucketSerializer
+    DorkSerializer, MetafinderDocumentSerializer, S3BucketSerializer, OsintStagingSerializer
 )
 
 class ScanSummaryAPIView(APIView):
@@ -205,7 +205,8 @@ class ScanSummaryAPIView(APIView):
             })
 
         # OSINT - Cumulative for target
-        emails = Email.objects.filter(emails__domain=target).distinct()
+        osint_staging = OsintStaging.objects.filter(scan_history=scan).order_by('-confidence', '-discovered_date')
+        emails = Email.objects.filter(emails__domain=target).annotate(breach_count=Count('emailbreach')).distinct()
         exposed_count = emails.exclude(password__isnull=True).count()
         secret_leaks = SecretLeak.objects.filter(scan_history__domain=target)
         secret_leaks_count = secret_leaks.count()
@@ -297,6 +298,7 @@ class ScanSummaryAPIView(APIView):
             ],
             'monitoring_discoveries': list(monitoring_discoveries.values('id', 'discovery_type', 'content')),
             'secret_leaks': SecretLeakSerializer(secret_leaks[:100], many=True).data,
+            'osint_staging': OsintStagingSerializer(osint_staging[:100], many=True).data,
             # Scan specific data
             'scan_info': {
                 'id': scan.id,

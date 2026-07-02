@@ -69,10 +69,32 @@
           - git_exposed
         intensity: normal
         documents_limit: 50
+        emailfinder: true
+        microsoft_recon: true
         leaks_and_secrets:
           leaklookup: true
           gitleaks: true
           trufflehog: true
+          leaksearch: false
+        api_leaks:
+          porch_pirate: true
+          postleaks: true
+          swaggerspy: true
+        github_analysis:
+          uses_tools:
+            - enumerepo
+            - trufflehog
+            - gitleaks
+            - noseyparker
+          gato: false
+          github_orgs: []
+        misconfig: true
+        domain_security:
+          spoofcheck: true
+        dork_engines:
+          - gofuzz
+          - dorks_hunter
+          - xnldorker
       dir_file_fuzz:
         auto_calibration: true
         run_dirsearch: true
@@ -113,6 +135,9 @@
         wordlist_name: dicc
         use_api_wordlist: false
         max_repeat_by_signature: 10
+      post_crawl_osint:
+        metagoofil: true
+        swaggerspy: true
       fetch_url:
         uses_tools:
           - gospider

@@ -71,6 +71,43 @@ if [ -f "/usr/src/github/ctfr/ctfr.py" ]; then
     sed -i "s/'.*www\\\\.'/r'.*www\\\\.'/g" /usr/src/github/ctfr/ctfr.py
 fi
 
+# Temporary fix for SwaggerSpy swaggerspy.py — two bugs in the regex_patterns dict:
+#   1. Missing comma after 'JIRA Personal Access Token (PAT) Regex' entry
+#   2. 'possible_Creds' uses r'...' with \-continuation inside the string (SyntaxError)
+# Guard: py_compile exits non-zero while the SyntaxError is still present; skips once fixed
+if [ -f "/usr/src/github/SwaggerSpy/swaggerspy.py" ] && \
+   ! python3 -m py_compile /usr/src/github/SwaggerSpy/swaggerspy.py 2>/dev/null; then
+  python3 << 'EOF'
+path = '/usr/src/github/SwaggerSpy/swaggerspy.py'
+with open(path, 'r', encoding='utf-8') as f:
+    lines = f.readlines()
+
+JIRA_OLD    = "\t'JIRA Personal Access Token (PAT) Regex'  : r'ATATTAC[a-zA-Z0-9]{24,48}'\n"
+JIRA_NEW    = "\t'JIRA Personal Access Token (PAT) Regex'  : r'ATATTAC[a-zA-Z0-9]{24,48}',\n"
+CREDS_START = "\t'possible_Creds' : r'"
+CREDS_FIXED = "\t'possible_Creds' : r'(?i)(\"password\\s*[`=:\"]+\\s*[^\\s]+|password is\\s*[`=:\"]*\\s*[^\\s]+|pwd\\s*[`=:\"]*\\s*[^\\s]+|passwd\\s*[`=:\"]+\\s*[^\\s]+)',\n"
+
+result = []
+i = 0
+while i < len(lines):
+    line = lines[i]
+    if line == JIRA_OLD:
+        result.append(JIRA_NEW)
+    elif line.startswith(CREDS_START):
+        # Advance past all continuation lines until the closing )', line
+        while i < len(lines) and not lines[i].rstrip('\n').endswith(")',"):
+            i += 1
+        result.append(CREDS_FIXED)
+    else:
+        result.append(line)
+    i += 1
+
+with open(path, 'w', encoding='utf-8') as f:
+    f.writelines(result)
+print('[entrypoint] SwaggerSpy regex patch applied')
+EOF
+fi
+
 
 # update whatportis
 yes | whatportis --update
