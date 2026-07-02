@@ -136,7 +136,7 @@ class TestHibpScraperCleanup(unittest.TestCase):
         from reNgine.osint.hibp_scraper import check_email_on_hibp_uc
         result = check_email_on_hibp_uc("test@example.com")
 
-        mock_cleanup.assert_called_once()
+        mock_cleanup.assert_called_once_with(None, mock_display_cls.return_value)
         self.assertFalse(result["success"])
 
     @patch('reNgine.osint.hibp_scraper.safe_chrome_cleanup')
