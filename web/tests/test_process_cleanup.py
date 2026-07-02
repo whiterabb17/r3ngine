@@ -1,7 +1,6 @@
 import signal
-import subprocess
 import unittest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from reNgine.utils.process_cleanup import kill_process_tree, safe_chrome_cleanup
 
@@ -89,6 +88,9 @@ class TestSafeChromeCleanup(unittest.TestCase):
         # Must not raise, and display.stop must still be called
         safe_chrome_cleanup(driver, display)
         display.stop.assert_called_once()
+        # Verify kill_process_tree still fires for driver PIDs and display PID
+        mock_kill.assert_any_call(5555)
+        mock_kill.assert_any_call(7777)
 
     @patch('reNgine.utils.process_cleanup.kill_process_tree')
     def test_none_driver_is_safe(self, mock_kill):
