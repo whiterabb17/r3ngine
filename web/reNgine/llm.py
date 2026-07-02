@@ -226,6 +226,13 @@ class LLMReportGenerator(LLMBaseGenerator):
         from reNgine.definitions import LLM_ATTACK_SCENARIO_SYSTEM_PROMPT
         return self._generate_section(LLM_ATTACK_SCENARIO_SYSTEM_PROMPT, vulnerability_context)
 
+    def generate_path_remediation(self, path_id: str, path_context: str) -> str:
+        from reNgine.definitions import LLM_ATTACK_PATH_REMEDIATION_SYSTEM_PROMPT
+        return self._generate_section(
+            LLM_ATTACK_PATH_REMEDIATION_SYSTEM_PROMPT,
+            f"Attack Path ID: {path_id}\n\n{path_context}",
+        )
+
 
 class LLMImpactGenerator(LLMBaseGenerator):
     def generate_impact_assessment(self, vulnerability_context):

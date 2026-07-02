@@ -609,6 +609,17 @@ class MasterScanWorkflow:
             # Post-Tier-4: dispatch any enabled "run after tier_4" plugins
             await _dispatch_tier_plugins(ctx, "tier_4", str(ctx.get('scan_history_id', 'scan')))
 
+            # Tier 4a: Post-crawl OSINT (exifray + SwaggerSpy path probe)
+            if "post_crawl_osint" in tasks:
+                await workflow.execute_activity(
+                    "RunGenericTaskActivity",
+                    args=[ctx, "post_crawl_osint", "Post-Crawl OSINT"],
+                    start_to_close_timeout=timedelta(hours=2),
+                    heartbeat_timeout=timedelta(minutes=10),
+                    retry_policy=_RETRY_LONG_SCAN,
+                    task_queue="python-orchestrator-queue"
+                )
+
             await self._check_paused()
             # ------------------------------------------------------------------
             # TIER 5: Analysis (parallel — WAF detection, secrets, vigolium)
@@ -1327,6 +1338,11 @@ _SUBSCAN_DISPATCH = {
         "timeout": timedelta(hours=8),
         "args_builder": lambda ctx: [ctx, "dir_file_fuzz", "Dir File Fuzz", {}],
     },
+    "post_crawl_osint": {
+        "activity": "RunGenericTaskActivity",
+        "timeout": timedelta(hours=2),
+        "args_builder": lambda ctx: [ctx, "post_crawl_osint", "Post-Crawl OSINT"],
+    },
     "screenshot": {
         "activity": "RunGenericTaskActivity",
         "timeout": timedelta(hours=1),
@@ -1826,6 +1842,8 @@ class SubScanWorkflow:
                 [t for t in active_tasks if t == "param_discovery"],
                 # TIER 4: Directory & File Fuzzing — needs Tier 3 URLs.
                 [t for t in active_tasks if t == "dir_file_fuzz"],
+                # TIER 4a: Post-crawl OSINT — exifray + SwaggerSpy path probe (needs Tier 4 fuzz output).
+                [t for t in active_tasks if t == "post_crawl_osint"],
                 # TIER 5: Analysis — WAF detection, secret scanning, vigolium.
                 [t for t in active_tasks if t in {"waf_detection", "secret_scanning", "vigolium_analysis"}],
                 # TIER 6: Security Assessment — explicit inclusion, mirrors MasterScanWorkflow Tier 6.
@@ -1841,7 +1859,8 @@ class SubScanWorkflow:
                     "dns_security", "osint", "spiderfoot_scan", "baddns",
                     "vigolium_harvest", "vigolium_discovery",
                     "http_crawl", "port_scan",
-                    "fetch_url", "screenshot", "dir_file_fuzz", "web_api_discovery", "waf_detection",
+                    "fetch_url", "screenshot", "dir_file_fuzz", "post_crawl_osint",
+                    "web_api_discovery", "waf_detection",
                     "secret_scanning", "vulnerability_scan", "waf_bypass",
                     "vigolium_analysis", "vigolium_scan", "param_discovery",
                     "http_crawl_bridge", "run_acunetix",

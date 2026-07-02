@@ -4,8 +4,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+import plotly.io as pio
 import plotly.graph_objs as go
 from plotly.io import to_image
+
+# Kaleido's Chromium subprocess refuses to start as root (common in Docker)
+# without the --no-sandbox flag, which causes to_image() to hang indefinitely.
+pio.kaleido.scope.chromium_args = ("--no-sandbox",)
 from django.db.models import Count
 from reNgine.definitions import NUCLEI_SEVERITY_MAP
 

@@ -7,7 +7,7 @@ import threading
 from django.conf import settings
 
 from weasyprint import HTML, CSS
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.contrib import messages
 from django.db.models import Count, Case, When, IntegerField
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
@@ -1091,27 +1091,12 @@ def delete_leak(request, id):
 
 @has_permission_decorator(PERM_MODIFY_SCAN_REPORT, redirect_url=FOUR_OH_FOUR_URL)
 def create_report(request, id):
-    """Initiate a report generation task.
+    """Initiate a report generation task."""
+    def _bool(key, default='False'):
+        return request.GET.get(key, default) == 'True'
 
-    Args:
-        request: The HTTP request object containing GET parameters:
-            - report_type (str): Type of report (full, vulnerability).
-            - report_template (str): Style template (default, modern, enterprise, cyber_pro).
-            - ignore_info_vuln (str): Whether to ignore informational vulnerabilities ('True'/'False').
-            - include_attack_surface_map (str): Whether to include the attack surface map ('True'/'False').
-            - include_attack_paths (str): Whether to include the APME Attack Paths ('True'/'False').
-            - comments (str): Optional assessment comments to insert in template.
-        id (int): ScanHistory database ID.
-    """
     report_type = request.GET.get('report_type', 'full')
     report_template = request.GET.get('report_template', 'default')
-    is_ignore_info_vuln = request.GET.get('ignore_info_vuln', 'False') == 'True'
-    include_attack_surface_map = request.GET.get('include_attack_surface_map', 'False') == 'True'
-    include_attack_paths = request.GET.get('include_attack_paths', 'False') == 'True'
-    # Default True for backward-compat — older callers that don't send this param
-    # should still include parameters (preserving prior behaviour).
-    include_found_parameters = request.GET.get('include_found_parameters', 'True') == 'True'
-    include_secret_findings = request.GET.get('include_secret_findings', 'True') == 'True'
     comments = request.GET.get('comments', '')
 
     scan = get_object_or_404(ScanHistory, id=id)
@@ -1122,12 +1107,25 @@ def create_report(request, id):
         report_template=report_template,
         status=-1, # Initiated
         params={
-            'ignore_info_vuln': is_ignore_info_vuln,
-            'include_attack_surface_map': include_attack_surface_map,
-            'include_attack_paths': include_attack_paths,
-            'include_found_parameters': include_found_parameters,
-            'include_secret_findings': include_secret_findings,
-            'comments': comments
+            'ignore_info_vuln': _bool('ignore_info_vuln'),
+            'include_attack_surface_map': _bool('include_attack_surface_map'),
+            'include_attack_paths': _bool('include_attack_paths'),
+            # Default True for backward-compat — older callers omitting this param
+            # should still include parameters (preserving prior behaviour).
+            'include_found_parameters': _bool('include_found_parameters', 'True'),
+            'include_secret_findings': _bool('include_secret_findings', 'True'),
+            'include_endpoints': _bool('include_endpoints'),
+            'include_directories': _bool('include_directories'),
+            'include_s3_buckets': _bool('include_s3_buckets'),
+            'include_waf': _bool('include_waf'),
+            'include_technologies': _bool('include_technologies'),
+            'include_api_intelligence': _bool('include_api_intelligence'),
+            'include_identity': _bool('include_identity'),
+            'include_exposures': _bool('include_exposures'),
+            'include_dorks_metadata': _bool('include_dorks_metadata'),
+            'include_certificates': _bool('include_certificates'),
+            'include_employees': _bool('include_employees'),
+            'comments': comments,
         }
     )
 
@@ -1144,6 +1142,13 @@ def create_report(request, id):
 @has_permission_decorator(PERM_MODIFY_SCAN_REPORT, redirect_url=FOUR_OH_FOUR_URL)
 def get_report_status(request, id):
     report = get_object_or_404(ScanReport, id=id)
+    # Recover reports that were stuck in "Running" (status=1) because the
+    # daemon thread was killed by a container restart.
+    if report.status == 1 and report.created_at < timezone.now() - timedelta(minutes=30):
+        report.status = 0
+        report.error_message = 'Report generation timed out. The process may have been interrupted by a server restart.'
+        report.completed_at = timezone.now()
+        report.save()
     response = {
         'status': report.status,
         'error_message': report.error_message,

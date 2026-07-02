@@ -810,49 +810,95 @@ def web_api_discovery(self, urls=[], ctx={}, description=None):
 
 	# Favirecon
 	if 'favirecon' in uses_tools and urls:
-		favirecon_out = f"{results_dir}/favirecon_out.txt"
+		from reNgine.tasks.parsers import parse_favirecon_result
+		favirecon_out = f"{results_dir}/favirecon_out.json"
 		targets_file = f"{results_dir}/targets.txt"
 		with open(targets_file, 'w') as _f:
 			_f.write('\n'.join(urls))
-		cmd = f"favirecon -l {targets_file} -o {favirecon_out}"
+		cmd = f"favirecon -j -l {targets_file} -o {favirecon_out}"
 		logger.warning('[WEB_API] Favirecon: running on %d URLs | cmd: %s', len(urls), cmd)
 		run_command(cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
+		if os.path.exists(favirecon_out):
+			try:
+				with open(favirecon_out, 'r') as f:
+					for line in f:
+						if not line.strip(): continue
+						try:
+							finding = json.loads(line)
+							if 'hash' in finding:
+								vuln_data = parse_favirecon_result(finding)
+								vuln_data['http_url'] = finding.get('url', '')
+								save_vulnerability(vuln_data, self.scan, self.domain)
+						except json.JSONDecodeError:
+							pass
+			except Exception as e:
+				logger.error(f"Favirecon parse error: {e}")
 		logger.warning('[WEB_API] Favirecon: finished')
 
 	# Sourcemapper
 	if 'sourcemapper' in uses_tools and urls:
+		from reNgine.tasks.parsers import parse_sourcemapper_result
 		logger.warning('[WEB_API] Sourcemapper: running on %d URLs', len(urls))
+		out_dir = f"{results_dir}/sourcemapper_out"
+		os.makedirs(out_dir, exist_ok=True)
 		for url in urls:
-			cmd = f"sourcemapper -url {url}"
+			cmd = f"sourcemapper -output {out_dir} -url {url}"
 			run_command(cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
+			if os.path.exists(out_dir) and os.listdir(out_dir):
+				vuln_data = parse_sourcemapper_result(url, out_dir)
+				save_vulnerability(vuln_data, self.scan, self.domain)
 		logger.warning('[WEB_API] Sourcemapper: finished')
 
 	# GQLSpection
 	if 'gqlspection' in uses_tools and urls:
+		from reNgine.tasks.parsers import parse_gqlspection_result
 		logger.warning('[WEB_API] GQLSpection: running on %d URLs', len(urls))
+		run_command("pipx inject gqlspection click", shell=True)
 		for url in urls:
 			cmd = f"GQLSpection -e {url}"
-			run_command(cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
+			return_code, output = run_command(cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
+			if "Introspection is enabled" in output or "enabled" in output.lower():
+				vuln_data = parse_gqlspection_result(url, output)
+				save_vulnerability(vuln_data, self.scan, self.domain)
 		logger.warning('[WEB_API] GQLSpection: finished')
 
 	# grpcurl
 	if 'grpcurl' in uses_tools and urls:
+		from reNgine.tasks.parsers import parse_grpcurl_result
 		logger.warning('[WEB_API] grpcurl: running on %d URLs', len(urls))
 		for url in urls:
 			parsed = urlparse(url)
 			target = f"{parsed.hostname}:{parsed.port or (443 if parsed.scheme == 'https' else 80)}"
 			cmd = f"grpcurl -plaintext {target} list"
-			run_command(cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
+			return_code, output = run_command(cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
+			if return_code == 0 and output.strip() and "Failed to dial" not in output:
+				vuln_data = parse_grpcurl_result(url, output)
+				save_vulnerability(vuln_data, self.scan, self.domain)
 		logger.warning('[WEB_API] grpcurl: finished')
 
 	# Julius (LLM scanner)
 	if 'julius' in uses_tools and urls:
+		from reNgine.tasks.parsers import parse_julius_result
 		logger.warning('[WEB_API] Julius: running on %d URLs', len(urls))
 		targets_file = f"{results_dir}/targets.txt"
+		julius_out = f"{results_dir}/julius.jsonl"
 		with open(targets_file, 'w') as _f:
 			_f.write('\n'.join(urls))
-		cmd = f"julius -urls {targets_file}"
+		cmd = f"julius probe -t {targets_file} -o jsonl | tee {julius_out}"
 		run_command(cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
+		if os.path.exists(julius_out):
+			try:
+				with open(julius_out, 'r') as f:
+					for line in f:
+						if not line.strip(): continue
+						try:
+							finding = json.loads(line)
+							vuln_data = parse_julius_result(finding)
+							save_vulnerability(vuln_data, self.scan, self.domain)
+						except json.JSONDecodeError:
+							pass
+			except Exception as e:
+				logger.error(f"Julius parse error: {e}")
 		logger.warning('[WEB_API] Julius: finished')
 
 	# Aquatone - visual inspection of discovered URLs

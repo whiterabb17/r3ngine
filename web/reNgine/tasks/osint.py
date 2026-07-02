@@ -36,6 +36,13 @@ from reNgine.tasks.vuln import semgrep_scan
 from reNgine.osint.hibp_scraper import check_hibp_for_email_task
 from reNgine.osint.linkedin_intelligence import LinkedInScraper
 from reNgine.osint.hunter_lookup import run_hunter_lookup
+from reNgine.osint.email_leaks import run_emailfinder, run_leaksearch
+from reNgine.osint.cloud_recon import run_msftrecon
+from reNgine.osint.api_leaks import run_porch_pirate, run_postleaks, run_swaggerspy_internet, run_swaggerspy_path_mode
+from reNgine.osint.post_crawl_metadata import run_post_crawl_exifray
+from reNgine.osint.github_analysis import run_github_analysis
+from reNgine.osint.misconfig import run_misconfig_mapper
+from reNgine.osint.domain_security import run_spoofcheck
 from reNgine.utils.graph import Neo4jManager
 from redis import Redis
 from scanEngine.models import Proxy
@@ -228,6 +235,9 @@ def osint_discovery(
             ctx=ctx,
         )
 
+    if "emails" in osint_lookup and config.get(EMAILFINDER, True):
+        run_emailfinder(self, host, scan_history, results_dir)
+
     leaks_config = config.get(LEAKS_AND_SECRETS, {})
     if leaks_config:
         if leaks_config.get(LEAKLOOKUP):
@@ -240,6 +250,9 @@ def osint_discovery(
                 ctx=ctx,
             )
 
+        if leaks_config.get(LEAKSEARCH):
+            run_leaksearch(self, host, scan_history, results_dir)
+
         if leaks_config.get(GITLEAKS) or leaks_config.get(TRUFFLEHOG):
             secret_scanning(
                 self,
@@ -250,6 +263,29 @@ def osint_discovery(
                 results_dir=results_dir,
                 ctx=ctx,
             )
+
+    if config.get(MICROSOFT_RECON):
+        run_msftrecon(self, host, scan_history, results_dir)
+
+    api_leaks_config = config.get(API_LEAKS, {})
+    if api_leaks_config:
+        if api_leaks_config.get(PORCH_PIRATE):
+            run_porch_pirate(self, host, scan_history, results_dir)
+        if api_leaks_config.get(POSTLEAKS):
+            run_postleaks(self, host, scan_history, results_dir)
+        if api_leaks_config.get(SWAGGERSPY):
+            run_swaggerspy_internet(self, host, scan_history, results_dir)
+
+    github_config = config.get(GITHUB_ANALYSIS, {})
+    if github_config:
+        run_github_analysis(self, host, scan_history, results_dir, config)
+
+    if config.get(MISCONFIG):
+        run_misconfig_mapper(self, host, scan_history, results_dir)
+
+    domain_security_config = config.get(DOMAIN_SECURITY, {})
+    if domain_security_config and domain_security_config.get(SPOOFCHECK):
+        run_spoofcheck(self, host, scan_history, results_dir)
 
     finish_osint_discovery([results], results_dir=results_dir)
 
@@ -549,6 +585,46 @@ def dorking(
 
     except Exception as e:
         logger.exception(e)
+
+    # --- Extended dork engines ---
+    _DORKS_HUNTER_PYTHON = '/usr/src/github/dorks_hunter/.venv/bin/python3'
+    _DORKS_HUNTER_SCRIPT = '/usr/src/github/dorks_hunter/dorks_hunter.py'
+    dork_engines = config.get(DORK_ENGINES, [])
+
+    if 'dorks_hunter' in dork_engines:
+        dorks_output_file = f'{results_dir}/dorks_hunter_{host}.txt'
+        cmd = [_DORKS_HUNTER_PYTHON, _DORKS_HUNTER_SCRIPT, '-d', host, '-o', dorks_output_file]
+        proxy_obj = Proxy.objects.first()
+        proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
+        if proxy:
+            cmd = ['proxychains4', '-q'] + cmd
+        return_code, output = run_command(cmd, cwd=results_dir)
+        try:
+            with open(dorks_output_file, 'r') as _f:
+                file_output = _f.read()
+        except OSError:
+            file_output = output or ''
+        for line in file_output.splitlines():
+            url = line.strip()
+            if url.startswith('http'):
+                dork, _ = Dork.objects.get_or_create(type='dorks_hunter', url=url)
+                scan_history.dorks.add(dork)
+                results.append(url)
+
+    if 'xnldorker' in dork_engines:
+        cmd = ['xnldorker', '-i', f'site:{host}', '-nb']
+        proxy_obj = Proxy.objects.first()
+        proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
+        if proxy:
+            cmd = ['proxychains4', '-q'] + cmd
+        return_code, output = run_command(cmd, cwd=results_dir)
+        for line in (output or '').splitlines():
+            url = line.strip()
+            if url.startswith('http'):
+                dork, _ = Dork.objects.get_or_create(type='xnldorker', url=url)
+                scan_history.dorks.add(dork)
+                results.append(url)
+
     return results
 
 
@@ -2037,3 +2113,29 @@ def osint_orchestrator(scan_history_id):
     # Wait for all threads to complete to ensure the Temporal activity blocks appropriately
     for t in threads:
         t.join()
+
+
+def post_crawl_osint(self, ctx={}, description=None):
+    """Run OSINT tasks that benefit from post-fuzz data (discovered documents, live subdomains).
+
+    Runs after dir_file_fuzz (Temporal Tier 4a). Reads fuzz-discovered documents
+    from the DB and runs exifray + SwaggerSpy path probe against confirmed live hosts.
+    """
+    config = self.yaml_configuration.get(POST_CRAWL_OSINT, {})
+    if not config:
+        logger.info("post_crawl_osint: no config — skipping for scan_id=%s", self.scan_id)
+        return True
+
+    host = self.domain.name if self.domain else ''
+
+    if config.get(METAGOOFIL):
+        run_post_crawl_exifray(self, host, ctx, self.results_dir)
+
+    if config.get(SWAGGERSPY):
+        run_swaggerspy_path_mode(self, host, self.scan, self.results_dir)
+
+    opsec = get_opsec_manager()
+    opsec.strip_directory(self.results_dir)
+
+    logger.info("post_crawl_osint finished for scan_id=%s", self.scan_id)
+    return True

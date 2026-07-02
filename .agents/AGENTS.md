@@ -58,6 +58,11 @@ Optional local aid:
 - When performing structural refactorings in the core `reNgine` codebase (such as splitting files, relocating modules, or renaming helper classes/functions), always search and verify imports in both the core `web/` repository and the `r3ngine-plugins/` repository.
 - Since plugins are maintained in a separate directory but run inside the core Django runtime context, outdated core imports in plugins will fail during runtime execution.
 
+## Core Import Locations (Post-Restructuring)
+- **Network/Extraction Utils:** General HTTP and subdomain extraction tools (`get_http_urls`, `sanitize_url`, `get_subdomain_from_url`) are strictly located in `reNgine.common_func`.
+- **Scan Data Persistence & Process Wrappers:** Scan persistence helpers (`save_subdomain`, `save_endpoint`) and process execution wrappers (`run_command`, `stream_command`) are strictly located in `reNgine.utils.task`.
+- **Avoid `reNgine.utilities` for these:** Do NOT attempt to import these functions from `reNgine.utilities` or incorrectly cross-import them, as they have been relocated.
+
 ## Background Tasks and Orchestration
 - **CRITICAL**: This project relies **exclusively** on Temporal for background tasks and orchestration. **Celery is NOT used anymore in this project.** Never assume, suggest, or attempt to use Celery syntax, patterns, or terminology. All task logs and statuses are managed through Temporal workers.
 
@@ -79,3 +84,15 @@ pm run build.
 
 ## Git Practices
 - **Committing Changes**: When asked to commit "the files you worked on", DO NOT use `git add -u` or `git add .`. Explicitly list the specific files that were modified for the specific task to prevent staging unrelated tracked changes.
+
+## Frontend UI (General)
+- **MUI Stack Component**: When using the `Stack` component from `@mui/material`, avoid passing `alignItems` directly as a prop, as it causes TypeScript compilation errors (`TS2769`). Always place it inside the `sx` prop instead (e.g., `<Stack sx={{ alignItems: 'center' }}>`).
+
+## Reporting & Data Models
+- **Directory Scans**: The `DirectoryScan` model does not contain file or URL details directly. It links to `DirectoryFile` objects via the `directory_files` ManyToMany field. When querying for actual discovered directory URLs on a subdomain, you must query the `DirectoryFile` model (e.g., `DirectoryFile.objects.filter(directory_files__directories__in=subdomains)`).
+- **Report Generation Tasks**: `generate_report_task` in `reNgine.tasks.report` is a synchronous background task that expects a `report_id` (the ID of a `ScanReport` instance), NOT a `scan_id`. It is not a Temporal Activity.
+
+## Local Execution & manage.py
+- **CRITICAL**: Never run `python manage.py` (or any other Python backend script) directly on the local Windows host. 
+- All Django utility commands (e.g., `check`, `flake8`, `makemigrations`, `migrate`, `dumpdata`, `test`) MUST be executed inside the `web` container using `docker compose exec web python manage.py <command>`.
+- The local environment does not have the required Python dependencies, environment variables, or paths configured; all backend code evaluation must happen within the container context.
