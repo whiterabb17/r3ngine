@@ -252,6 +252,7 @@ def smtp_user_enum(
     wordlist: str = SMTP_USERNAMES_WORDLIST,
     method: str = 'VRFY',
     timeout: int = 120,
+    domain: str = '',
 ) -> dict:
     """Run smtp-user-enum against each host:port target individually.
 
@@ -260,6 +261,9 @@ def smtp_user_enum(
         wordlist: path to usernames wordlist
         method: VRFY, EXPN, or RCPT
         timeout: seconds per target before killing the process
+        domain: when set, passes -d to smtp-user-enum so it sends
+                VRFY user@domain instead of bare VRFY user (required
+                by servers that enforce RFC 2821 FQDN syntax)
 
     Returns:
         {"users_found": {"host:port": [usernames]}, "raw": str}
@@ -276,13 +280,10 @@ def smtp_user_enum(
 
     for host, port in targets:
         host_port = "%s:%s" % (host, port)
-        cmd = [
-            'smtp-user-enum',
-            '-m', method,
-            '-U', wordlist,
-            host,
-            str(port),
-        ]
+        cmd = ['smtp-user-enum', '-m', method, '-U', wordlist]
+        if domain:
+            cmd += ['-d', domain]
+        cmd += [host, str(port)]
         try:
             return_code, output = run_command(cmd, timeout=timeout + 10)
             all_raw.append("=== %s ===\n%s" % (host_port, output[:2000]))

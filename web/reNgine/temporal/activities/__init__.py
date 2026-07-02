@@ -4222,7 +4222,7 @@ def _run_email_security_sync(ctx: dict) -> dict:
 
     enum_targets = list(checked_pairs)
     if enum_targets:
-        enum = smtp_user_enum(enum_targets)
+        enum = smtp_user_enum(enum_targets, domain=domain_name)
         for host_port_key, users in enum['users_found'].items():
             if users:
                 _vuln('SMTP User Enumeration (VRFY/EXPN)', 2,
