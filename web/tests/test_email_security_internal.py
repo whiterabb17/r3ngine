@@ -43,3 +43,44 @@ class TestEmailSecurityImport(TestCase):
         self.assertIn('expired', result)
         self.assertIn('self_signed', result)
         self.assertIn('hostname_mismatch', result)
+
+
+class TestSmtpUserEnumDomainFlag(TestCase):
+    """Verify smtp_user_enum passes -d domain to smtp-user-enum when domain is given."""
+
+    def _run(self, domain=''):
+        from reNgine.tasks.email_security import smtp_user_enum
+        captured = {}
+
+        def fake_run_command(cmd, **kwargs):
+            captured['cmd'] = cmd
+            return 0, ''
+
+        with patch('os.path.isfile', return_value=True), \
+             patch('reNgine.tasks.email_security.run_command', side_effect=fake_run_command):
+            smtp_user_enum([('mail.example.com', 25)], domain=domain)
+
+        return captured.get('cmd', [])
+
+    def test_domain_flag_absent_when_no_domain(self):
+        cmd = self._run(domain='')
+        self.assertNotIn('-d', cmd)
+
+    def test_domain_flag_present_when_domain_given(self):
+        cmd = self._run(domain='example.com')
+        self.assertIn('-d', cmd)
+        idx = cmd.index('-d')
+        self.assertEqual(cmd[idx + 1], 'example.com')
+
+    def test_host_and_port_always_present(self):
+        cmd = self._run(domain='example.com')
+        self.assertIn('mail.example.com', cmd)
+        self.assertIn('25', cmd)
+
+    def test_empty_targets_returns_early(self):
+        from reNgine.tasks.email_security import smtp_user_enum
+        with patch('os.path.isfile', return_value=True), \
+             patch('reNgine.tasks.email_security.run_command') as mock_rc:
+            result = smtp_user_enum([], domain='example.com')
+        mock_rc.assert_not_called()
+        self.assertEqual(result['users_found'], {})
