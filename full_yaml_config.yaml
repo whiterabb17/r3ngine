@@ -103,10 +103,34 @@ osint:
     # - { lookup_site: '_target_', lookup_extensions: 'php,asp,aspx' }
   intensity: normal
   documents_limit: 50
+  # --- New OSINT pipeline expansion ---
+  emailfinder: true
+  microsoft_recon: true
   leaks_and_secrets:
     leaklookup: true      # Query leak-lookup.com API for domain leaks
     gitleaks: true        # Scan discovered JS files for secrets (gitleaks)
     trufflehog: true      # Scan discovered JS files for secrets (trufflehog)
+    leaksearch: false     # requires LeakSearchAPIKey — opt-in
+  api_leaks:
+    porch_pirate: true
+    postleaks: true
+    swaggerspy: true
+  github_analysis:
+    uses_tools:
+      - enumerepo
+      - trufflehog
+      - gitleaks
+      # - noseyparker
+      # - titus
+    gato: false           # requires GitHubAPIKey — opt-in
+    github_orgs: []       # empty = auto-derive from domain name
+  misconfig: true
+  domain_security:
+    spoofcheck: true
+  dork_engines:
+    - gofuzz
+    # - dorks_hunter
+    # - xnldorker
 
 # ---------------------------------------------------------------------------
 # TIER 1 — SpiderFoot OSINT
@@ -115,6 +139,13 @@ spiderfoot_scan:
   modules: all
   intensity: normal
   threads: 10
+
+# ---------------------------------------------------------------------------
+# TIER 1a — Post-Crawl OSINT
+# ---------------------------------------------------------------------------
+post_crawl_osint:
+  metagoofil: true
+  swaggerspy: true
 
 # ---------------------------------------------------------------------------
 # TIER 2 — HTTP Crawl

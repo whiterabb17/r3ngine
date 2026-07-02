@@ -244,14 +244,14 @@ const enterpriseSet: ThemeTokenSet = {
     disabled: 'rgba(20, 20, 20, 0.38)',
   },
   border: {
-    subtle: '#e5e0d8',
-    strong: '#d8d3ca',
+    subtle: 'rgba(20, 20, 20, 0.08)',
+    strong: 'rgba(20, 20, 20, 0.16)',
   },
   chrome: {
     bg: '#141414',
     text: '#f5f3ef',
     textMuted: 'rgba(245, 243, 239, 0.55)',
-    border: 'rgba(245, 243, 239, 0.1)',
+    border: 'rgba(245, 243, 239, 0.05)',
     navDefault: 'rgba(245, 243, 239, 0.55)',
     navActive: '#f5f3ef',
     navActiveBg: '#9c1c2e',
@@ -260,7 +260,7 @@ const enterpriseSet: ThemeTokenSet = {
     iconMuted: 'rgba(245, 243, 239, 0.4)',
     navChildActive: '#f5f3ef',
     navChildActiveBg: 'rgba(156, 28, 46, 0.1)',
-    headerBorder: 'rgba(245, 243, 239, 0.1)',
+    headerBorder: 'rgba(245, 243, 239, 0.05)',
   },
   accent: {
     primary: '#9c1c2e',
@@ -285,8 +285,8 @@ const enterpriseSet: ThemeTokenSet = {
     tooltipText: '#141414',
   },
   effects: {
-    blur: 'blur(8px)',
-    radius: '8px',
+    blur: 'blur(16px)',
+    radius: '12px',
     bezier: sharedEffects.bezier,
     glowPrimary: 'none',
     glowSecondary: 'none',

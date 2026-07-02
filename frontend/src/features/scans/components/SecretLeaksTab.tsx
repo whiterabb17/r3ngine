@@ -25,6 +25,7 @@ import { Shield, ExternalLink, Copy, AlertTriangle, Fingerprint, Mail, ShieldAle
 import { useSecretLeaks, useScanSummary, useEmailBreaches, useCheckEmailBreach } from '../api';
 import { TacticalPanel } from '../../../components/TacticalPanel';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import { BreachDetailsModal } from './BreachDetailsModal';
 import { formatSecretType, getSecretCategory } from '../utils/secretTypeUtils';
 import type { SecretLeak } from '../types';
 
@@ -77,6 +78,7 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
 
   const [manualEmail, setManualEmail] = React.useState('');
   const [checkingEmails, setCheckingEmails] = React.useState<Record<string, boolean>>({});
+  const [selectedBreaches, setSelectedBreaches] = React.useState<any[] | null>(null);
   const [leaksPage, setLeaksPage] = React.useState(0);
   const [leaksRowsPerPage, setLeaksRowsPerPage] = React.useState(10);
   const [expandedKeys, setExpandedKeys] = React.useState<Set<string>>(new Set());
@@ -306,7 +308,7 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
               <TableContainer sx={{ maxHeight: '280px' }}>
                 <Table size="small" stickyHeader>
                   <TableHead>
-                    <TableRow sx={{ '& th': { borderBottom: '2px solid #7000ff', bgcolor: 'action.hover', color: tokens.accent.primary, fontSize: '0.7rem', fontWeight: 900, py: 1 } }}>
+                    <TableRow sx={{ '& th': { borderBottom: `2px solid ${tokens.accent.primary}`, bgcolor: 'background.paper', color: tokens.accent.primary, fontSize: '0.7rem', fontWeight: 900, py: 1 } }}>
                       <TableCell sx={{ color: tokens.accent.primary, fontSize: '10px', fontWeight: 900, fontFamily: 'Orbitron' }}>EMAIL ADDRESS</TableCell>
                       <TableCell sx={{ color: tokens.accent.primary, fontSize: '10px', fontWeight: 900, fontFamily: 'Orbitron' }}>STATUS</TableCell>
                       <TableCell align="right" sx={{ color: tokens.accent.primary, fontSize: '10px', fontWeight: 900, fontFamily: 'Orbitron' }}>ACTIONS</TableCell>
@@ -326,7 +328,20 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
                                 <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary' }}>CHECKING HIBP...</Typography>
                               </Stack>
                             ) : matchedBreaches.length > 0 ? (
-                              <Chip label={`${matchedBreaches.length} BREACHES`} size="small" sx={{ bgcolor: 'rgba(255,0,60,0.1)', color: '#ff003c', fontWeight: 900, fontSize: '0.6rem', border: '1px solid rgba(255,0,60,0.2)' }} />
+                              <Chip 
+                                label={`${matchedBreaches.length} BREACHES`} 
+                                size="small" 
+                                onClick={() => setSelectedBreaches(matchedBreaches)}
+                                sx={{ 
+                                  bgcolor: 'rgba(255,0,60,0.1)', 
+                                  color: '#ff003c', 
+                                  fontWeight: 900, 
+                                  fontSize: '0.6rem', 
+                                  border: '1px solid rgba(255,0,60,0.2)',
+                                  cursor: 'pointer',
+                                  '&:hover': { bgcolor: 'rgba(255,0,60,0.2)' }
+                                }} 
+                              />
                             ) : (
                               <Chip label="CLEAN" size="small" sx={{ bgcolor: 'rgba(0,255,98,0.1)', color: '#00ff62', fontWeight: 900, fontSize: '0.6rem', border: '1px solid rgba(0,255,98,0.2)' }} />
                             )}
@@ -381,7 +396,19 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
                       <Typography sx={{ fontSize: '10px', fontWeight: 800, color: 'text.primary', mb: 0.5, letterSpacing: 0.5 }}>COMPROMISED DATA:</Typography>
                       <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                         {breach.compromised_data?.map((dataClass: string) => (
-                          <Chip key={dataClass} label={dataClass} size="small" sx={{ bgcolor: 'rgba(112,0,255,0.05)', color: 'text.primary', fontSize: '0.6rem', fontWeight: 600, height: '18px', borderRadius: 0.5 }} />
+                          <Chip 
+                            key={dataClass} 
+                            label={dataClass.toUpperCase()} 
+                            size="small" 
+                            sx={{ 
+                              bgcolor: 'rgba(255,0,60,0.1)', 
+                              color: '#ff003c', 
+                              fontSize: '0.55rem', 
+                              fontWeight: 900, 
+                              height: '18px', 
+                              border: '1px solid rgba(255,0,60,0.2)' 
+                            }} 
+                          />
                         ))}
                       </Stack>
                     </Box>
@@ -398,6 +425,12 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
           </Grid>
         </Box>
       )}
+
+      <BreachDetailsModal 
+        open={Boolean(selectedBreaches)} 
+        onClose={() => setSelectedBreaches(null)} 
+        breaches={selectedBreaches} 
+      />
     </Box>
   );
 };

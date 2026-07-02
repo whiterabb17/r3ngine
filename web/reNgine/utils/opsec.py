@@ -104,7 +104,13 @@ class OpSecManager:
             return self._apply_dalfox(command, proxy_ip)
         elif tool_name == "dirsearch":
             return self._apply_dirsearch(command, proxy_ip)
-        
+        elif tool_name == "swaggerspy_path":
+            return self._apply_swaggerspy_path(command, proxy_ip)
+        elif tool_name == "misconfig_mapper":
+            return self._apply_misconfig_mapper(command, proxy_ip)
+        elif tool_name == "metagoofil":
+            return self._apply_metagoofil(command, proxy_ip)
+
         return command
 
     def _apply_nuclei(self, cmd, proxy_ip=None):
@@ -192,6 +198,22 @@ class OpSecManager:
                 flags.append(f"-H '{header}'")
         
         return f"{cmd} {' '.join(flags)}"
+
+    def _apply_swaggerspy_path(self, cmd: str, proxy_ip=None) -> str:
+        flags = []
+        if self.settings.enable_random_ua:
+            flags.append(f"--user-agent '{self.get_random_ua(proxy_ip)}'")
+        return f"{cmd} {' '.join(flags)}" if flags else cmd
+
+    def _apply_misconfig_mapper(self, cmd: str, proxy_ip=None) -> str:
+        flags = []
+        if self.settings.enable_random_ua:
+            flags.append(f"-H 'User-Agent: {self.get_random_ua(proxy_ip)}'")
+        return f"{cmd} {' '.join(flags)}" if flags else cmd
+
+    def _apply_metagoofil(self, cmd: str, proxy_ip=None) -> str:
+        # metagoofil does not support per-request UA; stealth is handled by proxy routing
+        return cmd
 
     def strip_metadata(self, file_path):
         """

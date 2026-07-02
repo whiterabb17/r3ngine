@@ -3,6 +3,7 @@ import logging
 import threading
 
 import redis
+from asgiref.sync import async_to_sync
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from rest_framework import status
@@ -70,7 +71,7 @@ class StressTestControlAPI(APIView):
         if action == "stop":
             # Primary: Temporal signal
             try:
-                asyncio.run(_signal_stress_workflow(scan_id))
+                async_to_sync(_signal_stress_workflow)(scan_id)
                 logger.info(f"[StressTestControlAPI] Temporal kill_switch sent for scan {scan_id}")
             except Exception as e:
                 logger.warning(
@@ -102,7 +103,7 @@ class StressTestControlAPI(APIView):
 
             # Primary: Temporal workflow
             try:
-                asyncio.run(_start_stress_workflow(ctx, scan_id))
+                async_to_sync(_start_stress_workflow)(ctx, scan_id)
                 logger.info(
                     f"[StressTestControlAPI] StressTestWorkflow started for scan {scan_id}"
                 )

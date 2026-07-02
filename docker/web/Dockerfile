@@ -70,6 +70,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go install -ldflags="-s -w" -v github.com/hueristiq/xurlfind3r/cmd/xurlfind3r@latest && \
     go install -ldflags="-s -w" -v github.com/edoardottt/cariddi/cmd/cariddi@latest && \
     go install -ldflags="-s -w" -v github.com/dimasma0305/wp-taint-scan/cmd/taint-scan@latest && \
+    go install -ldflags="-s -w" -v github.com/trickest/enumerepo@latest && \
+    go install -ldflags="-s -w" -v github.com/praetorian-inc/titus/cmd/titus@latest && \
+    go install -ldflags="-s -w" -v github.com/intigriti/misconfig-mapper/cmd/misconfig-mapper@latest && \
+    go install -ldflags="-s -w" -v github.com/mmarting/exifray@latest && \
     curl -sSfL https://github.com/praetorian-inc/brutus/releases/download/v1.5.1/brutus-linux-amd64.tar.gz | tar -C /go/bin -xz brutus
 
 # betterleaks has no published go install path — clone and build directly.
@@ -498,6 +502,68 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install --upgrade pip setuptools wheel pyOpenSSL h8mail && \
     pip3 install --upgrade fierce dirsearch meson ninja arjun inql netlas holehe smtp-user-enum
+
+# emailfinder — email discovery from public sources (confirmed installable 2026-07-01)
+# LeakSearch is not on PyPI; no Dockerfile line added (binary unavailable, module degrades gracefully)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install emailfinder
+
+# msftrecon — Microsoft 365 / Azure tenant mapping (confirmed working 2026-07-01)
+# Not on PyPI; installed via git clone + uv venv into /usr/src/github/msftrecon
+# Invoked as: /usr/src/github/msftrecon/.venv/bin/python3 msftrecon/msftrecon.py -d <domain> -j
+RUN git clone https://github.com/Arcanum-Sec/msftrecon /usr/src/github/msftrecon \
+    && cd /usr/src/github/msftrecon \
+    && uv venv \
+    && uv pip install -r requirements.txt
+
+# porch-pirate — Postman workspace leak discovery (confirmed working 2026-07-01)
+# Binary installed as: porch-pirate
+RUN uv tool install git+https://github.com/MandConsultingGroup/porch-pirate --force
+
+# postleaksNg — Postman workspace credential leaks (confirmed working 2026-07-01)
+# Binary installed as: postleaksNg (capital N and G)
+RUN uv tool install git+https://github.com/six2dez/postleaksNG --force --with 'jellyfish>=1.1.3'
+
+# dorks_hunter — Google dork automation (confirmed working 2026-07-01)
+# Not on PyPI; installed via git clone + uv venv into /usr/src/github/dorks_hunter
+# Invoked as: /usr/src/github/dorks_hunter/.venv/bin/python3 dorks_hunter.py -d <domain> -o <output_file>
+RUN git clone https://github.com/six2dez/dorks_hunter /usr/src/github/dorks_hunter \
+    && cd /usr/src/github/dorks_hunter \
+    && uv venv \
+    && uv pip install -r requirements.txt
+
+# xnldorker — extended Google dorking engine (confirmed working 2026-07-01)
+# Installed via uv tool install; binary available as xnldorker on PATH
+# Invoked as: xnldorker -d <domain>
+RUN uv tool install git+https://github.com/xnl-h4ck3r/xnldorker --force
+
+# SwaggerSpy — Swagger/OpenAPI spec discovery (confirmed working 2026-07-01)
+# Not on PyPI; installed via git clone + uv venv into /usr/src/github/SwaggerSpy
+# Invoked as: /usr/src/github/SwaggerSpy/.venv/bin/python3 swaggerspy.py <domain>
+RUN git clone https://github.com/UndeadSec/SwaggerSpy /usr/src/github/SwaggerSpy \
+    && cd /usr/src/github/SwaggerSpy \
+    && uv venv \
+    && uv pip install -r requirements.txt
+
+# Spoofy — SPF/DMARC email spoofability check (confirmed working 2026-07-01)
+# Not on PyPI; installed via git clone + uv venv into /usr/src/github/Spoofy
+# Invoked as: /usr/src/github/Spoofy/.venv/bin/python3 spoofy.py -d <domain> -o json
+RUN git clone https://github.com/MattKeeley/Spoofy /usr/src/github/Spoofy \
+    && cd /usr/src/github/Spoofy \
+    && uv venv \
+    && uv pip install -r requirements.txt
+
+# noseyparker — secret scanning in git repos (pre-built musl binary, no libc dependency)
+ARG NOSEYPARKER_VERSION=v0.24.0
+RUN curl -sL "https://github.com/praetorian-inc/noseyparker/releases/download/${NOSEYPARKER_VERSION}/noseyparker-${NOSEYPARKER_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+    | tar xz --strip-components=2 -C /usr/local/bin ./bin/noseyparker
+
+# gato — GitHub Actions CI/CD audit (Python, isolated uv venv)
+# Invoked as: /usr/src/github/gato/.venv/bin/gato enumerate --target <org> ...
+RUN git clone https://github.com/praetorian-inc/gato /usr/src/github/gato \
+    && cd /usr/src/github/gato \
+    && uv venv \
+    && uv pip install -e .
 
 # Ensure pipx is available and install baddns
 RUN --mount=type=cache,target=/root/.cache/pip \
