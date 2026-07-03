@@ -1,5 +1,6 @@
 import React from 'react';
 import { Grid, TextField, FormControlLabel, Checkbox, Typography, Collapse, Box } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import type { PortScanConfig } from '../../types/engineConfig';
 import { SectionCard } from '../shared/SectionCard';
 import { ChipSelect } from '../shared/ChipSelect';
@@ -119,7 +120,7 @@ export const PortScanSection: React.FC<Props> = ({ config, enabled, onToggle, on
 
       {/* Nmap sub-fields — only shown when enable_nmap is checked */}
       <Collapse in={config.enable_nmap}>
-        <Box sx={{ mt: 2, pl: 2, borderLeft: `2px solid ${tokens.accent.primary}40` }}>
+        <Box sx={{ mt: 2, pl: 2, borderLeft: `2px solid ${alpha(tokens.accent.primary, 0.25)}` }}>
           <Grid container spacing={2}>
             <Grid size={{ xs: 12 }}>
               <TextField
