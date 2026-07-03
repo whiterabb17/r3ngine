@@ -40,6 +40,9 @@ urlpatterns = [
         'api/engagements/',
         include('engagements.urls')),
     path(
+        'api/evidence/',
+        include('evidence.urls')),
+    path(
         'target/',
         include('targetApp.urls')),
     path(

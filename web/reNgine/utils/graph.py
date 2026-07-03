@@ -183,6 +183,7 @@ class Neo4jManager:
         tech_count = 0
         vuln_count = 0
         cve_count = 0
+        evidence_count = 0
 
         with self.driver.session() as session:
             self._ensure_graph_indexes(session)
@@ -557,13 +558,39 @@ class Neo4jManager:
                     label="organizations", heartbeat_callback=heartbeat,
                 )
 
+        from evidence.models import Evidence
+        evidence_rows = []
+        if getattr(scan, 'assessment', None):
+            evidence_qs = Evidence.objects.filter(collection__assessment=scan.assessment)
+            for row in evidence_qs.values('uuid', 'type', 'description', 'integrity_hash').iterator(chunk_size=GRAPH_SYNC_ORM_CHUNK):
+                evidence_rows.append({
+                    "uuid": str(row['uuid']),
+                    "type": row['type'],
+                    "description": row['description'] or "",
+                    "integrity_hash": row['integrity_hash'] or "",
+                    "scan_id": scan_history_id
+                })
+                evidence_count += 1
+                if len(evidence_rows) >= GRAPH_SYNC_BATCH_SIZE:
+                    self._batch_execute(
+                        session, self._batch_merge_evidence, evidence_rows,
+                        label="evidence", heartbeat_callback=heartbeat,
+                    )
+                    evidence_rows = []
+                    
+            if evidence_rows:
+                self._batch_execute(
+                    session, self._batch_merge_evidence, evidence_rows,
+                    label="evidence", heartbeat_callback=heartbeat,
+                )
+
         heartbeat(f"neo4j scan_id={scan_history_id} complete")
         logger.info(
             f"[Neo4j] sync_scan_results scan_id={scan_history_id}: "
             f"{subdomain_count} subdomains, {endpoint_count} endpoints, "
             f"{param_count} params, {tech_count} techs, "
             f"{vuln_count} vulns, {cve_count} CVEs, {cert_count} certs, "
-            f"{identity_count} identity_infra synced."
+            f"{identity_count} identity_infra, {evidence_count} evidence synced."
         )
 
     @staticmethod

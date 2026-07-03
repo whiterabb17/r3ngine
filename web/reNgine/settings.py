@@ -133,11 +133,27 @@ INSTALLED_APPS = [
     'plugins.apps.PluginsConfig',
     'apme.apps.ApmeConfig',
     'engagements.apps.EngagementsConfig',
+    'evidence.apps.EvidenceConfig',
     'channels',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
 ]
+
+# ---------------------------------------------------------------------------
+# Evidence Platform settings
+# ---------------------------------------------------------------------------
+EVIDENCE_STORAGE_BACKEND = os.environ.get('EVIDENCE_STORAGE_BACKEND', 'filesystem')
+EVIDENCE_STORAGE_ROOT = os.environ.get('EVIDENCE_STORAGE_ROOT', '/usr/src/app/evidence/')
+EVIDENCE_MAX_SIZE_MB = int(os.environ.get('EVIDENCE_MAX_SIZE_MB', 50))
+EVIDENCE_MAX_SIZE_BYTES = EVIDENCE_MAX_SIZE_MB * 1024 * 1024
+EVIDENCE_SIGNED_URL_EXPIRY = int(os.environ.get('EVIDENCE_SIGNED_URL_EXPIRY', 300))  # seconds
+EVIDENCE_MINIO_ENDPOINT = os.environ.get('EVIDENCE_MINIO_ENDPOINT', '')
+EVIDENCE_MINIO_ACCESS_KEY = os.environ.get('EVIDENCE_MINIO_ACCESS_KEY', '')
+EVIDENCE_MINIO_SECRET_KEY = os.environ.get('EVIDENCE_MINIO_SECRET_KEY', '')
+EVIDENCE_MINIO_BUCKET = os.environ.get('EVIDENCE_MINIO_BUCKET', 'r3ngine-evidence')
+EVIDENCE_S3_BUCKET = os.environ.get('EVIDENCE_S3_BUCKET', '')
+EVIDENCE_S3_REGION = os.environ.get('EVIDENCE_S3_REGION', 'us-east-1')
 
 # Dynamically add enabled plugins to INSTALLED_APPS
 PLUGINS_DIR = os.path.join(BASE_DIR, 'plugins_data')

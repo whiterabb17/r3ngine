@@ -100,6 +100,13 @@ from reNgine.temporal.activities.assessment_activities import (
     scan_orchestrator_activity,
     prepare_assessment_context_activity,
 )
+from reNgine.temporal.activities.evidence_activities import (
+    collect_screenshot_evidence_activity,
+    collect_http_evidence_activity,
+    collect_command_output_evidence_activity,
+    enforce_evidence_retention_activity,
+    verify_evidence_integrity_activity,
+)
 
 # Activities (all Python-side activities are registered here)
 from reNgine.temporal_activities import (
@@ -621,6 +628,13 @@ class Command(BaseCommand):
                 update_assessment_state_activity,
                 scan_orchestrator_activity,
                 prepare_assessment_context_activity,
+
+                # Evidence Platform
+                collect_screenshot_evidence_activity,
+                collect_http_evidence_activity,
+                collect_command_output_evidence_activity,
+                enforce_evidence_retention_activity,
+                verify_evidence_integrity_activity,
                 
                 # Plugin lifecycle
                 log_plugin_start_activity,
