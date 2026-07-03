@@ -40,6 +40,8 @@ interface EngineConfigModalProps {
    * When omitted the modal fetches from the API on open.
    */
   initialYaml?: string;
+  /** Called with the final YAML after a successful save. */
+  onSave?: (yaml: string) => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -51,6 +53,7 @@ export const EngineConfigModal: React.FC<EngineConfigModalProps> = ({
   engineId,
   engineName: initialName = '',
   initialYaml = '',
+  onSave,
 }) => {
   const theme = useTheme();
   const { tokens } = useThemeTokens();
@@ -82,7 +85,8 @@ export const EngineConfigModal: React.FC<EngineConfigModalProps> = ({
         setName(data.engine_name);
       })
       .catch((err: unknown) => {
-        setFetchError(err instanceof Error ? err.message : 'Failed to load engine');
+        console.error('[EngineConfigModal] fetch failed', err);
+        setFetchError('Failed to load engine configuration.');
       })
       .finally(() => {
         setFetchLoading(false);
@@ -123,6 +127,7 @@ export const EngineConfigModal: React.FC<EngineConfigModalProps> = ({
           yaml_configuration: yaml,
         });
       }
+      onSave?.(yaml);
       onClose();
     } catch {
       // Mutation errors are surfaced via createEngine.error / updateEngine.error;
@@ -149,9 +154,11 @@ export const EngineConfigModal: React.FC<EngineConfigModalProps> = ({
     boxShadow: isLight ? 'none' : `0 0 30px ${alpha(tokens.accent.primary, 0.1)}`,
   };
 
+  if (createEngine.error) console.error('[EngineConfigModal] create failed', createEngine.error);
+  if (updateEngine.error) console.error('[EngineConfigModal] update failed', updateEngine.error);
   const mutationError =
-    (createEngine.error instanceof Error ? createEngine.error.message : null) ||
-    (updateEngine.error instanceof Error ? updateEngine.error.message : null);
+    createEngine.error ? 'Failed to save engine. Please try again.' :
+    updateEngine.error ? 'Failed to update engine. Please try again.' : null;
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
