@@ -187,7 +187,7 @@ function serialiseConfigToYaml(config: EngineConfig): string {
     writeSection('vigolium_audit', { run_vigolium_audit: true, intensity: c.intensity, use_ai: c.use_ai, timeout: c.timeout });
   }
 
-  return jsYaml.dump(out, { lineWidth: 120, forceQuotes: false } as jsYaml.DumpOptions);
+  return jsYaml.dump(out, { lineWidth: 120, quotingType: "'", forceQuotes: false } as jsYaml.DumpOptions);
 }
 
 // ─── Parser ──────────────────────────────────────────────────────────────────
