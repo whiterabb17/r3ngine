@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 import {
   Box,
   Grid,
@@ -33,7 +33,7 @@ const BUILT_IN_LABELS: Record<string, string> = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export const TemplatePicker: React.FC<TemplatePickerProps> = ({ onSelect }) => {
+export const TemplatePicker: FC<TemplatePickerProps> = ({ onSelect }) => {
   const { tokens, isLight } = useThemeTokens();
   const { data: engines, isLoading, isError } = useEngines();
 
@@ -47,7 +47,7 @@ export const TemplatePicker: React.FC<TemplatePickerProps> = ({ onSelect }) => {
               height={88}
               sx={{
                 borderRadius: 1,
-                bgcolor: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)',
+                bgcolor: tokens.surface.secondary,
               }}
             />
           </Grid>
@@ -85,8 +85,8 @@ export const TemplatePicker: React.FC<TemplatePickerProps> = ({ onSelect }) => {
               variant="outlined"
               sx={{
                 height: '100%',
-                bgcolor: isLight ? 'background.paper' : 'rgba(10, 10, 20, 0.4)',
-                borderColor: isLight ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.07)',
+                bgcolor: tokens.surface.primary,
+                borderColor: tokens.border.subtle,
                 transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
                 '&:hover': {
                   borderColor: tokens.accent.primary,
