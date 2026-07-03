@@ -27,7 +27,7 @@ export const YamlPreviewPanel: React.FC<YamlPreviewPanelProps> = ({ yaml, yamlEr
         </Typography>
         <Tooltip title={copied ? 'Copied!' : 'Copy to clipboard'}>
           <IconButton size="small" onClick={handleCopy}>
-            {copied ? <Check size={14} color={tokens.accent.primary} /> : <Copy size={14} />}
+            {copied ? <Check size={14} color={tokens.accent.primary} /> : <Copy size={14} color={tokens.text.muted} />}
           </IconButton>
         </Tooltip>
       </Box>
@@ -52,10 +52,10 @@ export const YamlPreviewPanel: React.FC<YamlPreviewPanelProps> = ({ yaml, yamlEr
           lineHeight: 1.6,
           p: 1.5,
           border: yamlError
-            ? '1px solid #f44336'
-            : isLight ? '1px solid rgba(0,0,0,0.15)' : '1px solid rgba(255,255,255,0.1)',
+            ? `1px solid ${tokens.accent.error}`
+            : `1px solid ${tokens.border.subtle}`,
           borderRadius: 1,
-          bgcolor: isLight ? '#fafafa' : 'rgba(0,0,0,0.3)',
+          bgcolor: tokens.surface.secondary,
           color: 'text.primary',
           resize: 'vertical',
           outline: 'none',
