@@ -24,19 +24,18 @@ import {
   Code
 } from 'lucide-react';
 import { useEngines, useDeleteEngine } from '../api';
-import { EditEngineModal } from './EditEngineModal';
+import { EngineConfigModal } from './EngineConfigModal';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import type { Engine } from '../types';
 
 export const EngineList: React.FC = () => {
   const { tokens, isLight, theme } = useThemeTokens();
   const { data: engines, isLoading } = useEngines();
   const deleteEngine = useDeleteEngine();
-  const [editModalOpen, setEditModalOpen] = React.useState(false);
-  const [selectedEngineId, setSelectedEngineId] = React.useState<number | null>(null);
+  const [selectedEngine, setSelectedEngine] = React.useState<Engine | null>(null);
 
-  const handleEdit = (id: number) => {
-    setSelectedEngineId(id);
-    setEditModalOpen(true);
+  const handleEdit = (engine: Engine) => {
+    setSelectedEngine(engine);
   };
 
   if (isLoading) return <LinearProgress sx={{ bgcolor: isLight ? `${tokens.accent.primary}1A` : 'rgba(0, 243, 255, 0.1)', '& .MuiLinearProgress-bar': { bgcolor: tokens.accent.primary } }} />;
@@ -45,9 +44,9 @@ export const EngineList: React.FC = () => {
     <Box>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         {engines?.map((engine) => (
-          <Card 
-            key={engine.id} 
-            onClick={() => handleEdit(engine.id)}
+          <Card
+            key={engine.id}
+            onClick={() => handleEdit(engine)}
             sx={{ 
               width: '100%',
               bgcolor: isLight ? 'background.paper' : 'rgba(10, 10, 20, 0.4)', 
@@ -178,7 +177,7 @@ export const EngineList: React.FC = () => {
                     size="small" 
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleEdit(engine.id);
+                      handleEdit(engine);
                     }}
                     sx={{ color: 'text.secondary', '&:hover': { color: tokens.accent.primary, bgcolor: `${tokens.accent.primary}1A` } }}
                   >
@@ -208,10 +207,13 @@ export const EngineList: React.FC = () => {
         ))}
       </Box>
 
-      <EditEngineModal 
-        open={editModalOpen} 
-        onClose={() => setEditModalOpen(false)} 
-        engineId={selectedEngineId}
+      <EngineConfigModal
+        mode="edit"
+        open={!!selectedEngine}
+        onClose={() => setSelectedEngine(null)}
+        engineId={selectedEngine?.id}
+        engineName={selectedEngine?.engine_name}
+        initialYaml={selectedEngine?.yaml_configuration}
       />
     </Box>
   );
