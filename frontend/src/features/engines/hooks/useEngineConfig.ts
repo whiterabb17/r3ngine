@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import jsYaml from 'js-yaml';
+import { dump as yamlDump, load as yamlLoad } from 'js-yaml';
+import type { DumpOptions } from 'js-yaml';
 import type {
   EngineConfig, SectionKey, GlobalConfig,
 } from '../types/engineConfig';
@@ -187,14 +188,14 @@ function serialiseConfigToYaml(config: EngineConfig): string {
     writeSection('vigolium_audit', { run_vigolium_audit: true, intensity: c.intensity, use_ai: c.use_ai, timeout: c.timeout });
   }
 
-  return jsYaml.dump(out, { lineWidth: 120, quotingType: "'", forceQuotes: false } as jsYaml.DumpOptions);
+  return yamlDump(out, { lineWidth: 120, quotingType: "'", forceQuotes: false } as DumpOptions);
 }
 
 // ─── Parser ──────────────────────────────────────────────────────────────────
 
 function parseYamlToConfig(yamlStr: string): EngineConfig {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const raw: any = jsYaml.load(yamlStr) ?? {};
+  const raw: any = yamlLoad(yamlStr) ?? {};
   const def = DEFAULT_ENGINE_CONFIG;
 
   // Merge osint.leaks_and_secrets into top-level leaks_and_secrets
