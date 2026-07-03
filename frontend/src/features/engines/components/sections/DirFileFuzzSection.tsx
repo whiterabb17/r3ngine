@@ -39,7 +39,7 @@ export const DirFileFuzzSection: React.FC<Props> = ({ config, enabled, onToggle,
     >
       <Grid container spacing={1} sx={{ mb: 1 }}>
         {BOOL_FIELDS.map(([field, label]) => (
-          <Grid key={field}>
+          <Grid key={field} size={{ xs: 12, sm: 6 }}>
             <FormControlLabel
               control={
                 <Checkbox
