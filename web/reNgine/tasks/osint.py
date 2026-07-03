@@ -1,5 +1,6 @@
 import csv
 import logging
+import math
 import re
 import shutil
 import subprocess
@@ -9,6 +10,7 @@ import requests
 import base64
 import os
 import yaml
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from django.db import transaction
 
@@ -937,20 +939,37 @@ def secret_scanning(self, config=None, host=None, ctx=None, **kwargs):
     if not target_endpoints:
         return "No sensitive files found to scan."
 
+    # Cap at 70% to bound download time on large scans.
+    total_found = len(target_endpoints)
+    cap = max(1, math.ceil(total_found * 0.70))
+    target_endpoints = target_endpoints[:cap]
+    logger.info(
+        "secret_scanning: downloading %d / %d sensitive endpoints (70%% cap)",
+        cap,
+        total_found,
+    )
+
     temp_dir = f"{self.results_dir}/secrets_temp"
     os.makedirs(temp_dir, exist_ok=True)
 
-    # Download sensitive files
-    for js in target_endpoints:
+    def _download_one(js):
+        filename = "".join([c if c.isalnum() else "_" for c in js.http_url]) + ".js"
+        filepath = os.path.join(temp_dir, filename)
         try:
-            filename = "".join([c if c.isalnum() else "_" for c in js.http_url]) + ".js"
-            filepath = os.path.join(temp_dir, filename)
             resp = requests.get(js.http_url, timeout=10, verify=False)
             if resp.status_code == 200:
                 with open(filepath, "w") as f:
                     f.write(resp.text)
         except Exception as e:
             logger.error("Failed to download %s: %s", js.http_url, e)
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(_download_one, js) for js in target_endpoints]
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception as e:
+                logger.error("Download thread error: %s", e)
 
     findings_count = 0
 
