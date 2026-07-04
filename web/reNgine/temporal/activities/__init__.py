@@ -339,11 +339,23 @@ def _run_task(task_func, ctx: dict, task_name: str, description: str = None, db_
                         "activity_type=%s workflow_id=%s scan_id=%s" % (task_name, _workflow_id, _scan_id),
                     )
                 except TemporalCancelledError:
-                    # Temporal has cancelled this activity — propagate by marking
-                    # the scan aborted so the stream_command kill switch fires.
+                    details = activity.cancellation_details()
+                    if details and details.paused:
+                        # Temporal paused this activity (e.g. via UI or temporal CLI).
+                        # Kill the subprocess to free resources; do NOT mark the scan
+                        # aborted — Temporal will retry the activity when unpaused.
+                        activity.logger.warning(
+                            "[_run_task] Activity %s paused by Temporal for scan %s "
+                            "— subprocess will be killed, activity retried when unpaused.",
+                            task_name, proxy.scan_id,
+                        )
+                        cancel_event.set()
+                        return
+                    # Real cancellation (user abort or workflow cancel).
                     activity.logger.warning(
-                        f"[_run_task] Temporal cancellation received for {task_name}. "
-                        f"Marking scan {proxy.scan_id} as aborted."
+                        "[_run_task] Temporal cancellation received for %s "
+                        "— marking scan %s as aborted.",
+                        task_name, proxy.scan_id,
                     )
                     try:
                         from startScan.models import ScanHistory
@@ -355,7 +367,7 @@ def _run_task(task_func, ctx: dict, task_name: str, description: str = None, db_
                                 _scan.save()
                     except Exception as mark_err:
                         activity.logger.warning(
-                            f"[_run_task] Could not mark scan aborted: {mark_err}"
+                            "[_run_task] Could not mark scan aborted: %s", mark_err,
                         )
                     cancel_event.set()  # signal stream_command/run_command to abort
                     return  # stop heartbeating; kill switch will stop the subprocess
@@ -2402,18 +2414,30 @@ def run_stress_tool_activity(ctx: dict) -> dict:
             while not stop_heartbeat.is_set():
                 # Perform periodic cancellation check
                 if _is_cancelled():
-                    activity.logger.info(
-                        f"[RunStressToolActivity] Activity cancelled — terminating {tool}"
-                    )
+                    _cd = activity.cancellation_details() if _is_in_activity_context() else None
+                    if _cd and _cd.paused:
+                        activity.logger.info(
+                            "[RunStressToolActivity] Activity paused — terminating %s (will retry when unpaused)", tool
+                        )
+                    else:
+                        activity.logger.info(
+                            "[RunStressToolActivity] Activity cancelled — terminating %s", tool
+                        )
                     _terminate_process()
                     break
                 if _is_in_activity_context():
                     try:
                         activity.heartbeat(f"Running {tool} against {endpoint_url}")
                     except CancelledError:
-                        activity.logger.info(
-                            f"[RunStressToolActivity] Heartbeat received cancellation — terminating {tool}"
-                        )
+                        _cd = activity.cancellation_details()
+                        if _cd and _cd.paused:
+                            activity.logger.info(
+                                "[RunStressToolActivity] Activity paused via heartbeat — terminating %s (will retry when unpaused)", tool
+                            )
+                        else:
+                            activity.logger.info(
+                                "[RunStressToolActivity] Heartbeat received cancellation — terminating %s", tool
+                            )
                         _terminate_process()
                         break
                     except Exception as hb_err:
@@ -4023,7 +4047,11 @@ def run_email_security_activity(ctx: dict) -> dict:
                         "activity_type=email_security workflow_id=%s scan_id=%s" % (workflow_id, scan_id),
                     )
                 except TemporalCancelledError:
-                    logger.warning('[EMAIL_SECURITY] Temporal cancellation received for scan_id=%s', scan_id)
+                    _cd = activity.cancellation_details()
+                    if _cd and _cd.paused:
+                        logger.warning('[EMAIL_SECURITY] Activity paused by Temporal for scan_id=%s (will retry when unpaused)', scan_id)
+                    else:
+                        logger.warning('[EMAIL_SECURITY] Temporal cancellation received for scan_id=%s', scan_id)
                     return
                 except Exception as hb_err:
                     logger.log_line(
