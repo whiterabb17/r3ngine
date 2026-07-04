@@ -4,7 +4,6 @@ import logging
 import os
 import subprocess
 import tempfile
-import uuid
 from typing import Callable
 
 import redis
