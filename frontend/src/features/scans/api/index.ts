@@ -1011,8 +1011,8 @@ export const useStartEmployeeIntel = () => {
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
         body: JSON.stringify({ scan_id: scanId }),
       });
-      if (!resp.ok) throw new Error('Failed to start employee intelligence');
-      return resp.json() as Promise<{ job_id: string; already_running?: boolean }>;
+      if (resp.status === 409 || resp.ok) return resp.json() as Promise<{ job_id: string; already_running?: boolean }>;
+      throw new Error('Failed to start employee intelligence');
     },
   });
 };
