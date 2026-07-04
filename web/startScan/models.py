@@ -826,6 +826,9 @@ class Vulnerability(models.Model):
 	extracted_results = ArrayField(
 		models.CharField(max_length=5000), blank=True, null=True
 	)
+	affected_urls = ArrayField(
+		models.CharField(max_length=10000), blank=True, null=True, default=list
+	)
 
 	tags = models.ManyToManyField('VulnerabilityTags', related_name='vuln_tags', blank=True)
 	references = models.ManyToManyField('VulnerabilityReference', related_name='vuln_reference', blank=True)

@@ -232,6 +232,10 @@ export interface VigoliumAuditConfig {
   timeout: number;
 }
 
+export interface Tier7Config {
+  high_noise_modules: string[];
+}
+
 // ─── Root EngineConfig ───────────────────────────────────────────────────────
 
 export interface EngineConfig {
@@ -263,6 +267,7 @@ export interface EngineConfig {
   // Tier 7
   attack_path_modeling: SectionState<AttackPathConfig>;
   vigolium_audit: SectionState<VigoliumAuditConfig>;
+  tier_7: SectionState<Tier7Config>;
 }
 
 export type SectionKey = keyof Omit<EngineConfig, 'global'>;
@@ -371,5 +376,6 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
     },
   },
   attack_path_modeling: { enabled: false, config: { top_n: 5 } },
+  tier_7: { enabled: true, config: { high_noise_modules: ['sourcemap-detect', 'cookie-security-detect'] } },
   vigolium_audit: { enabled: false, config: { intensity: 'balanced', use_ai: false, timeout: 3600 } },
 };

@@ -2090,11 +2090,29 @@ export const ScanDetailPage = () => {
                 // animation: 'subtlePulse 3s ease-in-out infinite'
               }}>{scanId}</Box>
               {' | '}
-              TARGET: <Box component="span" sx={{
-                color: tokens.accent.secondary,
-                animation: 'subtlePulse 3s ease-in-out infinite',
-                animationDelay: '1.5s'
-              }}>{data.target_info?.name || 'N/A'}</Box>
+              TARGET: {data.target_info?.id ? (
+                <Link
+                  component={RouterLink}
+                  to={`/${projectSlug}/target/${data.target_info.id}/summary`}
+                  sx={{
+                    color: tokens.accent.secondary,
+                    textDecoration: 'none',
+                    animation: 'subtlePulse 3s ease-in-out infinite',
+                    animationDelay: '1.5s',
+                    '&:hover': {
+                      textDecoration: 'underline',
+                    }
+                  }}
+                >
+                  {data.target_info.name}
+                </Link>
+              ) : (
+                <Box component="span" sx={{
+                  color: tokens.accent.secondary,
+                  animation: 'subtlePulse 3s ease-in-out infinite',
+                  animationDelay: '1.5s'
+                }}>{data.target_info?.name || 'N/A'}</Box>
+              )}
             </Typography>
           </Box>
           <Stack spacing={1} sx={{ alignItems: { xs: 'flex-start', sm: 'flex-end' }, width: { xs: '100%', sm: 'auto' } }}>
