@@ -117,14 +117,49 @@ def parse_smugglex_result(finding):
 		'extracted_results': str(finding)
 	}
 
-def parse_second_order_result(finding):
+_SECOND_ORDER_SEVERITY: dict = {
+	'LogNon200Queries': 3,  # HIGH — broken external resource, potential takeover
+	'LogQueries': 0,        # INFO — external reference harvest (recon)
+	'LogInline': 0,         # INFO — inline content harvest (recon)
+}
+
+_SECOND_ORDER_TYPE: dict = {
+	'LogNon200Queries': 'Potential Resource Takeover',
+	'LogQueries': 'External Resource Reference',
+	'LogInline': 'Inline Content Discovered',
+}
+
+_SECOND_ORDER_NAME: dict = {
+	'LogNon200Queries': 'Second-Order: Non-200 External Resource',
+	'LogQueries': 'Second-Order: External Attribute Reference',
+	'LogInline': 'Second-Order: Inline Content',
+}
+
+
+def parse_second_order_finding(mode: str, page_url: str, element_key: str, values: list) -> dict:
+	"""Parse one entry from a second-order output file.
+
+	Args:
+		mode: JSON top-level key ('LogQueries', 'LogInline', 'LogNon200Queries').
+		page_url: the page URL that was scanned (nested dict key in output).
+		element_key: CSS-style selector ('img[src]') or element name ('script').
+		values: list of values found for this selector on this page.
+
+	Returns:
+		dict suitable for **kwargs to save_vulnerability().
+	"""
+	description = (
+		"Page: %s\nSelector: %s\nValues:\n%s"
+		% (page_url, element_key, "\n".join("  - %s" % v for v in values))
+	)
 	return {
-		'name': 'Subdomain Takeover (Second Order)',
-		'type': 'Subdomain Takeover',
-		'severity': 3,
-		'description': f"Vulnerable URL: {finding.get('url', 'N/A')}\nParameter/Link: {finding.get('parameter', finding.get('link', 'N/A'))}\nTakeover: {finding.get('takeover', 'N/A')}",
+		'name': _SECOND_ORDER_NAME.get(mode, 'Second-Order Finding'),
+		'type': _SECOND_ORDER_TYPE.get(mode, 'Information Disclosure'),
+		'severity': _SECOND_ORDER_SEVERITY.get(mode, 0),
+		'description': description,
+		'http_url': page_url,
 		'source': 'Second-Order',
-		'extracted_results': str(finding)
+		'extracted_results': values,
 	}
 
 def parse_favirecon_result(finding):
