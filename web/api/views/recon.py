@@ -560,9 +560,12 @@ class EmployeeIntelReplayView(APIView):
         if not scan_id:
             return Response({'events': [], 'complete': False})
 
+        if not ScanHistory.objects.filter(pk=scan_id).exists():
+            return Response({'events': [], 'complete': False})
+
         events = []
         complete = False
-        for _, fields in r.xrange(f'scan:logs:{scan_id}', '-', '+'):
+        for _, fields in r.xrange(f'scan:logs:{scan_id}', '-', '+', count=1000):
             try:
                 payload = json.loads(fields.get('data', '{}'))
             except (json.JSONDecodeError, TypeError):
