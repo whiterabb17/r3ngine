@@ -228,6 +228,15 @@ from reNgine.temporal_activities import (
 
     # Email security (internal module — Tier 2 post-scan)
     run_email_security_activity,
+
+    # Tier 6: Additional vuln scan activities
+    run_smugglex_activity,
+    run_second_order_activity,
+    run_nuclei_dast_activity,
+
+    # Port scan split activities
+    prepare_port_scan_activity,
+    parse_port_scan_results_activity,
 )
 
 
@@ -500,6 +509,8 @@ class Command(BaseCommand):
                 run_http_crawl_bridge_activity,
                 parse_http_crawl_results_activity,
                 run_port_scan_activity,
+                prepare_port_scan_activity,
+                parse_port_scan_results_activity,
                 run_screenshot_activity,
                 run_fetch_url_activity,
                 parse_enumeration_results_activity,
@@ -528,6 +539,9 @@ class Command(BaseCommand):
                 run_wpscan_activity,
                 run_semgrep_activity,
                 run_wptaint_scan_activity,
+                run_smugglex_activity,
+                run_second_order_activity,
+                run_nuclei_dast_activity,
                 run_vigolium_harvest_activity,
                 run_vigolium_scan_activity,
                 run_vigolium_discovery_activity,
