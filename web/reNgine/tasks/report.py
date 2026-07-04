@@ -596,6 +596,26 @@ def generate_report_task(report_id):
                 )
                 logger.log_line("[REPORT]", "LLM", "conclusion done (%d chars)" % len(data['llm_conclusion']))
 
+                logger.log_line("[REPORT]", "LLM", "generating missing vulnerability details")
+                from reNgine.tasks.llm import llm_vulnerability_description
+                vulns_updated = False
+                for v in vulns:
+                    if not v.description or not v.impact or not v.remediation:
+                        try:
+                            res = llm_vulnerability_description(v.id)
+                            if res and res.get('status'):
+                                vulns_updated = True
+                        except Exception as e:
+                            logger.log_line("[REPORT]", "ERROR", f"Failed to generate details for vuln {v.id}: {e}", level="error")
+
+                if vulns_updated:
+                    logger.log_line("[REPORT]", "LLM", "vulnerabilities were updated, refreshing context")
+                    vuln_ctx = build_vuln_context(scan, ignore_info=is_ignore_info_vuln)
+                    data['all_vulnerabilities'] = vuln_ctx['all_vulnerabilities']
+                    data['all_vulnerabilities_count'] = vuln_ctx['all_vulnerabilities_count']
+                    data['grouped_vulners_findings'] = vuln_ctx['grouped_vulners_findings']
+                    data['unique_vulnerabilities'] = vuln_ctx['unique_vulnerabilities']
+
                 if attack_paths:
                     logger.log_line("[REPORT]", "LLM", "generating attack path remediation (%d paths)" % len(attack_paths))
                     for path in attack_paths:
