@@ -1468,7 +1468,7 @@ export const ScanDetailPage = () => {
     { label: 'VULNERABILITIES', icon: ShieldAlert, show: data.vulnerability_count > 0 },
     { label: 'EXPOSURES', icon: ShieldAlert },
     { label: 'EXPLOITS', icon: Zap, show: data.exploitable_count > 0 },
-    { label: 'OSINT', icon: Search, show: data.scan_info.tasks?.includes('osint') },
+    { label: 'OSINT', icon: Search },
     { label: 'LEAKS', icon: Shield },
     { label: 'ATTACK PATHS', icon: GitBranch, show: data.vulnerability_count > 0 },
     { label: 'ATTACK SURFACE', icon: MapIcon },

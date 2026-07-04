@@ -176,3 +176,86 @@ class TestWptaintPluginDiscovery(TestCase):
 
         self.assertIsNone(result)
         mock_stream.assert_not_called()
+
+
+class TestWptaintParser(TestCase):
+    """Tests for parse_wptaint_results helper converting temp file paths to URL paths."""
+
+    def setUp(self):
+        """Prepares database objects for testing."""
+        self.domain = Domain.objects.create(name='wptaint-test.example.com')
+        self.engine = EngineType.objects.create(engine_name='WPTaint Test Engine')
+        self.scan = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_status=1,
+            start_scan_date=timezone.now(),
+            scan_type=self.engine,
+        )
+        self.scan.results_dir = '/tmp/rengine_test_wptaint'
+        self.subdomain = Subdomain.objects.create(
+            name='wptaint-test.example.com',
+            scan_history=self.scan,
+            target_domain=self.domain,
+        )
+
+    def test_parse_wptaint_results_converts_temp_path_to_url_path(self):
+        from reNgine.tasks.wptaint import parse_wptaint_results
+        
+        # Create a mock taint-results.json file
+        import tempfile
+        import json
+        
+        results_data = {
+            "results": [
+                {
+                    "check_id": "wp-request-sensitive-action-without-cap-check",
+                    "path": "/usr/src/scan_results/zuydam.co.za_22/temp_wptaint/advanced-access-manager/advanced-access-manager/application/Backend/tmpl/partial/content-access-form.php",
+                    "start": {"line": 138},
+                    "extra": {
+                        "message": "Found a sensitive action call without a capability check.",
+                        "dataflow_trace": {
+                            "source": {"snippet": "$_POST['action']"},
+                            "sink": {"snippet": "update_option(...)"}
+                        }
+                    }
+                }
+            ]
+        }
+        
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as tf:
+            json.dump(results_data, tf)
+            temp_file_name = tf.name
+            
+        try:
+            task_instance = MagicMock()
+            task_instance.scan = self.scan
+            task_instance.domain = self.domain
+            
+            parse_wptaint_results(
+                task_instance=task_instance,
+                output_file=temp_file_name,
+                subdomains=[self.subdomain],
+                plugin_name="advanced-access-manager"
+            )
+            
+            # Query the vulnerability created
+            vulns = Vulnerability.objects.filter(
+                scan_history=self.scan,
+                source='WPTaintScan'
+            )
+            self.assertEqual(len(vulns), 1)
+            vuln = vulns[0]
+            
+            # Assert that the http_url has the url path and not the temp file path
+            expected_url = "http://wptaint-test.example.com/wp-content/plugins/advanced-access-manager/application/Backend/tmpl/partial/content-access-form.php"
+            self.assertEqual(vuln.http_url, expected_url)
+            
+            # Assert that the description does not contain the temp file path, but instead the url path
+            self.assertIn("**File**: `/wp-content/plugins/advanced-access-manager/application/Backend/tmpl/partial/content-access-form.php` (Line 138)", vuln.description)
+            self.assertNotIn("temp_wptaint", vuln.description)
+            
+        finally:
+            import os
+            if os.path.exists(temp_file_name):
+                os.remove(temp_file_name)
+

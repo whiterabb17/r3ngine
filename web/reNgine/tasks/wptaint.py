@@ -83,7 +83,36 @@ def parse_wptaint_results(task_instance, output_file, subdomains, plugin_name):
 
             file_path = finding.get('path', '')
             line = (finding.get('start') or {}).get('line')
+            
+            url_path = ''
             if file_path:
+                # Convert backslashes to forward slashes for cross-platform robustness
+                normalized_file_path = file_path.replace('\\', '/')
+                temp_marker = '/temp_wptaint/'
+                
+                if temp_marker in normalized_file_path:
+                    # Get path relative to the temp download directory
+                    rel_part = normalized_file_path.split(temp_marker, 1)[1]
+                else:
+                    # Fallback path cleaning if the marker is missing (e.g. simplified paths)
+                    rel_part = normalized_file_path.lstrip('/')
+                
+                path_parts = rel_part.split('/')
+                # Remove the plugin name prefix (from plugin_dir and potentially the zip root folder)
+                if path_parts and path_parts[0] == plugin_name:
+                    path_parts = path_parts[1:]
+                if path_parts and path_parts[0] == plugin_name:
+                    path_parts = path_parts[1:]
+                
+                relative_path_within_plugin = '/'.join(path_parts)
+                url_path = f"/wp-content/plugins/{plugin_name}/{relative_path_within_plugin}"
+
+            if url_path:
+                file_line = '`%s`' % url_path
+                if line:
+                    file_line += ' (Line %d)' % line
+                description_parts.append('**File**: ' + file_line)
+            elif file_path:
                 file_line = '`%s`' % file_path
                 if line:
                     file_line += ' (Line %d)' % line
@@ -101,9 +130,10 @@ def parse_wptaint_results(task_instance, output_file, subdomains, plugin_name):
             severity_num = NUCLEI_SEVERITY_MAP.get(severity_str, 3)
 
             for subdomain in subdomains:
+                vuln_http_url = 'http://%s%s' % (subdomain.name, url_path) if url_path else 'http://%s' % subdomain.name
                 vuln, created = save_vulnerability(
                     target_domain=task_instance.domain,
-                    http_url='http://%s' % subdomain.name,
+                    http_url=vuln_http_url,
                     scan_history=task_instance.scan,
                     subdomain=subdomain,
                     name='WP Taint (%s): %s' % (plugin_name, canonical_name),

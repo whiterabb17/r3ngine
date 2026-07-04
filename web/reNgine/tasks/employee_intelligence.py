@@ -85,12 +85,12 @@ def _run_theharvester_employees(scan_id: int, domain: str) -> int:
     theharvester_dir = '/usr/src/github/theHarvester'
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        output_json = os.path.join(tmpdir, 'employees.json')
+        output_base = os.path.join(tmpdir, 'employees_out')
         cmd = [
             'uv', 'run', 'theHarvester',
             '-d', domain,
             '-b', 'linkedin,google',
-            '-f', output_json,
+            '-f', output_base,
         ]
         subprocess.run(
             cmd,
@@ -100,6 +100,7 @@ def _run_theharvester_employees(scan_id: int, domain: str) -> int:
             cwd=theharvester_dir,
         )
 
+        output_json = f'{output_base}.json'
         if not os.path.isfile(output_json):
             return 0
 
