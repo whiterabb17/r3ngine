@@ -23,6 +23,32 @@ from scanEngine.models import Proxy
 
 logger = logging.getLogger(__name__)
 
+# Merged second-order config — covers takeover, CDN, JS, parameter, and title detection.
+# Written to disk before each scan run so we never depend on a GitHub download.
+_SECOND_ORDER_MERGED_CONFIG: dict = {
+    # Non-200 external URLs — primary takeover/hijacking signal (HIGH severity)
+    "LogNon200Queries": [
+        "img[src]", "script[src]", "link[href]", "form[action]",
+        "iframe[src]", "a[href]", "object[data]", "source[src]",
+        "frame[src]", "embed[src]", "area[href]", "base[href]",
+    ],
+    # All external attribute references — recon / SSRF vector discovery (INFO)
+    "LogQueries": [
+        "img[src]", "script[src]", "link[href]", "form[action]",
+        "input[name]", "input[value]", "meta[content]", "meta[name]",
+        "iframe[src]", "a[href]", "object[data]", "source[src]",
+        "frame[src]", "embed[src]", "area[href]", "base[href]",
+    ],
+    # Inline content — JS and title analysis (INFO)
+    "LogInline": ["script", "title", "noscript", "style"],
+    "Headers": {
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+    },
+}
+
 def vulnerability_scan(self, urls=[], ctx={}, description=None):
 	"""This task serves as the entrypoint for vulnerability scans, spawning all enabled scanners.
 
@@ -251,15 +277,14 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 			activity_id=self.activity_id)
 
 		# Re-run the tag splitter because updating templates overwrites the split tags on disk
-		import sys
-		from django.conf import settings
-		splitter_script = os.path.normpath(os.path.join(settings.BASE_DIR, '..', 'docker', 'scripts', 'nuclei_tag_splitter.py'))
-		run_command(
-			f'{sys.executable} {splitter_script}',
-			shell=True,
-			history_file=self.history_file,
-			scan_id=self.scan_id,
-			activity_id=self.activity_id)
+		# splitter_script = '/usr/src/app/scripts/nuclei_tag_splitter.py'
+		# import sys
+		# run_command(
+		# 	f'{sys.executable} {splitter_script}',
+		# 	shell=True,
+		# 	history_file=self.history_file,
+		# 	scan_id=self.scan_id,
+		# 	activity_id=self.activity_id)
 	templates = []
 	if not (nuclei_templates or custom_nuclei_templates):
 		templates.append(NUCLEI_DEFAULT_TEMPLATES_PATH)
@@ -1308,45 +1333,34 @@ def smugglex_scan(self, urls=[], ctx={}, description=None):
 			logger.error(f"Smugglex parse error: {e}")
 
 def second_order_scan(self, urls=[], ctx={}, description=None):
-	"""Second Order Scan"""
+	"""Second Order Scan — runs the second-order Go tool against each target URL.
+
+	Writes the embedded merged config (_SECOND_ORDER_MERGED_CONFIG) covering 5 detection
+	modes: LogNon200Queries, LogQueries (img/script/link/form/input/meta),
+	LogInline (script/title/noscript/style), and custom headers.
+
+	Produces up to 3 output files per run:
+	  attributes.json               -> LogQueries  (INFO severity)
+	  inline.json                   -> LogInline   (INFO severity)
+	  non-200-url-attributes.json   -> LogNon200Queries (HIGH severity)
+	"""
 	from reNgine.common_func import save_vulnerability
-	from reNgine.utils.task import run_command
-	from reNgine.tasks.parsers import parse_second_order_result
-	import os
-	import json
+	from reNgine.tasks.parsers import parse_second_order_finding
 
 	logger.info('Second Order scan started')
 
-	config_path = "/usr/local/config/takeover.json"
-	config_url = "https://raw.githubusercontent.com/mhmdiaa/second-order/master/config/takeover.json"
-
-	def _valid_json_config(path):
-		try:
-			with open(path) as fh:
-				data = json.load(fh)
-			return isinstance(data, (dict, list))
-		except Exception:
-			return False
-
+	config_path = "/usr/local/config/second_order_merged.json"
 	os.makedirs("/usr/local/config", exist_ok=True)
 
-	if os.path.exists(config_path) and not _valid_json_config(config_path):
-		logger.warning('second_order: cached config is invalid JSON, deleting and re-downloading')
-		os.remove(config_path)
+	with open(config_path, 'w') as fh:
+		json.dump(_SECOND_ORDER_MERGED_CONFIG, fh)
 
-	if not os.path.exists(config_path):
-		run_command("curl -sL %s -o %s" % (config_url, config_path), shell=True)
-
-	if not _valid_json_config(config_path):
-		logger.warning('second_order: config unavailable or invalid — skipping scan')
-		return
-
-	targets = urls or [f"https://{self.domain.name}"]
-	out_dir = f"{self.results_dir}/second_order_out"
+	targets = urls or ["https://%s" % self.domain.name]
+	out_dir = "%s/second_order_out" % self.results_dir
 	os.makedirs(out_dir, exist_ok=True)
 
 	for target in targets:
-		cmd = f"second-order -target {target} -config {config_path} -output {out_dir}"
+		cmd = "second-order -target %s -config %s -output %s" % (target, config_path, out_dir)
 		run_command(cmd, shell=True, scan_id=self.scan_id, activity_id=self.activity_id)
 
 	for fname in os.listdir(out_dir):
@@ -1356,13 +1370,21 @@ def second_order_scan(self, urls=[], ctx={}, description=None):
 		try:
 			with open(fpath, 'r') as fh:
 				data = json.load(fh)
-			for finding in data:
-				vuln_data = parse_second_order_result(finding)
-				save_vulnerability(
-					target_domain=self.domain,
-					scan_history=self.scan,
-					subscan=self.subscan,
-					**vuln_data)
+			for mode_key, pages in data.items():
+				if not isinstance(pages, dict):
+					continue
+				for page_url, selectors in pages.items():
+					if not isinstance(selectors, dict):
+						continue
+					for element_key, values in selectors.items():
+						if not isinstance(values, list) or not values:
+							continue
+						vuln_data = parse_second_order_finding(mode_key, page_url, element_key, values)
+						save_vulnerability(
+							target_domain=self.domain,
+							scan_history=self.scan,
+							subscan=self.subscan,
+							**vuln_data)
 		except Exception as e:
 			logger.error('second_order: parse error on %s: %s', fname, e)
 
@@ -1391,6 +1413,15 @@ def nuclei_dast_scan(self, urls=[], ctx={}, description=None):
 	timeout = config.get(TIMEOUT) or self.yaml_configuration.get(TIMEOUT, DEFAULT_HTTP_TIMEOUT)
 	proxy_obj = Proxy.objects.first()
 	proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
+	if proxy:
+		from urllib.parse import urlparse as _urlparse
+		_scheme = _urlparse(proxy).scheme
+		if _scheme not in ('http', 'https', 'socks5'):
+			logger.warning(
+				'nuclei_dast: proxy scheme %s not supported by nuclei; running without proxy',
+				_scheme,
+			)
+			proxy = None
 
 	cmd = f"nuclei -dast -headless -l {input_path} -j"
 	if rate_limit:
