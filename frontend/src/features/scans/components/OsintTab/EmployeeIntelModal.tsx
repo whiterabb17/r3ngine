@@ -243,7 +243,7 @@ export const EmployeeIntelModal: React.FC<EmployeeIntelModalProps> = ({
             <Button onClick={handleViewEmployees} variant="contained">
               View Employees
             </Button>
-            <Button onClick={onClose}>Close</Button>
+            <Button onClick={handleViewEmployees}>Close</Button>
           </>
         ) : (
           <>
