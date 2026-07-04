@@ -1309,46 +1309,62 @@ def smugglex_scan(self, urls=[], ctx={}, description=None):
 
 def second_order_scan(self, urls=[], ctx={}, description=None):
 	"""Second Order Scan"""
-	from reNgine.common_func import save_vulnerability, get_http_urls
+	from reNgine.common_func import save_vulnerability
 	from reNgine.utils.task import run_command
 	from reNgine.tasks.parsers import parse_second_order_result
 	import os
 	import json
-	
-	logger.info('Second Order scan started')
-	
-	config_path = "/usr/local/config/takeover.json"
-	if not os.path.exists(config_path):
-		os.makedirs("/usr/local/config", exist_ok=True)
-		run_command(f"curl -sL https://raw.githubusercontent.com/mhmdiaa/second-order/master/takeover.json -o {config_path}", shell=True)
 
-	targets = urls or []
-	if not targets:
-		# Could just use the main domain
-		targets = [f"https://{self.domain.name}"]
-	
+	logger.info('Second Order scan started')
+
+	config_path = "/usr/local/config/takeover.json"
+	config_url = "https://raw.githubusercontent.com/mhmdiaa/second-order/master/config/takeover.json"
+
+	def _valid_json_config(path):
+		try:
+			with open(path) as fh:
+				data = json.load(fh)
+			return isinstance(data, (dict, list))
+		except Exception:
+			return False
+
+	os.makedirs("/usr/local/config", exist_ok=True)
+
+	if os.path.exists(config_path) and not _valid_json_config(config_path):
+		logger.warning('second_order: cached config is invalid JSON, deleting and re-downloading')
+		os.remove(config_path)
+
+	if not os.path.exists(config_path):
+		run_command("curl -sL %s -o %s" % (config_url, config_path), shell=True)
+
+	if not _valid_json_config(config_path):
+		logger.warning('second_order: config unavailable or invalid — skipping scan')
+		return
+
+	targets = urls or [f"https://{self.domain.name}"]
 	out_dir = f"{self.results_dir}/second_order_out"
 	os.makedirs(out_dir, exist_ok=True)
-	
+
 	for target in targets:
 		cmd = f"second-order -target {target} -config {config_path} -output {out_dir}"
 		run_command(cmd, shell=True, scan_id=self.scan_id, activity_id=self.activity_id)
 
 	for fname in os.listdir(out_dir):
-		if fname.endswith(".json"):
-			fpath = os.path.join(out_dir, fname)
-			try:
-				with open(fpath, 'r') as f:
-					data = json.load(f)
-					for finding in data:
-						vuln_data = parse_second_order_result(finding)
-						save_vulnerability(
-							target_domain=self.domain,
-							scan_history=self.scan,
-							subscan=self.subscan,
-							**vuln_data)
-			except Exception as e:
-				logger.error(f"Second Order parse error on {fname}: {e}")
+		if not fname.endswith(".json"):
+			continue
+		fpath = os.path.join(out_dir, fname)
+		try:
+			with open(fpath, 'r') as fh:
+				data = json.load(fh)
+			for finding in data:
+				vuln_data = parse_second_order_result(finding)
+				save_vulnerability(
+					target_domain=self.domain,
+					scan_history=self.scan,
+					subscan=self.subscan,
+					**vuln_data)
+		except Exception as e:
+			logger.error('second_order: parse error on %s: %s', fname, e)
 
 def nuclei_dast_scan(self, urls=[], ctx={}, description=None):
 	"""Nuclei DAST Scan"""
