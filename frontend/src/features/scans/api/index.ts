@@ -972,3 +972,72 @@ export const fetchEmailDiscoveryReplay = async (jobId: string): Promise<{ events
   if (!resp.ok) return { events: [], complete: false };
   return resp.json();
 };
+
+// ── Employee Intelligence ─────────────────────────────────────────────────────
+
+export interface EmployeeRecord {
+  id: number;
+  name: string | null;
+  designation: string | null;
+  metadata: {
+    maigret?: { site: string; url: string }[];
+    [key: string]: unknown;
+  };
+}
+
+export const useEmployees = (scanId: number) => {
+  return useQuery<EmployeeRecord[]>({
+    queryKey: ['employees', scanId],
+    queryFn: async () => {
+      const resp = await fetch(`/api/queryEmployees/?scan_id=${scanId}`, {
+        credentials: 'include',
+      });
+      if (!resp.ok) throw new Error('Failed to fetch employees');
+      const data = await resp.json();
+      return (data.employees || []) as EmployeeRecord[];
+    },
+    enabled: !!scanId,
+  });
+};
+
+export const useStartEmployeeIntel = () => {
+  return useMutation({
+    mutationFn: async ({ scanId }: { scanId: number }) => {
+      const csrfToken =
+        document.cookie.split('; ').find((row) => row.startsWith('csrftoken='))?.split('=')[1] || '';
+      const resp = await fetch('/api/employeeIntel/start/', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ scan_id: scanId }),
+      });
+      if (!resp.ok) throw new Error('Failed to start employee intelligence');
+      return resp.json() as Promise<{ job_id: string; already_running?: boolean }>;
+    },
+  });
+};
+
+export const useStopEmployeeIntel = () => {
+  return useMutation({
+    mutationFn: async ({ jobId }: { jobId: string }) => {
+      const csrfToken =
+        document.cookie.split('; ').find((row) => row.startsWith('csrftoken='))?.split('=')[1] || '';
+      const resp = await fetch('/api/employeeIntel/stop/', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ job_id: jobId }),
+      });
+      if (!resp.ok) throw new Error('Failed to stop employee intelligence');
+      return resp.json();
+    },
+  });
+};
+
+export const fetchEmployeeIntelReplay = async (
+  jobId: string,
+): Promise<{ events: object[]; complete: boolean }> => {
+  const resp = await fetch(`/api/employeeIntel/${jobId}/replay/`, { credentials: 'include' });
+  if (!resp.ok) return { events: [], complete: false };
+  return resp.json();
+};
