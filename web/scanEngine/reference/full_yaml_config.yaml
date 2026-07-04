@@ -398,11 +398,16 @@ firewall_vpn_scan:
   threads: 20
 
 # ---------------------------------------------------------------------------
-# TIER 7 — Attack Path Modeling
+# TIER 7 — Attack Path Modeling & Intelligence
 # ---------------------------------------------------------------------------
 attack_path_modeling:
   enabled: true
   top_n: 10
+
+tier_7:
+  high_noise_modules:
+    - sourcemap-detect
+    - cookie-security-detect
 
 # ===========================================================================
 # STANDALONE WORKFLOWS

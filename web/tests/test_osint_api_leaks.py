@@ -45,8 +45,7 @@ class TestAPILeaks(TestCase):
     def test_porch_pirate_saves_leaks(self, mock_proxy, mock_run):
         from reNgine.osint.api_leaks import run_porch_pirate
 
-        # 2-tuple: (return_code, output)
-        mock_run.return_value = (0, 'SECRET_KEY=abc123\nAPI_TOKEN=xyz789\n')
+        mock_run.return_value = (0, '- Header: X-API-Key: sk-abc123xyz\nSECRET_KEY=mysecret\n')
 
         run_porch_pirate(FakeSelf(), 'example-test.local', self.scan, '/tmp')
 
@@ -70,8 +69,74 @@ class TestAPILeaks(TestCase):
     def test_porch_pirate_skips_lines_without_separator(self, mock_proxy, mock_run):
         from reNgine.osint.api_leaks import run_porch_pirate
 
-        # Lines without '=' or ':' should not be saved
         mock_run.return_value = (0, 'plainlinewithoutkey\nanothernomatch\n')
+
+        run_porch_pirate(FakeSelf(), 'example-test.local', self.scan, '/tmp')
+
+        leaks = SecretLeak.objects.filter(scan_history=self.scan, tool_name='porch-pirate')
+        self.assertEqual(leaks.count(), 0)
+
+    @patch('reNgine.osint.api_leaks.run_command')
+    @patch('reNgine.osint.api_leaks._get_proxy', return_value=None)
+    def test_porch_pirate_skips_on_nonzero_exit_after_retries(self, mock_proxy, mock_run):
+        from reNgine.osint.api_leaks import run_porch_pirate
+
+        # Simulate 3 consecutive failures (initial + 2 retries)
+        mock_run.return_value = (1, 'Traceback (most recent call last):\n  sock = conn.create_connection(\nConnectionRefusedError: [Errno 111] Connection refused\n')
+
+        run_porch_pirate(FakeSelf(), 'example-test.local', self.scan, '/tmp')
+
+        # run_command must have been called 3 times (initial + 2 retries)
+        self.assertEqual(mock_run.call_count, 3)
+        # No traceback lines saved as findings
+        leaks = SecretLeak.objects.filter(scan_history=self.scan, tool_name='porch-pirate')
+        self.assertEqual(leaks.count(), 0)
+
+    @patch('reNgine.osint.api_leaks.run_command')
+    @patch('reNgine.osint.api_leaks._get_proxy', return_value=None)
+    def test_porch_pirate_retries_then_succeeds(self, mock_proxy, mock_run):
+        from reNgine.osint.api_leaks import run_porch_pirate
+
+        # First call fails, second succeeds
+        mock_run.side_effect = [
+            (1, 'ConnectionRefusedError: connection refused\n'),
+            (0, '- Header: Authorization: Bearer eyJsecrettoken\n'),
+        ]
+
+        run_porch_pirate(FakeSelf(), 'example-test.local', self.scan, '/tmp')
+
+        self.assertEqual(mock_run.call_count, 2)
+        leaks = SecretLeak.objects.filter(scan_history=self.scan, tool_name='porch-pirate')
+        self.assertGreater(leaks.count(), 0)
+
+    @patch('reNgine.osint.api_leaks.run_command')
+    @patch('reNgine.osint.api_leaks._get_proxy', return_value=None)
+    def test_porch_pirate_strips_ansi_and_skips_metadata(self, mock_proxy, mock_run):
+        from reNgine.osint.api_leaks import run_porch_pirate
+
+        # Realistic porch-pirate output with ANSI codes and metadata noise
+        ansi_output = (
+            '\x1b[1m- Name: \x1b[0m\x1b[36mMy API\x1b[0m\n'
+            '\x1b[1m- Request Method: \x1b[0m\x1b[33mGET\x1b[0m\n'
+            '\x1b[1m- URL: \x1b[0m\x1b[33m{{baseUrl}}/endpoint\x1b[0m\n'
+            '\x1b[1m- Authorization: \x1b[0m\x1b[33mapikey\x1b[0m\n'
+            '\x1b[1m- Parameter: \x1b[0msecret_key\x1b[0m=\x1b[32mreal-secret-abc\x1b[0m\n'
+        )
+        mock_run.return_value = (0, ansi_output)
+
+        run_porch_pirate(FakeSelf(), 'example-test.local', self.scan, '/tmp')
+
+        leaks = SecretLeak.objects.filter(scan_history=self.scan, tool_name='porch-pirate')
+        # Only the parameter line with a real value should be saved
+        self.assertEqual(leaks.count(), 1)
+        self.assertIn('secret_key', leaks.first().match_content)
+
+    @patch('reNgine.osint.api_leaks.run_command')
+    @patch('reNgine.osint.api_leaks._get_proxy', return_value=None)
+    def test_porch_pirate_skips_template_placeholder_values(self, mock_proxy, mock_run):
+        from reNgine.osint.api_leaks import run_porch_pirate
+
+        mock_run.return_value = (0, '- Parameter: api_key={{api_key}}\n')
 
         run_porch_pirate(FakeSelf(), 'example-test.local', self.scan, '/tmp')
 

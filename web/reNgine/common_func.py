@@ -1982,16 +1982,16 @@ def get_hackerone_key_username():
 def parse_llm_vulnerability_report(report):
 	# Do not globally strip '**' as we want to preserve markdown bolding in the Remediation playbook.
 	data = {}
-	# Split on the main headers, optionally allowing markdown bold/italic asterisks around them.
-	sections = re.split(r'\n(?=\**(?:Description|Impact|Remediation|References)\**\s*:)', report.strip(), flags=re.IGNORECASE)
+	# Split on the main headers, optionally allowing markdown bold/italic asterisks or header hashes around them.
+	sections = re.split(r'\n(?=[#\s\*]*(?:Description|Impact|Remediation|References)[#\s\*]*\s*:)', report.strip(), flags=re.IGNORECASE)
 
 	for section in sections:
 		if not section.strip():
 			continue
 
-		# Accept headers with or without asterisks, and with or without spaces.
+		# Accept headers with or without asterisks/hashes, and with or without spaces.
 		match = re.match(
-			r'^\**\s*(Description|Impact|Remediation|References)\s*\**\s*:\s*(.*)',
+			r'^[#\s\*]*(Description|Impact|Remediation|References)[#\s\*]*\s*:\s*(.*)',
 			section.strip(),
 			re.DOTALL | re.IGNORECASE,
 		)

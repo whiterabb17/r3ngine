@@ -489,3 +489,88 @@ class EmailDiscoveryReplayView(APIView):
                     complete = True
 
         return Response({'events': events, 'complete': complete})
+
+
+# ── Employee Intelligence Views ──────────────────────────────────────────────
+
+from reNgine.tasks.employee_intelligence import (
+    run_employee_intelligence,
+    _get_active_job as _get_active_emp_job,
+    _set_active as _set_emp_active,
+    _redis as _emp_redis,
+)
+
+
+class StartEmployeeIntelView(APIView):
+    """POST /api/employeeIntel/start/ — kick off background employee intelligence for a scan."""
+    permission_classes = [IsPenetrationTester]
+
+    def post(self, request: 'rest_framework.request.Request') -> Response:
+        scan_id = request.data.get('scan_id')
+        if not scan_id:
+            return Response({'error': 'scan_id required'}, status=400)
+
+        try:
+            scan = ScanHistory.objects.select_related('domain').get(pk=scan_id)
+        except ScanHistory.DoesNotExist:
+            return Response({'error': 'scan not found'}, status=404)
+
+        existing = _get_active_emp_job(int(scan_id))
+        if existing:
+            return Response({'job_id': existing, 'already_running': True})
+
+        job_id = str(_uuid.uuid4())
+        _set_emp_active(int(scan_id), job_id)
+
+        t = threading.Thread(
+            target=run_employee_intelligence,
+            args=[int(scan_id), scan.domain.name, job_id],
+            daemon=True,
+        )
+        t.start()
+
+        return Response({'job_id': job_id})
+
+
+class StopEmployeeIntelView(APIView):
+    """POST /api/employeeIntel/stop/ — send stop signal to a running employee intel job."""
+    permission_classes = [IsPenetrationTester]
+
+    def post(self, request: 'rest_framework.request.Request') -> Response:
+        job_id: str | None = request.data.get('job_id')
+        if not job_id:
+            return Response({'error': 'job_id required'}, status=400)
+
+        r = _emp_redis()
+        scan_id = r.get(f'employee_intel:job:{job_id}:scan_id')
+        if scan_id and not ScanHistory.objects.filter(pk=scan_id).exists():
+            return Response({'error': 'job not found'}, status=404)
+
+        r.set(f'employee_intel:{job_id}:stop', '1', ex=3600)
+        return Response({'status': 'stopping'})
+
+
+class EmployeeIntelReplayView(APIView):
+    """GET /api/employeeIntel/<job_id>/replay/ — replay log stream events for a job."""
+    permission_classes = [IsPenetrationTester]
+
+    def get(self, request: 'rest_framework.request.Request', job_id: str) -> Response:
+        r = _emp_redis()
+        scan_id: str | None = r.get(f'employee_intel:job:{job_id}:scan_id')
+        if not scan_id:
+            return Response({'events': [], 'complete': False})
+
+        events = []
+        complete = False
+        for _, fields in r.xrange(f'scan:logs:{scan_id}', '-', '+'):
+            try:
+                payload = json.loads(fields.get('data', '{}'))
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if payload.get('job_id') != job_id:
+                continue
+            events.append(payload)
+            if payload.get('type') == 'employee_intel_complete':
+                complete = True
+
+        return Response({'events': events, 'complete': complete})
