@@ -1250,6 +1250,8 @@ def create_proxy_list_activity(ctx: dict) -> str:
     logger.log_line("[TEMPORAL]", "START", f"task=create_proxy_list scan_id={scan_id}")
 
     proxies = get_proxy_list()
+    # Socks proxies are routed through proxychains, not passed as per-tool --proxy flags.
+    proxies = [p for p in proxies if not p.startswith('socks')]
     if not proxies:
         logger.log_line("[TEMPORAL]", "COMPLETE", f"task=create_proxy_list scan_id={scan_id} result=no_proxies")
         return None

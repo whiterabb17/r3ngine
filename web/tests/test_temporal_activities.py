@@ -86,7 +86,7 @@ class TestScanContext(TestCase):
 
 class TestSubScanDispatchRegistry(TestCase):
     def test_all_known_scan_types_in_registry(self):
-        from reNgine.temporal_workflows import _SUBSCAN_DISPATCH
+        from reNgine.temporal.workflows import _SUBSCAN_DISPATCH
         # All top-level YAML keys that can appear in any scan engine fixture or
         # default_yaml_config.yaml must be registered here so SubScanWorkflow's
         # ValueError guard is never triggered by a valid scan type.
@@ -108,7 +108,7 @@ class TestSubScanDispatchRegistry(TestCase):
             self.assertIn(t, _SUBSCAN_DISPATCH, f"'{t}' is missing from _SUBSCAN_DISPATCH")
 
     def test_regular_entry_has_required_keys(self):
-        from reNgine.temporal_workflows import _SUBSCAN_DISPATCH
+        from reNgine.temporal.workflows import _SUBSCAN_DISPATCH
         for scan_type, entry in _SUBSCAN_DISPATCH.items():
             if entry is None:
                 continue  # special-case — handled inline
