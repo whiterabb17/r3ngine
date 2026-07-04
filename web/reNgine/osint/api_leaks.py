@@ -1,4 +1,5 @@
 import logging
+import re
 import requests
 
 from startScan.models import Dork, Subdomain
@@ -8,6 +9,37 @@ from scanEngine.models import Proxy
 from reNgine.common_func import get_random_proxy
 
 logger = logging.getLogger(__name__)
+
+# Strip ANSI color/bold escape sequences emitted by porch-pirate
+_ANSI_ESCAPE = re.compile(r'\x1b\[[0-9;]*[mK]')
+
+# Value portion that is purely a Postman template placeholder — not a real secret
+_TEMPLATE_VALUE = re.compile(r'^\{\{[^}]+\}\}$')
+
+# Line prefixes that are structural porch-pirate metadata, never credentials
+_PP_SKIP_PREFIXES = (
+    '- Name:',
+    '- Request Method:',
+    '- URL:',
+    'Request ID ',
+    '[*] Querying workspace',
+    '[+] Query returned',
+    '- Requests:',
+    '- Workspaces:',
+    '- Collections:',
+    '- Teams:',
+    '- APIs:',
+    '- Flows:',
+    'by Mand Consulting Group',
+    '@zer0pwn',
+    '@xixasec',
+)
+
+# Authorization lines that state only the auth type with no actual token value
+_AUTH_TYPE_ONLY = re.compile(
+    r'^-\s+Authorization:\s*(apikey|bearer|basic|noauth|oauth2|oauth1|none)\s*$',
+    re.IGNORECASE,
+)
 
 _SWAGGER_PATHS = [
     '/swagger.json',
@@ -34,19 +66,56 @@ def _get_proxy() -> str | None:
     return get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
 
 
+def _pp_is_secret_line(line: str) -> bool:
+    """Return True if a (ANSI-stripped) porch-pirate output line may contain a secret."""
+    if any(line.startswith(p) for p in _PP_SKIP_PREFIXES):
+        return False
+    if _AUTH_TYPE_ONLY.match(line):
+        return False
+    if '=' not in line and ':' not in line:
+        return False
+    # Skip lines whose value is purely a Postman template placeholder
+    for sep in ('=', ':'):
+        idx = line.find(sep)
+        if idx != -1 and _TEMPLATE_VALUE.match(line[idx + 1:].strip()):
+            return False
+    return True
+
+
 def run_porch_pirate(self, host: str, scan_history, results_dir: str) -> None:
-    """Search public Postman workspaces for leaked secrets related to host."""
+    """Search public Postman workspaces for leaked secrets related to host.
+
+    Retries up to 2 times on non-zero exit (e.g. transient connection errors).
+    """
     proxy = _get_proxy()
     cmd = ['porch-pirate', '-s', host, '-l', '25', '--dump']
     if proxy:
         cmd = ['proxychains4', '-q'] + cmd
 
     logger.info("porch-pirate starting for %s", host)
-    return_code, output = run_command(cmd, cwd=results_dir)
 
-    for line in output.splitlines():
+    return_code, output = run_command(cmd, cwd=results_dir)
+    for attempt in range(1, 3):
+        if return_code == 0:
+            break
+        logger.warning(
+            "porch-pirate exited with code %s for %s — retry %d/2",
+            return_code, host, attempt,
+        )
+        return_code, output = run_command(cmd, cwd=results_dir)
+
+    if return_code != 0:
+        logger.error(
+            "porch-pirate failed after 3 attempts for %s (exit_code=%s) — no findings saved",
+            host, return_code,
+        )
+        return
+
+    clean = _ANSI_ESCAPE.sub('', output)
+    saved = 0
+    for line in clean.splitlines():
         line = line.strip()
-        if line and ('=' in line or ':' in line):
+        if line and _pp_is_secret_line(line):
             save_secret_leak(
                 scan_history=scan_history,
                 tool_name='porch-pirate',
@@ -54,8 +123,9 @@ def run_porch_pirate(self, host: str, scan_history, results_dir: str) -> None:
                 source_url='postman://%s' % host,
                 match_content=line,
             )
+            saved += 1
 
-    logger.info("porch-pirate finished for %s — exit_code=%s", host, return_code)
+    logger.info("porch-pirate finished for %s — exit_code=%s, saved=%d", host, return_code, saved)
 
 
 def run_postleaks(self, host: str, scan_history, results_dir: str) -> None:

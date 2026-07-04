@@ -1,5 +1,6 @@
 import logging
 import hashlib
+import yaml
 from django.db import IntegrityError, transaction
 from django.db.models import Q, Count
 from django.utils import timezone
@@ -22,6 +23,15 @@ class VulnerabilityCorrelationEngine:
 			scan_history (ScanHistory, optional): The scan history object being analyzed.
 		"""
 		self.scan_history = scan_history
+		self.tier7_config = {}
+		if self.scan_history and hasattr(self.scan_history, 'scan_type') and self.scan_history.scan_type and self.scan_history.scan_type.yaml_configuration:
+			try:
+				config = yaml.safe_load(self.scan_history.scan_type.yaml_configuration)
+				if isinstance(config, dict):
+					self.tier7_config = config.get('tier_7', {})
+			except Exception:
+				pass
+				
 		self.weights = {
 			'severity': 0.4,
 			'multi_tool_match': 0.25,
@@ -104,9 +114,34 @@ class VulnerabilityCorrelationEngine:
 			if len(group_vulns) > 1:
 				# Sort by verification status first (verified first), then by correlation score descending
 				group_vulns.sort(key=lambda x: (x.validation_status == 'verified', x.correlation_score or 0.0), reverse=True)
+				
+				survivor = group_vulns[0]
+				if not survivor.affected_urls:
+					survivor.affected_urls = []
+				if survivor.http_url and survivor.http_url not in survivor.affected_urls:
+					survivor.affected_urls.append(survivor.http_url)
+					
+				# Ensure survivor is in vulns_to_update if modified
+				if survivor not in vulns_to_update:
+					vulns_to_update.append(survivor)
+
 				# Suppress all except the highest-ranked one
 				for dup_vuln in group_vulns[1:]:
 					dup_vuln.is_suppressed = True
+					
+					if dup_vuln.http_url and dup_vuln.http_url not in survivor.affected_urls:
+						survivor.affected_urls.append(dup_vuln.http_url)
+						
+					# If it's a by-module grouping (where values might differ but are merged), union the extracted_results
+					HIGH_NOISE_MODULES = set(self.tier7_config.get('high_noise_modules', ['sourcemap-detect', 'cookie-security-detect']))
+					if survivor.name.lower().strip() in HIGH_NOISE_MODULES:
+						if dup_vuln.extracted_results:
+							if not survivor.extracted_results:
+								survivor.extracted_results = []
+							for res in dup_vuln.extracted_results:
+								if res not in survivor.extracted_results:
+									survivor.extracted_results.append(res)
+					
 					# If a suppressed vulnerability has an existing assessment, queue it for cleanup
 					existing_list = assessments_by_vuln.get(dup_vuln.id, [])
 					for ass in existing_list:
@@ -136,7 +171,7 @@ class VulnerabilityCorrelationEngine:
 				if vulns_to_update:
 					Vulnerability.objects.bulk_update(
 						vulns_to_update, 
-						['correlation_score', 'validation_status', 'group_key', 'is_suppressed']
+						['correlation_score', 'validation_status', 'group_key', 'is_suppressed', 'affected_urls', 'extracted_results']
 					)
 					
 				if assessment_ids_to_delete:
@@ -173,9 +208,24 @@ class VulnerabilityCorrelationEngine:
 		"""
 		source = (vuln.source or 'unknown').lower().strip()
 		name = vuln.name.lower().strip()
+		severity = str(vuln.severity)
 		subdomain = (vuln.subdomain.name or '').lower().strip() if vuln.subdomain else ''
-		endpoint = (vuln.endpoint.http_url or '').lower().strip() if vuln.endpoint else ''
-		raw_key = f"{source}:{name}:{subdomain}:{endpoint}"
+		
+		# Read high-noise modules from scan configuration (defaults if missing)
+		HIGH_NOISE_MODULES = set(self.tier7_config.get('high_noise_modules', ['sourcemap-detect', 'cookie-security-detect']))
+		
+		if name in HIGH_NOISE_MODULES:
+			# By-Module grouping: Ignore extracted_results and endpoint
+			raw_key = f"{source}:{name}:{severity}:{subdomain}:bymodule"
+		elif vuln.extracted_results and len(vuln.extracted_results) > 0:
+			# Value-based grouping: Include the extracted value instead of the endpoint
+			sorted_vals = ",".join(sorted(vuln.extracted_results)).lower().strip()
+			raw_key = f"{source}:{name}:{severity}:{subdomain}:val:{sorted_vals}"
+		else:
+			# Fallback: strict endpoint grouping (current behavior) to prevent false merges
+			endpoint = (vuln.endpoint.http_url or '').lower().strip() if vuln.endpoint else ''
+			raw_key = f"{source}:{name}:{severity}:{subdomain}:ep:{endpoint}"
+			
 		return hashlib.sha256(raw_key.encode('utf-8')).hexdigest()
 
 	def _process_single_vuln(self, vuln, subdomain_cve_map, assessments_by_vuln, vulns_to_update, assessments_to_create, assessments_to_update, assessment_ids_to_delete):

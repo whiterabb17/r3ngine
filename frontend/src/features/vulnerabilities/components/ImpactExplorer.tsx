@@ -397,10 +397,10 @@ export const ImpactExplorer: React.FC<ImpactExplorerProps> = ({ projectSlug, vul
                               <Typography sx={{ fontSize: '0.5rem', fontWeight: 900 }}>{idx + 1}</Typography>
                             </Box>
                             <Typography sx={{ fontSize: '0.65rem', color: tokens.accent.primary, fontWeight: 800, mb: 0.5, letterSpacing: 0.5 }}>
-                              {step.phase.toUpperCase()}
+                              {(step.phase || step.edge_type || "ATTACK STEP").toUpperCase()}
                             </Typography>
                             <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', lineHeight: 1.4 }}>
-                              {step.description}
+                              {step.description || `Action: ${step.action} (From: ${step.from_id} To: ${step.to_id})`}
                             </Typography>
                           </Box>
                         ))}

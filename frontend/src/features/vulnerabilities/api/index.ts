@@ -191,8 +191,12 @@ export const useImpactGraphData = (projectSlug: string, vulnId: number | null) =
   });
 };
 export interface AttackChainStep {
-  phase: string;
-  description: string;
+  phase?: string;
+  description?: string;
+  edge_type?: string;
+  action?: string;
+  from_id?: string;
+  to_id?: string;
 }
 
 export interface ImpactAssessmentResponse {

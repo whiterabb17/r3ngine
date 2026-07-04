@@ -205,6 +205,9 @@ attack_path_modeling: {
   'enabled': true,
   'top_n': 5
 }
+tier_7: {
+  'high_noise_modules': ['sourcemap-detect', 'cookie-security-detect']
+}
 vigolium_discovery: {
   'run_vigolium_discovery': true,
   'strategy': 'balanced',           # Options: fast, balanced, thorough
