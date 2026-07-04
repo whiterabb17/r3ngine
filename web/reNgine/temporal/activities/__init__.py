@@ -1495,19 +1495,16 @@ def run_nuclei_activity(ctx: dict, severity: str = None, tag_batch: list = None)
 @activity.defn(name="RunSmugglexActivity")
 def run_smugglex_activity(ctx: dict) -> bool:
     from reNgine.tasks import smugglex_scan
-    activity.logger.info(f"[RunSmugglexActivity] scan_id={ctx.get('scan_history_id')}")
     return _run_task(smugglex_scan, ctx, task_name='smugglex_scan', description='Smugglex Scan', urls=ctx.get('urls', []))
 
 @activity.defn(name="RunSecondOrderActivity")
 def run_second_order_activity(ctx: dict) -> bool:
     from reNgine.tasks import second_order_scan
-    activity.logger.info(f"[RunSecondOrderActivity] scan_id={ctx.get('scan_history_id')}")
     return _run_task(second_order_scan, ctx, task_name='second_order_scan', description='Second Order Scan', urls=ctx.get('urls', []))
 
 @activity.defn(name="RunNucleiDASTActivity")
 def run_nuclei_dast_activity(ctx: dict) -> bool:
     from reNgine.tasks import nuclei_dast_scan
-    activity.logger.info(f"[RunNucleiDASTActivity] scan_id={ctx.get('scan_history_id')}")
     return _run_task(nuclei_dast_scan, ctx, task_name='nuclei_dast_scan', description='Nuclei DAST Scan', urls=ctx.get('urls', []))
 
 
@@ -2788,23 +2785,13 @@ def setup_scheduled_scan_activity(params: dict) -> dict:
 
 @activity.defn(name="PreparePortScanActivity")
 def prepare_port_scan_activity(ctx: dict) -> dict:
-    """Prepare a port scan execution environment and construct the tool command.
-
-    Args:
-        ctx (dict): Scan context containing target host information, engine settings,
-                    and activity descriptors.
-
-    Returns:
-        dict: Prepared configuration details containing the generated command line,
-              input paths, and a unique command identifier stored in the database.
-    """
     from reNgine.tasks import port_scan
     from startScan.models import Command
     from django.utils import timezone
 
     scan_id = ctx.get('scan_history_id')
     logger.log_line("[TEMPORAL]", "START", "task=prepare_port_scan scan_id=%s" % scan_id)
-    activity.logger.info(f"[PreparePortScanActivity] scan_id={scan_id}")
+    activity.heartbeat("prepare_port_scan starting")
     proxy = TemporalTaskProxy(ctx, 'port_scan', 'Port Scan', track=False)
     raw_func = port_scan.__func__ if hasattr(port_scan, '__func__') else port_scan
     res = raw_func(proxy, ctx=ctx, prepare_only=True)
@@ -2822,20 +2809,11 @@ def prepare_port_scan_activity(ctx: dict) -> dict:
 
 @activity.defn(name="ParsePortScanResultsActivity")
 def parse_port_scan_results_activity(ctx: dict, stdout: str) -> dict:
-    """Parse port scan tool outputs and persist discovered ports/hosts to the database.
-
-    Args:
-        ctx (dict): Scan context with history IDs and metadata.
-        stdout (str): Raw string output containing JSON lines generated during tool execution.
-
-    Returns:
-        dict: Wrapped port details indicating scan outcomes.
-    """
     from reNgine.tasks import port_scan
 
     scan_id = ctx.get('scan_history_id')
     logger.log_line("[TEMPORAL]", "START", "task=parse_port_scan_results scan_id=%s" % scan_id)
-    activity.logger.info(f"[ParsePortScanResultsActivity] scan_id={scan_id}")
+    activity.heartbeat("parse_port_scan_results starting")
     proxy = TemporalTaskProxy(ctx, 'port_scan', 'Port Scan')
     raw_func = port_scan.__func__ if hasattr(port_scan, '__func__') else port_scan
     res = raw_func(proxy, ctx=ctx, parse_only=stdout)

@@ -67,7 +67,7 @@ export default defineConfig(({ command }) => ({
             if (id.includes('@dnd-kit')) return 'vendor-dnd';
 
             // General utilities
-            if (id.includes('axios') || id.includes('date-fns') || id.includes('lodash') || id.includes('react-markdown') || id.includes('dompurify') || id.includes('zustand')) return 'vendor-utils';
+            if (id.includes('axios') || id.includes('date-fns') || id.includes('lodash') || id.includes('react-markdown') || id.includes('dompurify') || id.includes('zustand') || id.includes('js-yaml')) return 'vendor-utils';
 
             return 'vendor-base';
           }

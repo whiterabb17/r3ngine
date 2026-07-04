@@ -4,7 +4,7 @@ import { EngineList } from './EngineList';
 import { WordlistList } from './WordlistList';
 import { useEngines, useWordlists } from '../api';
 import { Cpu, List, Plus, FileUp, Sliders } from 'lucide-react';
-import { AddEngineModal } from './AddEngineModal';
+import { EngineConfigModal } from './EngineConfigModal';
 import { UploadWordlistModal } from './UploadWordlistModal';
 import { ProfileManager } from '../../profiles/components/ProfileManager';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
@@ -162,9 +162,10 @@ export const EnginesPage: React.FC = () => {
         <ProfileManager />
       </TabPanel>
 
-      <AddEngineModal 
-        open={addEngineOpen} 
-        onClose={() => setAddEngineOpen(false)} 
+      <EngineConfigModal
+        mode="create"
+        open={addEngineOpen}
+        onClose={() => setAddEngineOpen(false)}
       />
       <UploadWordlistModal 
         open={uploadWordlistOpen} 
