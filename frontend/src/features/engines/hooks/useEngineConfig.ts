@@ -425,6 +425,10 @@ function parseYamlToConfig(yamlStr: string): EngineConfig {
       top_n: (r.top_n as number) ?? 5,
     }), def.attack_path_modeling.config) as EngineConfig['attack_path_modeling'],
 
+    tier_7: section('tier_7', (r) => ({
+      high_noise_modules: (r.high_noise_modules as string[]) ?? def.tier_7.config.high_noise_modules,
+    }), def.tier_7.config) as EngineConfig['tier_7'],
+
     vigolium_audit: section('vigolium_audit', (r) => ({
       intensity: (r.intensity as 'quick' | 'balanced' | 'deep') ?? 'balanced',
       use_ai: (r.use_ai as boolean) ?? false,

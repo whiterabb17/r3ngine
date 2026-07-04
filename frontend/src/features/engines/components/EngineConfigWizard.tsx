@@ -26,6 +26,7 @@ import { VigoliumAnalysisSection } from './sections/VigoliumAnalysisSection';
 import { VulnerabilitySection } from './sections/VulnerabilitySection';
 import { AttackPathSection } from './sections/AttackPathSection';
 import { VigoliumAuditSection } from './sections/VigoliumAuditSection';
+import { Tier7Section } from './sections/Tier7Section';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 
 interface EngineConfigWizardProps {
@@ -107,6 +108,7 @@ export const EngineConfigWizard: React.FC<EngineConfigWizardProps> = ({ state })
       content: (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <AttackPathSection config={config.attack_path_modeling.config} enabled={config.attack_path_modeling.enabled} onToggle={(v) => toggleSection('attack_path_modeling', v)} onChange={(p) => updateSection('attack_path_modeling', p)} />
+          <Tier7Section config={config.tier_7.config} enabled={config.tier_7.enabled} onToggle={(v) => toggleSection('tier_7', v)} onChange={(p) => updateSection('tier_7', p)} />
           <VigoliumAuditSection config={config.vigolium_audit.config} enabled={config.vigolium_audit.enabled} onToggle={(v) => toggleSection('vigolium_audit', v)} onChange={(p) => updateSection('vigolium_audit', p)} />
         </Box>
       ),

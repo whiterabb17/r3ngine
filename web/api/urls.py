@@ -66,6 +66,9 @@ from .views.recon import (
     StartEmailDiscoveryView,
     StopEmailDiscoveryView,
     EmailDiscoveryReplayView,
+    StartEmployeeIntelView,
+    StopEmployeeIntelView,
+    EmployeeIntelReplayView,
 )
 
 
@@ -164,6 +167,9 @@ urlpatterns = [
     path('emailDiscovery/start/', StartEmailDiscoveryView.as_view(), name='email_discovery_start'),
     path('emailDiscovery/stop/', StopEmailDiscoveryView.as_view(), name='email_discovery_stop'),
     path('emailDiscovery/<str:job_id>/replay/', EmailDiscoveryReplayView.as_view(), name='email_discovery_replay'),
+    path('employeeIntel/start/', StartEmployeeIntelView.as_view(), name='employee_intel_start'),
+    path('employeeIntel/stop/', StopEmployeeIntelView.as_view(), name='employee_intel_stop'),
+    path('employeeIntel/<str:job_id>/replay/', EmployeeIntelReplayView.as_view(), name='employee_intel_replay'),
     path(
         'queryEmployees/',
         ListEmployees.as_view(),
