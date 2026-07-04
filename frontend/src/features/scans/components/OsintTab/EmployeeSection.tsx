@@ -10,6 +10,7 @@ import MenuItem from '@mui/material/MenuItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import Typography from '@mui/material/Typography';
 import { Users, User, ExternalLink, Search, ChevronDown } from 'lucide-react';
+import { useThemeTokens } from '../../../../theme/useThemeTokens';
 import { TacticalPanel } from '../../../../components/TacticalPanel';
 import { useEmployees } from '../../api';
 import { useEmployeeIntelStore } from '../../../../store/employeeIntelStore';
@@ -20,6 +21,7 @@ interface EmployeeSectionProps {
 }
 
 export const EmployeeSection: React.FC<EmployeeSectionProps> = ({ scanId }) => {
+  const { tokens } = useThemeTokens();
   const { data: employees = [], refetch: refetchEmployees } = useEmployees(scanId);
   const [actionsAnchor, setActionsAnchor] = useState<HTMLElement | null>(null);
   const [intelOpen, setIntelOpen] = useState(false);
@@ -68,13 +70,13 @@ export const EmployeeSection: React.FC<EmployeeSectionProps> = ({ scanId }) => {
             {employees.map((employee) => (
               <Grid size={{ xs: 12, sm: 6, md: 4 }} key={employee.id}>
                 <Card sx={{
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  background: tokens.surface.secondary,
+                  border: `1px solid ${tokens.border.subtle}`,
                   borderRadius: 0,
                   height: '100%',
                   '&:hover': {
-                    borderColor: 'primary.main',
-                    background: 'rgba(255, 255, 255, 0.05)',
+                    borderColor: tokens.accent.primary,
+                    background: tokens.surface.elevated,
                   },
                 }}>
                   <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, '&:last-child': { pb: 2 } }}>
@@ -114,13 +116,13 @@ export const EmployeeSection: React.FC<EmployeeSectionProps> = ({ scanId }) => {
                                   fontSize: '10px',
                                   px: 1,
                                   py: 0.5,
-                                  background: 'rgba(33, 150, 243, 0.1)',
-                                  color: 'info.light',
-                                  border: '1px solid rgba(33, 150, 243, 0.3)',
+                                  background: `${tokens.accent.info}1a`,
+                                  color: tokens.accent.info,
+                                  border: `1px solid ${tokens.accent.info}4d`,
                                   textDecoration: 'none',
                                   '&:hover': {
-                                    background: 'rgba(33, 150, 243, 0.2)',
-                                    borderColor: 'info.main',
+                                    background: `${tokens.accent.info}33`,
+                                    borderColor: tokens.accent.info,
                                   },
                                 }}
                               >
