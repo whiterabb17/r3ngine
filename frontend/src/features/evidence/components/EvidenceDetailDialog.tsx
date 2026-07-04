@@ -39,11 +39,13 @@ export function EvidenceDetailDialog({
       onClose={onClose}
       maxWidth="md"
       fullWidth
-      PaperProps={{
-        sx: {
-          bgcolor: '#0a0e1a',
-          border: '1px solid rgba(0,243,255,0.15)',
-          backgroundImage: 'none',
+      slotProps={{
+        paper: {
+          sx: {
+            bgcolor: '#0a0e1a',
+            border: '1px solid rgba(0,243,255,0.15)',
+            backgroundImage: 'none',
+          }
         }
       }}
     >
@@ -80,7 +82,7 @@ export function EvidenceDetailDialog({
           </Box>
 
           {/* Chips */}
-          <Stack direction="row" spacing={1} flexWrap="wrap">
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
             <Chip label={item.evidence_type} size="small" sx={{ bgcolor: 'rgba(0,243,255,0.1)', color: '#00f3ff', border: '1px solid rgba(0,243,255,0.2)', fontSize: '0.65rem' }} />
             <Chip label={item.status} size="small" color={item.status === 'Active' ? 'success' : 'default'} sx={{ fontSize: '0.65rem' }} />
             {item.mime_type && (

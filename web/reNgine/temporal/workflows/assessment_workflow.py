@@ -504,6 +504,15 @@ class ValidationWorkflow:
             f"[ValidationWorkflow] Waiting for analyst approval for assessment {input.assessment_id}"
         )
 
+        # Run auto-validation activity first
+        await workflow.execute_activity(
+            "auto_validate_findings_activity",
+            input.assessment_id,
+            start_to_close_timeout=timedelta(minutes=10),
+            retry_policy=_standard_retry,
+            task_queue=_TASK_QUEUE,
+        )
+
         # Block until validation_approved signal received, or 30-day timeout
         try:
             await workflow.wait_condition(

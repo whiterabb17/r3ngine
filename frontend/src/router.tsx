@@ -26,6 +26,7 @@ const AssessmentsPage = lazyRouteComponent(() => import("./features/assessments"
 const AssessmentExecutionDashboard = lazyRouteComponent(() => import("./features/assessments").then(m => ({ default: m.AssessmentExecutionDashboard })));
 const TodoPage = lazyRouteComponent(() => import("./features/todos").then(m => ({ default: m.TodoPage })));
 const VulnerabilityList = lazyRouteComponent(() => import("./features/vulnerabilities").then(m => ({ default: m.VulnerabilityList })));
+const VerificationQueue = lazyRouteComponent(() => import("./features/vulnerabilities").then(m => ({ default: m.VerificationQueue })));
 const BountyHubPage = lazyRouteComponent(() => import("./features/bounty/components/BountyHubPage").then(m => ({ default: m.BountyHubPage })));
 const SearchPage = lazyRouteComponent(() => import("./features/search/components/SearchPage").then(m => ({ default: m.SearchPage })));
 const PluginManagementPage = lazyRouteComponent(() => import("./features/plugins/pages/PluginManagementPage").then(m => ({ default: m.default })));
@@ -449,6 +450,12 @@ const vulnsRoute = createRoute({
   )
 });
 
+const verificationQueueRoute = createRoute({
+  getParentRoute: () => projectRoute,
+  path: "vulns/queue",
+  component: VerificationQueue,
+});
+
 const bountyHubRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: "bountyhub",
@@ -602,6 +609,7 @@ const routeTree = rootRoute.addChildren([
     assessmentsRoute,
     assessmentExecutionRoute,
     vulnsRoute,
+    verificationQueueRoute,
     profileSettingsRoute,
     proxySettingsRoute,
     opsecSettingsRoute,

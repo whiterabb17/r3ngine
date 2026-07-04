@@ -99,6 +99,7 @@ from reNgine.temporal.activities.assessment_activities import (
     update_assessment_state_activity,
     scan_orchestrator_activity,
     prepare_assessment_context_activity,
+    auto_validate_findings_activity,
 )
 from reNgine.temporal.activities.evidence_activities import (
     collect_screenshot_evidence_activity,
@@ -642,6 +643,7 @@ class Command(BaseCommand):
                 update_assessment_state_activity,
                 scan_orchestrator_activity,
                 prepare_assessment_context_activity,
+                auto_validate_findings_activity,
 
                 # Evidence Platform
                 collect_screenshot_evidence_activity,

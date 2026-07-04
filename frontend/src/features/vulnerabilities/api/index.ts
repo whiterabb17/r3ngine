@@ -230,3 +230,77 @@ export const useImpactAssessment = (projectSlug: string, vulnId: number | null) 
     }
   });
 };
+
+
+export const useVulnerabilityQueue = (projectSlug: string, page = 1, searchQuery = '', pageSize = 10) => {
+  return useQuery<VulnerabilityResponse>({
+    queryKey: ['vulnerabilities', 'queue', projectSlug, page, searchQuery, pageSize],
+    queryFn: async () => {
+      const url = new URL(`${window.location.origin}/api/listVulnerability/queue/`);
+      url.searchParams.append('project', projectSlug);
+      url.searchParams.append('page', page.toString());
+      url.searchParams.append('length', pageSize.toString());
+      
+      if (searchQuery) {
+        url.searchParams.append('search[value]', searchQuery);
+      }
+      
+      url.searchParams.append('format', 'json');
+
+      const response = await fetch(url.toString(), {
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch vulnerability queue');
+      }
+      return response.json();
+    }
+  });
+};
+
+export const useVerifyVulnerability = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/listVulnerability/${id}/verify/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error('Failed to verify vulnerability');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
+    }
+  });
+};
+
+export const useRejectVulnerability = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: number; reason: string }) => {
+      const response = await fetch(`/api/listVulnerability/${id}/reject/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ reason }),
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error('Failed to reject vulnerability');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
+    }
+  });
+};

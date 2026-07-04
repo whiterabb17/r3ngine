@@ -69,7 +69,7 @@ export const AssessmentExecutionDashboard: React.FC = () => {
       <Tabs
         value={activeTab}
         onChange={(_, v) => setActiveTab(v)}
-        TabIndicatorProps={{ sx: { bgcolor: '#00f3ff' } }}
+        slotProps={{ indicator: { sx: { bgcolor: '#00f3ff' } } }}
         sx={{ borderBottom: '1px solid rgba(255,255,255,0.06)', mb: 3, minHeight: 36 }}
       >
         {TABS.map(t => (

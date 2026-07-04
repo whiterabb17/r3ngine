@@ -91,11 +91,13 @@ export function EvidenceUploadDialog({
       onClose={handleClose}
       maxWidth="sm"
       fullWidth
-      PaperProps={{
-        sx: {
-          bgcolor: '#0a0e1a',
-          border: '1px solid rgba(0,243,255,0.15)',
-          backgroundImage: 'none',
+      slotProps={{
+        paper: {
+          sx: {
+            bgcolor: '#0a0e1a',
+            border: '1px solid rgba(0,243,255,0.15)',
+            backgroundImage: 'none',
+          }
         }
       }}
     >
@@ -195,8 +197,10 @@ export function EvidenceUploadDialog({
             size="small"
             fullWidth
             required
-            InputProps={{ sx: { color: '#fff', fontSize: '0.8rem' } }}
-            InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' } }}
+            slotProps={{
+              input: { sx: { color: '#fff', fontSize: '0.8rem' } },
+              inputLabel: { sx: { color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' } }
+            }}
             sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' } }}
           />
 
@@ -208,8 +212,10 @@ export function EvidenceUploadDialog({
             fullWidth
             multiline
             rows={2}
-            InputProps={{ sx: { color: '#fff', fontSize: '0.8rem' } }}
-            InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' } }}
+            slotProps={{
+              input: { sx: { color: '#fff', fontSize: '0.8rem' } },
+              inputLabel: { sx: { color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' } }
+            }}
             sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' } }}
           />
         </Stack>

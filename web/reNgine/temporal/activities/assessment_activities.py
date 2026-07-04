@@ -285,3 +285,43 @@ async def prepare_assessment_context_activity(input: PrepareAssessmentContextInp
 
     return await _prepare()
 
+
+@activity.defn(name="auto_validate_findings_activity")
+async def auto_validate_findings_activity(assessment_id: str) -> bool:
+    """Analyze findings discovered during assessment to auto-verify or queue for review.
+
+    If validation_confidence > 0.8, validation_status becomes 'verified'.
+    Otherwise, defaults to 'needs_review'.
+    """
+    from startScan.models import Vulnerability, ScanHistory
+    from engagements.models import Assessment
+
+    @sync_to_async
+    def _validate():
+        try:
+            assessment = Assessment.objects.get(uuid=assessment_id)
+            scan_histories = ScanHistory.objects.filter(assessment=assessment)
+            vulns = Vulnerability.objects.filter(scan_history__in=scan_histories)
+            
+            updated = []
+            for vuln in vulns:
+                # If it's already verified/rejected by analyst, don't overwrite
+                if vuln.validation_status in ['verified', 'false_positive', 'accepted_risk']:
+                    continue
+                
+                # Check validation_confidence
+                if vuln.validation_confidence and vuln.validation_confidence > 0.8:
+                    vuln.validation_status = 'verified'
+                else:
+                    vuln.validation_status = 'needs_review'
+                updated.append(vuln)
+                
+            if updated:
+                Vulnerability.objects.bulk_update(updated, ['validation_status'])
+            return True
+        except Exception as e:
+            logger.log_line("[ASSESSMENT]", "ERROR", f"Auto-validation failed: {e}", level="error", exc_info=True)
+            raise e
+
+    return await _validate()
+

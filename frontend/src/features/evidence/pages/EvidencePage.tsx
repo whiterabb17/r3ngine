@@ -74,7 +74,7 @@ export function EvidencePage({ assessmentUuid }: { assessmentUuid?: string }) {
           <Tabs
             value={selectedCollection?.uuid ?? collections[0].uuid}
             onChange={(_, uuid) => setSelectedCollection(collections.find(c => c.uuid === uuid) ?? null)}
-            TabIndicatorProps={{ sx: { bgcolor: '#00f3ff' } }}
+            slotProps={{ indicator: { sx: { bgcolor: '#00f3ff' } } }}
             sx={{ minHeight: 36 }}
           >
             {collections.map(c => (
