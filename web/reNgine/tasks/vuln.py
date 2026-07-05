@@ -277,7 +277,7 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 			activity_id=self.activity_id)
 
 		# Re-run the tag splitter because updating templates overwrites the split tags on disk
-		# splitter_script = '/usr/src/app/scripts/nuclei_tag_splitter.py'
+		# splitter_script = '/usr/src/scripts/nuclei_tag_splitter.py'
 		# import sys
 		# run_command(
 		# 	f'{sys.executable} {splitter_script}',
