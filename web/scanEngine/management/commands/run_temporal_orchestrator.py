@@ -101,6 +101,9 @@ from reNgine.temporal.activities.assessment_activities import (
     prepare_assessment_context_activity,
     auto_validate_findings_activity,
 )
+from reNgine.temporal.activities.asset_correlation_activities import (
+    run_asset_correlation_activity,
+)
 from reNgine.temporal.activities.evidence_activities import (
     collect_screenshot_evidence_activity,
     collect_http_evidence_activity,
@@ -658,6 +661,9 @@ class Command(BaseCommand):
 
                 # Email security (internal module — Tier 2 post-scan)
                 run_email_security_activity,
+
+                # Phase 6 - Asset correlation
+                run_asset_correlation_activity,
             ]
 
             # -------------------------------------------------------------------
