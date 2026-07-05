@@ -97,6 +97,16 @@ NODE_TYPES = {
         "registry_persistence", "scheduled_task_persistence",
         "saml_assertion_forgery", "shadow_credentials", "webshell_persistence",
     ],
+    "Assessment": ["generic"],
+    "Finding": ["generic"],
+    "Evidence": [
+        "screenshot", "network_capture", "request_response",
+        "command_output", "log", "report", "other",
+    ],
+    "AuthenticationSystem": [
+        "oauth", "saml", "oidc", "ldap", "basic",
+        "form_login", "mtls", "api_key", "generic",
+    ],
 }
 
 EDGE_TYPES = [
@@ -114,4 +124,9 @@ EDGE_TYPES = [
     "DEPENDS_ON",       # app -> api endpoint
     "TRUSTS_DOMAIN",    # domain -> trusted external domain
     "PART_OF",          # app/org node -> parent domain node
+    "CONTAINS",       # Assessment -> Finding
+    "SUPPORTED_BY",   # Finding -> Evidence
+    "USES",           # Application -> AuthenticationSystem
+    "HAS_ASSET",      # Assessment -> Asset (Phase 6 canonical asset node)
+    "DISCOVERED_IN",  # Finding -> ScanHistory (audit trail)
 ]
