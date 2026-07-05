@@ -1192,6 +1192,22 @@
               </div>
               {% endfor %}
             </div>
+            {% with first_item=group.items.0 %}
+            {% if first_item.is_gpt_used and first_item.description %}
+            <div style="margin-top: 6px; border-top: 1px solid rgba(128,128,128,0.2); padding-top: 6px;">
+                <span class="mini-heading" style="color: #6366f1;">AI Description</span>
+                <p>{{ first_item.description|linebreaks }}</p>
+                {% if first_item.impact %}
+                <span class="mini-heading" style="color: #ef4444;">Impact</span>
+                <p>{{ first_item.impact|linebreaks }}</p>
+                {% endif %}
+                {% if first_item.remediation %}
+                <span class="mini-heading" style="color: #10b981;">Remediation</span>
+                <div>{{ first_item.remediation|render_markdown }}</div>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% endwith %}
           </div>
           {% endfor %}
           {% endif %}

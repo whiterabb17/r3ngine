@@ -64,7 +64,7 @@ django-cors-headers==4.3.1
 h2
 priority
 service_identity
-temporalio==1.7.0
+temporalio==1.30.0
 git+https://github.com/MatrixTM/PyRoxy.git
 icmplib==3.0.4
 impacket==0.13.1

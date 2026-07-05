@@ -704,23 +704,23 @@ class MasterScanWorkflow:
             ran_t6 = False
 
             if "vulnerability_scan" in tasks:
-                # Spawn as a child workflow so Nuclei execution has its own
-                # independent Temporal history and can be tracked separately.
-                # NucleiPlannerWorkflow handles per-tool failures internally
-                # (nuclei timeout/error → logs and continues with cpanel/wpscan/etc.)
-                # so this await only raises on a catastrophic workflow-level failure.
-                # In that case the exception propagates to the outer except, success
-                # stays False, and tier 7 is correctly blocked.
                 ran_t6 = True
-                await workflow.execute_child_workflow(
-                    "NucleiPlannerWorkflow",
-                    ctx,
-                    id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-nuclei",
-                    task_queue="python-orchestrator-queue",
-                    execution_timeout=timedelta(days=7),
-                    run_timeout=timedelta(days=7),
-                    retry_policy=RetryPolicy(maximum_attempts=1),
-                )
+                try:
+                    await workflow.execute_child_workflow(
+                        "NucleiPlannerWorkflow",
+                        ctx,
+                        id=f"{workflow.info().workflow_id}-{workflow.info().run_id[:8]}-nuclei",
+                        task_queue="python-orchestrator-queue",
+                        execution_timeout=timedelta(days=7),
+                        run_timeout=timedelta(days=7),
+                        retry_policy=RetryPolicy(maximum_attempts=1),
+                    )
+                except (ChildWorkflowError, ApplicationError) as nuclei_err:
+                    # Non-fatal: log and continue so Tier 7 (correlation, risk, Neo4j) still runs.
+                    workflow.logger.warning(
+                        f"NucleiPlannerWorkflow failed for scan_id={ctx.get('scan_history_id')} "
+                        f"(non-fatal, Tier 7 will still run): {nuclei_err}"
+                    )
 
             other_t6_futures = []
             if "waf_bypass" in tasks:
@@ -1427,6 +1427,11 @@ _SUBSCAN_DISPATCH = {
     "run_acunetix": {
         "activity": "RunAcunetixActivity",
         "timeout": timedelta(hours=4),
+        "args_builder": lambda ctx: [ctx],
+    },
+    "dns_security": {
+        "activity": "RunDNSSecurityActivity",
+        "timeout": timedelta(hours=1),
         "args_builder": lambda ctx: [ctx],
     },
     # Special cases — handled with inline logic in SubScanWorkflow.run():

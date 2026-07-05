@@ -17,7 +17,9 @@ class TestRunTheharvesterEmployees(TestCase):
         mock_save.return_value = (MagicMock(), True)
 
         def fake_run(cmd, **kwargs):
-            output_json = cmd[cmd.index('-f') + 1]
+            # theHarvester appends .json to the base name passed via -f
+            output_base = cmd[cmd.index('-f') + 1]
+            output_json = f'{output_base}.json'
             os.makedirs(os.path.dirname(output_json), exist_ok=True)
             with open(output_json, 'w') as f:
                 json.dump({'linkedin_people': ['Alice Smith', 'Bob Jones'], 'twitter_people': []}, f)
@@ -36,6 +38,32 @@ class TestRunTheharvesterEmployees(TestCase):
         mock_subproc.return_value = MagicMock(returncode=1)
         count = _run_theharvester_employees(1, 'example.com')
         self.assertEqual(count, 0)
+
+
+class TestRunLinkedintEmployees(TestCase):
+    @patch('reNgine.tasks.osint.run_linkedint', return_value=None)
+    @patch('reNgine.tasks.employee_intelligence.ScanHistory')
+    def test_returns_delta_employee_count(self, mock_sh, _run_li):
+        from reNgine.tasks.employee_intelligence import _run_linkedint_employees
+
+        mock_scan = MagicMock()
+        mock_scan.employees.count.side_effect = [3, 5]  # before=3, after=5
+        mock_sh.objects.get.return_value = mock_scan
+
+        result = _run_linkedint_employees(1, 'example.com')
+        self.assertEqual(result, 2)
+
+    @patch('reNgine.tasks.osint.run_linkedint', return_value=None)
+    @patch('reNgine.tasks.employee_intelligence.ScanHistory')
+    def test_returns_zero_when_count_unchanged(self, mock_sh, _run_li):
+        from reNgine.tasks.employee_intelligence import _run_linkedint_employees
+
+        mock_scan = MagicMock()
+        mock_scan.employees.count.side_effect = [5, 5]
+        mock_sh.objects.get.return_value = mock_scan
+
+        result = _run_linkedint_employees(1, 'example.com')
+        self.assertEqual(result, 0)
 
 
 class TestRunEmployeeIntelligence(TestCase):
