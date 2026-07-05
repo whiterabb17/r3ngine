@@ -104,6 +104,9 @@ from reNgine.temporal.activities.assessment_activities import (
 from reNgine.temporal.activities.asset_correlation_activities import (
     run_asset_correlation_activity,
 )
+from reNgine.temporal.activities.graph_activities import (
+    sync_assessment_graph_activity,
+)
 from reNgine.temporal.activities.evidence_activities import (
     collect_screenshot_evidence_activity,
     collect_http_evidence_activity,
@@ -664,6 +667,9 @@ class Command(BaseCommand):
 
                 # Phase 6 - Asset correlation
                 run_asset_correlation_activity,
+
+                # Phase 5 - Assessment graph sync
+                sync_assessment_graph_activity,
             ]
 
             # -------------------------------------------------------------------
