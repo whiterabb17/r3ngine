@@ -108,31 +108,60 @@ class BaseEvidenceStorage:
 class FilesystemEvidenceStorage(BaseEvidenceStorage):
     """Stores evidence files on the local filesystem.
 
-    Root directory is configured via EVIDENCE_STORAGE_ROOT (default: /usr/src/app/evidence/).
+    Root directory is configured via EVIDENCE_STORAGE_ROOT (defaults to
+    settings.ASSESSMENTS_ROOT/evidence — i.e. /usr/src/assessments/evidence/).
     """
 
     def __init__(self):
-        self.root = getattr(settings, 'EVIDENCE_STORAGE_ROOT', '/usr/src/app/evidence/')
-        os.makedirs(self.root, exist_ok=True)
+        default_root = os.path.join(
+            getattr(settings, 'ASSESSMENTS_ROOT', '/usr/src/assessments'),
+            'evidence',
+        )
+        self.root = getattr(settings, 'EVIDENCE_STORAGE_ROOT', default_root)
+        os.makedirs(self.root, mode=0o750, exist_ok=True)
 
-    def save(self, content: bytes, filename: str, subfolder: str = '') -> str:
-        """Save content to the filesystem and return a relative path key."""
-        key = self._unique_key(filename, subfolder)
-        abs_path = os.path.join(self.root, key)
-        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+    def _resolve_safe(self, storage_key: str) -> str:
+        """Return absolute path for storage_key iff it stays under self.root.
+
+        Raises ValueError on traversal attempt (r3ngine-security.md Rule 1.2).
+        """
+        if not storage_key or storage_key.startswith('/') or '..' in storage_key.split('/'):
+            raise ValueError("storage_key must be a relative path with no '..' segments")
+        base = os.path.realpath(self.root)
+        candidate = os.path.realpath(os.path.join(base, storage_key))
+        if not (candidate == base or candidate.startswith(base + os.sep)):
+            raise ValueError("storage_key resolves outside storage root")
+        return candidate
+
+    def save(self, content: bytes, filename: str, subfolder: str = '',
+             assessment_uuid: Optional[str] = None) -> str:
+        """Save content to the filesystem and return a relative path key.
+
+        When assessment_uuid is provided, files are placed under
+        <assessment_uuid>/<subfolder>/<date>/<hex>.<ext>.
+        """
+        parts_prefix = assessment_uuid.strip() if assessment_uuid else ''
+        combined_subfolder = '/'.join(p for p in [parts_prefix, subfolder] if p)
+        key = self._unique_key(filename, combined_subfolder)
+        abs_path = self._resolve_safe(key)
+        os.makedirs(os.path.dirname(abs_path), mode=0o750, exist_ok=True)
         with open(abs_path, 'wb') as f:
             f.write(content)
+        os.chmod(abs_path, 0o640)
         return key
 
     def read(self, storage_key: str) -> bytes:
         """Read raw bytes from the filesystem."""
-        abs_path = os.path.join(self.root, storage_key)
+        abs_path = self._resolve_safe(storage_key)
         with open(abs_path, 'rb') as f:
             return f.read()
 
     def delete(self, storage_key: str) -> None:
         """Delete a file from the filesystem. Silently ignores missing files."""
-        abs_path = os.path.join(self.root, storage_key)
+        try:
+            abs_path = self._resolve_safe(storage_key)
+        except ValueError:
+            return
         try:
             os.remove(abs_path)
         except FileNotFoundError:
@@ -140,14 +169,13 @@ class FilesystemEvidenceStorage(BaseEvidenceStorage):
 
     def exists(self, storage_key: str) -> bool:
         """Check if a file exists on the filesystem."""
-        return os.path.isfile(os.path.join(self.root, storage_key))
+        try:
+            return os.path.isfile(self._resolve_safe(storage_key))
+        except ValueError:
+            return False
 
     def get_signed_url(self, storage_key: str, expiry_seconds: Optional[int] = None) -> str:
-        """Return the internal serve URL for this evidence file.
-
-        Django's serve_protected_media view handles authentication.
-        The URL is relative: /media/<storage_key>
-        """
+        """Return the internal serve URL for this evidence file."""
         return f"/evidence/download/{storage_key}"
 
 
