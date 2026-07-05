@@ -29,6 +29,12 @@ with workflow.unsafe.imports_passed_through():
         scan_orchestrator_activity,
         prepare_assessment_context_activity,
     )
+    from reNgine.temporal.activities.asset_correlation_activities import (
+        run_asset_correlation_activity,
+    )
+    from reNgine.temporal.activities.graph_activities import (
+        sync_assessment_graph_activity,
+    )
 
 # ---------------------------------------------------------------------------
 # Shared dataclasses
@@ -816,6 +822,22 @@ class AssessmentWorkflow:
             )
 
             # ---------------------------------------------------------------- #
+            # Phase 3b: Correlation (Phase 6)
+            # ---------------------------------------------------------------- #
+            await self._update_state("Correlation", 70)
+            await self._wait_if_paused()
+            if self._is_cancelled:
+                raise ApplicationError("Assessment cancelled by user.", non_retryable=True)
+
+            await workflow.execute_activity(
+                run_asset_correlation_activity,
+                self._assessment_id,
+                start_to_close_timeout=timedelta(hours=1),
+                retry_policy=_standard_retry,
+                task_queue=_TASK_QUEUE,
+            )
+
+            # ---------------------------------------------------------------- #
             # Phase 4: Validation (analyst wait state)
             # ---------------------------------------------------------------- #
             await self._update_state("Validation", 80)
@@ -843,6 +865,20 @@ class AssessmentWorkflow:
                     findings_count=self._findings_count,
                     evidence_count=0,
                 )
+
+            # ---------------------------------------------------------------- #
+            # Phase 4b: GraphSync (Phase 5)
+            # ---------------------------------------------------------------- #
+            await self._update_state("GraphSync", 85)
+            await self._wait_if_paused()
+
+            await workflow.execute_activity(
+                sync_assessment_graph_activity,
+                self._assessment_id,
+                start_to_close_timeout=timedelta(hours=1),
+                retry_policy=_standard_retry,
+                task_queue=_TASK_QUEUE,
+            )
 
             # ---------------------------------------------------------------- #
             # Phase 5: Reporting
