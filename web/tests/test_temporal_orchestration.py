@@ -90,8 +90,8 @@ class TestTemporalOrchestration(TestCase):
         self.assertEqual(args[0], "MasterScanWorkflow")
         self.assertEqual(kwargs['task_queue'], "python-orchestrator-queue")
         
-        # Verify the context dictionary
-        temporal_ctx = args[1]
+        # Verify the context dictionary (passed as kwargs['args'][0] to start_workflow)
+        temporal_ctx = kwargs['args'][0]
         self.assertEqual(temporal_ctx['scan_history_id'], self.scan.id)
         self.assertEqual(temporal_ctx['domain_id'], self.domain.id)
         self.assertEqual(temporal_ctx['engine_id'], self.engine.id)

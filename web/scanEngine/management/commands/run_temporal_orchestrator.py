@@ -33,7 +33,7 @@ from temporalio.client import (
     ScheduleSpec,
     ScheduleState,
 )
-from temporalio.worker import Worker, UnsandboxedWorkflowRunner
+from temporalio.worker import Worker, UnsandboxedWorkflowRunner, PollerBehaviorAutoscaling
 
 logger = logging.getLogger(__name__)
 
@@ -702,7 +702,14 @@ class Command(BaseCommand):
                     activities=all_activities,
                     activity_executor=executor,
                     workflow_runner=UnsandboxedWorkflowRunner(),
-                    max_concurrent_activities=10
+                    max_concurrent_activities=10,
+                    activity_task_poller_behavior=PollerBehaviorAutoscaling(
+                        minimum=2, initial=5, maximum=20
+                    ),
+                    workflow_task_poller_behavior=PollerBehaviorAutoscaling(
+                        minimum=1, initial=2, maximum=10
+                    ),
+                    graceful_shutdown_timeout=datetime.timedelta(seconds=30),
                 )
 
                 self.stdout.write(self.style.SUCCESS(

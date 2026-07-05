@@ -157,6 +157,7 @@ from reNgine.tasks.scan_init import (
     finish_osint_discovery,
     initiate_scan_temporal,
     initiate_subscan_temporal,
+    recover_stuck_scans,
     report,
     resume_scan_temporal,
 )
