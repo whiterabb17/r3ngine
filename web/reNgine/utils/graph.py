@@ -562,12 +562,12 @@ class Neo4jManager:
         evidence_rows = []
         if getattr(scan, 'assessment', None):
             evidence_qs = Evidence.objects.filter(collection__assessment=scan.assessment)
-            for row in evidence_qs.values('uuid', 'type', 'description', 'integrity_hash').iterator(chunk_size=GRAPH_SYNC_ORM_CHUNK):
+            for row in evidence_qs.values('uuid', 'evidence_type', 'description', 'sha256_hash').iterator(chunk_size=GRAPH_SYNC_ORM_CHUNK):
                 evidence_rows.append({
                     "uuid": str(row['uuid']),
-                    "type": row['type'],
+                    "evidence_type": row['evidence_type'],
                     "description": row['description'] or "",
-                    "integrity_hash": row['integrity_hash'] or "",
+                    "sha256_hash": row['sha256_hash'] or "",
                     "scan_id": scan_history_id
                 })
                 evidence_count += 1
@@ -990,6 +990,28 @@ class Neo4jManager:
             WITH app, row
             MATCH (sc:Scan {id: row.scan_id})
             MERGE (sc)-[:FOUND]->(app)
+            """,
+            rows=rows,
+        )
+
+    @staticmethod
+    def _batch_merge_evidence(tx, rows):
+        """Merge Evidence nodes for an assessment-linked scan.
+
+        Only invoked when scan.assessment is set. Each row already contains
+        the Evidence UUID (from evidence.Evidence), evidence_type, description
+        and sha256_hash — see Evidence model in web/evidence/models.py.
+        """
+        tx.run(
+            """
+            UNWIND $rows AS row
+            MERGE (e:Evidence {uuid: row.uuid})
+            SET e.evidence_type = row.evidence_type,
+                e.description = row.description,
+                e.sha256_hash = row.sha256_hash
+            WITH e, row
+            MATCH (sc:Scan {id: row.scan_id})
+            MERGE (sc)-[:FOUND]->(e)
             """,
             rows=rows,
         )
