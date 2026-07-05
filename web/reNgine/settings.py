@@ -24,6 +24,16 @@ environ.Env.read_env(os.path.join(BASE_DIR, os.pardir, '.env'))
 # Root env vars
 RENGINE_HOME = env('RENGINE_HOME', default='/usr/src/app')
 RENGINE_RESULTS = env('RENGINE_RESULTS', default='/usr/src/scan_results')
+
+# Root for all assessment-scoped artifacts (evidence, exports, reports).
+# MUST NOT be under /usr/src/app/. See docs/superpowers/plans/2026-07-05-phases-5-6-neo4j-and-correlation.md.
+ASSESSMENTS_ROOT = env('ASSESSMENTS_ROOT', default='/usr/src/assessments')
+
+# Feature flags for Phase 5 (Neo4j assessment graph sync) and Phase 6 (canonical
+# asset correlation). Both default OFF at initial merge. Enable in staging first.
+ASSESSMENT_GRAPH_SYNC_ENABLED = env.bool('ASSESSMENT_GRAPH_SYNC_ENABLED', default=False)
+ASSESSMENT_ASSET_CORRELATION_ENABLED = env.bool('ASSESSMENT_ASSET_CORRELATION_ENABLED', default=False)
+
 RENGINE_CACHE_ENABLED = env.bool('RENGINE_CACHE_ENABLED', default=False)
 RENGINE_RECORD_ENABLED = env.bool('RENGINE_RECORD_ENABLED', default=True)
 RENGINE_RAISE_ON_ERROR = env.bool('RENGINE_RAISE_ON_ERROR', default=False)
@@ -309,6 +319,14 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = RENGINE_RESULTS
 FILE_UPLOAD_MAX_MEMORY_SIZE = 100000000
 FILE_UPLOAD_PERMISSIONS = 0o644
+
+# Evidence storage root — defaults to ASSESSMENTS_ROOT/evidence/. Env override
+# EVIDENCE_STORAGE_ROOT still honoured (e.g. for MinIO backend swap).
+EVIDENCE_STORAGE_ROOT = env(
+    'EVIDENCE_STORAGE_ROOT',
+    default=os.path.join(ASSESSMENTS_ROOT, 'evidence'),
+)
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.2/howto/static-files/
 
