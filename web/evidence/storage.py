@@ -29,13 +29,16 @@ class BaseEvidenceStorage:
     All backends must implement save, read, delete, exists, and get_signed_url.
     """
 
-    def save(self, content: bytes, filename: str, subfolder: str = '') -> str:
+    def save(self, content: bytes, filename: str, subfolder: str = '',
+             assessment_uuid: Optional[str] = None) -> str:
         """Persist content and return the storage key/path.
 
         Args:
             content (bytes): Raw file content to store.
             filename (str): Original filename (used for extension).
             subfolder (str): Optional subfolder / prefix within the store.
+            assessment_uuid (str, optional): Assessment UUID to scope the
+                storage key under, when the backend supports it.
 
         Returns:
             str: Storage key (path or S3 object key) for later retrieval.
@@ -203,9 +206,16 @@ class MinioEvidenceStorage(BaseEvidenceStorage):
         if not self.client.bucket_exists(self.bucket):
             self.client.make_bucket(self.bucket)
 
-    def save(self, content: bytes, filename: str, subfolder: str = '') -> str:
-        """Upload content to MinIO and return the object key."""
-        key = self._unique_key(filename, subfolder)
+    def save(self, content: bytes, filename: str, subfolder: str = '',
+             assessment_uuid: Optional[str] = None) -> str:
+        """Upload content to MinIO and return the object key.
+
+        When assessment_uuid is provided, the object key is prefixed with
+        it (mirrors FilesystemEvidenceStorage.save layout).
+        """
+        parts_prefix = assessment_uuid.strip() if assessment_uuid else ''
+        combined_subfolder = '/'.join(p for p in [parts_prefix, subfolder] if p)
+        key = self._unique_key(filename, combined_subfolder)
         self.client.put_object(
             self.bucket, key,
             data=io.BytesIO(content),
@@ -261,9 +271,16 @@ class S3EvidenceStorage(BaseEvidenceStorage):
         self.bucket = settings.EVIDENCE_S3_BUCKET
         self.expiry = getattr(settings, 'EVIDENCE_SIGNED_URL_EXPIRY', 300)
 
-    def save(self, content: bytes, filename: str, subfolder: str = '') -> str:
-        """Upload content to S3 and return the object key."""
-        key = self._unique_key(filename, subfolder)
+    def save(self, content: bytes, filename: str, subfolder: str = '',
+             assessment_uuid: Optional[str] = None) -> str:
+        """Upload content to S3 and return the object key.
+
+        When assessment_uuid is provided, the object key is prefixed with
+        it (mirrors FilesystemEvidenceStorage.save layout).
+        """
+        parts_prefix = assessment_uuid.strip() if assessment_uuid else ''
+        combined_subfolder = '/'.join(p for p in [parts_prefix, subfolder] if p)
+        key = self._unique_key(filename, combined_subfolder)
         self.s3.put_object(Bucket=self.bucket, Key=key, Body=content)
         return key
 

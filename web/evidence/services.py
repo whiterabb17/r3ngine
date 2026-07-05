@@ -159,7 +159,11 @@ class EvidenceService:
 
         # Persist to storage backend
         storage = get_storage_backend()
-        storage_key = storage.save(content, filename, subfolder or evidence_type.lower())
+        assessment_uuid = str(collection.assessment.uuid) if collection.assessment else None
+        storage_key = storage.save(
+            content, filename, subfolder or evidence_type.lower(),
+            assessment_uuid=assessment_uuid,
+        )
 
         # Create Evidence record
         evidence = Evidence.objects.create(

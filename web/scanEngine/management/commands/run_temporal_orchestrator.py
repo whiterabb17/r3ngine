@@ -502,6 +502,9 @@ class Command(BaseCommand):
             # -------------------------------------------------------------------
             # Collect all registered activities
             # -------------------------------------------------------------------
+            # NOTE: Adding a new activity here requires restarting the Temporal worker
+            # container (docker compose restart temporal-python-orchestrator) — bind-mounted
+            # code changes do NOT auto-register new activity handlers.
             all_activities = [
                 # Generic & Dynamic
                 run_generic_task_activity,

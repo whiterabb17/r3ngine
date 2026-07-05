@@ -78,18 +78,37 @@ class TestAssetCorrelationService(TestCase):
         self.assertTrue(b_assets)
         self.assertFalse(a_assets & b_assets, "canonical_key_hash must differ across assessments")
 
-    def test_no_assessment_no_assets(self):
-        """A scan without an assessment must not produce any Asset."""
-        standalone_scan = ScanHistory.objects.create(
-            domain=self.domain, scan_type=self.engine, start_scan_date=timezone.now(),
+    def test_assessment_with_no_scans_produces_no_assets(self):
+        """An assessment with zero ScanHistory rows must correlate to a no-op result."""
+        self.assessment_c = Assessment.objects.create(
+            engagement=self.eng, name='C', assessment_type='External',
         )
-        Subdomain.objects.create(
-            scan_history=standalone_scan, target_domain=self.domain, name='x.example.test',
+        from reNgine.asset_correlation import AssetCorrelationService
+        result = AssetCorrelationService(self.assessment_c).correlate()
+
+        self.assertEqual(result.new_assets, 0)
+        self.assertEqual(result.new_sources, 0)
+        self.assertEqual(result.scans_processed, 0)
+        self.assertEqual(Asset.objects.filter(assessment=self.assessment_c).count(), 0)
+
+    def test_url_form_asset_gets_nonzero_score_when_type_known(self):
+        """A URL-form canonical Asset (EndPoint-derived, no Exposure) must still
+        get a non-zero risk_score based on its asset_type weight alone."""
+        from reNgine.asset_correlation import AssetCorrelationService
+        from reNgine.exposure_correlation import _ASSET_TYPE_WEIGHTS
+
+        EndPoint.objects.create(
+            scan_history=self.scan, subdomain=self.sub,
+            http_url='https://api.example.test/', http_status=200,
         )
-        pre = Asset.objects.count()
-        # We do not run AssetCorrelationService on a standalone scan; verify it never gets called
-        # from any path we control. The assertion is simply that no Asset exists for that scan.
-        self.assertEqual(Asset.objects.count(), pre)
+        AssetCorrelationService(self.assessment_a).correlate()
+
+        asset = Asset.objects.get(
+            assessment=self.assessment_a,
+            canonical_identifier='https://api.example.test/',
+        )
+        expected_floor = _ASSET_TYPE_WEIGHTS['Web Application'] * 0.35 - 0.01
+        self.assertGreaterEqual(asset.risk_score, expected_floor)
 
     def test_risk_score_uses_shared_constants(self):
         """AssetCorrelationService._score must not duplicate ExposureCorrelationEngine constants."""

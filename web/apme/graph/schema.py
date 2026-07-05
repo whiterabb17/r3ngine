@@ -100,8 +100,8 @@ NODE_TYPES = {
     "Assessment": ["generic"],
     "Finding": ["generic"],
     "Evidence": [
-        "screenshot", "network_capture", "request_response",
-        "command_output", "log", "report", "other",
+        "Screenshot", "NetworkCapture", "RequestResponse",
+        "CommandOutput", "Log", "Report", "Other",
     ],
     "AuthenticationSystem": [
         "oauth", "saml", "oidc", "ldap", "basic",
