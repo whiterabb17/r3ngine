@@ -1782,6 +1782,8 @@ class EmailBreach(models.Model):
 	breach_date = models.CharField(max_length=100, null=True, blank=True)
 	description = models.TextField(null=True, blank=True)
 	compromised_data = models.JSONField(default=list, blank=True)
+	source = models.CharField(max_length=50, default='hibp')
+	# Values: 'hibp', 'whatbreach'
 	discovered_date = models.DateTimeField(auto_now_add=True)
 
 	class Meta:
@@ -1790,3 +1792,29 @@ class EmailBreach(models.Model):
 
 	def __str__(self):
 		return f"{self.email_address} in {self.breach_name}"
+
+
+class CredResult(models.Model):
+	scan_history = models.ForeignKey(ScanHistory, on_delete=models.CASCADE, null=True, blank=True)
+	email = models.ForeignKey(Email, on_delete=models.SET_NULL, null=True, blank=True)
+	email_address = models.CharField(max_length=255)
+	tool_name = models.CharField(max_length=50)
+	ms_tenant = models.CharField(max_length=255, null=True, blank=True)
+	username = models.CharField(max_length=255, null=True, blank=True)
+	password_hash = models.CharField(max_length=500, null=True, blank=True)
+	exposure_type = models.CharField(max_length=100, null=True, blank=True)
+	has_password = models.BooleanField(null=True, blank=True)
+	remote_ngc = models.BooleanField(null=True, blank=True)
+	has_fido = models.BooleanField(null=True, blank=True)
+	has_cert_auth = models.BooleanField(null=True, blank=True)
+	domain_type = models.CharField(max_length=50, null=True, blank=True)
+	account_exists = models.BooleanField(null=True, blank=True)
+	raw_data = models.JSONField(default=dict, blank=True)
+	discovered_date = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		verbose_name_plural = "Credential Results"
+		ordering = ['-discovered_date']
+
+	def __str__(self) -> str:
+		return f"{self.email_address} via {self.tool_name}"

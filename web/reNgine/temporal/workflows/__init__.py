@@ -346,10 +346,9 @@ class MasterScanWorkflow:
                     )
                 )
 
-            # Vigolium harvest (passive ingestion) and discovery (active probing) both
-            # run at Tier 1 alongside subdomain enumeration.  Harvest seeds the DB with
-            # passively gathered endpoints early; discovery actively probes targets with
-            # a robust config so results are available before http_crawl in Tier 2.
+            # Vigolium harvest (passive ingestion) runs at Tier 1 alongside subdomain
+            # enumeration — it seeds the DB with passively gathered endpoints early.
+            # Vigolium discovery moves to Tier 2 so it can target all enumerated subdomains.
             vigolium_harvest_config = yaml_config.get('vigolium_harvest', {})
             if vigolium_harvest_config.get('run_vigolium_harvest', True):
                 discovery_futures.append(
@@ -357,19 +356,6 @@ class MasterScanWorkflow:
                         "RunVigoliumHarvestActivity",
                         ctx,
                         start_to_close_timeout=timedelta(hours=3),
-                        heartbeat_timeout=timedelta(minutes=10),
-                        retry_policy=_RETRY_LONG_SCAN,
-                        task_queue="python-orchestrator-queue"
-                    )
-                )
-
-            vigolium_discovery_config = yaml_config.get('vigolium_discovery', {})
-            if vigolium_discovery_config.get('run_vigolium_discovery', True):
-                discovery_futures.append(
-                    workflow.execute_activity(
-                        "RunVigoliumDiscoveryActivity",
-                        ctx,
-                        start_to_close_timeout=timedelta(hours=4),
                         heartbeat_timeout=timedelta(minutes=10),
                         retry_policy=_RETRY_LONG_SCAN,
                         task_queue="python-orchestrator-queue"
@@ -429,6 +415,19 @@ class MasterScanWorkflow:
                     )
 
             tier2_futures = [_http_crawl_branch()]
+
+            vigolium_discovery_config = yaml_config.get('vigolium_discovery', {})
+            if vigolium_discovery_config.get('run_vigolium_discovery', True):
+                tier2_futures.append(
+                    workflow.execute_activity(
+                        "RunVigoliumDiscoveryActivity",
+                        ctx,
+                        start_to_close_timeout=timedelta(hours=4),
+                        heartbeat_timeout=timedelta(minutes=10),
+                        retry_policy=_RETRY_LONG_SCAN,
+                        task_queue="python-orchestrator-queue"
+                    )
+                )
 
             if "port_scan" in tasks:
                 tier2_futures.append(
@@ -1826,15 +1825,16 @@ class SubScanWorkflow:
 
             tiers = [
                 # TIER 1: Discovery — all discovery tools run concurrently.
-                # vigolium_harvest and vigolium_discovery also run here: harvest seeds
-                # passive endpoints early; discovery actively probes with robust config.
+                # vigolium_harvest seeds passive endpoints early alongside subdomain enumeration.
+                # vigolium_discovery is in Tier 2 so it targets all enumerated subdomains.
                 [t for t in active_tasks if t in {
                     "subdomain_discovery", "amass_intel_discovery", "firewall_vpn_scan",
                     "dns_security", "osint", "spiderfoot_scan", "baddns",
-                    "vigolium_harvest", "vigolium_discovery",
+                    "vigolium_harvest",
                 }],
-                # TIER 2: HTTP Crawl & Port Scan — populates endpoint DB for Tiers 3+.
-                [t for t in active_tasks if t in {"http_crawl", "port_scan"}],
+                # TIER 2: HTTP Crawl & Port Scan + vigolium discovery — populates endpoint DB for Tiers 3+.
+                # vigolium_discovery runs here (not Tier 1) so it targets all enumerated subdomains.
+                [t for t in active_tasks if t in {"http_crawl", "port_scan", "vigolium_discovery"}],
                 # TIER 3: URL Fetching + Screenshot — both depend only on Tier 2 http_crawl;
                 # screenshot does NOT depend on fetch_url output so they run concurrently.
                 # vigolium spidering runs as part of fetch_url (uses_tools: [vigolium]).
@@ -1862,8 +1862,8 @@ class SubScanWorkflow:
                 [t for t in active_tasks if t not in {
                     "subdomain_discovery", "amass_intel_discovery", "firewall_vpn_scan",
                     "dns_security", "osint", "spiderfoot_scan", "baddns",
-                    "vigolium_harvest", "vigolium_discovery",
-                    "http_crawl", "port_scan",
+                    "vigolium_harvest",
+                    "http_crawl", "port_scan", "vigolium_discovery",
                     "fetch_url", "screenshot", "dir_file_fuzz", "post_crawl_osint",
                     "web_api_discovery", "waf_detection",
                     "secret_scanning", "vulnerability_scan", "waf_bypass",

@@ -313,7 +313,7 @@ def vigolium_harvest(self, ctx={}, description=None):
         logger.info("Vigolium harvest disabled in configuration. Skipping.")
         return
 
-    strategy = harvest_config.get(VIGOLIUM_STRATEGY, 'thorough')
+    strategy = harvest_config.get(VIGOLIUM_STRATEGY, 'balanced')
     concurrency = harvest_config.get(VIGOLIUM_CONCURRENCY, 30)
     rate_limit = harvest_config.get(VIGOLIUM_RATE_LIMIT, 100)
     timeout = _ensure_duration(harvest_config.get(VIGOLIUM_TIMEOUT, '60s'))
@@ -380,7 +380,7 @@ def vigolium_discovery(self, ctx={}, description=None):
         logger.info("Vigolium discovery disabled in configuration. Skipping.")
         return
 
-    strategy = discovery_config.get(VIGOLIUM_STRATEGY, 'thorough')
+    strategy = discovery_config.get(VIGOLIUM_STRATEGY, 'balanced')
     concurrency = discovery_config.get(VIGOLIUM_CONCURRENCY, 40)
     rate_limit = discovery_config.get(VIGOLIUM_RATE_LIMIT, 100)
     timeout = _ensure_duration(discovery_config.get(VIGOLIUM_TIMEOUT, '30s'))

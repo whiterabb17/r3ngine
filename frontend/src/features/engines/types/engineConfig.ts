@@ -39,6 +39,9 @@ export interface OsintConfig {
   custom_dorks: string[];
   intensity: 'normal' | 'aggressive' | 'light';
   documents_limit: number;
+  whatbreach: boolean;
+  whatbreach_download_databases: boolean;
+  credspy: boolean;
 }
 
 export interface SpiderfootConfig {
@@ -305,6 +308,9 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
       custom_dorks: [],
       intensity: 'normal',
       documents_limit: 50,
+      whatbreach: true,
+      whatbreach_download_databases: false,
+      credspy: false,
     },
   },
   spiderfoot_scan: { enabled: false, config: { modules: 'all', intensity: 'normal', threads: 10 } },
