@@ -884,8 +884,15 @@ def web_api_discovery(self, urls=[], ctx={}, description=None):
 		julius_out = f"{results_dir}/julius.jsonl"
 		with open(targets_file, 'w') as _f:
 			_f.write('\n'.join(urls))
-		cmd = f"julius probe -t {targets_file} -o jsonl | tee {julius_out}"
-		run_command(cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
+		_julius_cmd = f"julius probe -f {targets_file} -o jsonl | tee {julius_out}"
+		_, _julius_output = run_command(_julius_cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
+		_tls_error_sigs = ('x509: certificate', 'tls: failed to verify certificate', 'certificate verify failed')
+		if any(sig in _julius_output for sig in _tls_error_sigs):
+			logger.warning('[WEB_API] Julius: TLS certificate error detected, retrying with --insecure')
+			if os.path.exists(julius_out):
+				os.remove(julius_out)
+			_julius_cmd = f"julius probe --insecure -f {targets_file} -o jsonl | tee {julius_out}"
+			run_command(_julius_cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
 		if os.path.exists(julius_out):
 			try:
 				with open(julius_out, 'r') as f:
