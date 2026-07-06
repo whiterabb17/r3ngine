@@ -1,9 +1,8 @@
 import logging
+import os
+import re
 import time
 import random
-import re
-from playwright.sync_api import Browser
-from reNgine.screenshot.browser_manager import browser_manager
 from reNgine.common_func import get_random_proxy
 from reNgine.utils.process_cleanup import safe_chrome_cleanup
 from startScan.models import ScanHistory, Email, EmailBreach
@@ -16,12 +15,13 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-def check_email_on_hibp_uc(email_address: str, proxy_string: str = None) -> dict:
+def check_email_on_hibp_uc(email_address: str, proxy_string: str = None, results_dir: str | None = None) -> dict:
     """Core haveibeenpwned scraping logic using undetected-chromedriver and Xvfb.
 
     Args:
         email_address (str): Email address to search.
         proxy_string (str, optional): Proxy server configuration.
+        results_dir (str, optional): Directory to save the raw HTML output.
 
     Returns:
         dict: Dict containing success, pwned status, and breach list.
@@ -83,7 +83,11 @@ def check_email_on_hibp_uc(email_address: str, proxy_string: str = None) -> dict
 
             time.sleep(2)  # Let DOM settle
 
-            with open("/usr/src/app/hibp_results.html", "w", encoding="utf-8") as f:
+            safe_name = re.sub(r'[^a-zA-Z0-9._-]', '_', email_address)
+            html_dir = results_dir or '/usr/src/app'
+            os.makedirs(html_dir, exist_ok=True)
+            html_path = os.path.join(html_dir, f'hibp_{safe_name}.html')
+            with open(html_path, "w", encoding="utf-8") as f:
                 f.write(driver.page_source)
 
             breach_elements = driver.find_elements(
@@ -160,7 +164,7 @@ def check_email_on_hibp_uc(email_address: str, proxy_string: str = None) -> dict
 
     return result
 
-def scrape_email_breaches_with_retries(email_address: str) -> dict:
+def scrape_email_breaches_with_retries(email_address: str, results_dir: str | None = None) -> dict:
     """Helper to run the HIBP scraping with proxy retries and sequential delays.
 
     Returns:
@@ -179,7 +183,7 @@ def scrape_email_breaches_with_retries(email_address: str) -> dict:
 
         logger.info("[HIBP Scraper] Proxy attempt %d/%d using proxy %s", attempt + 1, max_proxy_attempts, proxy)
         try:
-            res = check_email_on_hibp_uc(email_address, proxy)
+            res = check_email_on_hibp_uc(email_address, proxy, results_dir=results_dir)
             if res.get("success"):
                 return res
             logger.warning("[HIBP Scraper] Proxy request failed: %s", res.get('error'))
@@ -188,7 +192,7 @@ def scrape_email_breaches_with_retries(email_address: str) -> dict:
 
     logger.info("[HIBP Scraper] Final attempt: checking %s directly without proxy...", email_address)
     try:
-        return check_email_on_hibp_uc(email_address, None)
+        return check_email_on_hibp_uc(email_address, None, results_dir=results_dir)
     except Exception as e:
         logger.error("[HIBP Scraper] Direct request failed: %s", e)
         return {"success": False, "pwned": False, "breaches": [], "error": str(e)}
@@ -213,8 +217,13 @@ def check_hibp_for_email_task(email_address: str, scan_history_id: int, email_id
         logger.error("[HIBP Scraper] Pre-execution database check failed: %s", e)
         return 0
 
+    # Build per-scan HIBP output directory so HTML files land in scan results, not /usr/src/app
+    hibp_dir = os.path.join(scan_history.results_dir, 'hibp') if scan_history.results_dir else None
+    if hibp_dir:
+        os.makedirs(hibp_dir, exist_ok=True)
+
     # Execute scrape
-    res = scrape_email_breaches_with_retries(email_address)
+    res = scrape_email_breaches_with_retries(email_address, results_dir=hibp_dir)
 
     if not res.get("success"):
         logger.warning("[HIBP Scraper] Scraping failed for %s. No breaches saved.", email_address)
