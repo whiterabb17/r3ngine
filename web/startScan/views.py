@@ -808,31 +808,44 @@ def update_vuln_validation_status(request, id):
 
 
 def fetch_exploit_source(request, id):
+    """Fetch and return the text content of a vulnerability's exploit URL.
+
+    Uses undetected-chromedriver + Xvfb to bypass Cloudflare and similar bot
+    protection on packetstorm, githubexploit, seebug, 1337day, and exploit-db
+    pages.  Content is truncated to 50 000 characters by the scraper.
+
+    Args:
+        id (int): Vulnerability primary key.
+
+    Returns:
+        JsonResponse: {status, content} on success or {status, error} on failure.
+    """
+    from reNgine.osint.exploit_scraper import fetch_exploit_with_retries
+
     vuln = get_object_or_404(Vulnerability, id=id)
-    if vuln.exploit_url:
-        try:
-            validate_external_url(vuln.exploit_url)
-            response = requests.get(vuln.exploit_url, timeout=10, verify=True)
-            if response.status_code == 200:
-                # If it's HTML, we might want to extract just the code if possible
-                # But for now let's just return the text
-                return JsonResponse({
-                    'status': True,
-                    'content': response.text
-                })
-            else:
-                return JsonResponse({
-                    'status': False,
-                    'error': f'Failed to fetch exploit source. Status code: {response.status_code}'
-                })
-        except Exception as e:
-            return JsonResponse({
-                'status': False,
-                'error': str(e)
-            })
+    if not vuln.exploit_url:
+        return JsonResponse({
+            'status': False,
+            'error': 'No exploit URL found for this vulnerability.'
+        })
+
+    try:
+        validate_external_url(vuln.exploit_url)
+    except Exception as exc:
+        return JsonResponse({
+            'status': False,
+            'error': f'Invalid exploit URL: {exc}'
+        })
+
+    result = fetch_exploit_with_retries(vuln.exploit_url)
+    if result.get('success'):
+        return JsonResponse({
+            'status': True,
+            'content': result['content']
+        })
     return JsonResponse({
         'status': False,
-        'error': 'No exploit URL found for this vulnerability.'
+        'error': result.get('error', 'Unknown error fetching exploit source.')
     })
 
 

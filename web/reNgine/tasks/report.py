@@ -2,6 +2,7 @@ import os
 import re
 import markdown
 from datetime import datetime
+from itertools import groupby
 from django.core.files.base import ContentFile
 from django.template.loader import get_template
 from collections import defaultdict
@@ -21,7 +22,7 @@ from reNgine.utils.graph import Neo4jManager
 from reNgine.utils.logger import get_module_logger, format_exception_for_log
 from reNgine.common_func import get_interesting_subdomains, clean_semgrep_check_id, categorize_secret_type
 from reNgine.stress.report_builder import StressReportBuilder
-from startScan.models import ScanHistory, Subdomain, Vulnerability, IpAddress, ScanReport, StressTestResult, Parameter, EmailBreach, SecretLeak, EndPoint, DirectoryScan, DirectoryFile, S3Bucket, Waf, Technology, IdentityInfraDiscovery, APIIntelligenceProfile, Exposure, MetaFinderDocument, Dork, CertificateIntelligence, Employee
+from startScan.models import ScanHistory, Subdomain, Vulnerability, IpAddress, ScanReport, StressTestResult, Parameter, EmailBreach, CredResult, SecretLeak, EndPoint, DirectoryScan, DirectoryFile, S3Bucket, Waf, Technology, IdentityInfraDiscovery, APIIntelligenceProfile, Exposure, MetaFinderDocument, Dork, CertificateIntelligence, Employee
 from scanEngine.models import VulnerabilityReportSetting
 
 logger = get_module_logger(__name__)
@@ -301,8 +302,18 @@ def generate_report_task(report_id):
             logger.log_line("[REPORT]", "SKIP", "attack paths (template=%s include=%s)" % (report_template, include_attack_paths))
 
         logger.log_line("[REPORT]", "FETCH", "loading email breaches")
-        email_breaches = EmailBreach.objects.filter(scan_history=scan).order_by('email_address', '-discovered_date')
-        logger.log_line("[REPORT]", "FETCH", "email breaches: %d" % email_breaches.count())
+        raw_breaches = EmailBreach.objects.filter(scan_history=scan).order_by('email_address', 'source', '-discovered_date')
+        email_breaches_count = raw_breaches.count()
+        logger.log_line("[REPORT]", "FETCH", "email breaches: %d" % email_breaches_count)
+        breaches_by_user = {}
+        for address, group in groupby(raw_breaches, key=lambda b: b.email_address):
+            breaches_by_user[address] = list(group)
+
+        raw_creds = CredResult.objects.filter(scan_history=scan).order_by('email_address')
+        cred_results_count = raw_creds.count()
+        cred_results_by_user = {}
+        for address, group in groupby(raw_creds, key=lambda c: c.email_address):
+            cred_results_by_user[address] = list(group)
 
         include_secret_findings = params.get('include_secret_findings', True)
         if isinstance(include_secret_findings, str):
@@ -434,8 +445,10 @@ def generate_report_task(report_id):
             'stress_results': stress_results,
             'parameters': parameters,
             'parameters_count': parameters.count(),
-            'email_breaches': email_breaches,
-            'email_breaches_count': email_breaches.count(),
+            'email_breaches_count': email_breaches_count,
+            'breaches_by_user': breaches_by_user,
+            'cred_results_by_user': cred_results_by_user,
+            'cred_results_count': cred_results_count,
             'secret_leaks': secret_leaks,
             'secret_leaks_count': secret_leaks.count() if include_secret_findings else 0,
             'secret_findings_by_type': secret_findings_by_type,
@@ -606,7 +619,7 @@ def generate_report_task(report_id):
                             if res and res.get('status'):
                                 vulns_updated = True
                         except Exception as e:
-                            logger.log_line("[REPORT]", "ERROR", f"Failed to generate details for vuln {v.id}: {e}", level="error")
+                            logger.log_line("[REPORT]", "ERROR", "Failed to generate details for vuln %s: %s" % (v.id, format_exception_for_log(e)), level="error")
 
                 if vulns_updated:
                     logger.log_line("[REPORT]", "LLM", "vulnerabilities were updated, refreshing context")

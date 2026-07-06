@@ -718,37 +718,78 @@
     <article class="page-break" id="email-breaches-section">
         <h1>Email Breaches & Leaks</h1>
         <p style="margin-top: 4mm; margin-bottom: 4mm;">
-            The following email addresses discovered during the scan were matched against known public data breaches on HaveIBeenPwned.
+            The following email addresses discovered during the scan were matched against known public data breaches.
         </p>
-        <table style="width: 100%; border-collapse: collapse; margin-top: 4mm; font-size: 0.9em;">
-            <thead>
-                <tr style="border-bottom: 2px solid #e2e8f0; text-align: left; background-color: #f8fafc;">
-                    <th style="padding: 10px; width: 25%;">Email Address</th>
-                    <th style="padding: 10px; width: 20%;">Breach Name</th>
-                    <th style="padding: 10px; width: 15%;">Breach Date</th>
-                    <th style="padding: 10px; width: 40%;">Compromised Data</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for breach in email_breaches %}
-                <tr style="border-bottom: 1px solid #e2e8f0;">
-                    <td style="padding: 10px; font-family: monospace; word-break: break-all;">{{ breach.email_address }}</td>
-                    <td style="padding: 10px; font-weight: bold;">{{ breach.breach_name }}</td>
-                    <td style="padding: 10px;">{{ breach.breach_date|default:"Unknown" }}</td>
-                    <td style="padding: 10px;">
-                        {% for item in breach.compromised_data %}
-                        <span style="font-size: 8pt; margin: 2px; padding: 2px 6px; border-radius: 4px; display: inline-block; background-color: #e2e8f0; color: #1e293b;">{{ item }}</span>
-                        {% endfor %}
-                    </td>
-                </tr>
-                <tr style="border-bottom: 1px solid #cbd5e1;">
-                    <td colspan="4" style="padding: 10px 15px; font-size: 8.5pt; color: #475569; background-color: #f8fafc;">
-                        <strong>Description:</strong> {{ breach.description }}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        {% if breaches_by_user %}
+        {% for email_address, breaches in breaches_by_user.items %}
+        <div style="margin-bottom: 8mm;">
+            <h3 style="font-family: monospace; font-size: 10pt; margin-bottom: 2mm; word-break: break-all;">{{ email_address }}</h3>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 2mm; font-size: 0.9em;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #e2e8f0; text-align: left; background-color: #f8fafc;">
+                        <th style="padding: 10px; width: 25%;">Breach Name</th>
+                        <th style="padding: 10px; width: 15%;">Breach Date</th>
+                        <th style="padding: 10px; width: 15%;">Source</th>
+                        <th style="padding: 10px; width: 45%;">Compromised Data</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for breach in breaches %}
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                        <td style="padding: 10px; font-weight: bold;">{{ breach.breach_name }}</td>
+                        <td style="padding: 10px;">{{ breach.breach_date|default:"Unknown" }}</td>
+                        <td style="padding: 10px;">
+                            <span style="font-size: 8pt; padding: 2px 6px; border-radius: 4px; display: inline-block; background-color: #dbeafe; color: #1e40af;">{{ breach.source|upper }}</span>
+                        </td>
+                        <td style="padding: 10px;">
+                            {% for item in breach.compromised_data %}
+                            <span style="font-size: 8pt; margin: 2px; padding: 2px 6px; border-radius: 4px; display: inline-block; background-color: #e2e8f0; color: #1e293b;">{{ item }}</span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% if breach.description %}
+                    <tr style="border-bottom: 1px solid #cbd5e1;">
+                        <td colspan="4" style="padding: 10px 15px; font-size: 8.5pt; color: #475569; background-color: #f8fafc;">
+                            <strong>Description:</strong> {{ breach.description }}
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% with creds=cred_results_by_user|get_item:email_address %}
+            {% if creds %}
+            <table style="width: 100%; border-collapse: collapse; margin-top: 3mm; font-size: 0.85em; border: 1px solid #e2e8f0;">
+                <thead>
+                    <tr style="background-color: #eff6ff; text-align: left;">
+                        <th style="padding: 8px;">MS Tenant</th>
+                        <th style="padding: 8px;">Account Exists</th>
+                        <th style="padding: 8px;">Preferred Auth</th>
+                        <th style="padding: 8px;">Has Password</th>
+                        <th style="padding: 8px;">Remote NGC</th>
+                        <th style="padding: 8px;">FIDO</th>
+                        <th style="padding: 8px;">Domain Type</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cred in creds %}
+                    <tr style="border-top: 1px solid #e2e8f0;">
+                        <td style="padding: 8px;">{{ cred.ms_tenant|default:"-" }}</td>
+                        <td style="padding: 8px;">{{ cred.account_exists|yesno:"Yes,No,Unknown" }}</td>
+                        <td style="padding: 8px;">{{ cred.exposure_type|default:"-" }}</td>
+                        <td style="padding: 8px;">{{ cred.has_password|yesno:"Yes,No,Unknown" }}</td>
+                        <td style="padding: 8px;">{{ cred.remote_ngc|yesno:"Yes,No,Unknown" }}</td>
+                        <td style="padding: 8px;">{{ cred.has_fido|yesno:"Yes,No,Unknown" }}</td>
+                        <td style="padding: 8px;">{{ cred.domain_type|default:"-" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+            {% endwith %}
+        </div>
+        {% endfor %}
+        {% endif %}
     </article>
     {% endif %}
 

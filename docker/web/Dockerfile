@@ -565,6 +565,17 @@ RUN git clone https://github.com/praetorian-inc/gato /usr/src/github/gato \
     && uv venv \
     && uv pip install -e .
 
+# WhatBreach — multi-source email breach lookup (Hunter.io key injected at runtime)
+# Not on PyPI; installed via git clone + uv venv into /usr/src/github/WhatBreach
+# --help run at build time initialises ~/.whatbreach_home/tokens/ directory structure
+RUN git clone --depth 1 https://github.com/Ekultek/WhatBreach /usr/src/github/WhatBreach \
+    && cd /usr/src/github/WhatBreach \
+    && uv venv \
+    && uv pip install -r requirements.txt \
+    && rm -rf /usr/src/github/WhatBreach/.git \
+    && /usr/src/github/WhatBreach/.venv/bin/python3 \
+       /usr/src/github/WhatBreach/whatbreach.py --help || true
+
 # Ensure pipx is available and install baddns
 RUN --mount=type=cache,target=/root/.cache/pip \
     python3 -m pip install pipx && \
@@ -587,6 +598,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pipx install bbot --force && \
     pipx install sploitscan --force && \
     pipx install git+https://github.com/doyensec/GQLSpection --force
+
+# credspy — Microsoft account enumeration via Azure GetCredentialType endpoint
+# Python 3.10+ required (image runs 3.12); only runs when Microsoft MX records detected
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pipx install credspy
 
 # grype — Anchore filesystem CVE scanner
 # PINNED to v0.114.0 — downloaded directly from GitHub Releases (NOT install.sh)
@@ -651,8 +667,8 @@ RUN playwright install-deps chromium && \
 # above this line are fully cached on code-only rebuilds)
 # ---------------------------------------------------------------------------
 COPY web/ /usr/src/app/
-RUN mkdir /usr/src/app/scripts 
-COPY docker/scripts/nuclei_tag_splitter.py /usr/src/app/scripts/nuclei_tag_splitter.py
+RUN mkdir /usr/src/scripts 
+COPY docker/scripts/nuclei_tag_splitter.py /usr/src/scripts/nuclei_tag_splitter.py
 COPY docker/web/entrypoint.sh /usr/src/app/entrypoint.sh
 COPY docker/temporal-python-orchestrator/entrypoint.sh /usr/src/app/temporal-entrypoint.sh
 COPY docker/temporal-go-executor/entrypoint.sh /usr/src/app/executor-entrypoint.sh
@@ -676,3 +692,6 @@ COPY --from=frontend-builder /app/frontend/dist /usr/src/frontend/dist
 RUN find /usr/src -name "*.pyc" -delete 2>/dev/null; \
     find /usr/src -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null; \
     true
+
+# gau config — place before any gau invocation so it reads the custom provider/filter settings
+COPY config/tools/gau.toml /root/.gau.toml
