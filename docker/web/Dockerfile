@@ -667,8 +667,8 @@ RUN playwright install-deps chromium && \
 # above this line are fully cached on code-only rebuilds)
 # ---------------------------------------------------------------------------
 COPY web/ /usr/src/app/
-RUN mkdir /usr/src/scripts 
-COPY docker/scripts/nuclei_tag_splitter.py /usr/src/scripts/nuclei_tag_splitter.py
+#RUN mkdir /usr/src/scripts 
+#COPY docker/scripts/nuclei_tag_splitter.py /usr/src/scripts/nuclei_tag_splitter.py
 COPY docker/web/entrypoint.sh /usr/src/app/entrypoint.sh
 COPY docker/temporal-python-orchestrator/entrypoint.sh /usr/src/app/temporal-entrypoint.sh
 COPY docker/temporal-go-executor/entrypoint.sh /usr/src/app/executor-entrypoint.sh
@@ -695,3 +695,4 @@ RUN find /usr/src -name "*.pyc" -delete 2>/dev/null; \
 
 # gau config — place before any gau invocation so it reads the custom provider/filter settings
 COPY config/tools/gau.toml /root/.gau.toml
+RUN rm -rf /root/nuclei-templates/*
