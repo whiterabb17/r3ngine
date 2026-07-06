@@ -160,8 +160,8 @@ vigolium config set dynamic-assessment.max_feedback_rounds=3 || true
 vigolium config set known_issue_scan.enrich_targets=true || true
 
 # Split oversized nuclei tags
-echo "[entrypoint] Running Nuclei tag splitter..."
-python3 /usr/src/scripts/nuclei_tag_splitter.py
+# echo "[entrypoint] Running Nuclei tag splitter..."
+# python3 /usr/src/scripts/nuclei_tag_splitter.py
 
 # wait $INTERNAL_TOOLS_PID
 echo "[entrypoint] Starting Temporal Go Executor..."
