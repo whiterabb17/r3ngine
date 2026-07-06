@@ -1,5 +1,5 @@
 import React from 'react';
-import { Grid, TextField, MenuItem } from '@mui/material';
+import { Grid, TextField, MenuItem, FormControlLabel, Checkbox, FormGroup, Typography, Tooltip } from '@mui/material';
 import type { OsintConfig } from '../../types/engineConfig';
 import { SectionCard } from '../shared/SectionCard';
 import { ChipSelect } from '../shared/ChipSelect';
@@ -79,6 +79,51 @@ export const OsintSection: React.FC<Props> = ({ config, enabled, onToggle, onCha
           />
         </Grid>
       </Grid>
+      <FormGroup sx={{ mt: 1 }}>
+        <Typography variant="caption" sx={{ color: tokens.text.muted, mb: 0.5 }}>
+          Breach Intelligence
+        </Typography>
+        <FormControlLabel
+          control={
+            <Checkbox
+              size="small"
+              checked={config.whatbreach}
+              onChange={(e) => onChange({ whatbreach: e.target.checked })}
+            />
+          }
+          label="Enable WhatBreach"
+        />
+        <FormControlLabel
+          sx={{ ml: 2 }}
+          control={
+            <Checkbox
+              size="small"
+              checked={config.whatbreach_download_databases}
+              disabled={!config.whatbreach}
+              onChange={(e) => onChange({ whatbreach_download_databases: e.target.checked })}
+            />
+          }
+          label={
+            <Tooltip title="Downloads publicly available breach databases to the scan results folder. Files can be very large.">
+              <span>Download found databases</span>
+            </Tooltip>
+          }
+        />
+        <FormControlLabel
+          control={
+            <Checkbox
+              size="small"
+              checked={config.credspy}
+              onChange={(e) => onChange({ credspy: e.target.checked })}
+            />
+          }
+          label={
+            <Tooltip title="Post-crawl tool: runs after subdomain/crawl discovery so Microsoft infrastructure found during the scan is included in detection. Auto-skipped if no Microsoft MX records or autodiscover subdomains are detected.">
+              <span>Enable CredSpy <em style={{ fontSize: '0.75em', opacity: 0.7 }}>(post-crawl)</em></span>
+            </Tooltip>
+          }
+        />
+      </FormGroup>
     </SectionCard>
   );
 };
