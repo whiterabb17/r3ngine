@@ -695,4 +695,3 @@ RUN find /usr/src -name "*.pyc" -delete 2>/dev/null; \
 
 # gau config — place before any gau invocation so it reads the custom provider/filter settings
 COPY config/tools/gau.toml /root/.gau.toml
-RUN rm -rf /root/nuclei-templates/*
