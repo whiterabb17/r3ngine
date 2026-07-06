@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://github.com/whiterabb17/r3ngine/releases" target="_blank">
-    <img src="https://img.shields.io/badge/version-v3.7.0-informational?&logo=none" alt="r3ngine Latest Version" />
+    <img src="https://img.shields.io/badge/version-v3.7.2-informational?&logo=none" alt="r3ngine Latest Version" />
   </a>
   &nbsp;
   <a href="https://www.gnu.org/licenses/gpl-3.0" target="_blank">
@@ -30,7 +30,7 @@
   </a>
 </p>
 
-<h3 align="center">r3ngine 3.7.0: The Phoenix Rebirth</h3>
+<h3 align="center">r3ngine 3.7.2: The Phoenix Rebirth</h3>
 <p>
   r3ngine v3.7.0 is the production-stabilized, enterprise-grade evolution of the platform. Building off the original reNgine and further inspired by rengine-ng (Check out <a href="https://github.com/Security-Tools-Alliance/rengine-ng" target="_blank">rengine-ng v3</a> if you haven't!) This release delivers a massively expanded <b>Attack Path Modeling Engine</b> (179 rules, MITRE ATT&CK, 10-factor scoring), <b>Distributed Remote Workers</b>, <b>Certificate Intelligence</b> (tlsx-driven TLS reconnaissance), <b>Identity Infrastructure Intelligence</b> (SSO/IdP detection), <b>Expanded Graph & API Intelligence</b> (Organization → Application → APIEndpoint chain with a dedicated full-chain visualizer), <b>Exposure Correlation Engine</b> (cross-tool dedup + 18-category taxonomy), <b>WPScan/WPTaint SAST integration</b>, <b>Nuclei proxy rotation</b>, <b>session-based LinkedIn OSINT</b>, <b>Tier 7 LLM auto-enrichment</b>, <b>offline hash cracking</b>, <b>intelligent Tier 5 tool gating</b>, and a full <b>Target Editing</b> workflow. The infrastructure remains hardened with <b>Django 5.2.3 LTS</b>, <b>PostgreSQL 16</b>, and <b>Gunicorn + Uvicorn ASGI</b> production serving. Building on the v3.2.0 Celery → Temporal migration — which replaced the legacy at-most-once task broker with a durable workflow engine providing crash-safe execution, full replay history, and pause/resume signaling — v3.7.0 focuses on attack intelligence depth, operational security, horizontal scaling, and production reliability at scale.
 </p>

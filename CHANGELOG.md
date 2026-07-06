@@ -1,8 +1,29 @@
 # Changelog
 
+### [v3.7.2] - 2026-07-06
+
+#### Fixed
+
+- **Vulners Exploit Source Extraction — Cloudflare Bypass**:
+  - The "Preview Exploit Content" feature for Vulners NSE scan findings was silently failing. The browser-side JS fetch was blocked by CORS; the backend `fetch_exploit_source` view used a bare `requests.get()` call which was blocked by Cloudflare on all major exploit repositories (packetstorm, githubexploit, seebug, 1337day, exploit-db).
+  - Created `web/reNgine/osint/exploit_scraper.py` — a new UC-based scraper module implementing `fetch_exploit_source_uc()` (undetected-chromedriver + Xvfb, same architecture as `hibp_scraper.py`) and `fetch_exploit_with_retries()` (up to 3 proxy attempts then direct fallback).
+  - Updated `fetch_exploit_source` view in `startScan/views.py` to delegate to the new scraper instead of plain `requests.get()`. Content is validated, scraped, and capped at 50 000 characters.
+
+#### Enhanced
+
+- **Exploit Source UI — Core Frontend**:
+  - Added `useFetchExploitSource` mutation hook to `frontend/src/features/vulnerabilities/api/index.ts` targeting `/scan/fetch/exploit_source/<id>/`.
+  - Added an **EXPLOIT SOURCE** collapsible panel to `VulnerabilityTable.tsx` (visible only on vulnerabilities with an `exploit_url`). Shows the full exploit URL as a clickable link, a **LOAD EXPLOIT CONTENT** button (with loading state and reload support), and renders the scraped body text in a scrollable monospace pre-block (max 320px).
+
+- **Exploit Source UI — ERL Plugin**:
+  - Mirrored both changes (`useFetchExploitSource` hook + EXPLOIT SOURCE panel) in `r3ngine-plugins/exploit_readiness_layer/ui/`, styled using the plugin's cyberpunk palette (neon red `#ff003c`, dark `#05050a` background).
+
+---
+
 ### [v3.7.0]
 
 #### Enhanced
+
 
 - **Temporal Plugin Logging & Timeline Grouping**:
   - Implemented the `LogPluginStartActivity` and `LogPluginEndActivity` Temporal activities within `MasterScanWorkflow` to dynamically log backend execution of plugin child workflows directly to the `ScanActivity` database table.
