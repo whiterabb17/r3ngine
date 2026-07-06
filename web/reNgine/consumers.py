@@ -181,3 +181,60 @@ class ScanLogConsumer(AsyncWebsocketConsumer):
     async def log_message(self, event):
         """Receive message from group."""
         await self.send(text_data=json.dumps(event))
+
+class AssessmentEventConsumer(AsyncWebsocketConsumer):
+    """WebSocket consumer for real-time assessment progress and state changes."""
+    async def connect(self):
+        user = self.scope.get('user')
+        if not user or not user.is_authenticated:
+            await self.close(code=4401)
+            return
+
+        self.assessment_id = self.scope['url_route']['kwargs']['assessment_id']
+        self.group_name = f"assessment_{self.assessment_id}"
+
+        # Join group
+        await self.channel_layer.group_add(
+            self.group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+        logger.info(f"AssessmentEvent WebSocket connected for assessment {self.assessment_id}")
+
+        # Send authoritative current status from DB
+        current_state = await self._get_current_state()
+        if current_state:
+            await self.send(text_data=json.dumps({
+                'type': 'assessment_progress',
+                'data': current_state
+            }))
+
+    @database_sync_to_async
+    def _get_current_state(self):
+        from engagements.models import AssessmentWorkflowState
+        try:
+            state = AssessmentWorkflowState.objects.get(assessment__uuid=self.assessment_id)
+            return {
+                'assessment_id': self.assessment_id,
+                'stage': state.current_stage,
+                'progress': state.progress_percent
+            }
+        except Exception:
+            return None
+
+    async def disconnect(self, close_code):
+        if hasattr(self, 'group_name'):
+            await self.channel_layer.group_discard(
+                self.group_name,
+                self.channel_name
+            )
+        logger.info(f"AssessmentEvent WebSocket disconnected for assessment {getattr(self, 'assessment_id', 'unknown')}")
+
+    async def assessment_message(self, event):
+        """Receive message from group send and forward to WebSocket."""
+        # Clean up the internal type field, forward the actual event name
+        await self.send(text_data=json.dumps({
+            'type': event['event'],
+            'data': event['data']
+        }))

@@ -135,7 +135,7 @@ class AiBundleBuilder:
             .order_by("endpoint__http_url", "name")
         )
         vulnerabilities = list(
-            Vulnerability.objects.filter(scan_history=scan)
+            Vulnerability.objects.filter(scan_history=scan, validation_status='verified')
             .select_related("subdomain", "endpoint", "target_domain")
             .prefetch_related("tags", "references", "cve_ids", "cwe_ids")
             .order_by("-severity", "-correlation_score", "-discovered_date", "name")

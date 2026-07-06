@@ -274,3 +274,181 @@ class GraphBuilder:
             to_subtype=to_subtype,
         )
         return result.single() is not None
+
+    # ------------------------------------------------------------------------
+    # Phase 5 — Assessment intelligence nodes
+    # ------------------------------------------------------------------------
+
+    def merge_assessment_node(self, assessment) -> None:
+        """MERGE (a:Assessment) — idempotent by uuid."""
+        if not self._driver:
+            return
+        params = {
+            "uuid": str(assessment.uuid),
+            "name": assessment.name,
+            "engagement_uuid": str(assessment.engagement.uuid),
+            "assessment_type": assessment.assessment_type,
+            "status": assessment.status,
+        }
+        with self._driver.session() as session:
+            session.run(
+                """
+                MERGE (a:Assessment {uuid: $uuid})
+                SET a.name = $name,
+                    a.engagement_uuid = $engagement_uuid,
+                    a.assessment_type = $assessment_type,
+                    a.status = $status
+                """,
+                **params,
+            )
+
+    def merge_finding_nodes(self, vulnerabilities, assessment=None) -> int:
+        """MERGE (:Finding {finding_id}) rows in a single UNWIND.
+
+        When assessment is provided, also MERGE (:Assessment)-[:CONTAINS]->(:Finding).
+        Returns the row count written.
+        """
+        if not self._driver or not vulnerabilities:
+            return 0
+        rows = []
+        for v in vulnerabilities:
+            rows.append({
+                "finding_id": v.id,
+                "name": v.name or "",
+                "severity": int(v.severity or -1),
+                "validation_status": getattr(v, 'validation_status', 'new') or 'new',
+                "scan_id": v.scan_history_id if getattr(v, 'scan_history_id', None) else None,
+            })
+        with self._driver.session() as session:
+            session.run(
+                """
+                UNWIND $rows AS row
+                MERGE (f:Finding {finding_id: row.finding_id})
+                SET f.name = row.name,
+                    f.severity = row.severity,
+                    f.validation_status = row.validation_status
+                WITH f, row
+                WHERE row.scan_id IS NOT NULL
+                MATCH (sc:Scan {id: row.scan_id})
+                MERGE (f)-[:DISCOVERED_IN]->(sc)
+                """,
+                rows=rows,
+            )
+            if assessment is not None:
+                session.run(
+                    """
+                    UNWIND $rows AS row
+                    MATCH (a:Assessment {uuid: $assessment_uuid}), (f:Finding {finding_id: row.finding_id})
+                    MERGE (a)-[:CONTAINS]->(f)
+                    """,
+                    rows=rows,
+                    assessment_uuid=str(assessment.uuid),
+                )
+        return len(rows)
+
+    def merge_evidence_nodes(self, evidences_with_findings) -> int:
+        """MERGE (:Evidence) nodes and their SUPPORTED_BY edges to Findings.
+
+        Arg is an iterable of (evidence, [finding_ids]) tuples. Returns the
+        evidence row count written.
+        """
+        if not self._driver:
+            return 0
+        rows = []
+        edge_rows = []
+        for ev, finding_ids in evidences_with_findings:
+            rows.append({
+                "evidence_uuid": str(ev.uuid),
+                "evidence_type": ev.evidence_type,
+                "sha256_hash": ev.sha256_hash or "",
+                "storage_path": ev.file_path or "",
+            })
+            for fid in finding_ids:
+                edge_rows.append({
+                    "evidence_uuid": str(ev.uuid),
+                    "finding_id": fid,
+                })
+        if not rows:
+            return 0
+        with self._driver.session() as session:
+            session.run(
+                """
+                UNWIND $rows AS row
+                MERGE (e:Evidence {evidence_uuid: row.evidence_uuid})
+                SET e.evidence_type = row.evidence_type,
+                    e.sha256_hash = row.sha256_hash,
+                    e.storage_path = row.storage_path
+                """,
+                rows=rows,
+            )
+            if edge_rows:
+                session.run(
+                    """
+                    UNWIND $rows AS row
+                    MATCH (f:Finding {finding_id: row.finding_id}),
+                          (e:Evidence {evidence_uuid: row.evidence_uuid})
+                    MERGE (f)-[:SUPPORTED_BY]->(e)
+                    """,
+                    rows=edge_rows,
+                )
+        return len(rows)
+
+    def merge_authentication_system(self, host: str, auth_type: str,
+                                    subtype: str = "generic") -> str:
+        """MERGE (:AuthenticationSystem) — returns the apme_id used."""
+        import hashlib
+        apme_id = "auth:" + hashlib.sha256(
+            f"{host}|{auth_type}".encode('utf-8')
+        ).hexdigest()[:24]
+        if not self._driver:
+            return apme_id
+        with self._driver.session() as session:
+            session.run(
+                """
+                MERGE (a:AuthenticationSystem {apme_id: $apme_id})
+                SET a.host = $host,
+                    a.auth_system_type = $auth_type,
+                    a.subtype = $subtype
+                """,
+                apme_id=apme_id,
+                host=host,
+                auth_type=auth_type,
+                subtype=subtype,
+            )
+        return apme_id
+
+    def link_application_to_auth(self, application_apme_id: str,
+                                 auth_apme_id: str) -> None:
+        """MERGE (:Application)-[:USES]->(:AuthenticationSystem)."""
+        if not self._driver:
+            return
+        with self._driver.session() as session:
+            session.run(
+                """
+                MATCH (app:Application {apme_id: $app_id}),
+                      (auth:AuthenticationSystem {apme_id: $auth_id})
+                MERGE (app)-[:USES]->(auth)
+                """,
+                app_id=application_apme_id,
+                auth_id=auth_apme_id,
+            )
+
+    def attach_assessment_id(self, scan_id: int, assessment_uuid: str) -> int:
+        """Backfill assessment_id on all APMENodes tagged with scan_id.
+
+        Returns the updated node count.
+        """
+        if not self._driver:
+            return 0
+        with self._driver.session() as session:
+            result = session.run(
+                """
+                MATCH (n:APMENode {scan_id: $scan_id})
+                SET n.assessment_id = $assessment_uuid
+                RETURN count(n) AS updated
+                """,
+                scan_id=scan_id,
+                assessment_uuid=assessment_uuid,
+            )
+            record = result.single()
+            return int(record['updated']) if record else 0

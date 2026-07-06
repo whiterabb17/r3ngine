@@ -694,7 +694,7 @@ def save_vulnerability(vuln_data=None, scan_history=None, target_domain=None, de
 	subscan = vuln_data.pop('subscan', None)
 
 	exploit_url = vuln_data.pop('exploit_url', None)
-	validation_status = vuln_data.pop('validation_status', 'unverified')
+	validation_status = vuln_data.pop('validation_status', 'new')
 
 	# If subdomain is not provided, try to find it from http_url
 	subdomain = vuln_data.get('subdomain')
