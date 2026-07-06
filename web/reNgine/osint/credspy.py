@@ -4,6 +4,8 @@ import os
 import subprocess
 from typing import TYPE_CHECKING
 
+from django.conf import settings
+
 from reNgine.common_func import get_random_proxy
 from startScan.models import CredResult, DnsRecord, Subdomain
 
@@ -11,6 +13,8 @@ if TYPE_CHECKING:
     from startScan.models import ScanHistory
 
 logger = logging.getLogger(__name__)
+
+_RESULTS_BASE = os.path.realpath(getattr(settings, 'RENGINE_RESULTS', '/usr/src/scan_results'))
 
 
 def is_microsoft_email_provider(scan_history_id: int) -> bool:
@@ -71,11 +75,16 @@ def run_credspy(
         logger.warning("run_credspy | SKIP | no emails for scan_id=%s", scan_history.id)
         return 0
 
-    emails_file = os.path.join(results_dir, 'credspy_emails.txt')
+    resolved_dir = os.path.realpath(results_dir)
+    if not resolved_dir.startswith(_RESULTS_BASE):
+        logger.error("run_credspy | ABORT | results_dir outside expected base: %s", results_dir)
+        return 0
+
+    emails_file = os.path.join(resolved_dir, 'credspy_emails.txt')
     with open(emails_file, 'w') as fh:
         fh.write('\n'.join(emails))
 
-    csv_path = _get_csv_path(results_dir)
+    csv_path = _get_csv_path(resolved_dir)
     cmd = ['credspy', emails_file, '--csv', csv_path, '--proxy', proxy_url]
 
     try:
@@ -112,18 +121,20 @@ def _parse_credspy_csv(csv_path: str, scan_history: 'ScanHistory') -> int:
             email_address = (row.get('Email') or '').strip()
             if not email_address:
                 continue
-            CredResult.objects.create(
+            _, row_created = CredResult.objects.get_or_create(
                 scan_history=scan_history,
                 email_address=email_address,
                 tool_name='credspy',
-                account_exists=_to_bool(row.get('Exists')),
-                exposure_type=(row.get('PreferredType') or '').strip() or None,
-                has_password=_to_bool(row.get('HasPassword')),
-                remote_ngc=_to_bool(row.get('RemoteNGC')),
-                has_fido=_to_bool(row.get('HasFido')),
-                has_cert_auth=_to_bool(row.get('HasCertAuth')),
-                domain_type=(row.get('DomainType') or '').strip() or None,
-                raw_data=dict(row),
+                defaults=dict(
+                    account_exists=_to_bool(row.get('Exists')),
+                    exposure_type=(row.get('PreferredType') or '').strip() or None,
+                    has_password=_to_bool(row.get('HasPassword')),
+                    remote_ngc=_to_bool(row.get('RemoteNGC')),
+                    has_fido=_to_bool(row.get('HasFido')),
+                    has_cert_auth=_to_bool(row.get('HasCertAuth')),
+                    domain_type=(row.get('DomainType') or '').strip() or None,
+                    raw_data=dict(row),
+                ),
             )
             created += 1
     return created

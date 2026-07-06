@@ -3,6 +3,8 @@ import os
 import subprocess
 from typing import TYPE_CHECKING
 
+from django.conf import settings
+
 from dashboard.models import HunterIOAPIKey
 from startScan.models import EmailBreach
 from reNgine.utils.task import save_email
@@ -11,6 +13,8 @@ if TYPE_CHECKING:
     from startScan.models import ScanHistory
 
 logger = logging.getLogger(__name__)
+
+_RESULTS_BASE = os.path.realpath(getattr(settings, 'RENGINE_RESULTS', '/usr/src/scan_results'))
 
 _WHATBREACH_PYTHON = '/usr/src/github/WhatBreach/.venv/bin/python3'
 _WHATBREACH_SCRIPT = '/usr/src/github/WhatBreach/whatbreach.py'
@@ -61,7 +65,12 @@ def run_whatbreach(
         logger.warning("run_whatbreach | SKIP | no emails found for scan_id=%s", scan_history.id)
         return 0
 
-    emails_file = os.path.join(results_dir, 'whatbreach_emails.txt')
+    resolved_dir = os.path.realpath(results_dir)
+    if not resolved_dir.startswith(_RESULTS_BASE):
+        logger.error("run_whatbreach | ABORT | results_dir outside expected base: %s", results_dir)
+        return 0
+
+    emails_file = os.path.join(resolved_dir, 'whatbreach_emails.txt')
     with open(emails_file, 'w') as fh:
         fh.write('\n'.join(emails))
 
@@ -71,7 +80,7 @@ def run_whatbreach(
         _WHATBREACH_PYTHON, _WHATBREACH_SCRIPT,
         '-l', emails_file,
         '-sH', '-dP', '-vH',
-        '-s', results_dir,
+        '-s', resolved_dir,
     ]
     if download_databases:
         cmd.append('-d')
@@ -90,7 +99,7 @@ def run_whatbreach(
         ) as proc:
             if stdin_data:
                 proc.stdin.write(stdin_data)
-                proc.stdin.close()
+            proc.stdin.close()
 
             for raw_line in proc.stdout:
                 line = raw_line.decode('utf-8', errors='replace').strip()

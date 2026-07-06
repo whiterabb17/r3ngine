@@ -46,6 +46,7 @@ class TestRunWhatbreach(TestCase):
         self.scan.emails.add(alice, bob)
         HunterIOAPIKey.objects.create(key='test-hunter-key')
 
+    @patch('reNgine.osint.whatbreach._RESULTS_BASE', '/tmp')
     @patch('reNgine.osint.whatbreach.subprocess.Popen')
     @patch('reNgine.osint.whatbreach._ensure_whatbreach_hunter_key')
     def test_creates_email_breach_rows(self, mock_ensure_key, mock_popen):
@@ -101,6 +102,7 @@ class TestRunWhatbreach(TestCase):
                 content = open(token_file).read()
                 self.assertEqual(content.count('my-key-123'), 1)
 
+    @patch('reNgine.osint.whatbreach._RESULTS_BASE', '/tmp')
     @patch('reNgine.osint.whatbreach.subprocess.Popen')
     @patch('reNgine.osint.whatbreach._ensure_whatbreach_hunter_key')
     def test_pipes_stdin_when_download_enabled(self, mock_ensure_key, mock_popen):

@@ -619,7 +619,7 @@ def generate_report_task(report_id):
                             if res and res.get('status'):
                                 vulns_updated = True
                         except Exception as e:
-                            logger.log_line("[REPORT]", "ERROR", f"Failed to generate details for vuln {v.id}: {e}", level="error")
+                            logger.log_line("[REPORT]", "ERROR", "Failed to generate details for vuln %s: %s" % (v.id, format_exception_for_log(e)), level="error")
 
                 if vulns_updated:
                     logger.log_line("[REPORT]", "LLM", "vulnerabilities were updated, refreshing context")
