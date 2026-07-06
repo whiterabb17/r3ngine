@@ -103,6 +103,9 @@ osint:
     # - { lookup_site: '_target_', lookup_extensions: 'php,asp,aspx' }
   intensity: normal
   documents_limit: 50
+  whatbreach:
+    download_found_databases: false   # WARNING: large downloads; opt-in only
+  credspy: false                      # Only runs when Microsoft MX records detected
   leaks_and_secrets:
     leaklookup: true      # Query leak-lookup.com API for domain leaks
     gitleaks: true        # Scan discovered JS files for secrets (gitleaks)

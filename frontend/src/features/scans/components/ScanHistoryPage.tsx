@@ -537,7 +537,7 @@ export const ScanHistoryPage: React.FC = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Clock size={12} style={{ color: `${tokens.accent.primary}80` }} />
                         <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.65rem' }}>
-                          Time: {scan.elapsed_time || '0s'}
+                          Time: {scan.completed_ago || 'just now'}
                         </Typography>
                       </Box>
                       <Typography variant="caption" sx={{ display: 'block', color: 'text.disabled', fontSize: '0.55rem', mt: 0.5 }}>

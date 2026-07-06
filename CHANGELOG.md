@@ -1,8 +1,55 @@
 # Changelog
 
+### [v3.7.2] - 2026-07-06
+
+#### Fixed
+
+- **Vulners Exploit Source Extraction — Cloudflare Bypass**:
+  - The "Preview Exploit Content" feature for Vulners NSE scan findings was silently failing. The browser-side JS fetch was blocked by CORS; the backend `fetch_exploit_source` view used a bare `requests.get()` call which was blocked by Cloudflare on all major exploit repositories (packetstorm, githubexploit, seebug, 1337day, exploit-db).
+  - Created `web/reNgine/osint/exploit_scraper.py` — a new UC-based scraper module implementing `fetch_exploit_source_uc()` (undetected-chromedriver + Xvfb, same architecture as `hibp_scraper.py`) and `fetch_exploit_with_retries()` (up to 3 proxy attempts then direct fallback).
+  - Updated `fetch_exploit_source` view in `startScan/views.py` to delegate to the new scraper instead of plain `requests.get()`. Content is validated, scraped, and capped at 50 000 characters.
+
+#### Added
+
+- **WhatBreach — Multi-Source Email Breach Lookup**:
+  - Integrated [WhatBreach](https://github.com/Ekultek/WhatBreach) into the OSINT pipeline as a supplementary breach source alongside the existing HIBP implementation. All WhatBreach modules run except HIBP (which uses the custom UC-based scraper). Requires a configured Hunter.io API key.
+  - New `web/reNgine/osint/whatbreach.py` module: Hunter.io key injection into `~/.whatbreach_home/tokens/hunter.io`, email list file generation, `subprocess.Popen` stdout parser tracking per-email breach rows, `EmailBreach` rows saved with `source='whatbreach'`, Hunter-discovered emails persisted via `save_email()`.
+  - `EmailBreach` model gains a `source` field (CharField, default `'hibp'`) to distinguish HIBP from WhatBreach findings.
+  - Optional `download_found_databases` flag (off by default) enabled via engine config; pipes `y\n` to WhatBreach stdin when active.
+  - Path traversal guard: `results_dir` resolved with `os.path.realpath()` and asserted against `RENGINE_RESULTS` base before any file write.
+
+- **CredSpy — Microsoft Account Enumeration**:
+  - Integrated [CredSpy](https://github.com/RedByte1337/CredSpy) as a post-crawl OSINT tool. Runs after the crawl/subdomain-discovery phase so Microsoft infrastructure (autodiscover subdomains, MX records) found during scanning is available for detection before CredSpy fires.
+  - New `web/reNgine/osint/credspy.py` module: `is_microsoft_email_provider()` checks `DnsRecord` MX values for `microsoft`/`outlook` and `Subdomain` names for `autodiscover`; `run_credspy()` invokes CredSpy with a native `--proxy <url>` flag (no proxychains4).
+  - **Proxy-mandatory execution**: CredSpy contacts Microsoft authentication endpoints — silently skips if no proxy is configured to protect the operator's IP.
+  - New `CredResult` model stores per-email enumeration output: `account_exists`, `exposure_type`, `has_password`, `remote_ngc`, `has_fido`, `has_cert_auth`, `domain_type`, `ms_tenant`, and full `raw_data` JSON. Uses `get_or_create()` for Temporal-retry idempotency.
+  - Migration `0058_emailbreach_source_credresult` covers both the new model and the `source` field.
+
+- **Per-User Breach Report Sections**:
+  - All four report templates (Cyber Pro, Enterprise, Modern, Default) now group breach findings per email address instead of a single flat table. Each user section shows a source badge distinguishing HIBP from WhatBreach findings, and a CredSpy sub-table when Microsoft enumeration results are present.
+  - `report.py` replaced the flat `email_breaches` queryset with `breaches_by_user` and `cred_results_by_user` dicts (built via `itertools.groupby`).
+  - Added `get_item` Django template filter to `custom_tags.py` for dict lookup inside templates.
+
+- **Engine Config — OSINT Breach Intelligence Controls**:
+  - New engine config UI section "Breach Intelligence" in the OSINT tab with three controls: **Enable WhatBreach** (default on), **Download found databases** (disabled sub-toggle, default off), and **Enable CredSpy** (default off, labeled as post-crawl with tooltip).
+  - YAML serializer handles WhatBreach as either `true` (no download) or `{download_found_databases: true}` (with download). Parser handles both forms.
+  - Full 4-layer update: `full_yaml_config.yaml` reference, `engineConfig.ts` types/defaults, `useEngineConfig.ts` serializer+parser, `OsintSection.tsx` UI.
+
+#### Enhanced
+
+- **Exploit Source UI — Core Frontend**:
+  - Added `useFetchExploitSource` mutation hook to `frontend/src/features/vulnerabilities/api/index.ts` targeting `/scan/fetch/exploit_source/<id>/`.
+  - Added an **EXPLOIT SOURCE** collapsible panel to `VulnerabilityTable.tsx` (visible only on vulnerabilities with an `exploit_url`). Shows the full exploit URL as a clickable link, a **LOAD EXPLOIT CONTENT** button (with loading state and reload support), and renders the scraped body text in a scrollable monospace pre-block (max 320px).
+
+- **Exploit Source UI — ERL Plugin**:
+  - Mirrored both changes (`useFetchExploitSource` hook + EXPLOIT SOURCE panel) in `r3ngine-plugins/exploit_readiness_layer/ui/`, styled using the plugin's cyberpunk palette (neon red `#ff003c`, dark `#05050a` background).
+
+---
+
 ### [v3.7.0]
 
 #### Enhanced
+
 
 - **Temporal Plugin Logging & Timeline Grouping**:
   - Implemented the `LogPluginStartActivity` and `LogPluginEndActivity` Temporal activities within `MasterScanWorkflow` to dynamically log backend execution of plugin child workflows directly to the `ScanActivity` database table.

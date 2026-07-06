@@ -71,3 +71,11 @@ def categorize_secret(value):
     Usage in template: {% with cat=leak.secret_type|categorize_secret %}{{ cat.0 }}{% endwith %}
     """
     return _categorize_secret_type(value)
+
+
+@register.filter
+def get_item(dictionary, key):
+    """Look up a dictionary key in a Django template: {{ my_dict|get_item:key }}"""
+    if not isinstance(dictionary, dict):
+        return None
+    return dictionary.get(key)

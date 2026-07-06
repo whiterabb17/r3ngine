@@ -230,3 +230,26 @@ export const useImpactAssessment = (projectSlug: string, vulnId: number | null) 
     }
   });
 };
+
+export interface FetchExploitSourceResponse {
+  status: boolean;
+  content?: string;
+  error?: string;
+}
+
+export const useFetchExploitSource = () => {
+  return useMutation({
+    mutationFn: async (vulnId: number): Promise<FetchExploitSourceResponse> => {
+      // NOTE: This triggers a UC-based browser fetch on the backend (~10-20s).
+      // Must only be called on explicit user action, never auto-fetched.
+      const response = await fetch(`/scan/fetch/exploit_source/${vulnId}/`, {
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch exploit source: HTTP ${response.status}`);
+      }
+      return response.json() as Promise<FetchExploitSourceResponse>;
+    }
+  });
+};
+

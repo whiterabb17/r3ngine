@@ -916,31 +916,66 @@
         <p>
           The following email addresses discovered during the scan were matched against known public data breaches on HaveIBeenPwned.
         </p>
-        <div class="table" style="margin-top: 10px;">
-          <div class="row header bg-info">
-            <div class="cell grey-color" style="width: 25%;">Email Address</div>
-            <div class="cell grey-color" style="width: 20%;">Breach Name</div>
-            <div class="cell grey-color" style="width: 15%;">Breach Date</div>
-            <div class="cell grey-color" style="width: 40%;">Compromised Data</div>
-          </div>
-          {% for breach in email_breaches %}
+        {% if breaches_by_user %}
+        {% for email_address, breaches in breaches_by_user.items %}
+        <div class="breach-user-section" style="margin-top: 16px;">
+          <h4 style="font-family: monospace; font-size: 10pt; margin-bottom: 6px; color: #1e293b;">{{ email_address }}</h4>
+          <div class="table">
+            <div class="row header bg-info">
+              <div class="cell grey-color" style="width: 25%;">Breach Name</div>
+              <div class="cell grey-color" style="width: 15%;">Breach Date</div>
+              <div class="cell grey-color" style="width: 10%;">Source</div>
+              <div class="cell grey-color" style="width: 50%;">Compromised Data</div>
+            </div>
+            {% for breach in breaches %}
             <div class="row">
-              <div class="cell" style="width: 25%; font-family: monospace; word-break: break-all;">{{ breach.email_address }}</div>
-              <div class="cell" style="width: 20%; font-weight: bold;">{{ breach.breach_name }}</div>
+              <div class="cell" style="width: 25%; font-weight: bold;">{{ breach.breach_name }}</div>
               <div class="cell" style="width: 15%;">{{ breach.breach_date|default:"Unknown" }}</div>
-              <div class="cell" style="width: 40%;">
+              <div class="cell" style="width: 10%;"><span class="badge bg-info" style="font-size: 8pt; padding: 2px 6px; border-radius: 4px; display: inline-block; background-color: #e2e8f0; color: #1e293b;">{{ breach.source|upper }}</span></div>
+              <div class="cell" style="width: 50%;">
                 {% for item in breach.compromised_data %}
                   <span class="badge bg-info" style="font-size: 8pt; margin: 2px; padding: 2px 6px; border-radius: 4px; display: inline-block; background-color: #e2e8f0; color: #1e293b;">{{ item }}</span>
                 {% endfor %}
               </div>
             </div>
+            {% if breach.description %}
             <div class="row">
-              <div class="cell" colspan="4" style="font-size: 9pt; color: #475569; padding: 8px 12px; background-color: #f8fafc; border-top: none;">
+              <div class="cell" style="font-size: 9pt; color: #475569; padding: 8px 12px; background-color: #f8fafc; border-top: none;">
                 <strong>Description:</strong> {{ breach.description }}
               </div>
             </div>
-          {% endfor %}
+            {% endif %}
+            {% endfor %}
+          </div>
+          {% with creds=cred_results_by_user|get_item:email_address %}
+          {% if creds %}
+          <div class="table" style="margin-top: 8px;">
+            <div class="row header bg-info">
+              <div class="cell grey-color" style="width: 20%;">MS Tenant</div>
+              <div class="cell grey-color" style="width: 12%;">Account Exists</div>
+              <div class="cell grey-color" style="width: 18%;">Preferred Auth</div>
+              <div class="cell grey-color" style="width: 12%;">Has Password</div>
+              <div class="cell grey-color" style="width: 12%;">Remote NGC</div>
+              <div class="cell grey-color" style="width: 10%;">FIDO</div>
+              <div class="cell grey-color" style="width: 16%;">Domain Type</div>
+            </div>
+            {% for cred in creds %}
+            <div class="row">
+              <div class="cell" style="width: 20%;">{{ cred.ms_tenant|default:"-" }}</div>
+              <div class="cell" style="width: 12%;">{{ cred.account_exists|yesno:"Yes,No,Unknown" }}</div>
+              <div class="cell" style="width: 18%;">{{ cred.exposure_type|default:"-" }}</div>
+              <div class="cell" style="width: 12%;">{{ cred.has_password|yesno:"Yes,No,Unknown" }}</div>
+              <div class="cell" style="width: 12%;">{{ cred.remote_ngc|yesno:"Yes,No,Unknown" }}</div>
+              <div class="cell" style="width: 10%;">{{ cred.has_fido|yesno:"Yes,No,Unknown" }}</div>
+              <div class="cell" style="width: 16%;">{{ cred.domain_type|default:"-" }}</div>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% endwith %}
         </div>
+        {% endfor %}
+        {% endif %}
       </article>
     {% endif %}
 

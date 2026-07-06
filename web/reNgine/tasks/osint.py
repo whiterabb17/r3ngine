@@ -166,6 +166,16 @@ def osint(self, host=None, ctx={}, description=None):
         for email_obj in self.scan.emails.all():
             check_hibp_for_email_task(email_obj.address, self.scan.id, email_obj.id)
 
+    # WhatBreach: multi-source breach lookup using Hunter.io key
+    wb_val = config.get(WHATBREACH, True)
+    if wb_val:
+        from reNgine.osint.whatbreach import run_whatbreach
+        wb_config = wb_val if isinstance(wb_val, dict) else {}
+        run_whatbreach(
+            self, host, self.scan, self.results_dir,
+            download_databases=wb_config.get(WHATBREACH_DOWNLOAD_DATABASES, False),
+        )
+
     logger.info("OSINT Tasks finished...")
     return True
 
@@ -2152,6 +2162,15 @@ def post_crawl_osint(self, ctx={}, description=None):
 
     if config.get(SWAGGERSPY):
         run_swaggerspy_path_mode(self, host, self.scan, self.results_dir)
+
+    # CredSpy runs post-crawl so autodiscover subdomains and MX records from
+    # the crawl phase are in the DB before the Microsoft provider check runs.
+    # Config key lives under osint: (where the UI writes it).
+    from reNgine.definitions import OSINT, CREDSPY
+    osint_cfg = self.yaml_configuration.get(OSINT, {})
+    if osint_cfg.get(CREDSPY, False):
+        from reNgine.osint.credspy import run_credspy
+        run_credspy(self, host, self.scan, self.results_dir)
 
     opsec = get_opsec_manager()
     opsec.strip_directory(self.results_dir)

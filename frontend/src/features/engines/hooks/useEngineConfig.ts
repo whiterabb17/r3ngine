@@ -46,6 +46,11 @@ function serialiseConfigToYaml(config: EngineConfig): string {
       ...(c.custom_dorks.length > 0 ? { custom_dorks: c.custom_dorks } : {}),
       intensity: c.intensity,
       documents_limit: c.documents_limit,
+      // whatbreach: nested dict when download enabled, plain boolean otherwise
+      whatbreach: c.whatbreach
+        ? (c.whatbreach_download_databases ? { download_found_databases: true } : true)
+        : false,
+      credspy: c.credspy,
     });
   }
 
@@ -243,6 +248,18 @@ function parseYamlToConfig(yamlStr: string): EngineConfig {
       custom_dorks: (r.custom_dorks as string[]) ?? [],
       intensity: (r.intensity as 'normal' | 'aggressive' | 'light') ?? 'normal',
       documents_limit: (r.documents_limit as number) ?? 50,
+      // whatbreach can be boolean true or { download_found_databases: true }
+      ...(() => {
+        const wb = r.whatbreach;
+        return {
+          whatbreach: wb !== false && wb !== undefined,
+          whatbreach_download_databases:
+            typeof wb === 'object' && wb !== null
+              ? (wb as Record<string, unknown>).download_found_databases === true
+              : false,
+        };
+      })(),
+      credspy: (r.credspy as boolean) ?? false,
     }), def.osint.config) as EngineConfig['osint'],
 
     spiderfoot_scan: section('spiderfoot_scan', (r) => ({
