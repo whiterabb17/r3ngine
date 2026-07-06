@@ -692,3 +692,6 @@ COPY --from=frontend-builder /app/frontend/dist /usr/src/frontend/dist
 RUN find /usr/src -name "*.pyc" -delete 2>/dev/null; \
     find /usr/src -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null; \
     true
+
+# gau config — place before any gau invocation so it reads the custom provider/filter settings
+COPY config/tools/gau.toml /root/.gau.toml
