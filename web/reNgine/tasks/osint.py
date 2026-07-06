@@ -172,7 +172,7 @@ def osint(self, host=None, ctx={}, description=None):
         from reNgine.osint.whatbreach import run_whatbreach
         wb_config = wb_val if isinstance(wb_val, dict) else {}
         run_whatbreach(
-            self, host, scan_history, results_dir,
+            self, host, self.scan, self.results_dir,
             download_databases=wb_config.get(WHATBREACH_DOWNLOAD_DATABASES, False),
         )
 
@@ -2170,9 +2170,7 @@ def post_crawl_osint(self, ctx={}, description=None):
     osint_cfg = self.yaml_configuration.get(OSINT, {})
     if osint_cfg.get(CREDSPY, False):
         from reNgine.osint.credspy import run_credspy
-        host = self.domain.name if self.domain else ''
-        scan_history = self.scan
-        run_credspy(self, host, scan_history, self.results_dir)
+        run_credspy(self, host, self.scan, self.results_dir)
 
     opsec = get_opsec_manager()
     opsec.strip_directory(self.results_dir)
