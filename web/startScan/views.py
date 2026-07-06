@@ -800,13 +800,15 @@ def update_vuln_validation_status(request, id):
     if request.method == 'POST':
         vuln = get_object_or_404(Vulnerability, id=id)
         status = request.POST.get('status')
-        if status in ['unverified', 'verified', 'not_working', 'patched', 'closed']:
+        if status in ['new', 'verified', 'needs_review', 'false_positive', 'accepted_risk', 'resolved']:
             vuln.validation_status = status
             vuln.save()
             return JsonResponse({'status': True})
     return JsonResponse({'status': False})
 
 
+# TODO Update function to use uc driver to fetch sources
+# to avoid the existing fetch errors of exploit and pocs
 def fetch_exploit_source(request, id):
     """Fetch and return the text content of a vulnerability's exploit URL.
 

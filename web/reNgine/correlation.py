@@ -313,7 +313,7 @@ class VulnerabilityCorrelationEngine:
 		elif vuln.correlation_score >= 75 and cve_with_cisa:
 			vuln.validation_status = 'verified'
 		else:
-			vuln.validation_status = 'unverified'
+			vuln.validation_status = 'new'
 			
 		vulns_to_update.append(vuln)
 		

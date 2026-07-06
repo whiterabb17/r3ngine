@@ -1,4 +1,4 @@
-﻿import json
+import json
 import re
 import socket
 import logging
@@ -442,6 +442,55 @@ class VulnerabilityViewSet(viewsets.ModelViewSet):
 					logger.exception("Unexpected error: %s", e)
 
 		return qs
+
+	@action(detail=False, methods=['get'])
+	def queue(self, request):
+		project = request.query_params.get('project')
+		if project:
+			qs = Vulnerability.objects.filter(scan_history__domain__project__slug=project)
+		else:
+			qs = Vulnerability.objects.all()
+
+		qs = qs.filter(validation_status__in=['new', 'needs_review']).order_by('-severity', '-correlation_score')
+
+		page = self.paginate_queryset(qs)
+		if page is not None:
+			serializer = self.get_serializer(page, many=True)
+			return self.get_paginated_response(serializer.data)
+
+		serializer = self.get_serializer(qs, many=True)
+		return Response(serializer.data)
+
+	@action(detail=True, methods=['post'])
+	def verify(self, request, pk=None):
+		vuln = self.get_object()
+		vuln.validation_status = 'verified'
+		vuln.save()
+		
+		has_evidence = False
+		if hasattr(vuln, 'evidence_items'):
+			has_evidence = vuln.evidence_items.exists()
+
+		return Response({
+			'status': 'verified',
+			'has_evidence': has_evidence
+		}, status=status.HTTP_200_OK)
+
+	@action(detail=True, methods=['post'])
+	def reject(self, request, pk=None):
+		vuln = self.get_object()
+		reason = request.data.get('reason')
+		if not reason:
+			return Response({'error': 'Reason is required to reject a finding.'}, status=status.HTTP_400_BAD_REQUEST)
+		
+		vuln.validation_status = 'false_positive'
+		vuln.validation_reason = reason
+		vuln.save()
+		
+		return Response({
+			'status': 'false_positive',
+			'reason': reason
+		}, status=status.HTTP_200_OK)
 
 class ExposurePagination(PageNumberPagination):
 	page_size = 10

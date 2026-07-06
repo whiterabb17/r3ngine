@@ -24,6 +24,16 @@ environ.Env.read_env(os.path.join(BASE_DIR, os.pardir, '.env'))
 # Root env vars
 RENGINE_HOME = env('RENGINE_HOME', default='/usr/src/app')
 RENGINE_RESULTS = env('RENGINE_RESULTS', default='/usr/src/scan_results')
+
+# Root for all assessment-scoped artifacts (evidence, exports, reports).
+# MUST NOT be under /usr/src/app/. See docs/superpowers/plans/2026-07-05-phases-5-6-neo4j-and-correlation.md.
+ASSESSMENTS_ROOT = env('ASSESSMENTS_ROOT', default='/usr/src/assessments')
+
+# Feature flags for Phase 5 (Neo4j assessment graph sync) and Phase 6 (canonical
+# asset correlation). Both default OFF at initial merge. Enable in staging first.
+ASSESSMENT_GRAPH_SYNC_ENABLED = env.bool('ASSESSMENT_GRAPH_SYNC_ENABLED', default=False)
+ASSESSMENT_ASSET_CORRELATION_ENABLED = env.bool('ASSESSMENT_ASSET_CORRELATION_ENABLED', default=False)
+
 RENGINE_CACHE_ENABLED = env.bool('RENGINE_CACHE_ENABLED', default=False)
 RENGINE_RECORD_ENABLED = env.bool('RENGINE_RECORD_ENABLED', default=True)
 RENGINE_RAISE_ON_ERROR = env.bool('RENGINE_RAISE_ON_ERROR', default=False)
@@ -133,11 +143,27 @@ INSTALLED_APPS = [
     'plugins.apps.PluginsConfig',
     'apme.apps.ApmeConfig',
     'engagements.apps.EngagementsConfig',
+    'evidence.apps.EvidenceConfig',
     'channels',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
 ]
+
+# ---------------------------------------------------------------------------
+# Evidence Platform settings
+# ---------------------------------------------------------------------------
+EVIDENCE_STORAGE_BACKEND = os.environ.get('EVIDENCE_STORAGE_BACKEND', 'filesystem')
+EVIDENCE_STORAGE_ROOT = os.environ.get('EVIDENCE_STORAGE_ROOT', '/usr/src/app/evidence/')
+EVIDENCE_MAX_SIZE_MB = int(os.environ.get('EVIDENCE_MAX_SIZE_MB', 50))
+EVIDENCE_MAX_SIZE_BYTES = EVIDENCE_MAX_SIZE_MB * 1024 * 1024
+EVIDENCE_SIGNED_URL_EXPIRY = int(os.environ.get('EVIDENCE_SIGNED_URL_EXPIRY', 300))  # seconds
+EVIDENCE_MINIO_ENDPOINT = os.environ.get('EVIDENCE_MINIO_ENDPOINT', '')
+EVIDENCE_MINIO_ACCESS_KEY = os.environ.get('EVIDENCE_MINIO_ACCESS_KEY', '')
+EVIDENCE_MINIO_SECRET_KEY = os.environ.get('EVIDENCE_MINIO_SECRET_KEY', '')
+EVIDENCE_MINIO_BUCKET = os.environ.get('EVIDENCE_MINIO_BUCKET', 'r3ngine-evidence')
+EVIDENCE_S3_BUCKET = os.environ.get('EVIDENCE_S3_BUCKET', '')
+EVIDENCE_S3_REGION = os.environ.get('EVIDENCE_S3_REGION', 'us-east-1')
 
 # Dynamically add enabled plugins to INSTALLED_APPS
 PLUGINS_DIR = os.path.join(BASE_DIR, 'plugins_data')
@@ -293,6 +319,14 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = RENGINE_RESULTS
 FILE_UPLOAD_MAX_MEMORY_SIZE = 100000000
 FILE_UPLOAD_PERMISSIONS = 0o644
+
+# Evidence storage root — defaults to ASSESSMENTS_ROOT/evidence/. Env override
+# EVIDENCE_STORAGE_ROOT still honoured (e.g. for MinIO backend swap).
+EVIDENCE_STORAGE_ROOT = env(
+    'EVIDENCE_STORAGE_ROOT',
+    default=os.path.join(ASSESSMENTS_ROOT, 'evidence'),
+)
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.2/howto/static-files/
 

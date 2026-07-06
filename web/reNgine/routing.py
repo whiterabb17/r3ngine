@@ -10,13 +10,14 @@ django_asgi_app = get_asgi_application()
 from django.urls import re_path
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
-from reNgine.consumers import StressTelemetryConsumer, ScanLogConsumer
+from reNgine.consumers import StressTelemetryConsumer, ScanLogConsumer, AssessmentEventConsumer
 from reNgine.middleware import JWTAuthMiddleware
 
 
 websocket_urlpatterns = [
     re_path(r'ws/stress/(?P<scan_id>\d+)/$', StressTelemetryConsumer.as_asgi()),
     re_path(r'ws/logs/(?P<scan_id>\d+)/$', ScanLogConsumer.as_asgi()),
+    re_path(r'ws/assessments/(?P<assessment_id>[\w-]+)/$', AssessmentEventConsumer.as_asgi()),
 ]
 
 # Dynamic plugin WebSocket consumer discovery

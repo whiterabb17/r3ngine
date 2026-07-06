@@ -90,6 +90,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./web/entrypoint.sh:/usr/src/app/entrypoint.sh:ro
       - exploitdb:/usr/src/exploitdb
+      - assessments_data:/usr/src/assessments
     ports:
       - "8000:8000"
       - "5173:5173"
@@ -348,6 +349,8 @@ volumes:
     name: r3ngine_plugins_data
   exploitdb:
     name: r3ngine_exploitdb
+  assessments_data:
+    name: r3ngine_assessments_data
 
 secrets:
   proxy.ca:
