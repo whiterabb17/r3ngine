@@ -100,3 +100,24 @@ class TestRunWhatbreach(TestCase):
                 _ensure_whatbreach_hunter_key('my-key-123')
                 content = open(token_file).read()
                 self.assertEqual(content.count('my-key-123'), 1)
+
+    @patch('reNgine.osint.whatbreach.subprocess.Popen')
+    @patch('reNgine.osint.whatbreach._ensure_whatbreach_hunter_key')
+    def test_pipes_stdin_when_download_enabled(self, mock_ensure_key, mock_popen):
+        proc = MagicMock()
+        proc.stdout = []
+        proc.wait.return_value = 0
+        mock_popen.return_value.__enter__ = MagicMock(return_value=proc)
+        mock_popen.return_value.__exit__ = MagicMock(return_value=False)
+
+        from reNgine.osint.whatbreach import run_whatbreach
+        task_self = MagicMock()
+        task_self.scan = self.scan
+        run_whatbreach(task_self, 'corp.com', self.scan, '/tmp', download_databases=True)
+
+        # Verify -d flag was appended to command
+        call_args = mock_popen.call_args[0][0]
+        self.assertIn('-d', call_args)
+
+        # Verify y\n bytes were written to stdin
+        proc.stdin.write.assert_called_once_with(b'y\n' * 50)

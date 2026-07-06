@@ -125,3 +125,15 @@ class TestRunCredspy(TestCase):
         count = run_credspy(task_self, 'corp.com', self.scan, '/tmp')
         self.assertEqual(count, 0)
         mock_run.assert_not_called()
+
+    @patch('reNgine.osint.credspy.get_random_proxy', return_value='socks5://proxy:1080')
+    @patch('reNgine.osint.credspy.subprocess.run')
+    def test_skips_when_no_emails(self, mock_run, mock_proxy):
+        # MS detected, proxy configured, but no emails in scan
+        self.scan.emails.all().delete()
+        from reNgine.osint.credspy import run_credspy
+        task_self = MagicMock()
+        task_self.scan = self.scan
+        count = run_credspy(task_self, 'corp.com', self.scan, '/tmp')
+        self.assertEqual(count, 0)
+        mock_run.assert_not_called()
