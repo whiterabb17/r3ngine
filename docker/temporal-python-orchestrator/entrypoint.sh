@@ -277,6 +277,11 @@ else
   echo "Updating Wordfence nuclei templates"
   git -C /root/nuclei-templates/wordfence pull --quiet || true
 fi
+# Install repo dependencies
+pip3 install -q -r /root/nuclei-templates/wordfence/requirements.txt || true
+# Merge wordfence nuclei-templates/ into the main templates directory so nuclei
+# picks them up directly under /root/nuclei-templates without extra nesting.
+cp -ru /root/nuclei-templates/wordfence/nuclei-templates/. /root/nuclei-templates/
 
 # httpx alias
 echo 'alias httpx="/usr/local/bin/httpx"' >> ~/.bashrc
@@ -297,8 +302,8 @@ vulnx update
 vigolium config set known_issue_scan.severities "critical,high,medium,low,info" || true
 
 # Split oversized nuclei tags
-echo "[entrypoint] Running Nuclei tag splitter..."
-python3 /usr/src/scripts/nuclei_tag_splitter.py &
+# echo "[entrypoint] Running Nuclei tag splitter..."
+# python3 /usr/src/scripts/nuclei_tag_splitter.py
 
 # wait $INTERNAL_TOOLS_PID
 echo "[entrypoint] Starting Temporal Python Orchestrator..."
