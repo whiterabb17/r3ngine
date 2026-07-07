@@ -1307,13 +1307,16 @@ def smugglex_scan(self, urls=[], ctx={}, description=None):
 
 	proxy = get_random_proxy()
 	output_json = f"{self.results_dir}/smugglex_output.json"
+	cmd = f"cat {input_path} | smugglex --json -o {output_json}"
+
 	# add proxy to the command
 	if proxy:
-		cmd = f"cat {input_path} | smugglex --json -o {output_json} --proxy {proxy}"
-	else:
-		cmd = f"cat {input_path} | smugglex --json -o {output_json}"
+		cmd += f" --proxy {proxy}"
+
+	# SmuggleX checks
 	cmd += f" -c cl-te,te-cl,te-te,h2c,h2,cl-edge,h2-downgrade"
 	cmd += f" --fuzz"
+	
 	run_command(cmd, shell=True, scan_id=self.scan_id, activity_id=self.activity_id)
 
 	if os.path.exists(output_json):
