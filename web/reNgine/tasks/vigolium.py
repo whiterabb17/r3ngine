@@ -245,11 +245,15 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
     if urls:
         target_urls = urls
     else:
-        from reNgine.common_func import get_http_urls
-        target_urls = get_http_urls(ctx={
-            'scan_history_id': self.scan_id,
-            'domain_id': getattr(self, 'domain_id', None),
-        })
+        from reNgine.common_func import collect_all_scan_urls
+        target_urls = collect_all_scan_urls(
+            ctx={
+                'scan_history_id': self.scan_id,
+                'domain_id': getattr(self, 'domain_id', None),
+            },
+            results_dir=self.scan.results_dir if hasattr(self, 'scan') and self.scan else f"{RENGINE_HOME}/scan_results/{self.scan_id}",
+            ignore_files=True
+        )
 
     if not target_urls:
         if self.scan and self.scan.domain:

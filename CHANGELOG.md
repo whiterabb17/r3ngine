@@ -4,6 +4,10 @@
 
 #### Fixed
 
+- **Vigolium Target Population**:
+  - `vigolium_scan` at Tier 6 was only receiving base `EndPoint` records (the root subdomains) rather than the full list of spidered URLs discovered during crawl phases. It was incorrectly using `get_http_urls` (which only queries DB endpoints).
+  - Updated `tasks/vigolium.py` to use `collect_all_scan_urls` (matching `nuclei_scan`) so Vigolium now scans all URLs discovered and stored in `fetch_url.txt` by spidering tools.
+
 - **Vulners Exploit Source Extraction — Cloudflare Bypass**:
   - The "Preview Exploit Content" feature for Vulners NSE scan findings was silently failing. The browser-side JS fetch was blocked by CORS; the backend `fetch_exploit_source` view used a bare `requests.get()` call which was blocked by Cloudflare on all major exploit repositories (packetstorm, githubexploit, seebug, 1337day, exploit-db).
   - Created `web/reNgine/osint/exploit_scraper.py` — a new UC-based scraper module implementing `fetch_exploit_source_uc()` (undetected-chromedriver + Xvfb, same architecture as `hibp_scraper.py`) and `fetch_exploit_with_retries()` (up to 3 proxy attempts then direct fallback).
