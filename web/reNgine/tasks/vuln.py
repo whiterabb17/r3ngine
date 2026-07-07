@@ -583,7 +583,7 @@ def dalfox_xss_scan(self, urls=[], ctx={}, description=None):
 	cmd += f' --ignore-return 302,404,403'
 	
 	cmd = opsec.apply_stealth('dalfox', cmd, proxy=proxy)
-	cmd += f' file {input_path}'
+	cmd += f' {input_path}'
 	cmd += f' --proxy {proxy}' if proxy and '--proxy' not in cmd else ''
 	cmd += f' --waf-evasion' if is_waf_evasion else ''
 	cmd += f' --waf-bypass auto'
