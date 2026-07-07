@@ -4,6 +4,10 @@
 
 #### Fixed
 
+- **Vigolium Proxy Execution Reliability**:
+  - `vigolium` scans (harvest, discovery, analysis, scan) would silently fail and output 0 findings if the randomly assigned proxy was slow or dropping packets, as Vigolium's heuristic probes would time out and skip the target.
+  - Implemented a proxy-bypass retry mechanism in `_run_vigolium_phase`: if the scanner aborts with 0 requests made, it automatically retries the execution without the proxy.
+
 - **Vigolium Target Population**:
   - `vigolium_scan` at Tier 6 was only receiving base `EndPoint` records (the root subdomains) rather than the full list of spidered URLs discovered during crawl phases. It was incorrectly using `get_http_urls` (which only queries DB endpoints).
   - Updated `tasks/vigolium.py` to use `collect_all_scan_urls` (matching `nuclei_scan`) so Vigolium now scans all URLs discovered and stored in `fetch_url.txt` by spidering tools.
