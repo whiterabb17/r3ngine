@@ -180,20 +180,20 @@ def collect_from_arjun_files(results_dir: str) -> list[dict]:
 
 
 def collect_from_paramspider_files(results_dir: str) -> list[dict]:
-    """Read all `ps_*.txt` files and extract query-string parameters.
+    """Read ParamSpider result files and extract query-string parameters.
 
-    ParamSpider writes one URL per line with `FUZZ` as the placeholder value.
-    Extract the key names from the query string of each line.
+    ParamSpider writes results to results/{domain}.txt (not stdout).
+    Each line is a URL with FUZZ as the placeholder value.
 
     Args:
-        results_dir: Path to the scan results directory.
+        results_dir: Path to the scan results directory (web_api_discovery/).
 
     Returns:
         List of CPDE finding dicts with confidence=55.
     """
     findings: list[dict] = []
-    pattern = os.path.join(results_dir, 'ps_*.txt')
-    file_paths = glob.glob(pattern)
+    ps_results_dir = os.path.join(results_dir, 'results')
+    file_paths = glob.glob(os.path.join(ps_results_dir, '*.txt'))
 
     for filepath in file_paths:
         try:
