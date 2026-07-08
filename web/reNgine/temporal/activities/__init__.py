@@ -904,6 +904,7 @@ def run_http_crawl_activity(ctx: dict) -> bool:
     return _run_task(
         http_crawl,
         ctx,
+        is_ran_from_subdomain_scan=True,
         task_name='http_crawl',
         description='HTTP Crawl'
     )

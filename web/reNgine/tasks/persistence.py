@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import os
 from urllib.parse import urlparse
 
@@ -114,13 +114,24 @@ def process_httpx_response(line, ctx={}, is_ran_from_subdomain_scan=False):
 	if not subdomain:
 		return None, False
 
+	is_default = is_ran_from_subdomain_scan
+	if not is_default and 'url' in line:
+		from reNgine.common_func import sanitize_url
+		original_url = sanitize_url(line['url'])
+		scan_id = ctx.get('scan_history_id')
+		if scan_id:
+			from startScan.models import EndPoint
+			orig_ep = EndPoint.objects.filter(scan_history_id=scan_id, http_url=original_url).first()
+			if orig_ep and orig_ep.is_default:
+				is_default = True
+
 	# Save default HTTP URL to endpoint object in DB
 	endpoint, created = save_endpoint(
 		http_url,
 		crawl=False,
 		ctx=ctx,
 		subdomain=subdomain,
-		is_default=is_ran_from_subdomain_scan
+		is_default=is_default
 	)
 	if not endpoint:
 		return None, False
