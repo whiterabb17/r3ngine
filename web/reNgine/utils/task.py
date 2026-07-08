@@ -180,6 +180,8 @@ def sanitize_command_for_db(cmd):
     cmd = re.sub(r'^export\s+.*?\s+&&\s+', '', cmd)
     # Strip proxychains4 wrapper with its config file
     cmd = re.sub(r'^(?:[/\w]*/)?proxychains4\s+-f\s+\S+\s+', '', cmd)
+    # Strip leading cat <file> | pipes
+    cmd = re.sub(r'^cat\s+[^\s|]+\s*\|\s*', '', cmd)
     return cmd
 
 

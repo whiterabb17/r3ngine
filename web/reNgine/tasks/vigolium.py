@@ -302,8 +302,7 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
     output_file = f"{results_dir}/findings.jsonl"
 
     cmd = (
-        f"vigolium scan"
-        f" -T {targets_file}"
+        f"cat {targets_file} | vigolium scan"
         f" --stateless"
         f" --format jsonl"
         f" --verbose"
@@ -372,8 +371,7 @@ def vigolium_harvest(self, ctx={}, description=None):
     output_file = f"{results_dir}/harvest.jsonl"
 
     cmd = (
-        f"vigolium scan"
-        f" -T {targets_file}"
+        f"cat {targets_file} | vigolium scan"
         f" --stateless"
         f" --format jsonl"
         f" -o {output_file}"
@@ -437,8 +435,7 @@ def vigolium_discovery(self, ctx={}, description=None):
     output_file = f"{results_dir}/discovery.jsonl"
 
     cmd = (
-        f"vigolium scan"
-        f" -T {targets_file}"
+        f"cat {targets_file} | vigolium scan"
         f" --stateless"
         f" --format jsonl"
         f" -o {output_file}"
@@ -496,8 +493,7 @@ def vigolium_analysis(self, ctx={}, description=None):
     output_file = f"{results_dir}/analysis.jsonl"
 
     cmd = (
-        f"vigolium scan"
-        f" -T {targets_file}"
+        f"cat {targets_file} | vigolium scan"
         f" --stateless"
         f" --format jsonl"
         f" -o {output_file}"
