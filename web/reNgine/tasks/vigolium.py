@@ -171,26 +171,33 @@ def _run_vigolium_phase(task_instance, cmd, output_file, phase_label, save_http_
         logger.warning(f"Command: {current_cmd}")
         for _ in stream_command(current_cmd, scan_id=task_instance.scan_id, activity_id=task_instance.activity_id):
             pass
-        
-        # Check if the scan aborted with 0 requests (proxy failure)
-        if os.path.exists(output_file):
-            with open(output_file, 'r') as f:
-                for line in f:
-                    try:
-                        record = json.loads(line)
-                        if record.get('type') == 'scan':
-                            if record.get('data', {}).get('total_requests', 0) == 0:
-                                return False
-                    except:
-                        pass
-        return True
+
+        # No output file means vigolium crashed or produced nothing — treat as proxy failure.
+        if not os.path.exists(output_file):
+            logger.warning(f"Vigolium {phase_label} produced no output file.")
+            return False
+
+        # Look for the scan-summary record; if total_requests == 0 the proxy blocked all traffic.
+        with open(output_file, 'r') as f:
+            for line in f:
+                try:
+                    record = json.loads(line)
+                    if record.get('type') == 'scan':
+                        if record.get('data', {}).get('total_requests', 0) == 0:
+                            return False
+                        return True
+                except Exception:
+                    pass
+
+        # No scan-summary record found — output may be partial; treat as proxy failure.
+        return False
 
     success = False
     if proxy:
         proxy_cmd = f"{cmd} --proxy {proxy}"
         success = run_cmd_and_check(proxy_cmd)
         if not success:
-            logger.warning(f"Vigolium {phase_label} aborted with 0 requests using proxy {proxy}. Retrying without proxy...")
+            logger.warning(f"Vigolium {phase_label} failed or made 0 requests using proxy {proxy}. Retrying without proxy...")
             # Remove output file so the retry starts fresh
             if os.path.exists(output_file):
                 os.remove(output_file)
