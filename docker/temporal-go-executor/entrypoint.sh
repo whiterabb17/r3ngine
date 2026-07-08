@@ -158,6 +158,9 @@ vulnx update
 vigolium config set known_issue_scan.severities "critical,high,medium,low,info" || true
 vigolium config set dynamic-assessment.max_feedback_rounds=3 || true
 vigolium config set known_issue_scan.enrich_targets=true || true
+vigolium config discovery.enrich_targets=true
+vigolium update
+vigolium doctor --fix
 
 # Split oversized nuclei tags
 # echo "[entrypoint] Running Nuclei tag splitter..."
