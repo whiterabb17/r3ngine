@@ -1,6 +1,13 @@
 #!/bin/bash
+# Sync GF patterns from image into volume (overwrites stale patterns)
+echo "Syncing GF patterns..."
+mkdir -p /root/.gf
+cp -f /usr/src/gf-patterns/*.json /root/.gf/
+echo "GF patterns synced: $(ls /root/.gf/*.json | wc -l) patterns installed"
+
 # Entrypoint for the Temporal Python Orchestrator container.
 # Handles one-time setup (wordlists, templates, tools) then starts the Temporal worker.
+
 
 # ---------------------------------------------------------------------------
 # Start deferred tool installer in the background so normal setup tasks

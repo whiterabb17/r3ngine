@@ -1,0 +1,22 @@
+{
+    "flags": "-iE",
+    "patterns": [
+        "email=",
+        "to=",
+        "cc=",
+        "bcc=",
+        "from=",
+        "reply_to=",
+        "emailto=",
+        "mail=",
+        "sender=",
+        "recipient=",
+        "subject=",
+        "body=",
+        "message=",
+        "contact=",
+        "sendmail=",
+        "smtp=",
+        "mailserver="
+    ]
+}

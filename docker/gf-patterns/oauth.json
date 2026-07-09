@@ -1,0 +1,21 @@
+{
+    "flags": "-iE",
+    "patterns": [
+        "client_id=",
+        "client_secret=",
+        "redirect_uri=",
+        "response_type=",
+        "scope=",
+        "state=",
+        "grant_type=",
+        "code=",
+        "access_token=",
+        "refresh_token=",
+        "token_type=",
+        "expires_in=",
+        "authorization_code=",
+        "oauth_token=",
+        "oauth_callback=",
+        "oauth_verifier="
+    ]
+}

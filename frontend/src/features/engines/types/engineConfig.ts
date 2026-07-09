@@ -335,8 +335,14 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
       remove_duplicate_endpoints: true,
       duplicate_fields: ['content_length', 'page_title'],
       enable_http_crawl: true,
-      gf_patterns: ['debug_logic', 'idor', 'interestingEXT', 'interestingparams',
-                    'interestingsubs', 'lfi', 'rce', 'redirect', 'sqli', 'ssrf', 'ssti', 'xss'],
+      gf_patterns: [
+        'api-keys', 'command-injection', 'cors', 'crlf', 'debug_logic',
+        'email-injection', 'graphql', 'http-smuggling', 'idor', 'img-traversal',
+        'interestingEXT', 'interestingparams', 'interestingsubs', 'jsvar', 'jwt',
+        'lfi', 'mass-assignment', 'nosqli', 'oauth', 'open-redirect',
+        'path-traversal', 'prototype-pollution', 'rce', 'redirect', 'sqli',
+        'ssrf', 's3-bucket', 'ssti', 'upload', 'websocket', 'xss', 'xxe'
+      ],
       ignore_file_extensions: ['png', 'jpg', 'jpeg', 'gif', 'mp4', 'mpeg', 'mp3'],
       threads: 30,
     },

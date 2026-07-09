@@ -1,4 +1,10 @@
 #!/bin/bash
+# Sync GF patterns from image into volume (overwrites stale patterns)
+echo "Syncing GF patterns..."
+mkdir -p /root/.gf
+cp -f /usr/src/gf-patterns/*.json /root/.gf/
+echo "GF patterns synced: $(ls /root/.gf/*.json | wc -l) patterns installed"
+
 # Install/update frontend dependencies only when package.json is updated or node_modules doesn't exist
 echo "Checking frontend dependencies..."
 cd /usr/src/app/frontend

@@ -31,18 +31,38 @@
           - page_title
         enable_http_crawl: true
         gf_patterns:
+          - api-keys
+          - command-injection
+          - cors
+          - crlf
           - debug_logic
+          - email-injection
+          - graphql
+          - http-smuggling
           - idor
+          - img-traversal
           - interestingEXT
           - interestingparams
           - interestingsubs
+          - jsvar
+          - jwt
           - lfi
+          - mass-assignment
+          - nosqli
+          - oauth
+          - open-redirect
+          - path-traversal
+          - prototype-pollution
           - rce
           - redirect
           - sqli
           - ssrf
+          - s3-bucket
           - ssti
+          - upload
+          - websocket
           - xss
+          - xxe
         ignore_file_extensions:
           - png
           - jpg

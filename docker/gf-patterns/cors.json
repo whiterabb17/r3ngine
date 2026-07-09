@@ -1,0 +1,17 @@
+{
+    "flags": "-iE",
+    "patterns": [
+        "origin=",
+        "cors=",
+        "cors_origin=",
+        "access_control_allow_origin=",
+        "allowed_origin=",
+        "corshost=",
+        "whitelist_origin=",
+        "cors_url=",
+        "allowed_origins=",
+        "cross_origin=",
+        "request_origin=",
+        "referer="
+    ]
+}

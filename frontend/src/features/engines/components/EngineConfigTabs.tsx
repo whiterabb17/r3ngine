@@ -28,6 +28,7 @@ import { useThemeTokens } from '../../../theme/useThemeTokens';
 
 interface EngineConfigTabsProps {
   state: UseEngineConfigReturn;
+  availableGfPatterns?: string[];
 }
 
 const TAB_LABELS = [
@@ -42,7 +43,7 @@ const TAB_LABELS = [
   'YAML',
 ];
 
-export const EngineConfigTabs: React.FC<EngineConfigTabsProps> = ({ state }) => {
+export const EngineConfigTabs: React.FC<EngineConfigTabsProps> = ({ state, availableGfPatterns }) => {
   const [tab, setTab] = useState(0);
   const { tokens } = useThemeTokens();
   const { config, yaml, yamlError, updateSection, toggleSection, updateGlobal, setYaml } = state;
@@ -174,6 +175,7 @@ export const EngineConfigTabs: React.FC<EngineConfigTabsProps> = ({ state }) => 
               enabled={config.fetch_url.enabled}
               onToggle={(v) => toggleSection('fetch_url', v)}
               onChange={(p) => updateSection('fetch_url', p)}
+              availableGfPatterns={availableGfPatterns}
             />
             <WebApiDiscoverySection
               config={config.web_api_discovery.config}
