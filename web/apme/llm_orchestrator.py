@@ -220,12 +220,15 @@ class LLMPathOrchestrator:
 
     def _persist_to_db(self, path: AttackPath, scan: ScanHistory):
         """Save a single path to ImpactAssessment.
+        Checks existing paths by fingerprint and vulnerability to perform deduplication.
 
         Args:
             path (AttackPath): The AttackPath instance to save.
             scan (ScanHistory): The ScanHistory database object to link.
         """
         try:
+            from apme.models.path import get_path_fingerprint
+
             # Try to find a representative vulnerability in the path to link it
             # We look for steps that mention something that looks like a vuln
             vuln = None
@@ -236,20 +239,54 @@ class LLMPathOrchestrator:
                     vuln = v_query.first()
                     break
 
-            ImpactAssessment.objects.create(
-                scan_history=scan,
-                vulnerability=vuln,
-                is_ai_generated=True,
-                potential_attack_chain={
+            vuln_id = vuln.id if vuln else None
+
+            # Fetch existing assessments for this scan to perform deduplication check
+            existing_assessments = list(ImpactAssessment.objects.filter(scan_history=scan))
+
+            # Find if there is an existing assessment we should update
+            matched_assessment = None
+            if vuln_id is not None:
+                matched_assessment = next((ea for ea in existing_assessments if ea.vulnerability_id == vuln_id), None)
+
+            if not matched_assessment:
+                path_fp = path.fingerprint
+                for ea in existing_assessments:
+                    steps = None
+                    if ea.simulated_path and "steps" in ea.simulated_path:
+                        steps = ea.simulated_path["steps"]
+                    elif ea.potential_attack_chain and "steps" in ea.potential_attack_chain:
+                        steps = ea.potential_attack_chain["steps"]
+
+                    if steps and get_path_fingerprint(steps) == path_fp:
+                        matched_assessment = ea
+                        break
+
+            defaults = {
+                "scan_history": scan,
+                "vulnerability": vuln,
+                "is_ai_generated": True,
+                "potential_attack_chain": {
                     "apme_path_id": path.id,
                     "risk": path.risk,
                     "score": path.score,
                     "steps": [s.to_dict() for s in path.steps],
                     "is_llm_generated": True
                 },
-                potential_impact=f"LLM-Generated Attack Path: {path.id}. Risk: {path.risk.upper()}. End Goal: {path.end}",
-                remediation_priority=self._risk_to_priority(path.risk)
-            )
+                "potential_impact": f"LLM-Generated Attack Path: {path.id}. Risk: {path.risk.upper()}. End Goal: {path.end}",
+                "simulated_path": path.to_dict(),
+                "remediation_priority": self._risk_to_priority(path.risk),
+            }
+
+            if matched_assessment:
+                for key, val in defaults.items():
+                    setattr(matched_assessment, key, val)
+                matched_assessment.save()
+                logger.debug(f"LLM APME: Updated existing path {path.id} via fingerprint/vuln matching.")
+            else:
+                ImpactAssessment.objects.create(**defaults)
+                logger.debug(f"LLM APME: Created new path {path.id}.")
+
         except Exception as e:
             logger.error(f"LLM APME: Database persistence failed: {str(e)}")
 

@@ -53,3 +53,32 @@ class AttackPath:
             "entry_type": self.entry_type,
             "steps": [s.to_dict() for s in self.steps],
         }
+
+    @property
+    def fingerprint(self) -> str:
+        return get_path_fingerprint(self.steps)
+
+
+def get_path_fingerprint(steps: List[Any]) -> str:
+    """
+    Generate a stable semantic fingerprint for a list of steps.
+    Each step can be a PathStep instance or a dictionary.
+    """
+    import re
+    _strip_id = re.compile(r"::\d+$")
+    parts = []
+    for s in steps:
+        if isinstance(s, dict):
+            from_id = s.get("from") or s.get("from_id") or ""
+            to_id = s.get("to") or s.get("to_id") or ""
+            edge_type = s.get("edge_type") or ""
+        else:
+            from_id = getattr(s, "from_id", "")
+            to_id = getattr(s, "to_id", "")
+            edge_type = getattr(s, "edge_type", "")
+
+        from_stripped = _strip_id.sub("", from_id)
+        to_stripped = _strip_id.sub("", to_id)
+        parts.append(f"{edge_type}:{from_stripped}:{to_stripped}")
+    return "->".join(parts)
+
