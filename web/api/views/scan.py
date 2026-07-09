@@ -614,7 +614,7 @@ class ScanActivityRetryAPIView(APIView):
         import yaml
         import asyncio
         from startScan.models import ScanActivity
-        from reNgine.definitions import FAILED_TASK, RUNNING_TASK, INITIATED_TASK
+        from reNgine.definitions import FAILED_TASK, RUNNING_TASK, INITIATED_TASK, SUCCESS_TASK
         from reNgine.temporal_client import TemporalClientProvider
 
         from django.db import transaction
@@ -648,11 +648,13 @@ class ScanActivityRetryAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if activity_obj.status != FAILED_TASK:
+        if scan.scan_status != SUCCESS_TASK and activity_obj.status != FAILED_TASK:
             return Response(
                 {"status": False, "message": "Task is not in a failed state"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        original_scan_status = scan.scan_status
 
         with transaction.atomic():
             # Reset the failed activity row so the serializer counts it as pending
@@ -678,6 +680,7 @@ class ScanActivityRetryAPIView(APIView):
             "results_dir": scan.results_dir,
             "yaml_configuration": yaml_config or {},
             "tasks": [activity_obj.name],
+            "original_scan_status": original_scan_status,
         }
         workflow_id = (
             f"retry-{activity_obj.name}-{scan.id}-{int(timezone.now().timestamp())}"
