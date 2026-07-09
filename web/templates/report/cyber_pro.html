@@ -913,7 +913,7 @@
                 <div class="finding-section" style="background-color: #f1f5f9; border-left: 4px solid #3b82f6; padding: 4mm; margin-top: 4mm;">
                     <span class="section-label" style="color: #3b82f6;">Attack Strategy Explanation</span>
                     <div class="attack-scenario-content">
-                        {{ path.explanation | safe }}
+                        {{ path.explanation | render_markdown }}
                     </div>
                 </div>
                 {% endif %}
