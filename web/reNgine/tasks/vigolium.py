@@ -151,23 +151,59 @@ def parse_vigolium_http_record(task_instance, record_data):
     )
 
 
-def _run_vigolium_phase(task_instance, cmd, output_file, phase_label, save_http_records=False):
+def _run_vigolium_phase(task_instance, cmd, output_file, phase_label, save_http_records=False, proxy=None):
     """Execute a vigolium command, then parse and persist findings from the JSONL output.
 
     Args:
         task_instance: Temporal task proxy with scan context.
-        cmd: Full vigolium command string.
+        cmd: Full vigolium command string (without proxy).
         output_file: Path where vigolium writes its JSONL output.
         phase_label: Human-readable label for logging.
         save_http_records: If True, also save http_record entries as EndPoints.
+        proxy: The proxy string to use, if any.
     """
     from reNgine.tasks import stream_command
+    import json
+    import os
 
-    logger.info(f"Running Vigolium {phase_label}")
-    logger.warning(f"Command: {cmd}")
+    def run_cmd_and_check(current_cmd):
+        logger.info(f"Running Vigolium {phase_label}")
+        logger.warning(f"Command: {current_cmd}")
+        for _ in stream_command(current_cmd, scan_id=task_instance.scan_id, activity_id=task_instance.activity_id):
+            pass
 
-    for _ in stream_command(cmd, scan_id=task_instance.scan_id, activity_id=task_instance.activity_id):
-        pass
+        # No output file means vigolium crashed or produced nothing — treat as proxy failure.
+        if not os.path.exists(output_file):
+            logger.warning(f"Vigolium {phase_label} produced no output file.")
+            return False
+
+        # Look for the scan-summary record; if total_requests == 0 the proxy blocked all traffic.
+        with open(output_file, 'r') as f:
+            for line in f:
+                try:
+                    record = json.loads(line)
+                    if record.get('type') == 'scan':
+                        if record.get('data', {}).get('total_requests', 0) == 0:
+                            return False
+                        return True
+                except Exception:
+                    pass
+
+        # No scan-summary record found — output may be partial; treat as proxy failure.
+        return False
+
+    success = False
+    if proxy:
+        proxy_cmd = f"{cmd} --proxy {proxy}"
+        success = run_cmd_and_check(proxy_cmd)
+        if not success:
+            logger.warning(f"Vigolium {phase_label} failed or made 0 requests using proxy {proxy}. Retrying without proxy...")
+            # Remove output file so the retry starts fresh
+            if os.path.exists(output_file):
+                os.remove(output_file)
+            
+    if not success:
+        run_cmd_and_check(cmd)
 
     findings_saved = 0
     duplicates_skipped = 0
@@ -245,11 +281,15 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
     if urls:
         target_urls = urls
     else:
-        from reNgine.common_func import get_http_urls
-        target_urls = get_http_urls(ctx={
-            'scan_history_id': self.scan_id,
-            'domain_id': getattr(self, 'domain_id', None),
-        })
+        from reNgine.common_func import collect_all_scan_urls
+        target_urls = collect_all_scan_urls(
+            ctx={
+                'scan_history_id': self.scan_id,
+                'domain_id': getattr(self, 'domain_id', None),
+            },
+            results_dir=self.scan.results_dir if hasattr(self, 'scan') and self.scan else f"{RENGINE_HOME}/scan_results/{self.scan_id}",
+            ignore_files=True
+        )
 
     if not target_urls:
         if self.scan and self.scan.domain:
@@ -269,8 +309,7 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
     output_file = f"{results_dir}/findings.jsonl"
 
     cmd = (
-        f"vigolium scan"
-        f" -T {targets_file}"
+        f"cat {targets_file} | vigolium scan"
         f" --stateless"
         f" --format jsonl"
         f" --verbose"
@@ -289,10 +328,8 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
 
 
     proxy = get_random_proxy()
-    if proxy:
-        cmd += f" --proxy {proxy}"
 
-    _run_vigolium_phase(self, cmd, output_file, "Vulnerability Scan", save_http_records=False)
+    _run_vigolium_phase(self, cmd, output_file, "Vulnerability Scan", save_http_records=False, proxy=proxy)
     return "Vigolium scan completed"
 
 
@@ -341,8 +378,7 @@ def vigolium_harvest(self, ctx={}, description=None):
     output_file = f"{results_dir}/harvest.jsonl"
 
     cmd = (
-        f"vigolium scan"
-        f" -T {targets_file}"
+        f"cat {targets_file} | vigolium scan"
         f" --stateless"
         f" --format jsonl"
         f" -o {output_file}"
@@ -355,10 +391,8 @@ def vigolium_harvest(self, ctx={}, description=None):
     )
 
     proxy = get_random_proxy()
-    if proxy:
-        cmd += f" --proxy {proxy}"
 
-    _run_vigolium_phase(self, cmd, output_file, f"Harvest ({len(target_hosts)} targets)", save_http_records=True)
+    _run_vigolium_phase(self, cmd, output_file, f"Harvest ({len(target_hosts)} targets)", save_http_records=True, proxy=proxy)
     return "Vigolium harvest completed"
 
 
@@ -408,8 +442,7 @@ def vigolium_discovery(self, ctx={}, description=None):
     output_file = f"{results_dir}/discovery.jsonl"
 
     cmd = (
-        f"vigolium scan"
-        f" -T {targets_file}"
+        f"cat {targets_file} | vigolium scan"
         f" --stateless"
         f" --format jsonl"
         f" -o {output_file}"
@@ -422,10 +455,8 @@ def vigolium_discovery(self, ctx={}, description=None):
     )
 
     proxy = get_random_proxy()
-    if proxy:
-        cmd += f" --proxy {proxy}"
 
-    _run_vigolium_phase(self, cmd, output_file, f"Discovery ({len(target_hosts)} targets)", save_http_records=True)
+    _run_vigolium_phase(self, cmd, output_file, f"Discovery ({len(target_hosts)} targets)", save_http_records=True, proxy=proxy)
 
     return "Vigolium discovery completed"
 
@@ -469,8 +500,7 @@ def vigolium_analysis(self, ctx={}, description=None):
     output_file = f"{results_dir}/analysis.jsonl"
 
     cmd = (
-        f"vigolium scan"
-        f" -T {targets_file}"
+        f"cat {targets_file} | vigolium scan"
         f" --stateless"
         f" --format jsonl"
         f" -o {output_file}"
@@ -484,10 +514,8 @@ def vigolium_analysis(self, ctx={}, description=None):
     )
 
     proxy = get_random_proxy()
-    if proxy:
-        cmd += f" --proxy {proxy}"
 
-    _run_vigolium_phase(self, cmd, output_file, f"Analysis ({len(subdomains)} targets)", save_http_records=True)
+    _run_vigolium_phase(self, cmd, output_file, f"Analysis ({len(subdomains)} targets)", save_http_records=True, proxy=proxy)
 
     return "Vigolium analysis completed"
 

@@ -1,0 +1,21 @@
+{
+    "flags": "-iE",
+    "patterns": [
+        "user\\[role\\]=",
+        "admin=",
+        "is_admin=",
+        "role=",
+        "privilege=",
+        "superuser=",
+        "permission=",
+        "groups=",
+        "profile\\[role\\]=",
+        "member_type=",
+        "access_level=",
+        "is_staff=",
+        "staff=",
+        "write_access=",
+        "read_access=",
+        "owner="
+    ]
+}

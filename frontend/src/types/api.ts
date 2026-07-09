@@ -5992,7 +5992,9 @@ export interface components {
              * Validation status
              * @enum {string}
              */
-            validation_status?: "unverified" | "verified" | "not_working" | "patched" | "closed";
+            validation_status?: "new" | "verified" | "needs_review" | "false_positive" | "accepted_risk" | "resolved";
+            /** Validation reason */
+            validation_reason?: string | null;
             /** Validation confidence */
             validation_confidence?: number | null;
             /** Correlation score */

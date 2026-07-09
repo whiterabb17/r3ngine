@@ -8,9 +8,13 @@ import { getFieldSx } from '../../../../theme/semanticColors';
 import { useThemeTokens } from '../../../../theme/useThemeTokens';
 
 const FETCH_TOOLS = ['gospider', 'hakrawler', 'waybackurls', 'katana', 'gau'];
-const GF_PATTERNS = [
-  'debug_logic', 'idor', 'interestingEXT', 'interestingparams',
-  'interestingsubs', 'lfi', 'rce', 'redirect', 'sqli', 'ssrf', 'ssti', 'xss',
+const FALLBACK_GF_PATTERNS = [
+  'api-keys', 'command-injection', 'cors', 'crlf', 'debug_logic',
+  'email-injection', 'graphql', 'http-smuggling', 'idor', 'img-traversal',
+  'interestingEXT', 'interestingparams', 'interestingsubs', 'jsvar', 'jwt',
+  'lfi', 'mass-assignment', 'nosqli', 'oauth', 'open-redirect',
+  'path-traversal', 'prototype-pollution', 'rce', 'redirect', 'sqli',
+  'ssrf', 's3-bucket', 'ssti', 'upload', 'websocket', 'xss', 'xxe'
 ];
 const DEDUP_FIELDS = ['content_length', 'page_title'];
 
@@ -19,9 +23,10 @@ interface Props {
   enabled: boolean;
   onToggle: (v: boolean) => void;
   onChange: (patch: Partial<FetchUrlConfig>) => void;
+  availableGfPatterns?: string[];
 }
 
-export const FetchUrlSection: React.FC<Props> = ({ config, enabled, onToggle, onChange }) => {
+export const FetchUrlSection: React.FC<Props> = ({ config, enabled, onToggle, onChange, availableGfPatterns }) => {
   const { tokens, isLight } = useThemeTokens();
   const fieldSx = getFieldSx(isLight, tokens);
   const chkSx = { color: tokens.accent.primary, '&.Mui-checked': { color: tokens.accent.primary } };
@@ -41,7 +46,7 @@ export const FetchUrlSection: React.FC<Props> = ({ config, enabled, onToggle, on
       />
       <ChipSelect
         label="GF Patterns"
-        options={GF_PATTERNS}
+        options={availableGfPatterns ?? FALLBACK_GF_PATTERNS}
         value={config.gf_patterns}
         onChange={(v) => onChange({ gf_patterns: v })}
         helperText="URL patterns to flag during crawl"

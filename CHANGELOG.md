@@ -1,8 +1,43 @@
 # Changelog
 
+### [v3.7.3] - 2026-07-09
+
+#### Added
+
+- **Post-Completion Task Retry**:
+  - Any task in the scan timeline can now be re-run after a scan has fully completed (SUCCESS), not just failed tasks. Use this to accumulate additional results with a fresh proxy without re-running the entire scan.
+  - If the retried task fails, the overall scan status is preserved as SUCCESS — only the individual task activity row reflects the failure.
+  - The retry button appears on all timeline tasks when viewing a completed scan, and continues to appear only on failed tasks for aborted/failed scans (unchanged behaviour).
+
+- **Zombie Task & Timeline Cleanup on Scan Completion**:
+  - When a scan completes successfully (after all Tier 7 post-processing), any task rows still in a RUNNING state (zombie tasks from crashed workers or cancelled subscans) are now automatically marked as ABORTED.
+  - Spurious "Scan Aborted" sentinel entries written by cancelled previous attempts are deleted from the timeline when the overall scan succeeds, keeping the completed scan timeline clean.
+
+- **Massive GF Pattern Library Expansion**:
+  - Sourced and created 18 new high-value patterns and enhanced 6 existing ones, expanding the total default catalog from 14 to 32 patterns.
+  - New patterns target: API Keys, Command Injection, CORS, CRLF, Email Injection, GraphQL, HTTP Smuggling, JWT, Mass Assignment, NoSQL Injection, OAuth, Open Redirect, Path Traversal, Prototype Pollution, S3 Buckets, WebSockets, XML External Entity (XXE), and more.
+
+- **Dynamic API-Driven Scan Engine Editor Options**:
+  - The Scan Engine Editor's Fetch URLs section now dynamically queries the backend `tool_settings` API (which lists patterns via `gf -list`) to render available GF options.
+  - Users are no longer limited to a static list of hardcoded patterns in the UI and can select any installed pattern.
+  - Fallback mechanisms preserve the local list (updated to all 32 patterns) if the backend API is temporarily unreachable.
+
+- **Runtime Staging & Volume Overwrites Seeding**:
+  - Pattern files are staged in the image at `/usr/src/gf-patterns/` via Dockerfile.
+  - Web and Temporal orchestrator entrypoint scripts sync staged patterns into the `/root/.gf/` volume on every startup.
+  - Guarantees updated patterns are propagated to existing installations automatically without requiring a volume wipe.
+
 ### [v3.7.2] - 2026-07-06
 
 #### Fixed
+
+- **Vigolium Proxy Execution Reliability**:
+  - `vigolium` scans (harvest, discovery, analysis, scan) would silently fail and output 0 findings if the randomly assigned proxy was slow or dropping packets, as Vigolium's heuristic probes would time out and skip the target.
+  - Implemented a proxy-bypass retry mechanism in `_run_vigolium_phase`: if the scanner aborts with 0 requests made, it automatically retries the execution without the proxy.
+
+- **Vigolium Target Population**:
+  - `vigolium_scan` at Tier 6 was only receiving base `EndPoint` records (the root subdomains) rather than the full list of spidered URLs discovered during crawl phases. It was incorrectly using `get_http_urls` (which only queries DB endpoints).
+  - Updated `tasks/vigolium.py` to use `collect_all_scan_urls` (matching `nuclei_scan`) so Vigolium now scans all URLs discovered and stored in `fetch_url.txt` by spidering tools.
 
 - **Vulners Exploit Source Extraction — Cloudflare Bypass**:
   - The "Preview Exploit Content" feature for Vulners NSE scan findings was silently failing. The browser-side JS fetch was blocked by CORS; the backend `fetch_exploit_source` view used a bare `requests.get()` call which was blocked by Cloudflare on all major exploit repositories (packetstorm, githubexploit, seebug, 1337day, exploit-db).

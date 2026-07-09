@@ -93,6 +93,7 @@ import { DirectoriesTab } from './DirectoriesTab';
 import { EndpointsTab } from './EndpointsTab';
 import { ParametersTab } from './ParametersTab';
 import { TacticalPanel } from '../../../components/TacticalPanel';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { VulnerabilityTable } from '../../vulnerabilities/components/VulnerabilityTable';
 import { useGptVulnerabilityDetails } from '../../vulnerabilities/api';
 import { SecretLeaksTab } from './SecretLeaksTab';
@@ -752,7 +753,7 @@ const TIER_LABELS: Record<number, string> = {
   7: 'Post-Processing',
 };
 
-const TimelineItem: React.FC<{ activity: ScanActivity, onClick?: () => void, onRetry?: (activity: ScanActivity) => void, isTerminal?: boolean }> = ({ activity, onClick, onRetry, isTerminal }) => {
+const TimelineItem: React.FC<{ activity: ScanActivity, onClick?: () => void, onRetry?: (activity: ScanActivity) => void, isTerminal?: boolean, allowRetryAny?: boolean }> = ({ activity, onClick, onRetry, isTerminal, allowRetryAny }) => {
   const { theme, isLight, tokens } = useThemeTokens();
   const statusConfig: Record<string, { color: string, label: string }> = {
     'SUCCESS': { color: tokens.accent.success, label: 'Completed' },
@@ -837,7 +838,7 @@ const TimelineItem: React.FC<{ activity: ScanActivity, onClick?: () => void, onR
               • Click to view details <ChevronRight size={10} />
             </Typography>
           </Stack>
-          {isTerminal && activity.status === 'FAILED' && activity.name !== 'raw_scan_history' && onRetry && (
+          {isTerminal && (activity.status === 'FAILED' || allowRetryAny) && activity.name !== 'raw_scan_history' && onRetry && (
             <MuiTooltip title="Retry Task" placement="top">
               <IconButton 
                 size="small" 
@@ -1352,6 +1353,8 @@ export const ScanDetailPage = () => {
   const [startScanTargets, setStartScanTargets] = useState<{ ids: number[]; names: string[] } | null>(null);
   const [taskOverlayOpen, setTaskOverlayOpen] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<{ id: number; title: string } | null>(null);
+  const [retryConfirmOpen, setRetryConfirmOpen] = useState(false);
+  const [pendingRetryActivity, setPendingRetryActivity] = useState<ScanActivity | null>(null);
 
   const [selectedVulnForInfo, setSelectedVulnForInfo] = useState<any | null>(null);
   const [vulnInfoModalOpen, setVulnInfoModalOpen] = useState(false);
@@ -1379,9 +1382,8 @@ export const ScanDetailPage = () => {
   };
 
   const handleRetryTask = (activity: ScanActivity) => {
-    if (confirm(`Are you sure you want to retry ${activity.title}?`)) {
-      retryScanTaskMutation.mutate(Number(activity.id));
-    }
+    setPendingRetryActivity(activity);
+    setRetryConfirmOpen(true);
   };
 
   const groupedTimeline = useMemo(() => {
@@ -1611,7 +1613,8 @@ export const ScanDetailPage = () => {
                         activity={activity}
                         onClick={() => handleTimelineItemClick(activity)}
                         onRetry={handleRetryTask}
-                        isTerminal={[0, 3].includes(data?.scan_info?.scan_status ?? -1)}
+                        isTerminal={[0, 2, 3].includes(data?.scan_info?.scan_status ?? -1)}
+                        allowRetryAny={data?.scan_info?.scan_status === 2}
                       />
                     ))}
                   </Box>
@@ -2416,6 +2419,23 @@ export const ScanDetailPage = () => {
           projectSlug={projectSlug}
         />
       )}
+
+      <ConfirmDialog
+        open={retryConfirmOpen}
+        onClose={() => { setRetryConfirmOpen(false); setPendingRetryActivity(null); }}
+        onConfirm={() => {
+          if (pendingRetryActivity) retryScanTaskMutation.mutate(Number(pendingRetryActivity.id));
+          setRetryConfirmOpen(false);
+          setPendingRetryActivity(null);
+        }}
+        title="Retry Task"
+        message={pendingRetryActivity ? `Re-run ${pendingRetryActivity.title}? A new proxy will be assigned and results will be merged into this scan.` : ''}
+        confirmText="RETRY"
+        cancelText="CANCEL"
+        isDestructive={false}
+        isLoading={retryScanTaskMutation.isPending}
+        type="info"
+      />
     </Box>
   );
 };

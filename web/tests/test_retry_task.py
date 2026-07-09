@@ -109,6 +109,51 @@ class RetryTaskViewTests(TestCase):
             resp = self.client.post(url, content_type="application/json")
         self.assertEqual(resp.status_code, 400)
 
+    @patch("api.views.run_and_close")
+    def test_retry_success_activity_on_completed_scan_returns_200(self, mock_run):
+        """Guard must accept any activity status when the parent scan is SUCCESS."""
+        mock_run.return_value = None
+        scan = _make_scan(status=SUCCESS_TASK)
+        act = _make_activity(scan, status=SUCCESS_TASK)
+        url = reverse("api:retry_task", kwargs={"pk": act.pk})
+        resp = self.client.post(url, content_type="application/json")
+        self.assertEqual(resp.status_code, 200)
+        act.refresh_from_db()
+        self.assertEqual(act.status, INITIATED_TASK)
+
+    def test_retry_success_activity_on_running_scan_still_returns_400(self):
+        """RUNNING scan must still block retry even if the activity is in any state."""
+        scan = _make_scan(status=RUNNING_TASK)
+        act = _make_activity(scan, status=SUCCESS_TASK)
+        url = reverse("api:retry_task", kwargs={"pk": act.pk})
+        resp = self.client.post(url, content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+
+    @patch("api.views.run_and_close")
+    def test_retry_ctx_includes_original_scan_status(self, mock_run):
+        """original_scan_status captured before scan flips to RUNNING must equal SUCCESS_TASK."""
+        from unittest.mock import AsyncMock
+        import asyncio
+
+        mock_client = MagicMock()
+        mock_client.start_workflow = AsyncMock()
+
+        scan = _make_scan(status=SUCCESS_TASK)
+        act = _make_activity(scan, status=SUCCESS_TASK)
+        url = reverse("api:retry_task", kwargs={"pk": act.pk})
+
+        with patch(
+            "reNgine.temporal_client.TemporalClientProvider.get_client",
+            new=AsyncMock(return_value=mock_client),
+        ):
+            mock_run.side_effect = lambda _loop, coro: asyncio.run(coro)
+            resp = self.client.post(url, content_type="application/json")
+
+        self.assertEqual(resp.status_code, 200)
+        _, call_kwargs = mock_client.start_workflow.call_args
+        ctx_arg = call_kwargs["args"][0]
+        self.assertEqual(ctx_arg.get("original_scan_status"), SUCCESS_TASK)
+
 
 from reNgine.temporal_activities import get_scan_final_status_activity, initialize_scan_tasks_activity
 

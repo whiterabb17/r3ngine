@@ -666,9 +666,10 @@ RUN playwright install-deps chromium && \
 # Copy application source (placed last — changes most frequently, so layers
 # above this line are fully cached on code-only rebuilds)
 # ---------------------------------------------------------------------------
+COPY docker/gf-patterns/ /usr/src/gf-patterns/
 COPY web/ /usr/src/app/
-RUN mkdir /usr/src/scripts 
-COPY docker/scripts/nuclei_tag_splitter.py /usr/src/scripts/nuclei_tag_splitter.py
+#RUN mkdir /usr/src/scripts 
+#COPY docker/scripts/nuclei_tag_splitter.py /usr/src/scripts/nuclei_tag_splitter.py
 COPY docker/web/entrypoint.sh /usr/src/app/entrypoint.sh
 COPY docker/temporal-python-orchestrator/entrypoint.sh /usr/src/app/temporal-entrypoint.sh
 COPY docker/temporal-go-executor/entrypoint.sh /usr/src/app/executor-entrypoint.sh

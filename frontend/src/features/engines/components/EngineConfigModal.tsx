@@ -22,6 +22,8 @@ import { EngineConfigTabs } from './EngineConfigTabs';
 import { EngineConfigWizard } from './EngineConfigWizard';
 import { getDialogPaperSx, getFieldSx } from '../../../theme/semanticColors';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import { useParams } from '@tanstack/react-router';
+import { useToolSettings } from '../../settings';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +60,9 @@ export const EngineConfigModal: React.FC<EngineConfigModalProps> = ({
   const theme = useTheme();
   const { tokens } = useThemeTokens();
   const isLight = tokens.mode === 'light';
+
+  const { projectSlug = 'default' } = useParams({ strict: false }) as any;
+  const { data: toolSettings } = useToolSettings(projectSlug);
 
   const [name, setName] = useState(initialName);
   const [fetchLoading, setFetchLoading] = useState(false);
@@ -255,13 +260,13 @@ export const EngineConfigModal: React.FC<EngineConfigModalProps> = ({
             {mode === 'create' && (
               <>
                 <TemplatePicker onSelect={engineConfigState.loadTemplate} />
-                <EngineConfigWizard state={engineConfigState} />
+                <EngineConfigWizard state={engineConfigState} availableGfPatterns={toolSettings?.gf_patterns} />
               </>
             )}
 
             {/* Edit mode — full tab layout */}
             {mode === 'edit' && (
-              <EngineConfigTabs state={engineConfigState} />
+              <EngineConfigTabs state={engineConfigState} availableGfPatterns={toolSettings?.gf_patterns} />
             )}
           </Box>
         )}

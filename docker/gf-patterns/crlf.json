@@ -1,0 +1,15 @@
+{
+    "flags": "-iE",
+    "patterns": [
+        "%0d%0a",
+        "%0d",
+        "%0a",
+        "%0D%0A",
+        "\\r\\n",
+        "crlf=",
+        "header=",
+        "inject=",
+        "newline=",
+        "response_header="
+    ]
+}
