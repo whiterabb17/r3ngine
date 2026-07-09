@@ -1,0 +1,19 @@
+{
+    "flags": "-iE",
+    "patterns": [
+        "ws://",
+        "wss://",
+        "socket=",
+        "ws_url=",
+        "websocket=",
+        "ws_endpoint=",
+        "ws_host=",
+        "socketio=",
+        "socket_url=",
+        "ws_path=",
+        "sockjs=",
+        "stream=",
+        "channel=",
+        "room="
+    ]
+}

@@ -53,7 +53,8 @@ import {
   Shield,
   Network,
   X,
-  Folder
+  Folder,
+  Crosshair,
 } from 'lucide-react';
 import { getCsrfToken } from '../../../api/axiosConfig';
 
@@ -205,6 +206,8 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
   const deleteMutation = useDeleteSubdomain(projectSlug);
   const importantMutation = useToggleSubdomainImportant(projectSlug);
   const subscanMutation = useInitiateSubscan();
+  const probeMutation = useInitiateSubscan();
+  const [probeTarget, setProbeTarget] = useState<any>(null);
   const attackSurfaceMutation = useGPTAttackSurface();
   const createTodoMutation = useCreateTodo();
   const { data: enginesData } = useEngines();
@@ -370,6 +373,23 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
       setSelectedAssets([]);
     } catch (error: any) {
       showNotification(error.message || 'Failed to initiate Acunetix scan', 'error');
+    }
+  };
+
+  const handleProbeConfirm = async () => {
+    if (!probeTarget) return;
+    const id = probeTarget.id;
+    const name = probeTarget.name;
+    setProbeTarget(null);
+    try {
+      await probeMutation.mutateAsync({
+        engine_id: null,
+        tasks: ['http_crawl', 'screenshot'],
+        subdomain_ids: [id],
+      });
+      showNotification(`Probe initiated for ${name}`);
+    } catch (error: any) {
+      showNotification(error.message || 'Failed to initiate probe', 'error');
     }
   };
 
@@ -983,8 +1003,8 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Add Recon TODO/Note">
-                        <IconButton 
-                          size="small" 
+                        <IconButton
+                          size="small"
                           onClick={() => {
                             setTargetSubdomain(sub);
                             setTodoModalOpen(true);
@@ -992,6 +1012,17 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
                           sx={{ color: tokens.accent.warning, bgcolor: `${tokens.accent.warning}0D`, p: 0.5 }}
                         >
                           <FileText size={14} />
+                        </IconButton>
+                      </Tooltip>
+                      {/* Probe button */}
+                      <Tooltip title="Probe Subdomain">
+                        <IconButton
+                          size="small"
+                          onClick={() => setProbeTarget(sub)}
+                          disabled={probeMutation.isPending}
+                          sx={{ color: tokens.accent.primary, bgcolor: `${tokens.accent.primary}0D`, p: 0.5 }}
+                        >
+                          <Crosshair size={14} />
                         </IconButton>
                       </Tooltip>
                       <IconButton size="small" onClick={(e) => handleActionClick(e, sub)} sx={{ color: 'text.disabled', p: 0.5 }}>
@@ -1043,27 +1074,37 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
               ...getMenuPaperSx(isLight, theme, tokens),
               border: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : `${tokens.accent.primary}33`}`,
               color: 'text.primary',
+              minWidth: 0,
               '& .MuiMenuItem-root': {
-                fontSize: '12px',
-                fontWeight: 600,
-                fontFamily: 'Inter',
+                py: 0.5,
+                px: 1.5,
+                minHeight: 'unset',
                 '&:hover': { bgcolor: `${tokens.accent.primary}15` }
+              },
+              '& .MuiListItemText-primary': {
+                fontSize: '10px',
+                fontWeight: 700,
+                fontFamily: 'Inter',
+                letterSpacing: '0.05em',
+              },
+              '& .MuiListItemIcon-root': {
+                minWidth: 22,
               }
             }
           }
         }}
       >
         <MenuItem onClick={handleLaunchADAssessment} sx={{ color: tokens.accent.primary }}>
-          <ListItemIcon><Network size={16} color={tokens.accent.primary} /></ListItemIcon>
+          <ListItemIcon><Network size={12} color={tokens.accent.primary} /></ListItemIcon>
           <ListItemText primary="ASSESS IDENTITY INFRASTRUCTURE" />
         </MenuItem>
-        <Divider sx={{ my: 0.5, borderColor: 'divider' }} />
+        <Divider sx={{ my: 0.25, borderColor: 'divider' }} />
         <MenuItem onClick={() => handleToggleImportant(selectedId!)} sx={{ color: tokens.accent.warning }}>
-          <ListItemIcon><Shield size={16} color={tokens.accent.warning} /></ListItemIcon>
+          <ListItemIcon><Shield size={12} color={tokens.accent.warning} /></ListItemIcon>
           <ListItemText primary={targetSubdomain?.is_important ? "UNMARK IMPORTANT" : "MARK IMPORTANT"} />
         </MenuItem>
         <MenuItem onClick={() => handleDelete(selectedId!)} sx={{ color: tokens.accent.error }}>
-          <ListItemIcon><Trash2 size={16} color={tokens.accent.error} /></ListItemIcon>
+          <ListItemIcon><Trash2 size={12} color={tokens.accent.error} /></ListItemIcon>
           <ListItemText primary="DELETE ASSET" />
         </MenuItem>
       </Menu>
@@ -1341,6 +1382,20 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
         title={confirmConfig.title}
         message={confirmConfig.message}
         type={confirmConfig.type}
+      />
+
+      {/* Probe confirmation */}
+      <ConfirmDialog
+        open={Boolean(probeTarget)}
+        onClose={() => setProbeTarget(null)}
+        onConfirm={handleProbeConfirm}
+        title="Probe Subdomain"
+        message={`Run HTTP crawl and screenshot against ${probeTarget?.name}? This will refresh its status, content length, IP, and screenshot.`}
+        confirmText="PROBE"
+        cancelText="CANCEL"
+        isDestructive={false}
+        type="info"
+        isLoading={probeMutation.isPending}
       />
 
       <Snackbar

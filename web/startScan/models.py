@@ -851,17 +851,19 @@ class Vulnerability(models.Model):
 
 	exploit_url = models.CharField(max_length=2500, null=True, blank=True)
 	VULNERABILITY_STATUS_CHOICES = (
-		('unverified', 'Unverified'),
+		('new', 'New'),
 		('verified', 'Verified'),
-		('not_working', 'Not Working'),
-		('patched', 'Patched'),
-		('closed', 'Closed'),
+		('needs_review', 'Needs Review'),
+		('false_positive', 'False Positive'),
+		('accepted_risk', 'Accepted Risk'),
+		('resolved', 'Resolved'),
 	)
-	validation_status = models.CharField(max_length=20, choices=VULNERABILITY_STATUS_CHOICES, default='unverified')
+	validation_status = models.CharField(max_length=20, choices=VULNERABILITY_STATUS_CHOICES, default='new')
 	validation_confidence = models.FloatField(null=True, blank=True, default=0.0)
 	correlation_score = models.FloatField(null=True, blank=True, default=0.0)
 	is_suppressed = models.BooleanField(default=False)
 	group_key = models.CharField(max_length=500, null=True, blank=True, db_index=True)
+	validation_reason = models.TextField(blank=True, null=True, help_text="Reason/justification for status change")
 
 	def get_path(self):
 		if self.http_url:

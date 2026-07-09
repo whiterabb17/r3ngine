@@ -1,0 +1,21 @@
+{
+    "flags": "-iE",
+    "patterns": [
+        "token=",
+        "jwt=",
+        "bearer=",
+        "auth=",
+        "auth_token=",
+        "access_token=",
+        "refresh_token=",
+        "id_token=",
+        "session_token=",
+        "usertoken=",
+        "apitoken=",
+        "jwt_token=",
+        "x-auth-token=",
+        "authorization=",
+        "authn=",
+        "authz="
+    ]
+}

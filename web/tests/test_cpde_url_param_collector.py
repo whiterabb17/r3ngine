@@ -167,7 +167,8 @@ class TestCollectFromParamSpiderFiles(TestCase):
     def test_extracts_query_params(self):
         from reNgine.cpde.url_param_collector import collect_from_paramspider_files
         with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, 'ps_example.com.txt')
+            os.makedirs(os.path.join(d, 'results'))
+            path = os.path.join(d, 'results', 'example.com.txt')
             with open(path, 'w') as fh:
                 fh.write('https://example.com/search?q=FUZZ&page=FUZZ\n')
                 fh.write('https://example.com/api?id=FUZZ&sort=FUZZ\n')
@@ -181,7 +182,8 @@ class TestCollectFromParamSpiderFiles(TestCase):
     def test_confidence_is_55(self):
         from reNgine.cpde.url_param_collector import collect_from_paramspider_files
         with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, 'ps_example.com.txt')
+            os.makedirs(os.path.join(d, 'results'))
+            path = os.path.join(d, 'results', 'example.com.txt')
             with open(path, 'w') as fh:
                 fh.write('https://example.com/?x=FUZZ\n')
             findings = collect_from_paramspider_files(d)
@@ -190,7 +192,8 @@ class TestCollectFromParamSpiderFiles(TestCase):
     def test_non_url_lines_skipped(self):
         from reNgine.cpde.url_param_collector import collect_from_paramspider_files
         with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, 'ps_example.com.txt')
+            os.makedirs(os.path.join(d, 'results'))
+            path = os.path.join(d, 'results', 'example.com.txt')
             with open(path, 'w') as fh:
                 fh.write('[*] Running ParamSpider...\n')
                 fh.write('https://example.com/?real=FUZZ\n')
@@ -271,8 +274,9 @@ class TestCollectAll(TestCase):
             # Arjun
             with open(os.path.join(d, 'arjun_example.com.json'), 'w') as fh:
                 json.dump({'https://example.com/api': {'params': {'GET': ['arjun_param']}}}, fh)
-            # ParamSpider
-            with open(os.path.join(d, 'ps_example.com.txt'), 'w') as fh:
+            # ParamSpider (writes to results/ subdir)
+            os.makedirs(os.path.join(d, 'results'), exist_ok=True)
+            with open(os.path.join(d, 'results', 'example.com.txt'), 'w') as fh:
                 fh.write('https://example.com/?ps_param=FUZZ\n')
             findings = collect_all(d)
         names = {f['name'] for f in findings}

@@ -1,0 +1,217 @@
+- model: scanEngine.enginetype
+  pk: 15
+  fields:
+    engine_name: "Assessment: External"
+    default_engine: false
+    yaml_configuration: |
+      subdomain_discovery:
+        uses_tools:
+          - subfinder
+          - ctfr
+          - tlsx
+          - baddns
+        enable_http_crawl: true
+        threads: 30
+        timeout: 5
+      http_crawl:
+        threads: 30
+        follow_redirect: true
+      port_scan:
+        enable_http_crawl: true
+        ports:
+          - top-100
+        rate_limit: 150
+        threads: 30
+        passive: false
+      fetch_url:
+        uses_tools:
+          - gauplus
+          - waybackurls
+          - hakrawler
+        remove_duplicate_endpoints: true
+        filter_urls: true
+      vulnerability_scan:
+        run_nuclei: true
+        nuclei:
+          use_nuclei_config: false
+          severities:
+            - critical
+            - high
+            - medium
+          rate_limit: 150
+          retries: 1
+          timeout: 5
+
+- model: scanEngine.enginetype
+  pk: 16
+  fields:
+    engine_name: "Assessment: Web"
+    default_engine: false
+    yaml_configuration: |
+      http_crawl:
+        threads: 30
+        follow_redirect: true
+      dir_file_fuzz:
+        extensions:
+          - php
+          - asp
+          - aspx
+          - js
+          - txt
+          - html
+        rate_limit: 150
+        threads: 30
+        timeout: 10
+        follow_redirect: true
+        auto_calibration: true
+      web_api_discovery:
+        uses_tools:
+          - kiterunner
+          - arjun
+        threads: 30
+      secret_scanning:
+        uses_tools:
+          - gitleaks
+          - trufflehog
+      vulnerability_scan:
+        run_nuclei: true
+        nuclei:
+          use_nuclei_config: false
+          severities:
+            - critical
+            - high
+            - medium
+            - low
+          rate_limit: 150
+          retries: 1
+          timeout: 5
+
+- model: scanEngine.enginetype
+  pk: 17
+  fields:
+    engine_name: "Assessment: API"
+    default_engine: false
+    yaml_configuration: |
+      http_crawl:
+        threads: 30
+        follow_redirect: true
+      web_api_discovery:
+        uses_tools:
+          - kiterunner
+          - arjun
+          - zap
+        threads: 30
+      vulnerability_scan:
+        run_nuclei: true
+        nuclei:
+          use_nuclei_config: false
+          tags:
+            - api
+            - token
+            - injection
+          severities:
+            - critical
+            - high
+            - medium
+          rate_limit: 100
+          retries: 1
+          timeout: 5
+
+- model: scanEngine.enginetype
+  pk: 18
+  fields:
+    engine_name: "Assessment: Internal"
+    default_engine: false
+    yaml_configuration: |
+      subdomain_discovery:
+        uses_tools:
+          - subfinder
+          - ctfr
+        enable_http_crawl: true
+        threads: 20
+        timeout: 5
+      port_scan:
+        enable_http_crawl: true
+        ports:
+          - top-1000
+        rate_limit: 100
+        threads: 20
+        passive: false
+        enable_nmap: true
+        nmap_script: "default,vuln"
+      vulnerability_scan:
+        run_nuclei: true
+        nuclei:
+          use_nuclei_config: false
+          severities:
+            - critical
+            - high
+            - medium
+          rate_limit: 100
+          retries: 1
+          timeout: 10
+
+- model: scanEngine.enginetype
+  pk: 19
+  fields:
+    engine_name: "Assessment: Hybrid"
+    default_engine: false
+    yaml_configuration: |
+      subdomain_discovery:
+        uses_tools:
+          - subfinder
+          - chaos
+          - ctfr
+          - tlsx
+          - baddns
+        enable_http_crawl: true
+        threads: 30
+        timeout: 5
+      http_crawl:
+        threads: 30
+        follow_redirect: true
+      port_scan:
+        enable_http_crawl: true
+        ports:
+          - top-1000
+        rate_limit: 150
+        threads: 30
+        passive: false
+        enable_nmap: true
+      fetch_url:
+        uses_tools:
+          - gauplus
+          - waybackurls
+          - hakrawler
+        remove_duplicate_endpoints: true
+        filter_urls: true
+      dir_file_fuzz:
+        extensions:
+          - php
+          - asp
+          - aspx
+          - js
+          - txt
+          - html
+        rate_limit: 150
+        threads: 30
+        timeout: 10
+        auto_calibration: true
+      vulnerability_scan:
+        run_nuclei: true
+        nuclei:
+          use_nuclei_config: false
+          severities:
+            - critical
+            - high
+            - medium
+            - low
+          rate_limit: 150
+          retries: 1
+          timeout: 5
+      secret_scanning:
+        uses_tools:
+          - gitleaks
+          - trufflehog
+      waf_detection:
+        threads: 20

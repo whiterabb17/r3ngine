@@ -31,9 +31,10 @@ import { useThemeTokens } from '../../../theme/useThemeTokens';
 
 interface EngineConfigWizardProps {
   state: UseEngineConfigReturn;
+  availableGfPatterns?: string[];
 }
 
-export const EngineConfigWizard: React.FC<EngineConfigWizardProps> = ({ state }) => {
+export const EngineConfigWizard: React.FC<EngineConfigWizardProps> = ({ state, availableGfPatterns }) => {
   const [activeStep, setActiveStep] = useState(0);
   const { tokens } = useThemeTokens();
   const { config, updateSection, toggleSection, updateGlobal } = state;
@@ -74,7 +75,7 @@ export const EngineConfigWizard: React.FC<EngineConfigWizardProps> = ({ state })
       description: 'URL fetching, API discovery, and parameter extraction run sequentially.',
       content: (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <FetchUrlSection config={config.fetch_url.config} enabled={config.fetch_url.enabled} onToggle={(v) => toggleSection('fetch_url', v)} onChange={(p) => updateSection('fetch_url', p)} />
+          <FetchUrlSection config={config.fetch_url.config} enabled={config.fetch_url.enabled} onToggle={(v) => toggleSection('fetch_url', v)} onChange={(p) => updateSection('fetch_url', p)} availableGfPatterns={availableGfPatterns} />
           <WebApiDiscoverySection config={config.web_api_discovery.config} enabled={config.web_api_discovery.enabled} onToggle={(v) => toggleSection('web_api_discovery', v)} onChange={(p) => updateSection('web_api_discovery', p)} />
           <ParamDiscoverySection config={config.param_discovery.config} enabled={config.param_discovery.enabled} onToggle={(v) => toggleSection('param_discovery', v)} onChange={(p) => updateSection('param_discovery', p)} />
         </Box>

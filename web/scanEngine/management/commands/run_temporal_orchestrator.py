@@ -87,7 +87,33 @@ from reNgine.temporal_workflows import (
     URLAuthExtractWorkflow,
 )
 
-from reNgine.temporal.workflows.assessment_workflow import AssessmentWorkflow
+from reNgine.temporal.workflows.assessment_workflow import (
+    AssessmentWorkflow,
+    DiscoveryWorkflow,
+    EnumerationWorkflow,
+    AnalysisWorkflow,
+    ValidationWorkflow,
+    ReportingWorkflow,
+)
+from reNgine.temporal.activities.assessment_activities import (
+    update_assessment_state_activity,
+    scan_orchestrator_activity,
+    prepare_assessment_context_activity,
+    auto_validate_findings_activity,
+)
+from reNgine.temporal.activities.asset_correlation_activities import (
+    run_asset_correlation_activity,
+)
+from reNgine.temporal.activities.graph_activities import (
+    sync_assessment_graph_activity,
+)
+from reNgine.temporal.activities.evidence_activities import (
+    collect_screenshot_evidence_activity,
+    collect_http_evidence_activity,
+    collect_command_output_evidence_activity,
+    enforce_evidence_retention_activity,
+    verify_evidence_integrity_activity,
+)
 
 # Activities (all Python-side activities are registered here)
 from reNgine.temporal_activities import (
@@ -476,6 +502,9 @@ class Command(BaseCommand):
             # -------------------------------------------------------------------
             # Collect all registered activities
             # -------------------------------------------------------------------
+            # NOTE: Adding a new activity here requires restarting the Temporal worker
+            # container (docker compose restart temporal-python-orchestrator) — bind-mounted
+            # code changes do NOT auto-register new activity handlers.
             all_activities = [
                 # Generic & Dynamic
                 run_generic_task_activity,
@@ -619,12 +648,31 @@ class Command(BaseCommand):
                 run_urlparser_activity,
                 extract_auth_for_url_activity,
                 
+                # Assessment Orchestration
+                update_assessment_state_activity,
+                scan_orchestrator_activity,
+                prepare_assessment_context_activity,
+                auto_validate_findings_activity,
+
+                # Evidence Platform
+                collect_screenshot_evidence_activity,
+                collect_http_evidence_activity,
+                collect_command_output_evidence_activity,
+                enforce_evidence_retention_activity,
+                verify_evidence_integrity_activity,
+                
                 # Plugin lifecycle
                 log_plugin_start_activity,
                 log_plugin_end_activity,
 
                 # Email security (internal module — Tier 2 post-scan)
                 run_email_security_activity,
+
+                # Phase 6 - Asset correlation
+                run_asset_correlation_activity,
+
+                # Phase 5 - Assessment graph sync
+                sync_assessment_graph_activity,
             ]
 
             # -------------------------------------------------------------------
@@ -642,7 +690,9 @@ class Command(BaseCommand):
                                  HostReconWorkflow, CIDRReconWorkflow, CodeScanWorkflow,
                                  DomainReconWorkflow, SubdomainReconWorkflow, URLCrawlWorkflow,
                                  URLDirSearchWorkflow, URLFuzzWorkflow, URLParamsFuzzWorkflow,
-                                 URLVulnWorkflow, URLAuthExtractWorkflow, AssessmentWorkflow]
+                                 URLVulnWorkflow, URLAuthExtractWorkflow, AssessmentWorkflow,
+                                 DiscoveryWorkflow, EnumerationWorkflow, AnalysisWorkflow,
+                                 ValidationWorkflow, ReportingWorkflow]
                 all_workflows = [MasterScanWorkflow, NucleiPlannerWorkflow, SubScanWorkflow, StressTestWorkflow, StartupSyncWorkflow, ScheduledScanWorkflow, MonitoringWorkflow, GoExecutorTaskWorkflow, ApmeTaskWorkflow, RecalculateApmeWorkflow, CertificateResyncWorkflow, IdentityEnrichmentWorkflow, GeoLocalizeWorkflow, HackerOneImportWorkflow, HackerOneSyncBookmarkedWorkflow, ProxyFetchWorkflow, SingleTaskRetryWorkflow] + _p2_workflows + plugin_workflows
                 all_activities.extend(plugin_activities)
             except Exception as e:
@@ -651,7 +701,9 @@ class Command(BaseCommand):
                                  HostReconWorkflow, CIDRReconWorkflow, CodeScanWorkflow,
                                  DomainReconWorkflow, SubdomainReconWorkflow, URLCrawlWorkflow,
                                  URLDirSearchWorkflow, URLFuzzWorkflow, URLParamsFuzzWorkflow,
-                                 URLVulnWorkflow, URLAuthExtractWorkflow, AssessmentWorkflow]
+                                 URLVulnWorkflow, URLAuthExtractWorkflow, AssessmentWorkflow,
+                                 DiscoveryWorkflow, EnumerationWorkflow, AnalysisWorkflow,
+                                 ValidationWorkflow, ReportingWorkflow]
                 all_workflows = [MasterScanWorkflow, NucleiPlannerWorkflow, SubScanWorkflow, StressTestWorkflow, StartupSyncWorkflow, ScheduledScanWorkflow, MonitoringWorkflow, GoExecutorTaskWorkflow, ApmeTaskWorkflow, RecalculateApmeWorkflow, CertificateResyncWorkflow, IdentityEnrichmentWorkflow, GeoLocalizeWorkflow, HackerOneImportWorkflow, HackerOneSyncBookmarkedWorkflow, ProxyFetchWorkflow, SingleTaskRetryWorkflow] + _p2_workflows
 
             # -------------------------------------------------------------------

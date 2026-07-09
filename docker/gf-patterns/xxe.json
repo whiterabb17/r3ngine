@@ -1,0 +1,20 @@
+{
+    "flags": "-iE",
+    "patterns": [
+        "xml=",
+        "data=",
+        "entity=",
+        "xmldata=",
+        "xml_data=",
+        "xmlfile=",
+        "xmlurl=",
+        "xmlcontent=",
+        "xmlbody=",
+        "soap=",
+        "wsdl=",
+        "schema=",
+        "dtd=",
+        "xsl=",
+        "xslt="
+    ]
+}

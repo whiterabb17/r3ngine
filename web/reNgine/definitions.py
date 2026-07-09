@@ -644,19 +644,40 @@ DEFAULT_IGNORE_FILE_EXTENSIONS = [
 ]
 
 DEFAULT_GF_PATTERNS = [
+    'api-keys',
+    'command-injection',
+    'cors',
+    'crlf',
     'debug_logic',
+    'email-injection',
+    'graphql',
+    'http-smuggling',
     'idor',
+    'img-traversal',
     'interestingEXT',
     'interestingparams',
     'interestingsubs',
+    'jsvar',
+    'jwt',
     'lfi',
+    'mass-assignment',
+    'nosqli',
+    'oauth',
+    'open-redirect',
+    'path-traversal',
+    'prototype-pollution',
     'rce',
     'redirect',
     'sqli',
     'ssrf',
+    's3-bucket',
     'ssti',
-    'xss'
+    'upload',
+    'websocket',
+    'xss',
+    'xxe',
 ]
+
 
 
 # Default Dir File Fuzz Params

@@ -23,8 +23,10 @@ const TargetSummary = lazyRouteComponent(() => import("./features/targets").then
 const EndpointsPage = lazyRouteComponent(() => import("./features/endpoints").then(m => ({ default: m.EndpointsPage })));
 const SubdomainsPage = lazyRouteComponent(() => import("./features/subdomains").then(m => ({ default: m.SubdomainsPage })));
 const AssessmentsPage = lazyRouteComponent(() => import("./features/assessments").then(m => ({ default: m.AssessmentsPage })));
+const AssessmentExecutionDashboard = lazyRouteComponent(() => import("./features/assessments").then(m => ({ default: m.AssessmentExecutionDashboard })));
 const TodoPage = lazyRouteComponent(() => import("./features/todos").then(m => ({ default: m.TodoPage })));
 const VulnerabilityList = lazyRouteComponent(() => import("./features/vulnerabilities").then(m => ({ default: m.VulnerabilityList })));
+const VerificationQueue = lazyRouteComponent(() => import("./features/vulnerabilities").then(m => ({ default: m.VerificationQueue })));
 const BountyHubPage = lazyRouteComponent(() => import("./features/bounty/components/BountyHubPage").then(m => ({ default: m.BountyHubPage })));
 const SearchPage = lazyRouteComponent(() => import("./features/search/components/SearchPage").then(m => ({ default: m.SearchPage })));
 const PluginManagementPage = lazyRouteComponent(() => import("./features/plugins/pages/PluginManagementPage").then(m => ({ default: m.default })));
@@ -141,6 +143,13 @@ const assessmentsRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: "assessments",
   component: AssessmentsPage,
+});
+
+// Assessment Execution Route
+const assessmentExecutionRoute = createRoute({
+  getParentRoute: () => projectRoute,
+  path: "assessments/$id/execution",
+  component: AssessmentExecutionDashboard,
 });
 
 // Target Summary Route
@@ -441,6 +450,12 @@ const vulnsRoute = createRoute({
   )
 });
 
+const verificationQueueRoute = createRoute({
+  getParentRoute: () => projectRoute,
+  path: "vulns/queue",
+  component: VerificationQueue,
+});
+
 const bountyHubRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: "bountyhub",
@@ -592,7 +607,9 @@ const routeTree = rootRoute.addChildren([
     todoRoute,
     organizationsRoute,
     assessmentsRoute,
+    assessmentExecutionRoute,
     vulnsRoute,
+    verificationQueueRoute,
     profileSettingsRoute,
     proxySettingsRoute,
     opsecSettingsRoute,

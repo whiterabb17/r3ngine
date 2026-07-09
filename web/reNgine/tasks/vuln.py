@@ -248,7 +248,8 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 	# When tags_override is used, all_techs is empty; check the batch tags instead.
 	if tags_override is not None:
 		is_wordpress_detected = any(
-			'wordpress' in t.lower() or 'wp-' in t.lower()
+			'wordpress' in t.lower() or t.lower() == 'wp'
+			or t.lower().startswith('wp-') or t.lower().startswith('wp_')
 			for t in (tags_override or [])
 		)
 	else:
@@ -268,23 +269,17 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 				'templates should be pre-loaded at container startup', wordfence_dir
 			)
 
-	if auto_update_templates:
+	# Skip template update when tags were pre-batched by GatherNucleiTagsActivity — the
+	# activity handles update+re-split before building batches. Updating here would wipe
+	# the split tag YAML modifications and cause every batch after the first to find zero
+	# matching templates.
+	if auto_update_templates and tags_override is None:
 		run_command(
 			'nuclei -update-templates',
 			shell=True,
 			history_file=self.history_file,
 			scan_id=self.scan_id,
 			activity_id=self.activity_id)
-
-		# Re-run the tag splitter because updating templates overwrites the split tags on disk
-		# splitter_script = '/usr/src/scripts/nuclei_tag_splitter.py'
-		# import sys
-		# run_command(
-		# 	f'{sys.executable} {splitter_script}',
-		# 	shell=True,
-		# 	history_file=self.history_file,
-		# 	scan_id=self.scan_id,
-		# 	activity_id=self.activity_id)
 	templates = []
 	if not (nuclei_templates or custom_nuclei_templates):
 		templates.append(NUCLEI_DEFAULT_TEMPLATES_PATH)
@@ -588,7 +583,7 @@ def dalfox_xss_scan(self, urls=[], ctx={}, description=None):
 	cmd += f' --ignore-return 302,404,403'
 	
 	cmd = opsec.apply_stealth('dalfox', cmd, proxy=proxy)
-	cmd += f' file {input_path}'
+	cmd += f' {input_path}'
 	cmd += f' --proxy {proxy}' if proxy and '--proxy' not in cmd else ''
 	cmd += f' --waf-evasion' if is_waf_evasion else ''
 	cmd += f' --waf-bypass auto'
@@ -1310,10 +1305,20 @@ def smugglex_scan(self, urls=[], ctx={}, description=None):
 		logger.warning('smugglex: no endpoints to scan, skipping.')
 		return
 
+	proxy = get_random_proxy()
 	output_json = f"{self.results_dir}/smugglex_output.json"
 	cmd = f"cat {input_path} | smugglex --json -o {output_json}"
-	run_command(cmd, shell=True, scan_id=self.scan_id, activity_id=self.activity_id)
+
+	# add proxy to the command
+	if proxy:
+		cmd += f" --proxy {proxy}"
+
+	# SmuggleX checks
+	cmd += f" -c cl-te,te-cl,te-te,h2c,h2,cl-edge,h2-downgrade"
+	cmd += f" --fuzz"
 	
+	run_command(cmd, shell=True, scan_id=self.scan_id, activity_id=self.activity_id)
+
 	if os.path.exists(output_json):
 		try:
 			with open(output_json, 'r') as f:

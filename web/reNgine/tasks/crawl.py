@@ -1,6 +1,7 @@
 import logging
 import os
 import json
+import re
 import subprocess
 import requests
 import validators
@@ -564,19 +565,28 @@ def web_api_discovery(self, urls=[], ctx={}, description=None):
 	for url, subdomain_name, subdomain in url_subdomain_map:
 
 		# Arjun - Parameter discovery (once per subdomain; output is subdomain-scoped)
+		# Cache sentinel: arjun_{subdomain}.json exists (even empty) means already ran.
+		# When arjun confirms params it writes the JSON file; when it can't (e.g.
+		# connection error during logicforcing) it exits without writing anything.
+		# In that case we fall back to parsing the extracted-params line from stdout
+		# so parameters found in the response are still persisted.
 		if 'arjun' in uses_tools and subdomain_name not in processed_arjun_subdomains:
 			processed_arjun_subdomains.add(subdomain_name)
 			arjun_output = f"{results_dir}/arjun_{subdomain_name}.json"
-			if os.path.exists(arjun_output) and os.path.getsize(arjun_output) > 0:
+			arjun_stdout = ''
+			if os.path.exists(arjun_output):
 				logger.warning('[WEB_API] Arjun: cache hit for %s — loading existing results', subdomain_name)
 			else:
 				cmd = f"arjun -u {url} --passive -m {arjun_methods} -t {threads} -oJ {arjun_output}"
 				logger.warning('[WEB_API] Arjun: running on %s | cmd: %s', subdomain_name, cmd)
-				run_command(cmd, shell=True, scan_id=self.scan_id, activity_id=self.activity_id)
+				_, arjun_stdout = run_command(cmd, shell=True, scan_id=self.scan_id, activity_id=self.activity_id)
+				# Write empty sentinel so Temporal retries don't re-run the tool
+				if not os.path.exists(arjun_output):
+					open(arjun_output, 'w').close()
 				logger.warning('[WEB_API] Arjun: finished on %s', subdomain_name)
-			if os.path.exists(arjun_output):
+			arjun_params = 0
+			if os.path.exists(arjun_output) and os.path.getsize(arjun_output) > 0:
 				try:
-					arjun_params = 0
 					with open(arjun_output, 'r') as f:
 						data = json.load(f)
 						for target_url, details in data.items():
@@ -593,46 +603,61 @@ def web_api_discovery(self, urls=[], ctx={}, description=None):
 									for p in params:
 										save_parameter(endpoint, p, param_type=method)
 										arjun_params += 1
-					logger.warning('[WEB_API] Arjun: %s → %d params saved', subdomain_name, arjun_params)
 				except Exception as e:
 					logger.error('[WEB_API] Arjun: error parsing output for %s: %s', subdomain_name, e)
-			else:
-				logger.warning('[WEB_API] Arjun: output file missing for %s', subdomain_name)
+			if arjun_params == 0 and arjun_stdout:
+				# Arjun printed "Extracted N parameters from response for testing: p1, p2, ..."
+				# but couldn't confirm them (e.g. connection error). Save them anyway.
+				_match = re.search(r'Extracted\s+\d+\s+parameters?\s+from\s+response\s+for\s+testing:\s+(.+)', arjun_stdout)
+				if _match:
+					endpoint, _ = save_endpoint(url, ctx=ctx, subdomain=subdomain)
+					if endpoint:
+						for p_name in [p.strip() for p in _match.group(1).split(',') if p.strip()]:
+							save_parameter(endpoint, p_name, param_type='Arjun')
+							arjun_params += 1
+			logger.warning('[WEB_API] Arjun: %s → %d params saved', subdomain_name, arjun_params)
 
 		# ParamSpider - once per subdomain
+		# ParamSpider writes results to results/{domain}.txt (not stdout).
+		# The sentinel file ps_{domain}.txt is written after a run so Temporal
+		# retries skip re-running the tool; actual URLs are read from results/.
 		if 'paramspider' in uses_tools and subdomain_name not in processed_paramspider_subdomains:
 			processed_paramspider_subdomains.add(subdomain_name)
-			ps_output = f"{results_dir}/ps_{subdomain_name}.txt"
-			if os.path.exists(ps_output) and os.path.getsize(ps_output) > 0:
+			ps_sentinel = f"{results_dir}/ps_{subdomain_name}.txt"
+			ps_results_file = f"{results_dir}/results/{subdomain_name}.txt"
+			if os.path.exists(ps_sentinel):
 				logger.warning('[WEB_API] ParamSpider: cache hit for %s — loading existing results', subdomain_name)
 			else:
-				cmd = f"paramspider --domain {subdomain_name} | tee {ps_output}"
+				cmd = f"paramspider --domain {subdomain_name}"
 				proxy = get_random_proxy()
 				if proxy:
-					cmd = f"paramspider --domain {subdomain_name} --proxy {proxy} | tee {ps_output}"
+					cmd = f"paramspider --domain {subdomain_name} --proxy {proxy}"
 				logger.warning('[WEB_API] ParamSpider: running on %s | cmd: %s', subdomain_name, cmd)
 				run_command(cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
+				# Write sentinel so retries skip re-running
+				open(ps_sentinel, 'w').close()
 				logger.warning('[WEB_API] ParamSpider: finished on %s', subdomain_name)
-			if os.path.exists(ps_output):
+			if os.path.exists(ps_results_file):
 				try:
 					ps_params = 0
-					with open(ps_output, 'r') as f:
+					with open(ps_results_file, 'r') as f:
 						for line in f:
 							line = line.strip()
 							if line and is_valid_url(line):
 								endpoint, _ = save_endpoint(line, ctx=ctx, subdomain=subdomain)
-								parsed = urlparse(line)
-								if parsed.query:
-									for q in parsed.query.split('&'):
-										if '=' in q:
-											p_name = q.split('=')[0]
-											save_parameter(endpoint, p_name, param_type='URL Query')
-											ps_params += 1
+								if endpoint:
+									parsed = urlparse(line)
+									if parsed.query:
+										for q in parsed.query.split('&'):
+											if '=' in q:
+												p_name = q.split('=')[0]
+												save_parameter(endpoint, p_name, param_type='URL Query')
+												ps_params += 1
 					logger.warning('[WEB_API] ParamSpider: %s → %d params saved', subdomain_name, ps_params)
 				except Exception as e:
 					logger.error('[WEB_API] ParamSpider: error parsing output for %s: %s', subdomain_name, e)
 			else:
-				logger.warning('[WEB_API] ParamSpider: output file missing for %s', subdomain_name)
+				logger.warning('[WEB_API] ParamSpider: no results file for %s (tool may have found nothing)', subdomain_name)
 
 		# LinkFinder - once per subdomain (JS endpoint and parameter extraction).
 		# processed_linkfinder_subdomains is the primary dedup guard so the tool
@@ -877,6 +902,9 @@ def web_api_discovery(self, urls=[], ctx={}, description=None):
 		logger.warning('[WEB_API] grpcurl: finished')
 
 	# Julius (LLM scanner)
+	# julius probe -f <file> -o jsonl is broken upstream — combining -f with the
+	# global -o flag causes julius to ignore the file and show its help menu.
+	# Workaround: feed targets via stdin using `julius probe -`.
 	if 'julius' in uses_tools and urls:
 		from reNgine.tasks.parsers import parse_julius_result
 		logger.warning('[WEB_API] Julius: running on %d URLs', len(urls))
@@ -884,14 +912,14 @@ def web_api_discovery(self, urls=[], ctx={}, description=None):
 		julius_out = f"{results_dir}/julius.jsonl"
 		with open(targets_file, 'w') as _f:
 			_f.write('\n'.join(urls))
-		_julius_cmd = f"julius probe -f {targets_file} -o jsonl | tee {julius_out}"
+		_julius_cmd = f"cat {targets_file} | julius probe - -o jsonl --no-banner | tee {julius_out}"
 		_, _julius_output = run_command(_julius_cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
 		_tls_error_sigs = ('x509: certificate', 'tls: failed to verify certificate', 'certificate verify failed')
 		if any(sig in _julius_output for sig in _tls_error_sigs):
 			logger.warning('[WEB_API] Julius: TLS certificate error detected, retrying with --insecure')
 			if os.path.exists(julius_out):
 				os.remove(julius_out)
-			_julius_cmd = f"julius probe --insecure -f {targets_file} -o jsonl | tee {julius_out}"
+			_julius_cmd = f"cat {targets_file} | julius probe - --insecure -o jsonl --no-banner | tee {julius_out}"
 			run_command(_julius_cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
 		if os.path.exists(julius_out):
 			try:
@@ -1117,8 +1145,9 @@ def http_crawl(
 				fields={'IPs': ips_str},
 				add_meta_info=False)
 
-		# Update subdomain status attributes if this is the default endpoint
-		if endpoint.is_default and subdomain:
+		# Update subdomain status: always update if subdomain has no real status yet,
+		# or if this is the canonical/default endpoint.
+		if subdomain and (endpoint.is_default or not subdomain.http_status):
 			subdomain.http_url = endpoint.http_url
 			subdomain.http_status = endpoint.http_status
 			subdomain.page_title = endpoint.page_title
@@ -1126,11 +1155,11 @@ def http_crawl(
 			subdomain.webserver = endpoint.webserver
 			subdomain.response_time = endpoint.response_time
 			subdomain.content_type = endpoint.content_type
-			
+
 			cnames = line.get('cnames', [])
 			if cnames:
 				subdomain.cname = ','.join(cnames)
-			
+
 			subdomain.is_cdn = cdn
 			if cdn:
 				subdomain.cdn_name = line.get('cdn_name')

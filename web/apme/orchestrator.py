@@ -349,14 +349,35 @@ class APMEOrchestrator:
         """
         Persist attack paths to reNgine's ImpactAssessment model.
         Each top-level path is stored as a simulated_path JSON blob.
+        Checks existing paths by fingerprint and vulnerability to perform deduplication.
         """
         try:
             from startScan.models import ImpactAssessment, ScanHistory, Vulnerability
+            from apme.models.path import get_path_fingerprint
 
             scan_history = ScanHistory.objects.get(id=scan_history_id)
 
             from apme.output.llm_narrator import LLMNarrator
             narrator = LLMNarrator()
+
+            # Pre-load all existing assessments for this scan
+            existing_assessments = list(ImpactAssessment.objects.filter(scan_history=scan_history))
+
+            # Map existing assessments by vulnerability and fingerprint
+            existing_by_vuln = {ea.vulnerability_id: ea for ea in existing_assessments if ea.vulnerability_id is not None}
+
+            existing_by_fingerprint = {}
+            for ea in existing_assessments:
+                steps = None
+                if ea.simulated_path and "steps" in ea.simulated_path:
+                    steps = ea.simulated_path["steps"]
+                elif ea.potential_attack_chain and "steps" in ea.potential_attack_chain:
+                    steps = ea.potential_attack_chain["steps"]
+
+                if steps:
+                    fp = get_path_fingerprint(steps)
+                    if fp not in existing_by_fingerprint:
+                        existing_by_fingerprint[fp] = ea
 
             for path in paths:
                 path_dict = path.to_dict()
@@ -364,49 +385,52 @@ class APMEOrchestrator:
 
                 # Try to link to the most impactful vulnerability in the path
                 vuln = self._find_representative_vuln(path, scan_history_id)
+                vuln_id = vuln.id if vuln else None
 
-                if vuln:
-                    # Update or create by vulnerability since vulnerability_id must be unique
-                    ImpactAssessment.objects.update_or_create(
-                        vulnerability=vuln,
-                        defaults={
-                            "scan_history": scan_history,
-                            "simulated_path": path_dict,
-                            "potential_attack_chain": {
-                                "apme_path_id": path.id,
-                                "risk": path.risk,
-                                "score": path.score,
-                                "steps": serialize_path(path, node_index)["steps"],
-                                "narrative": narrative,
-                                "metadata": self._build_path_metadata(path, node_index, scan_id=scan_history_id),
-                            },
-                            "potential_impact": narrative,
-                            "remediation_priority": self._risk_to_priority(path.risk),
-                            "is_ai_generated": False,
-                        },
-                    )
+                # Find if there is an existing assessment we should update
+                matched_assessment = None
+                if vuln_id is not None and vuln_id in existing_by_vuln:
+                    matched_assessment = existing_by_vuln[vuln_id]
                 else:
-                    # Vulnerability is None, unique constraint doesn't apply, lookup by path ID
-                    ImpactAssessment.objects.update_or_create(
-                        scan_history=scan_history,
-                        vulnerability=None,
-                        potential_attack_chain__apme_path_id=path.id,
-                        defaults={
-                            "simulated_path": path_dict,
-                            "potential_attack_chain": {
-                                "apme_path_id": path.id,
-                                "risk": path.risk,
-                                "score": path.score,
-                                "steps": serialize_path(path, node_index)["steps"],
-                                "narrative": narrative,
-                                "metadata": self._build_path_metadata(path, node_index, scan_id=scan_history_id),
-                            },
-                            "potential_impact": narrative,
-                            "remediation_priority": self._risk_to_priority(path.risk),
-                            "is_ai_generated": False,
-                        },
+                    path_fp = path.fingerprint
+                    if path_fp in existing_by_fingerprint:
+                        matched_assessment = existing_by_fingerprint[path_fp]
+
+                defaults = {
+                    "scan_history": scan_history,
+                    "simulated_path": path_dict,
+                    "potential_attack_chain": {
+                        "apme_path_id": path.id,
+                        "risk": path.risk,
+                        "score": path.score,
+                        "steps": serialize_path(path, node_index)["steps"],
+                        "narrative": narrative,
+                        "metadata": self._build_path_metadata(path, node_index, scan_id=scan_history_id),
+                    },
+                    "potential_impact": narrative,
+                    "remediation_priority": self._risk_to_priority(path.risk),
+                    "is_ai_generated": False,
+                }
+
+                if matched_assessment:
+                    # Update fields
+                    matched_assessment.vulnerability = vuln
+                    for key, val in defaults.items():
+                        setattr(matched_assessment, key, val)
+                    matched_assessment.save()
+                    logger.debug(f"APME: Updated existing path {path.id} with narrative.")
+                else:
+                    # Create new
+                    new_ea = ImpactAssessment.objects.create(
+                        vulnerability=vuln,
+                        **defaults
                     )
-                logger.debug(f"APME: Persisted path {path.id} with narrative.")
+                    # Add to caches to prevent duplicating within the same batch
+                    if vuln_id is not None:
+                        existing_by_vuln[vuln_id] = new_ea
+                    path_fp = path.fingerprint
+                    existing_by_fingerprint[path_fp] = new_ea
+                    logger.debug(f"APME: Created new path {path.id} with narrative.")
 
         except Exception as exc:
             logger.error(f"APME: Failed to persist paths: {exc}")
