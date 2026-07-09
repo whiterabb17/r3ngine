@@ -36,7 +36,9 @@ def build_vuln_context(scan, ignore_info=False):
     - unique_vulnerabilities: summary for report index table (both sources combined)
     - all_vulnerabilities_count: total count including vulners
     """
-    base_qs = Vulnerability.objects.filter(scan_history=scan, validation_status='verified')
+    base_qs = Vulnerability.objects.filter(scan_history=scan).exclude(
+        validation_status__in=['false_positive', 'accepted_risk', 'resolved']
+    )
     if ignore_info:
         base_qs = base_qs.exclude(severity=0)
 
@@ -180,13 +182,16 @@ def generate_report_task(report_id):
         ))
 
         # All-source queryset used for description template substitution and LLM context
+        _excluded_statuses = ['false_positive', 'accepted_risk', 'resolved']
         vulns = (
             Vulnerability.objects
-            .filter(scan_history=scan, validation_status='verified')
+            .filter(scan_history=scan)
+            .exclude(validation_status__in=_excluded_statuses)
             .order_by('-severity')
         ) if not is_ignore_info_vuln else (
             Vulnerability.objects
-            .filter(scan_history=scan, validation_status='verified')
+            .filter(scan_history=scan)
+            .exclude(validation_status__in=_excluded_statuses)
             .exclude(severity=0)
             .order_by('-severity')
         )
