@@ -145,8 +145,9 @@ def process_httpx_response(line, ctx={}, is_ran_from_subdomain_scan=False):
 	endpoint.is_redirect = is_redirect
 	endpoint.save()
 
-	# Sync Subdomain status attributes if this is the default endpoint
-	if endpoint.is_default and subdomain:
+	# Sync subdomain status whenever we have real data and the subdomain hasn't
+	# been probed yet, or this is the canonical endpoint.
+	if subdomain and (endpoint.is_default or not subdomain.http_status):
 		subdomain.http_status = http_status
 		subdomain.page_title = page_title
 		subdomain.content_length = content_length

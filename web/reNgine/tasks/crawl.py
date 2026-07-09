@@ -1145,8 +1145,9 @@ def http_crawl(
 				fields={'IPs': ips_str},
 				add_meta_info=False)
 
-		# Update subdomain status attributes if this is the default endpoint
-		if endpoint.is_default and subdomain:
+		# Update subdomain status: always update if subdomain has no real status yet,
+		# or if this is the canonical/default endpoint.
+		if subdomain and (endpoint.is_default or not subdomain.http_status):
 			subdomain.http_url = endpoint.http_url
 			subdomain.http_status = endpoint.http_status
 			subdomain.page_title = endpoint.page_title
@@ -1154,11 +1155,11 @@ def http_crawl(
 			subdomain.webserver = endpoint.webserver
 			subdomain.response_time = endpoint.response_time
 			subdomain.content_type = endpoint.content_type
-			
+
 			cnames = line.get('cnames', [])
 			if cnames:
 				subdomain.cname = ','.join(cnames)
-			
+
 			subdomain.is_cdn = cdn
 			if cdn:
 				subdomain.cdn_name = line.get('cdn_name')
