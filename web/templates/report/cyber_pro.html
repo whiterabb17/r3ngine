@@ -775,9 +775,9 @@
                     <p>{{ vulnerability.description|linebreaks }}</p>
                 </div>
                 {% if vulnerability.remediation %}
-                <div class="finding-section">
-                    <span class="section-label">Remediation</span>
-                    <div>{{ vulnerability.remediation|render_markdown }}</div>
+                <div class="finding-section" style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 4mm; margin-top: 5mm;">
+                    <span class="section-label" style="color: #15803d;">Remediation</span>
+                    <div style="font-size: 9pt;">{{ vulnerability.remediation|render_markdown }}</div>
                 </div>
                 {% endif %}
                 <div class="finding-section">
@@ -857,9 +857,9 @@
                 </div>
                 {% endif %}
                 {% if first_item.remediation %}
-                <div class="finding-section">
-                    <span class="section-label" style="color: #10b981; font-weight: bold;">Remediation</span>
-                    <div>{{ first_item.remediation|render_markdown }}</div>
+                <div class="finding-section" style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 4mm; margin-top: 5mm;">
+                    <span class="section-label" style="color: #15803d;">Remediation</span>
+                    <div style="font-size: 9pt;">{{ first_item.remediation|render_markdown }}</div>
                 </div>
                 {% endif %}
             </div>
@@ -904,9 +904,9 @@
                     <div class="meta-item"><b>Remediation Priority:</b> {{ path.remediation_priority }}</div>
                 </div>
 
-                <div class="finding-section">
-                    <span class="section-label">Impact Summary</span>
-                    <p>{{ path.potential_impact }}</p>
+                <div class="finding-section" style="background-color: #f8fafc; border-left: 4px solid #3b82f6; padding: 4mm; margin-top: 4mm;">
+                    <span class="section-label" style="color: #1d4ed8;">Impact Summary</span>
+                    <div style="font-size: 9pt;">{{ path.potential_impact|render_markdown }}</div>
                 </div>
 
                 {% if path.explanation %}
