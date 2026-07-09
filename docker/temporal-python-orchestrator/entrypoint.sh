@@ -1,8 +1,14 @@
 #!/bin/bash
-# Sync GF patterns from image into volume (overwrites stale patterns)
+# Sync GF patterns from bind-mount or staged image into volume
 echo "Syncing GF patterns..."
 mkdir -p /root/.gf
-cp -f /usr/src/gf-patterns/*.json /root/.gf/
+if [ -d "/usr/src/app/gf-patterns" ]; then
+  cp -f /usr/src/app/gf-patterns/*.json /root/.gf/
+elif [ -d "/usr/src/gf-patterns" ]; then
+  cp -f /usr/src/gf-patterns/*.json /root/.gf/
+else
+  echo "Warning: no GF patterns directory found!"
+fi
 echo "GF patterns synced: $(ls /root/.gf/*.json | wc -l) patterns installed"
 
 # Entrypoint for the Temporal Python Orchestrator container.
