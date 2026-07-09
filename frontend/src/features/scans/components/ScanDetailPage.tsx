@@ -752,7 +752,7 @@ const TIER_LABELS: Record<number, string> = {
   7: 'Post-Processing',
 };
 
-const TimelineItem: React.FC<{ activity: ScanActivity, onClick?: () => void, onRetry?: (activity: ScanActivity) => void, isTerminal?: boolean }> = ({ activity, onClick, onRetry, isTerminal }) => {
+const TimelineItem: React.FC<{ activity: ScanActivity, onClick?: () => void, onRetry?: (activity: ScanActivity) => void, isTerminal?: boolean, allowRetryAny?: boolean }> = ({ activity, onClick, onRetry, isTerminal, allowRetryAny }) => {
   const { theme, isLight, tokens } = useThemeTokens();
   const statusConfig: Record<string, { color: string, label: string }> = {
     'SUCCESS': { color: tokens.accent.success, label: 'Completed' },
@@ -837,7 +837,7 @@ const TimelineItem: React.FC<{ activity: ScanActivity, onClick?: () => void, onR
               • Click to view details <ChevronRight size={10} />
             </Typography>
           </Stack>
-          {isTerminal && activity.status === 'FAILED' && activity.name !== 'raw_scan_history' && onRetry && (
+          {isTerminal && (activity.status === 'FAILED' || allowRetryAny) && activity.name !== 'raw_scan_history' && onRetry && (
             <MuiTooltip title="Retry Task" placement="top">
               <IconButton 
                 size="small" 
@@ -1611,7 +1611,8 @@ export const ScanDetailPage = () => {
                         activity={activity}
                         onClick={() => handleTimelineItemClick(activity)}
                         onRetry={handleRetryTask}
-                        isTerminal={[0, 3].includes(data?.scan_info?.scan_status ?? -1)}
+                        isTerminal={[0, 2, 3].includes(data?.scan_info?.scan_status ?? -1)}
+                        allowRetryAny={data?.scan_info?.scan_status === 2}
                       />
                     ))}
                   </Box>
