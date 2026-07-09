@@ -93,6 +93,7 @@ import { DirectoriesTab } from './DirectoriesTab';
 import { EndpointsTab } from './EndpointsTab';
 import { ParametersTab } from './ParametersTab';
 import { TacticalPanel } from '../../../components/TacticalPanel';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { VulnerabilityTable } from '../../vulnerabilities/components/VulnerabilityTable';
 import { useGptVulnerabilityDetails } from '../../vulnerabilities/api';
 import { SecretLeaksTab } from './SecretLeaksTab';
@@ -1352,6 +1353,8 @@ export const ScanDetailPage = () => {
   const [startScanTargets, setStartScanTargets] = useState<{ ids: number[]; names: string[] } | null>(null);
   const [taskOverlayOpen, setTaskOverlayOpen] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<{ id: number; title: string } | null>(null);
+  const [retryConfirmOpen, setRetryConfirmOpen] = useState(false);
+  const [pendingRetryActivity, setPendingRetryActivity] = useState<ScanActivity | null>(null);
 
   const [selectedVulnForInfo, setSelectedVulnForInfo] = useState<any | null>(null);
   const [vulnInfoModalOpen, setVulnInfoModalOpen] = useState(false);
@@ -1379,9 +1382,8 @@ export const ScanDetailPage = () => {
   };
 
   const handleRetryTask = (activity: ScanActivity) => {
-    if (confirm(`Are you sure you want to retry ${activity.title}?`)) {
-      retryScanTaskMutation.mutate(Number(activity.id));
-    }
+    setPendingRetryActivity(activity);
+    setRetryConfirmOpen(true);
   };
 
   const groupedTimeline = useMemo(() => {
@@ -2417,6 +2419,23 @@ export const ScanDetailPage = () => {
           projectSlug={projectSlug}
         />
       )}
+
+      <ConfirmDialog
+        open={retryConfirmOpen}
+        onClose={() => { setRetryConfirmOpen(false); setPendingRetryActivity(null); }}
+        onConfirm={() => {
+          if (pendingRetryActivity) retryScanTaskMutation.mutate(Number(pendingRetryActivity.id));
+          setRetryConfirmOpen(false);
+          setPendingRetryActivity(null);
+        }}
+        title="Retry Task"
+        message={pendingRetryActivity ? `Re-run ${pendingRetryActivity.title}? A new proxy will be assigned and results will be merged into this scan.` : ''}
+        confirmText="RETRY"
+        cancelText="CANCEL"
+        isDestructive={false}
+        isLoading={retryScanTaskMutation.isPending}
+        type="info"
+      />
     </Box>
   );
 };
