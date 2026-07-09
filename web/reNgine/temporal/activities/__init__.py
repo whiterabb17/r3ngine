@@ -2045,7 +2045,7 @@ def send_scan_notification_activity(ctx: dict) -> bool:
     # a new row and completes it. Reconcile these orphans against their later SUCCESS
     # counterparts so the timeline shows only clean state.
     if status == SUCCESS_TASK:
-        from reNgine.definitions import RUNNING_TASK as _RUNNING
+        from reNgine.definitions import RUNNING_TASK as _RUNNING, ABORTED_TASK as _ABORTED
         success_row_ids = dict(
             ScanActivity.objects.filter(scan_of=scan, status=SUCCESS_TASK)
             .values_list('name', 'id')
@@ -2062,6 +2062,35 @@ def send_scan_notification_activity(ctx: dict) -> bool:
             activity.logger.warning(
                 "[SCAN_COMPLETE] Reconciled %d orphaned RUNNING rows to SUCCESS | scan_id=%s ids=%s",
                 len(orphan_ids), scan_id, orphan_ids,
+            )
+
+        # Mark any remaining RUNNING tasks as ABORTED — these are zombie tasks
+        # (e.g. subscan or plugin rows) that were still running when the scan
+        # completed. They never finished but the scan succeeded; ABORTED conveys
+        # "the scan ended before this task could complete" without marking the
+        # overall scan as failed.
+        zombie_ids = list(
+            ScanActivity.objects.filter(
+                scan_of=scan, status=_RUNNING, time_started__isnull=False
+            ).values_list('id', flat=True)
+        )
+        if zombie_ids:
+            ScanActivity.objects.filter(id__in=zombie_ids).update(status=_ABORTED)
+            activity.logger.warning(
+                "[SCAN_COMPLETE] Marked %d zombie RUNNING tasks as ABORTED | scan_id=%s ids=%s",
+                len(zombie_ids), scan_id, zombie_ids,
+            )
+
+        # Delete 'Scan Aborted' sentinel rows — empty-name placeholder entries
+        # written when a previous attempt or subscan was cancelled. They are noise
+        # on a successfully completed scan timeline.
+        deleted_count, _ = ScanActivity.objects.filter(
+            scan_of=scan, name='', title='Scan aborted'
+        ).delete()
+        if deleted_count:
+            activity.logger.warning(
+                "[SCAN_COMPLETE] Deleted %d 'Scan aborted' sentinel rows | scan_id=%s",
+                deleted_count, scan_id,
             )
 
     # Log scan summary stats
