@@ -1074,27 +1074,37 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
               ...getMenuPaperSx(isLight, theme, tokens),
               border: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : `${tokens.accent.primary}33`}`,
               color: 'text.primary',
+              minWidth: 0,
               '& .MuiMenuItem-root': {
-                fontSize: '12px',
-                fontWeight: 600,
-                fontFamily: 'Inter',
+                py: 0.5,
+                px: 1.5,
+                minHeight: 'unset',
                 '&:hover': { bgcolor: `${tokens.accent.primary}15` }
+              },
+              '& .MuiListItemText-primary': {
+                fontSize: '10px',
+                fontWeight: 700,
+                fontFamily: 'Inter',
+                letterSpacing: '0.05em',
+              },
+              '& .MuiListItemIcon-root': {
+                minWidth: 22,
               }
             }
           }
         }}
       >
         <MenuItem onClick={handleLaunchADAssessment} sx={{ color: tokens.accent.primary }}>
-          <ListItemIcon><Network size={16} color={tokens.accent.primary} /></ListItemIcon>
+          <ListItemIcon><Network size={12} color={tokens.accent.primary} /></ListItemIcon>
           <ListItemText primary="ASSESS IDENTITY INFRASTRUCTURE" />
         </MenuItem>
-        <Divider sx={{ my: 0.5, borderColor: 'divider' }} />
+        <Divider sx={{ my: 0.25, borderColor: 'divider' }} />
         <MenuItem onClick={() => handleToggleImportant(selectedId!)} sx={{ color: tokens.accent.warning }}>
-          <ListItemIcon><Shield size={16} color={tokens.accent.warning} /></ListItemIcon>
+          <ListItemIcon><Shield size={12} color={tokens.accent.warning} /></ListItemIcon>
           <ListItemText primary={targetSubdomain?.is_important ? "UNMARK IMPORTANT" : "MARK IMPORTANT"} />
         </MenuItem>
         <MenuItem onClick={() => handleDelete(selectedId!)} sx={{ color: tokens.accent.error }}>
-          <ListItemIcon><Trash2 size={16} color={tokens.accent.error} /></ListItemIcon>
+          <ListItemIcon><Trash2 size={12} color={tokens.accent.error} /></ListItemIcon>
           <ListItemText primary="DELETE ASSET" />
         </MenuItem>
       </Menu>
