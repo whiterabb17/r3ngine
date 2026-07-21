@@ -10,7 +10,7 @@
             size: A4;
             margin: 20mm;
             @bottom-left {
-                content: "{{ company_name }} — Confidential";
+                content: "{% if show_footer %}{{ footer_text }}{% else %}{{ company_name }} — Confidential{% endif %}";
                 font-family: 'Inter', sans-serif;
                 font-size: 8pt;
                 color: #64748b;
@@ -283,6 +283,9 @@
     <div class="border-accent accent-4"></div>
 
     <div class="content-box">
+        {% if company_logo %}
+        <img src="{{ company_logo }}" style="max-width:50mm; margin-bottom:10mm; display:block;" />
+        {% endif %}
         <div class="report-type-tag">Target Security Report</div>
         <p class="cover-report-title">Attack Surface<br><b>Intelligence</b></p>
 

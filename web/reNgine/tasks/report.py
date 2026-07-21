@@ -1062,9 +1062,33 @@ def generate_target_report_task(target_report_id: int) -> None:
             scan_ids=report_obj.selected_scan_ids,
             included_sections=report_obj.included_sections,
         )
-        context['company_name'] = 'r3ngine'
-        context['primary_color'] = '#0f172a'
-        context['secondary_color'] = '#f8fafc'
+        # Load report branding from VulnerabilityReportSetting (same pattern as generate_report_task)
+        primary_color = '#00f3ff'
+        secondary_color = '#0f172a'
+        vuln_report_query = VulnerabilityReportSetting.objects.all()
+        if vuln_report_query.exists():
+            report_setting = vuln_report_query[0]
+            context['company_name'] = report_setting.company_name
+            context['company_address'] = report_setting.company_address
+            context['company_email'] = report_setting.company_email
+            context['company_website'] = report_setting.company_website
+            context['show_rengine_banner'] = report_setting.show_rengine_banner
+            context['show_footer'] = report_setting.show_footer
+            context['footer_text'] = report_setting.footer_text
+            context['company_logo'] = report_setting.logo_url or ''
+            primary_color = report_setting.primary_color or primary_color
+            secondary_color = report_setting.secondary_color or secondary_color
+        else:
+            context['company_name'] = 'r3ngine'
+            context['company_address'] = ''
+            context['company_email'] = ''
+            context['company_website'] = ''
+            context['show_rengine_banner'] = True
+            context['show_footer'] = False
+            context['footer_text'] = ''
+            context['company_logo'] = ''
+        context['primary_color'] = primary_color
+        context['secondary_color'] = secondary_color
 
         logger.log_line("[TARGET_REPORT]", "RENDER", "rendering template")
         html_string = get_template('report/target_report.html').render(context)
