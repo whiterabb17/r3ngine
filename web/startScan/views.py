@@ -1172,3 +1172,65 @@ def get_report_status(request, id):
     }
     return JsonResponse(response)
 
+
+@has_permission_decorator(PERM_MODIFY_SCAN_REPORT, redirect_url=FOUR_OH_FOUR_URL)
+def create_target_report(request, domain_id):
+    raw_scan_ids = request.GET.get('scan_ids', '')
+    try:
+        scan_ids = [int(s.strip()) for s in raw_scan_ids.split(',') if s.strip()]
+    except ValueError:
+        return JsonResponse({'status': False, 'message': 'Invalid scan_ids format'}, status=400)
+
+    if len(scan_ids) < 2:
+        return JsonResponse({'status': False, 'message': 'At least 2 scan IDs are required'}, status=400)
+
+    from targetApp.models import Domain
+    domain = get_object_or_404(Domain, id=domain_id)
+
+    invalid = list(
+        ScanHistory.objects.filter(id__in=scan_ids).exclude(domain=domain).values_list('id', flat=True)
+    )
+    if invalid:
+        return JsonResponse(
+            {'status': False, 'message': 'Scan IDs %s do not belong to this target' % invalid},
+            status=400,
+        )
+
+    included_sections_raw = request.GET.get('included_sections', '')
+    included_sections = [s.strip() for s in included_sections_raw.split(',') if s.strip()]
+
+    from startScan.models import TargetReport
+    report_obj = TargetReport.objects.create(
+        domain=domain,
+        selected_scan_ids=scan_ids,
+        included_sections=included_sections,
+        comments=request.GET.get('comments', ''),
+        status=1,
+    )
+
+    from reNgine.tasks.report import generate_target_report_task
+    threading.Thread(
+        target=generate_target_report_task,
+        args=(report_obj.id,),
+        daemon=True,
+    ).start()
+
+    return JsonResponse({'status': True, 'report_id': report_obj.id})
+
+
+@has_permission_decorator(PERM_MODIFY_SCAN_REPORT, redirect_url=FOUR_OH_FOUR_URL)
+def get_target_report_status(request, report_id):
+    from startScan.models import TargetReport
+    report = get_object_or_404(TargetReport, id=report_id)
+    if report.status == 1 and report.created_at < timezone.now() - timedelta(minutes=30):
+        report.status = 0
+        report.error_message = 'Report generation timed out. The process may have been interrupted by a server restart.'
+        report.completed_at = timezone.now()
+        report.save()
+    return JsonResponse({
+        'status': report.status,
+        'error_message': report.error_message,
+        'report_url': report.report_file.url if report.report_file else None,
+        'completed_at': report.completed_at,
+    })
+

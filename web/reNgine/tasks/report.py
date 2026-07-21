@@ -1048,3 +1048,45 @@ def build_target_report_context(
         'employees': employees,
         'included_sections': included_sections,
     }
+
+
+def generate_target_report_task(target_report_id: int) -> None:
+    logger.log_line("[TARGET_REPORT]", "START", "beginning target report id=%s" % target_report_id)
+    report_obj = None
+    try:
+        from startScan.models import TargetReport
+        report_obj = TargetReport.objects.get(id=target_report_id)
+
+        context = build_target_report_context(
+            domain_id=report_obj.domain_id,
+            scan_ids=report_obj.selected_scan_ids,
+            included_sections=report_obj.included_sections,
+        )
+        context['company_name'] = 'r3ngine'
+        context['primary_color'] = '#0f172a'
+        context['secondary_color'] = '#f8fafc'
+
+        logger.log_line("[TARGET_REPORT]", "RENDER", "rendering template")
+        html_string = get_template('report/target_report.html').render(context)
+
+        logger.log_line("[TARGET_REPORT]", "PDF", "generating PDF")
+        pdf_bytes = HTML(string=html_string, url_fetcher=secure_url_fetcher).write_pdf()
+
+        file_name = 'target_report_%s.pdf' % target_report_id
+        report_obj.report_file.save(file_name, ContentFile(pdf_bytes), save=False)
+        report_obj.status = 2
+        report_obj.completed_at = timezone.now()
+        report_obj.save()
+
+        logger.log_line("[TARGET_REPORT]", "COMPLETE", "saved report_id=%s" % target_report_id)
+
+    except Exception as exc:
+        logger.log_line("[TARGET_REPORT]", "ERROR", format_exception_for_log(exc), level="error", exc_info=True)
+        if report_obj is not None:
+            report_obj.status = 0
+            report_obj.error_message = format_exception_for_log(exc)
+            report_obj.completed_at = timezone.now()
+            try:
+                report_obj.save()
+            except Exception:
+                pass
