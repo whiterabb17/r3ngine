@@ -45,12 +45,20 @@ class TargetReportViewTest(TestCase):
             start_scan_date=timezone.now(),
         )
 
+    def _post_create(self, domain_id, scan_ids, included_sections=''):
+        return self.client.post(
+            f'/scan/target/create_report/{domain_id}/',
+            data=json.dumps({'scan_ids': scan_ids, 'included_sections': included_sections}),
+            content_type='application/json',
+        )
+
     @patch('startScan.views.threading.Thread')
     def test_create_target_report_returns_report_id(self, mock_thread):
         mock_thread.return_value.start.return_value = None
-        response = self.client.get(
-            f'/scan/target/create_report/{self.domain.id}/',
-            {'scan_ids': f'{self.scan1.id},{self.scan2.id}', 'included_sections': 'subdomain_changes'},
+        response = self._post_create(
+            self.domain.id,
+            f'{self.scan1.id},{self.scan2.id}',
+            'subdomain_changes',
         )
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
@@ -59,10 +67,7 @@ class TargetReportViewTest(TestCase):
 
     @patch('startScan.views.threading.Thread')
     def test_create_target_report_rejects_single_scan(self, _):
-        response = self.client.get(
-            f'/scan/target/create_report/{self.domain.id}/',
-            {'scan_ids': str(self.scan1.id)},
-        )
+        response = self._post_create(self.domain.id, str(self.scan1.id))
         self.assertEqual(response.status_code, 400)
 
     @patch('startScan.views.threading.Thread')
@@ -83,10 +88,7 @@ class TargetReportViewTest(TestCase):
             scan_status=2,
             start_scan_date=timezone.now(),
         )
-        response = self.client.get(
-            f'/scan/target/create_report/{self.domain.id}/',
-            {'scan_ids': f'{self.scan1.id},{other_scan.id}'},
-        )
+        response = self._post_create(self.domain.id, f'{self.scan1.id},{other_scan.id}')
         self.assertEqual(response.status_code, 400)
 
     def test_get_status_running(self):

@@ -795,11 +795,20 @@ def build_target_report_context(
     total_unique = vh_all.values('group_key').distinct().count()
     resolved_count = vh_all.filter(is_remediated=True).values('group_key').distinct().count()
 
-    open_by_severity: dict = {}
-    for sev, label in [(4, 'critical'), (3, 'high'), (2, 'medium'), (1, 'low'), (0, 'info')]:
-        open_by_severity[label] = VulnerabilityHistory.objects.filter(
-            scan_history=latest_scan, is_remediated=False, vulnerability__severity=sev,
-        ).count()
+    _SEV_LABELS: dict = {4: 'critical', 3: 'high', 2: 'medium', 1: 'low', 0: 'info'}
+
+    # Single grouped query replaces 5 individual .count() calls
+    _open_sev_qs = (
+        VulnerabilityHistory.objects
+        .filter(scan_history=latest_scan, is_remediated=False)
+        .values('vulnerability__severity')
+        .annotate(cnt=Count('id'))
+    )
+    open_by_severity: dict = {lbl: 0 for lbl in _SEV_LABELS.values()}
+    for _r in _open_sev_qs:
+        _lbl = _SEV_LABELS.get(_r['vulnerability__severity'])
+        if _lbl:
+            open_by_severity[_lbl] = _r['cnt']
 
     prev_groups = set(VulnerabilityHistory.objects.filter(
         scan_history=prev_scan).values_list('group_key', flat=True))
@@ -814,13 +823,22 @@ def build_target_report_context(
         'new_in_latest': new_in_latest,
     }
 
+    # Single grouped query replaces 5×N individual .count() calls
+    _sev_trend_qs = (
+        VulnerabilityHistory.objects
+        .filter(scan_history_id__in=scan_ids, is_remediated=False)
+        .values('scan_history_id', 'vulnerability__severity')
+        .annotate(cnt=Count('id'))
+    )
+    _sev_by_scan: dict = {}
+    for _r in _sev_trend_qs:
+        _sev_by_scan.setdefault(_r['scan_history_id'], {})[_r['vulnerability__severity']] = _r['cnt']
     severity_trend = []
     for scan in selected_scans:
+        _counts = _sev_by_scan.get(scan.id, {})
         row: dict = {'scan_id': scan.id, 'date': scan.start_scan_date}
-        for sev, label in [(4, 'critical'), (3, 'high'), (2, 'medium'), (1, 'low'), (0, 'info')]:
-            row[label] = VulnerabilityHistory.objects.filter(
-                scan_history=scan, is_remediated=False, vulnerability__severity=sev,
-            ).count()
+        for sev, label in _SEV_LABELS.items():
+            row[label] = _counts.get(sev, 0)
         severity_trend.append(row)
 
     severity_trend_chart = generate_severity_trend_chart(severity_trend)
@@ -869,9 +887,10 @@ def build_target_report_context(
     vuln_timeline = []
     for group_key, vh_list in groups.items():
         vh_by_scan = {vh.scan_history_id: vh for vh in vh_list}
-        first_scan_id = min(vh.scan_history_id for vh in vh_list)
-        first_seen_scan = scan_map.get(first_scan_id)
+        # vh_list is ordered by start_scan_date (see queryset order_by above), so [0] is the earliest by date
         first_vh = vh_list[0]
+        first_scan_id = first_vh.scan_history_id
+        first_seen_scan = scan_map.get(first_scan_id)
         vuln = first_vh.vulnerability
 
         affected_hosts = sorted(set(

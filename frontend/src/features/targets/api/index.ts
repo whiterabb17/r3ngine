@@ -226,12 +226,17 @@ export const useCreateTargetReport = () => {
       scanIds: number[];
       includedSections: string[];
     }) => {
-      const qs = new URLSearchParams({
-        scan_ids: params.scanIds.join(','),
-        included_sections: params.includedSections.join(','),
-      });
-      const response = await fetch(`/scan/target/create_report/${params.domainId}/?${qs}`, {
+      const response = await fetch(`/scan/target/create_report/${params.domainId}/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+        },
         credentials: 'include',
+        body: JSON.stringify({
+          scan_ids: params.scanIds.join(','),
+          included_sections: params.includedSections.join(','),
+        }),
       });
       if (!response.ok) throw new Error('Failed to create target report');
       return response.json() as Promise<{ status: boolean; report_id: number }>;

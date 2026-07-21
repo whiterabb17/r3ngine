@@ -10,7 +10,7 @@ from weasyprint import HTML, CSS
 from datetime import datetime, timedelta
 from django.contrib import messages
 from django.db.models import Count, Case, When, IntegerField
-from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.template.loader import get_template
 from django.urls import reverse
@@ -1173,11 +1173,26 @@ def get_report_status(request, id):
     return JsonResponse(response)
 
 
+_TARGET_REPORT_VALID_SECTIONS = frozenset({
+    'subdomain_changes', 'attack_surface_trend', 'exposures', 'certificates',
+    'waf_info', 'endpoints', 'directories', 's3_buckets', 'employees',
+    'email_breaches', 'secret_findings',
+})
+
+
 @has_permission_decorator(PERM_MODIFY_SCAN_REPORT, redirect_url=FOUR_OH_FOUR_URL)
-def create_target_report(request, domain_id):
-    raw_scan_ids = request.GET.get('scan_ids', '')
+def create_target_report(request: HttpRequest, domain_id: int) -> JsonResponse:
+    if request.method != 'POST':
+        return JsonResponse({'status': False, 'message': 'Method not allowed'}, status=405)
+    import json as _json
     try:
-        scan_ids = [int(s.strip()) for s in raw_scan_ids.split(',') if s.strip()]
+        body: dict = _json.loads(request.body)
+    except (ValueError, TypeError):
+        body = {}
+
+    raw_scan_ids = body.get('scan_ids', '')
+    try:
+        scan_ids = [int(s.strip()) for s in str(raw_scan_ids).split(',') if s.strip()]
     except ValueError:
         return JsonResponse({'status': False, 'message': 'Invalid scan_ids format'}, status=400)
 
@@ -1196,15 +1211,18 @@ def create_target_report(request, domain_id):
             status=400,
         )
 
-    included_sections_raw = request.GET.get('included_sections', '')
-    included_sections = [s.strip() for s in included_sections_raw.split(',') if s.strip()]
+    included_sections_raw = body.get('included_sections', '')
+    included_sections = [
+        s.strip() for s in str(included_sections_raw).split(',')
+        if s.strip() in _TARGET_REPORT_VALID_SECTIONS
+    ]
 
     from startScan.models import TargetReport
     report_obj = TargetReport.objects.create(
         domain=domain,
         selected_scan_ids=scan_ids,
         included_sections=included_sections,
-        comments=request.GET.get('comments', ''),
+        comments=body.get('comments', ''),
         status=1,
     )
 
@@ -1219,7 +1237,7 @@ def create_target_report(request, domain_id):
 
 
 @has_permission_decorator(PERM_MODIFY_SCAN_REPORT, redirect_url=FOUR_OH_FOUR_URL)
-def get_target_report_status(request, report_id):
+def get_target_report_status(request: HttpRequest, report_id: int) -> JsonResponse:
     from startScan.models import TargetReport
     report = get_object_or_404(TargetReport, id=report_id)
     if report.status == 1 and report.created_at < timezone.now() - timedelta(minutes=30):
@@ -1227,9 +1245,14 @@ def get_target_report_status(request, report_id):
         report.error_message = 'Report generation timed out. The process may have been interrupted by a server restart.'
         report.completed_at = timezone.now()
         report.save()
+    # Sanitise error for client: expose safe timeout message, redact exception internals (Rule 8.1)
+    if report.status == 0:
+        client_error = report.error_message if (report.error_message and 'timed out' in report.error_message) else 'Report generation failed.'
+    else:
+        client_error = None
     return JsonResponse({
         'status': report.status,
-        'error_message': report.error_message,
+        'error_message': client_error,
         'report_url': report.report_file.url if report.report_file else None,
         'completed_at': report.completed_at,
     })

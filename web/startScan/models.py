@@ -1461,7 +1461,7 @@ class TargetReport(models.Model):
 		help_text='Section keys included in this report',
 	)
 	status = models.IntegerField(choices=STATUS_CHOICES, default=1)
-	report_type = models.CharField(max_length=50, default='full')
+	report_type = models.CharField(max_length=50, default='full', help_text='Reserved for future report variants (e.g. vulnerability-only).')
 	report_file = models.FileField(upload_to='target_reports/', null=True, blank=True)
 	error_message = models.TextField(null=True, blank=True)
 	comments = models.TextField(null=True, blank=True)
