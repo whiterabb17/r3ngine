@@ -1444,6 +1444,37 @@ class ScanReport(models.Model):
 		return f"Report for {self.scan_history.domain.name} ({self.report_type})"
 
 
+class TargetReport(models.Model):
+	STATUS_CHOICES = ((0, 'Failed'), (1, 'Running'), (2, 'Complete'))
+
+	domain = models.ForeignKey(
+		'targetApp.Domain', on_delete=models.CASCADE,
+		related_name='target_reports',
+	)
+	selected_scan_ids = ArrayField(
+		models.IntegerField(),
+		help_text='Ordered list of ScanHistory IDs included in this report',
+	)
+	included_sections = ArrayField(
+		models.CharField(max_length=100),
+		default=list,
+		help_text='Section keys included in this report',
+	)
+	status = models.IntegerField(choices=STATUS_CHOICES, default=1)
+	report_type = models.CharField(max_length=50, default='full')
+	report_file = models.FileField(upload_to='target_reports/', null=True, blank=True)
+	error_message = models.TextField(null=True, blank=True)
+	comments = models.TextField(null=True, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	completed_at = models.DateTimeField(null=True, blank=True)
+
+	class Meta:
+		verbose_name_plural = 'Target Reports'
+
+	def __str__(self) -> str:
+		return f'Target Report for {self.domain.name} ({self.report_type})'
+
+
 class DnsRecord(models.Model):
 	scan_history = models.ForeignKey(
 		ScanHistory, on_delete=models.CASCADE, related_name='dns_records'
