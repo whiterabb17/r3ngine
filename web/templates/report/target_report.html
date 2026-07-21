@@ -488,7 +488,7 @@
     </div>
     {% endif %}
 
-    <h3>Open Findings by Severity per Scan</h3>
+    <h3>Per-Scan Summary</h3>
     <table>
         <thead>
             <tr>
@@ -498,10 +498,14 @@
                 <th>Medium</th>
                 <th>Low</th>
                 <th>Info</th>
+                <th>New Findings</th>
+                <th>Resolved</th>
+                <th>Open Total</th>
             </tr>
         </thead>
         <tbody>
             {% for row in severity_trend %}
+            {% with tl=findings_timeline|list_item:forloop.counter0 %}
             <tr>
                 <td>{{ row.date|date:"d M Y" }}</td>
                 <td>{{ row.critical }}</td>
@@ -509,29 +513,11 @@
                 <td>{{ row.medium }}</td>
                 <td>{{ row.low }}</td>
                 <td>{{ row.info }}</td>
+                <td>{% if tl %}{{ tl.new_findings }}{% else %}—{% endif %}</td>
+                <td>{% if tl %}{{ tl.resolved }}{% else %}—{% endif %}</td>
+                <td>{% if tl %}{{ tl.open_total }}{% else %}—{% endif %}</td>
             </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <h3>New Findings &amp; Resolutions per Scan</h3>
-    <table>
-        <thead>
-            <tr>
-                <th>Scan Date</th>
-                <th>New Findings</th>
-                <th>Resolved</th>
-                <th>Open Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in findings_timeline %}
-            <tr>
-                <td>{{ row.date|date:"d M Y" }}</td>
-                <td>{{ row.new_findings }}</td>
-                <td>{{ row.resolved }}</td>
-                <td>{{ row.open_total }}</td>
-            </tr>
+            {% endwith %}
             {% endfor %}
         </tbody>
     </table>
