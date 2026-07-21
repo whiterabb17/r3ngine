@@ -16,13 +16,15 @@ from reNgine.llm import LLMReportGenerator
 from reNgine.charts import (
     generate_subdomain_chart_by_http_status,
     generate_vulnerability_chart_by_severity,
-    generate_attack_surface_map
+    generate_attack_surface_map,
+    generate_severity_trend_chart,
+    generate_findings_timeline_chart,
 )
 from reNgine.utils.graph import Neo4jManager
 from reNgine.utils.logger import get_module_logger, format_exception_for_log
 from reNgine.common_func import get_interesting_subdomains, clean_semgrep_check_id, categorize_secret_type
 from reNgine.stress.report_builder import StressReportBuilder
-from startScan.models import ScanHistory, Subdomain, Vulnerability, IpAddress, ScanReport, StressTestResult, Parameter, EmailBreach, CredResult, SecretLeak, EndPoint, DirectoryScan, DirectoryFile, S3Bucket, Waf, Technology, IdentityInfraDiscovery, APIIntelligenceProfile, Exposure, MetaFinderDocument, Dork, CertificateIntelligence, Employee
+from startScan.models import ScanHistory, Subdomain, Vulnerability, VulnerabilityHistory, IpAddress, ScanReport, StressTestResult, Parameter, EmailBreach, CredResult, SecretLeak, EndPoint, DirectoryScan, DirectoryFile, S3Bucket, Waf, Technology, IdentityInfraDiscovery, APIIntelligenceProfile, Exposure, MetaFinderDocument, Dork, CertificateIntelligence, Employee
 from scanEngine.models import VulnerabilityReportSetting
 
 logger = get_module_logger(__name__)
@@ -757,3 +759,292 @@ def generate_report_task(report_id):
         from django.db import close_old_connections
         close_old_connections()
         logger.log_line("[REPORT]", "CLEANUP", "database connections closed for report_id=%s" % report_id)
+
+
+def build_target_report_context(
+    domain_id: int,
+    scan_ids: list,
+    included_sections: list,
+    ignore_info: bool = False,
+) -> dict:
+    from collections import defaultdict
+    from django.db import models
+    from targetApp.models import Domain
+
+    if len(scan_ids) < 2:
+        raise ValueError("At least 2 scan IDs are required for a target report")
+
+    domain = Domain.objects.get(id=domain_id)
+    selected_scans = list(
+        ScanHistory.objects.filter(id__in=scan_ids, domain=domain)
+        .order_by('start_scan_date')
+    )
+    if len(selected_scans) < 2:
+        raise ValueError("At least 2 valid scans belonging to domain %s are required" % domain_id)
+
+    scan_map = {s.id: s for s in selected_scans}
+    date_range = (selected_scans[0].start_scan_date, selected_scans[-1].start_scan_date)
+
+    latest_scan = selected_scans[-1]
+    prev_scan = selected_scans[-2]
+
+    vh_all = VulnerabilityHistory.objects.filter(scan_history_id__in=scan_ids)
+    if ignore_info:
+        vh_all = vh_all.filter(vulnerability__severity__gt=0)
+
+    total_unique = vh_all.values('group_key').distinct().count()
+    resolved_count = vh_all.filter(is_remediated=True).values('group_key').distinct().count()
+
+    open_by_severity: dict = {}
+    for sev, label in [(4, 'critical'), (3, 'high'), (2, 'medium'), (1, 'low'), (0, 'info')]:
+        open_by_severity[label] = VulnerabilityHistory.objects.filter(
+            scan_history=latest_scan, is_remediated=False, vulnerability__severity=sev,
+        ).count()
+
+    prev_groups = set(VulnerabilityHistory.objects.filter(
+        scan_history=prev_scan).values_list('group_key', flat=True))
+    latest_groups = set(VulnerabilityHistory.objects.filter(
+        scan_history=latest_scan).values_list('group_key', flat=True))
+    new_in_latest = len(latest_groups - prev_groups)
+
+    exec_summary = {
+        'total_unique': total_unique,
+        'open_by_severity': open_by_severity,
+        'resolved_count': resolved_count,
+        'new_in_latest': new_in_latest,
+    }
+
+    severity_trend = []
+    for scan in selected_scans:
+        row: dict = {'scan_id': scan.id, 'date': scan.start_scan_date}
+        for sev, label in [(4, 'critical'), (3, 'high'), (2, 'medium'), (1, 'low'), (0, 'info')]:
+            row[label] = VulnerabilityHistory.objects.filter(
+                scan_history=scan, is_remediated=False, vulnerability__severity=sev,
+            ).count()
+        severity_trend.append(row)
+
+    severity_trend_chart = generate_severity_trend_chart(severity_trend)
+
+    findings_timeline = []
+    seen_groups: set = set()
+    for scan in selected_scans:
+        scan_vh_qs = VulnerabilityHistory.objects.filter(scan_history=scan)
+        if ignore_info:
+            scan_vh_qs = scan_vh_qs.filter(vulnerability__severity__gt=0)
+        scan_groups = set(scan_vh_qs.values_list('group_key', flat=True))
+        new_findings = len(scan_groups - seen_groups)
+        resolved = scan_vh_qs.filter(
+            models.Q(is_remediated=True) |
+            models.Q(vulnerability__validation_status='resolved')
+        ).count()
+        open_total = scan_vh_qs.exclude(
+            is_remediated=True,
+        ).exclude(
+            vulnerability__validation_status__in=['resolved', 'false_positive'],
+        ).count()
+        findings_timeline.append({
+            'scan': scan,
+            'date': scan.start_scan_date,
+            'new_findings': new_findings,
+            'resolved': resolved,
+            'open_total': open_total,
+        })
+        seen_groups |= scan_groups
+
+    findings_timeline_chart = generate_findings_timeline_chart(findings_timeline)
+
+    vh_qs = (
+        VulnerabilityHistory.objects
+        .filter(scan_history_id__in=scan_ids)
+        .select_related('vulnerability__subdomain', 'scan_history')
+        .order_by('group_key', 'scan_history__start_scan_date')
+    )
+    if ignore_info:
+        vh_qs = vh_qs.filter(vulnerability__severity__gt=0)
+
+    groups: dict = defaultdict(list)
+    for vh in vh_qs:
+        groups[vh.group_key].append(vh)
+
+    vuln_timeline = []
+    for group_key, vh_list in groups.items():
+        vh_by_scan = {vh.scan_history_id: vh for vh in vh_list}
+        first_scan_id = min(vh.scan_history_id for vh in vh_list)
+        first_seen_scan = scan_map.get(first_scan_id)
+        first_vh = vh_list[0]
+        vuln = first_vh.vulnerability
+
+        affected_hosts = sorted(set(
+            vh.vulnerability.subdomain.name
+            for vh in vh_list
+            if vh.vulnerability.subdomain
+        ))
+
+        scan_statuses = []
+        remediation_date = None
+        remediation_type = None
+
+        for scan in selected_scans:
+            if scan.id not in vh_by_scan:
+                if first_seen_scan and scan.start_scan_date < first_seen_scan.start_scan_date:
+                    status, label = 'not_yet_found', '—'
+                else:
+                    status, label = 'not_detected', 'Not Detected'
+            else:
+                vh = vh_by_scan[scan.id]
+                vstat = vh.vulnerability.validation_status
+                if vstat == 'resolved':
+                    status, label = 'resolved', 'Resolved (Manual)'
+                    remediation_type = remediation_type or 'manual'
+                    remediation_date = remediation_date or vh.last_seen
+                elif vstat == 'false_positive':
+                    status, label = 'false_positive', 'False Positive'
+                elif vstat == 'accepted_risk':
+                    status, label = 'accepted_risk', 'Accepted Risk'
+                elif vh.is_remediated:
+                    status, label = 'resolved', 'Resolved (Auto)'
+                    remediation_type = remediation_type or 'auto'
+                    remediation_date = remediation_date or vh.remediation_date
+                else:
+                    status, label = 'open', 'Open'
+
+            scan_statuses.append({'scan': scan, 'status': status, 'label': label})
+
+        vuln_timeline.append({
+            'name': vuln.name,
+            'severity': vuln.severity,
+            'affected_hosts': affected_hosts,
+            'first_seen_scan': first_seen_scan,
+            'first_seen_date': first_vh.first_seen,
+            'scan_statuses': scan_statuses,
+            'remediation_date': remediation_date,
+            'remediation_type': remediation_type,
+        })
+
+    vuln_timeline.sort(key=lambda x: (-x['severity'], x['first_seen_date']))
+
+    subdomain_delta = None
+    if 'subdomain_changes' in included_sections:
+        subdomain_delta = []
+        for i in range(len(selected_scans) - 1):
+            scan_a, scan_b = selected_scans[i], selected_scans[i + 1]
+            names_a = set(Subdomain.objects.filter(scan_history=scan_a).values_list('name', flat=True))
+            names_b = set(Subdomain.objects.filter(scan_history=scan_b).values_list('name', flat=True))
+            subdomain_delta.append({
+                'from_scan': scan_a,
+                'to_scan': scan_b,
+                'added': sorted(names_b - names_a),
+                'removed': sorted(names_a - names_b),
+            })
+
+    attack_surface_trend = None
+    if 'attack_surface_trend' in included_sections:
+        attack_surface_trend = [
+            {
+                'scan': scan,
+                'date': scan.start_scan_date,
+                'endpoint_count': EndPoint.objects.filter(scan_history=scan).count(),
+                'subdomain_count': Subdomain.objects.filter(scan_history=scan).count(),
+            }
+            for scan in selected_scans
+        ]
+
+    email_breaches = None
+    if 'email_breaches' in included_sections:
+        seen: dict = {}
+        for scan in selected_scans:
+            for breach in EmailBreach.objects.filter(scan_history=scan).order_by('email_address', 'breach_name'):
+                key = (breach.email_address, breach.breach_name, breach.source)
+                if key not in seen:
+                    seen[key] = {'breach': breach, 'first_seen_scan': scan}
+        email_breaches = list(seen.values())
+
+    secret_findings = None
+    if 'secret_findings' in included_sections:
+        secret_findings = []
+        for scan in selected_scans:
+            leaks = list(SecretLeak.objects.filter(scan_history=scan).select_related('subdomain'))
+            if leaks:
+                secret_findings.append({'scan': scan, 'leaks': leaks})
+
+    exposures = None
+    if 'exposures' in included_sections:
+        exposures = []
+        for scan in selected_scans:
+            items = list(Exposure.objects.filter(scan_history=scan).select_related('subdomain', 'endpoint'))
+            if items:
+                exposures.append({'scan': scan, 'items': items})
+
+    certificates = None
+    if 'certificates' in included_sections:
+        certificates = []
+        for scan in selected_scans:
+            items = list(CertificateIntelligence.objects.filter(scan_history=scan))
+            if items:
+                certificates.append({'scan': scan, 'items': items})
+
+    waf_info = None
+    if 'waf_info' in included_sections:
+        waf_info = []
+        for scan in selected_scans:
+            subdomains = Subdomain.objects.filter(scan_history=scan)
+            items = list(Waf.objects.filter(waf__in=subdomains).distinct())
+            if items:
+                waf_info.append({'scan': scan, 'items': items})
+
+    endpoints = None
+    if 'endpoints' in included_sections:
+        endpoints = []
+        for scan in selected_scans:
+            items = list(EndPoint.objects.filter(scan_history=scan).order_by('http_url')[:500])
+            if items:
+                endpoints.append({'scan': scan, 'items': items})
+
+    directories = None
+    if 'directories' in included_sections:
+        directories = []
+        for scan in selected_scans:
+            scan_subdomains = Subdomain.objects.filter(scan_history=scan)
+            items = list(DirectoryScan.objects.filter(directories__in=scan_subdomains).distinct())
+            if items:
+                directories.append({'scan': scan, 'items': items})
+
+    s3_buckets = None
+    if 's3_buckets' in included_sections:
+        s3_buckets = []
+        for scan in selected_scans:
+            items = list(scan.buckets.all())
+            if items:
+                s3_buckets.append({'scan': scan, 'items': items})
+
+    employees = None
+    if 'employees' in included_sections:
+        employees = []
+        for scan in selected_scans:
+            items = list(scan.employees.all())
+            if items:
+                employees.append({'scan': scan, 'items': items})
+
+    return {
+        'domain': domain,
+        'selected_scans': selected_scans,
+        'date_range': date_range,
+        'exec_summary': exec_summary,
+        'severity_trend': severity_trend,
+        'severity_trend_chart': severity_trend_chart,
+        'findings_timeline': findings_timeline,
+        'findings_timeline_chart': findings_timeline_chart,
+        'vuln_timeline': vuln_timeline,
+        'subdomain_delta': subdomain_delta,
+        'attack_surface_trend': attack_surface_trend,
+        'email_breaches': email_breaches,
+        'secret_findings': secret_findings,
+        'exposures': exposures,
+        'certificates': certificates,
+        'waf_info': waf_info,
+        'endpoints': endpoints,
+        'directories': directories,
+        's3_buckets': s3_buckets,
+        'employees': employees,
+        'included_sections': included_sections,
+    }
