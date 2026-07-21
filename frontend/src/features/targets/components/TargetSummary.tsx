@@ -81,6 +81,7 @@ import { AttackSurfaceTab } from '../../scans/components/AttackSurfaceTab';
 import PluginCardSlot from '../../plugins/components/PluginCardSlot';
 import { AiExportModal } from '../../scans/components/AiExportModal';
 import { ExposureList } from '../../exposures/components/ExposureList';
+import { TargetReportModal } from './TargetReportModal';
 
 
 const SeverityBadge: React.FC<{ severity: number }> = ({ severity }) => {
@@ -134,6 +135,7 @@ export const TargetSummary = () => {
   const [subdomainInitialAlive, setSubdomainInitialAlive] = useState(false);
   const [endpointsInitialAlive, setEndpointsInitialAlive] = useState(false);
   const [aiExportModalOpen, setAiExportModalOpen] = useState(false);
+  const [targetReportModalOpen, setTargetReportModalOpen] = useState(false);
   const [startScanTargets, setStartScanTargets] = useState<{ ids: number[]; names: string[] } | null>(null);
   const stopScanMutation = useStopScan(projectSlug || 'default');
   const theme = useTheme();
@@ -821,7 +823,25 @@ export const TargetSummary = () => {
         {tabs[activeTab]?.label === 'PARAMETERS' && <ParametersTab targetId={parseInt(targetId || '0')} scanId={latestScanId} />}
         {tabs[activeTab]?.label === 'VULNERABILITIES' && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+              <Button
+                variant="contained"
+                startIcon={<FileText size={16} />}
+                onClick={() => setTargetReportModalOpen(true)}
+                sx={{
+                  bgcolor: alpha(cGreen, 0.12),
+                  color: cGreen,
+                  border: `1px solid ${alpha(cGreen, 0.4)}`,
+                  fontFamily: 'var(--r3-heading-font)',
+                  fontSize: '0.68rem',
+                  fontWeight: 900,
+                  letterSpacing: 1,
+                  px: 2,
+                  '&:hover': { bgcolor: alpha(cGreen, 0.22) },
+                }}
+              >
+                TARGET REPORT
+              </Button>
               <Button
                 variant="contained"
                 startIcon={<BarChartIcon size={16} />}
@@ -862,6 +882,12 @@ export const TargetSummary = () => {
                 targetName={data?.target_info?.name ?? ''}
               />
             )}
+            <TargetReportModal
+              open={targetReportModalOpen}
+              onClose={() => setTargetReportModalOpen(false)}
+              domainId={parseInt(targetId || '0')}
+              domainName={data?.target_info?.name ?? ''}
+            />
           </Box>
         )}
         {tabs[activeTab]?.label === 'EXPOSURES' && (
