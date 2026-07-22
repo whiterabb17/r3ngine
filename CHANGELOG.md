@@ -1,5 +1,22 @@
 # Changelog
 
+### [v3.7.4] - 2026-07-22
+
+#### Added
+
+- **Target Report Generation**:
+  - A new **TARGET REPORT** button in the Vulnerabilities tab of the Target Summary page lets users generate a multi-scan PDF intelligence report covering the entire history of a target — not just a single scan.
+  - Select 2 or more completed scans to include. The report aggregates data across all selected scans and produces a cross-scan view of how the attack surface and vulnerability posture have changed over time.
+  - **Cross-Scan Vulnerability Tracking Timeline**: Every unique vulnerability (keyed by host + name + type) is tracked across each selected scan with status columns — `Open`, `Resolved (Auto)`, `Resolved (Manual)`, `False Positive`, `Accepted Risk`, `Not Detected`, and `—` (not yet active). First-seen and remediation dates are captured automatically.
+  - **Severity Trend Chart**: A stacked bar chart showing counts of Critical / High / Medium / Low / Info findings per scan, rendered as an embedded base64 PNG in the PDF.
+  - **Findings Timeline Chart**: A multi-line chart tracking new findings, resolved findings, and open total across the scan timeline.
+  - **Executive Summary**: Risk boxes by severity (Critical / High / Medium / Low / Info), plus total unique findings, resolved count, and new-in-latest-scan count.
+  - **11 Optional Report Sections** (user-selectable before generation): Subdomain Changes, Attack Surface Trend, Exposure Intelligence, Certificates, WAF Detection, Endpoints, Directories, S3 Buckets, Employees, Email Breaches, Secret Leaks.
+  - **Cyber Pro PDF Template**: Dark-themed cover page with corner marks, border accents, and footer strip; full table of contents with WeasyPrint page-reference links; all sections follow the existing `cyber_pro.html` design language.
+  - **Report Branding**: All colours (primary accent, cover background), company name, logo, footer text, and show/hide settings are loaded from the configured `VulnerabilityReportSetting` — same source as scan reports.
+  - Report generation runs asynchronously in a background thread. A polling modal in the UI updates status every 3 seconds and presents a **DOWNLOAD REPORT** button on completion.
+  - Allowlist-validated optional sections, cross-target scan-ownership enforcement, and generic client-facing error messages (exception details remain server-side) — consistent with the existing security posture.
+
 ### [v3.7.3] - 2026-07-09
 
 #### Added
