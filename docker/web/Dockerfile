@@ -128,9 +128,9 @@ RUN git clone --depth 1 https://github.com/vigolium/vigolium /build/vigolium
 
 WORKDIR /build/vigolium
 
-# Build embedded binaries (vigolium-audit via bun, jsscan via bun)
+# Build embedded binaries (vigolium-audit via bun, jstangle via bun)
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-    make ensure-audit && make ensure-jsscan
+    make ensure-audit && make ensure-jstangle
 
 # Compile vigolium binary
 RUN --mount=type=cache,target=/go/pkg/mod \

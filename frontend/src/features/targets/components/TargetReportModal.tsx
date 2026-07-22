@@ -126,10 +126,10 @@ export const TargetReportModal: React.FC<TargetReportModalProps> = ({
       } else {
         throw new Error('Invalid server response');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsGenerating(false);
       setHasError(true);
-      setStatusMessage(err?.message ?? 'Failed to start report generation.');
+      setStatusMessage(err instanceof Error ? err.message : 'Failed to start report generation.');
     }
   };
 

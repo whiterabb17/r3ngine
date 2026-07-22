@@ -1,6 +1,7 @@
 import logging
 import os
 import json
+import hashlib
 import re
 import subprocess
 import requests
@@ -863,14 +864,38 @@ def web_api_discovery(self, urls=[], ctx={}, description=None):
 	# Sourcemapper
 	if 'sourcemapper' in uses_tools and urls:
 		from reNgine.tasks.parsers import parse_sourcemapper_result
-		logger.warning('[WEB_API] Sourcemapper: running on %d URLs', len(urls))
-		out_dir = f"{results_dir}/sourcemapper_out"
-		os.makedirs(out_dir, exist_ok=True)
+		logger.warning('[WEB_API] Sourcemapper: evaluating %d candidate URLs', len(urls))
+		sourcemap_base_dir = f"{results_dir}/sourcemapper_out"
+		os.makedirs(sourcemap_base_dir, exist_ok=True)
+
+		valid_sourcemap_targets = set()
 		for url in urls:
-			cmd = f"sourcemapper -output {out_dir} -url {url}"
+			parsed = urlparse(url)
+			path_lower = parsed.path.lower()
+			if path_lower.endswith('.map'):
+				valid_sourcemap_targets.add(url)
+			elif path_lower.endswith('.js') or '.js' in path_lower:
+				base_path = url.split('?')[0]
+				map_candidate = f"{base_path}.map"
+				if map_candidate not in valid_sourcemap_targets:
+					try:
+						res = requests.get(map_candidate, timeout=3, stream=True, headers={'User-Agent': 'Mozilla/5.0'})
+						if res.status_code == 200:
+							peek = res.raw.read(512, decode_content=True).decode('utf-8', errors='ignore').strip()
+							if peek.startswith('{') and ('"version"' in peek or '"sources"' in peek or '"mappings"' in peek):
+								valid_sourcemap_targets.add(map_candidate)
+					except Exception:
+						pass
+
+		logger.warning('[WEB_API] Sourcemapper: identified %d valid sourcemap target(s)', len(valid_sourcemap_targets))
+		for sm_url in valid_sourcemap_targets:
+			url_hash = hashlib.md5(sm_url.encode('utf-8')).hexdigest()[:10]
+			url_out_dir = f"{sourcemap_base_dir}/{url_hash}"
+			os.makedirs(url_out_dir, exist_ok=True)
+			cmd = f"sourcemapper -output {url_out_dir} -url {sm_url}"
 			run_command(cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
-			if os.path.exists(out_dir) and os.listdir(out_dir):
-				vuln_data = parse_sourcemapper_result(url, out_dir)
+			if os.path.exists(url_out_dir) and os.listdir(url_out_dir):
+				vuln_data = parse_sourcemapper_result(sm_url, url_out_dir)
 				save_vulnerability(vuln_data, self.scan, self.domain)
 		logger.warning('[WEB_API] Sourcemapper: finished')
 
@@ -890,15 +915,36 @@ def web_api_discovery(self, urls=[], ctx={}, description=None):
 	# grpcurl
 	if 'grpcurl' in uses_tools and urls:
 		from reNgine.tasks.parsers import parse_grpcurl_result
-		logger.warning('[WEB_API] grpcurl: running on %d URLs', len(urls))
+		logger.warning('[WEB_API] grpcurl: evaluating %d URLs', len(urls))
+
+		target_map = {}
 		for url in urls:
 			parsed = urlparse(url)
-			target = f"{parsed.hostname}:{parsed.port or (443 if parsed.scheme == 'https' else 80)}"
-			cmd = f"grpcurl -plaintext {target} list"
+			if not parsed.hostname:
+				continue
+			port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+			target = f"{parsed.hostname}:{port}"
+			if target not in target_map:
+				target_map[target] = url
+
+		logger.warning('[WEB_API] grpcurl: probing %d unique target host(s)', len(target_map))
+		failed_targets = set()
+
+		for target, representative_url in target_map.items():
+			if target in failed_targets:
+				continue
+
+			cmd = f"grpcurl -connect-timeout 3 -plaintext {target} list"
 			return_code, output = run_command(cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
+
 			if return_code == 0 and output.strip() and "Failed to dial" not in output:
-				vuln_data = parse_grpcurl_result(url, output)
+				vuln_data = parse_grpcurl_result(representative_url, output)
 				save_vulnerability(vuln_data, self.scan, self.domain)
+			else:
+				if "Failed to dial" in output or "context deadline exceeded" in output or return_code != 0:
+					logger.warning('[WEB_API] grpcurl: target %s dial/connection failed — skipping further attempts', target)
+					failed_targets.add(target)
+
 		logger.warning('[WEB_API] grpcurl: finished')
 
 	# Julius (LLM scanner)
