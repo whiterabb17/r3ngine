@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { operations } from '@/types/api';
-import type { VulnerabilityResponse } from '../types';
+import type { Vulnerability, VulnerabilityResponse } from '../types';
 
 
 export interface VulnerabilityFilters {
@@ -55,6 +55,30 @@ export const useVulnerabilities = (projectSlug: string, page = 1, searchQuery = 
     },
 
     enabled: !!projectSlug,
+  });
+};
+
+export const useVulnerability = (id: number | null, projectSlug?: string) => {
+  return useQuery<Vulnerability>({
+    queryKey: ['vulnerability', id, projectSlug],
+    queryFn: async () => {
+      if (!id) throw new Error('No vulnerability ID provided');
+      const url = new URL(`${window.location.origin}/api/listVulnerability/${id}/`);
+      url.searchParams.append('format', 'json');
+      if (projectSlug) {
+        url.searchParams.append('project', projectSlug);
+      }
+
+      const response = await fetch(url.toString(), {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch vulnerability details');
+      }
+      return await response.json() as Vulnerability;
+    },
+    enabled: !!id,
   });
 };
 
