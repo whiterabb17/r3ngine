@@ -355,7 +355,7 @@ class MasterScanWorkflow:
                     workflow.execute_activity(
                         "RunVigoliumHarvestActivity",
                         ctx,
-                        start_to_close_timeout=timedelta(hours=3),
+                        start_to_close_timeout=timedelta(hours=6),
                         heartbeat_timeout=timedelta(minutes=10),
                         retry_policy=_RETRY_LONG_SCAN,
                         task_queue="python-orchestrator-queue"
@@ -422,7 +422,7 @@ class MasterScanWorkflow:
                     workflow.execute_activity(
                         "RunVigoliumDiscoveryActivity",
                         ctx,
-                        start_to_close_timeout=timedelta(hours=4),
+                        start_to_close_timeout=timedelta(hours=8),
                         heartbeat_timeout=timedelta(minutes=10),
                         retry_policy=_RETRY_LONG_SCAN,
                         task_queue="python-orchestrator-queue"
@@ -667,8 +667,8 @@ class MasterScanWorkflow:
                     workflow.execute_activity(
                         "RunVigoliumAnalysisActivity",
                         ctx,
-                        start_to_close_timeout=timedelta(hours=8),
-                        heartbeat_timeout=timedelta(minutes=5),
+                        start_to_close_timeout=timedelta(hours=12),
+                        heartbeat_timeout=timedelta(minutes=10),
                         retry_policy=_RETRY_LONG_SCAN,
                         task_queue="python-orchestrator-queue"
                     )
@@ -1241,8 +1241,8 @@ class NucleiPlannerWorkflow:
                 await workflow.execute_activity(
                     "RunVigoliumScanActivity",
                     ctx,
-                    start_to_close_timeout=timedelta(hours=6),
-                    heartbeat_timeout=timedelta(minutes=5),
+                    start_to_close_timeout=timedelta(hours=12),
+                    heartbeat_timeout=timedelta(minutes=10),
                     retry_policy=_RETRY_LONG_SCAN,
                     task_queue="python-orchestrator-queue"
                 )
@@ -2475,17 +2475,19 @@ class GoExecutorTaskWorkflow:
                 - command (list): The command split into parts (binary + arguments)
                 - scan_id (int): Associated Scan History ID
                 - command_id (int): Database record Command ID to log stdout/stderr to
+                - timeout_seconds (int, optional): Custom execution timeout in seconds
                 
         Returns:
             dict: The output result of the subprocess execution, including stdout, stderr,
                   and exit code.
         """
+        timeout_sec = input_data.get("timeout_seconds") or 43200
         # Execute the activity on the dedicated go-executor-queue task queue
         return await workflow.execute_activity(
             "RunToolSubprocessActivity",
             input_data,
-            start_to_close_timeout=timedelta(hours=2),
-            heartbeat_timeout=timedelta(minutes=5),
+            start_to_close_timeout=timedelta(seconds=timeout_sec),
+            heartbeat_timeout=timedelta(minutes=10),
             task_queue="go-executor-queue"
         )
 
@@ -3537,11 +3539,11 @@ class SingleTaskRetryWorkflow:
                 await workflow.execute_activity("RunPortScanActivity", ctx, start_to_close_timeout=timedelta(hours=6), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("ParseEnumerationResultsActivity", ctx, start_to_close_timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
             elif task_name == "vigolium_harvest":
-                await workflow.execute_activity("RunVigoliumHarvestActivity", ctx, start_to_close_timeout=timedelta(hours=3), heartbeat_timeout=timedelta(minutes=10), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
+                await workflow.execute_activity("RunVigoliumHarvestActivity", ctx, start_to_close_timeout=timedelta(hours=6), heartbeat_timeout=timedelta(minutes=10), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
             elif task_name == "vigolium_discovery":
-                await workflow.execute_activity("RunVigoliumDiscoveryActivity", ctx, start_to_close_timeout=timedelta(hours=4), heartbeat_timeout=timedelta(minutes=10), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
+                await workflow.execute_activity("RunVigoliumDiscoveryActivity", ctx, start_to_close_timeout=timedelta(hours=8), heartbeat_timeout=timedelta(minutes=10), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
             elif task_name == "vigolium_scan":
-                await workflow.execute_activity("RunVigoliumScanActivity", ctx, start_to_close_timeout=timedelta(hours=4), heartbeat_timeout=timedelta(minutes=10), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
+                await workflow.execute_activity("RunVigoliumScanActivity", ctx, start_to_close_timeout=timedelta(hours=12), heartbeat_timeout=timedelta(minutes=10), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
             elif task_name == "fetch_url":
                 await workflow.execute_activity("RunFetchURLActivity", ctx, start_to_close_timeout=timedelta(hours=8), heartbeat_timeout=timedelta(minutes=15), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("RunHTTPCrawlBridgeActivity", ctx, start_to_close_timeout=timedelta(hours=3), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
@@ -3562,7 +3564,7 @@ class SingleTaskRetryWorkflow:
                 await workflow.execute_activity("RunSecretScanningActivity", ctx, start_to_close_timeout=timedelta(hours=2), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("ParseAnalysisResultsActivity", ctx, start_to_close_timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
             elif task_name == "vigolium_analysis":
-                await workflow.execute_activity("RunVigoliumAnalysisActivity", ctx, start_to_close_timeout=timedelta(hours=8), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
+                await workflow.execute_activity("RunVigoliumAnalysisActivity", ctx, start_to_close_timeout=timedelta(hours=12), heartbeat_timeout=timedelta(minutes=10), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("ParseAnalysisResultsActivity", ctx, start_to_close_timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
             elif task_name == "vulnerability_scan":
                 await workflow.execute_child_workflow("NucleiPlannerWorkflow", ctx, id=f"{workflow.info().workflow_id}-nuclei", task_queue="python-orchestrator-queue", execution_timeout=timedelta(days=7), run_timeout=timedelta(days=7), retry_policy=RetryPolicy(maximum_attempts=1))

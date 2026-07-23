@@ -198,7 +198,7 @@ class DiscoveryWorkflow:
             workflow.execute_activity(
                 "RunVigoliumHarvestActivity",
                 ctx,
-                start_to_close_timeout=timedelta(hours=2),
+                start_to_close_timeout=timedelta(hours=6),
                 retry_policy=_long_retry,
                 task_queue=_TASK_QUEUE,
             )

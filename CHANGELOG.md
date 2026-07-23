@@ -1,5 +1,22 @@
 # Changelog
 
+### [v3.7.6] - 2026-07-23
+
+#### Fixed
+
+- **OpenAI `max_completion_tokens` Fallback**:
+  - Updated LLM generator and connection testing logic to support automatic fallback from `max_tokens` to `max_completion_tokens` whenever OpenAI returns HTTP 400 (`Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.`).
+  - Ensures compatibility across newer OpenAI models (such as `o1`, `o3-mini`, etc.) for all LLM calls and connectivity validations.
+
+### [v3.7.5] - 2026-07-23
+
+#### Fixed
+
+- **Vigolium Scans Temporal Timeout Fix**:
+  - Resolved `Activity complete after timeout` error restarts on `go-executor-queue` by making `GoExecutorTaskWorkflow`'s `start_to_close_timeout` dynamic and configurable via `input_data` (defaulting to 12 hours).
+  - Forwarded execution timeouts (`timeout_seconds`) from `stream_command` and `run_command` to `GoExecutorTaskWorkflow`.
+  - Updated default task command timeouts to 12 hours (43,200s) and aligned Vigolium activity timeouts (`RunVigoliumScanActivity`, `RunVigoliumAnalysisActivity`, `RunVigoliumDiscoveryActivity`, `RunVigoliumHarvestActivity`) across `MasterScanWorkflow`, `SingleTaskRetryWorkflow`, and `assessment_workflow.py`.
+
 ### [v3.7.4] - 2026-07-22
 
 #### Added

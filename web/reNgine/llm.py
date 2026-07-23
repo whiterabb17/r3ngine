@@ -55,8 +55,14 @@ class LLMBaseGenerator:
             self.provider = self.config.provider
             self.api_key = self.config.api_key
 
-    def _call_llm(self, system_message, user_message):
-        """Unified method to call the configured LLM provider with PII protection."""
+    def _call_llm(self, system_message, user_message, max_tokens=None):
+        """Unified method to call the configured LLM provider with PII protection.
+
+        Args:
+            system_message (str): System prompt context for the LLM.
+            user_message (str): User query/input prompt.
+            max_tokens (int, optional): Maximum token limit for output generation.
+        """
         # Anonymize inputs
         masked_system = self.gate.anonymize(system_message)
         masked_user = self.gate.anonymize(user_message)
@@ -65,7 +71,7 @@ class LLMBaseGenerator:
         if self.provider == OLLAMA:
             response = self._call_ollama(masked_system, masked_user)
         elif self.provider == OPENAI:
-            response = self._call_openai(masked_system, masked_user)
+            response = self._call_openai(masked_system, masked_user, max_tokens=max_tokens)
         elif self.provider == ANTHROPIC:
             response = self._call_anthropic(masked_system, masked_user)
         elif self.provider == GEMINI:
@@ -86,7 +92,21 @@ class LLMBaseGenerator:
             self.logger.error(f"Ollama Error: {str(e)}")
             return f"Error: {str(e)}"
 
-    def _call_openai(self, system_message, user_message):
+    def _call_openai(self, system_message, user_message, max_tokens=None):
+        """Execute chat completion request to OpenAI API.
+
+        Handles model parameter compatibility by automatically falling back from
+        'max_tokens' to 'max_completion_tokens' if the target model returns HTTP 400
+        indicating 'max_tokens' is unsupported.
+
+        Args:
+            system_message (str): System prompt for instruction context.
+            user_message (str): Input prompt for LLM response generation.
+            max_tokens (int, optional): Maximum token generation limit.
+
+        Returns:
+            str: Generated text response or error string.
+        """
         if not self.api_key:
             return "Error: OpenAI API Key not set"
         try:
@@ -101,12 +121,31 @@ class LLMBaseGenerator:
                     {"role": "user", "content": user_message}
                 ]
             }
+            if max_tokens is not None:
+                data["max_tokens"] = max_tokens
+
             response = requests.post(
                 "https://api.openai.com/v1/chat/completions",
                 headers=headers,
                 json=data,
                 timeout=60
             )
+
+            # Fallback to max_completion_tokens if OpenAI model rejects max_tokens parameter
+            if response.status_code == 400 and ("max_tokens" in response.text and "max_completion_tokens" in response.text):
+                self.logger.warning(
+                    f"OpenAI model '{self.model_name}' rejected 'max_tokens'. Retrying with 'max_completion_tokens'."
+                )
+                if "max_tokens" in data:
+                    token_val = data.pop("max_tokens")
+                    data["max_completion_tokens"] = token_val
+                response = requests.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers=headers,
+                    json=data,
+                    timeout=60
+                )
+
             response.raise_for_status()
             return response.json()['choices'][0]['message']['content']
         except Exception as e:

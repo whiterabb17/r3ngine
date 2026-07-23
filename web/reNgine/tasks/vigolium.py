@@ -169,7 +169,7 @@ def _run_vigolium_phase(task_instance, cmd, output_file, phase_label, save_http_
     def run_cmd_and_check(current_cmd):
         logger.info(f"Running Vigolium {phase_label}")
         logger.warning(f"Command: {current_cmd}")
-        for _ in stream_command(current_cmd, scan_id=task_instance.scan_id, activity_id=task_instance.activity_id):
+        for _ in stream_command(current_cmd, scan_id=task_instance.scan_id, activity_id=task_instance.activity_id, timeout=43200):
             pass
 
         # No output file means vigolium crashed or produced nothing — treat as proxy failure.
