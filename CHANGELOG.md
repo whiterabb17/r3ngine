@@ -1,6 +1,6 @@
 # Changelog
 
-### [v3.7.7] - 2026-07-24
+### [v3.7.4] - 2026-07-24
 
 #### Enhanced
 
@@ -9,24 +9,22 @@
   - Updated Vigolium task routines (`vigolium_scan`, `vigolium_analysis`, and `fetch_url` spidering) to support and pass `--spider-max-time` (`75m` default) CLI flags.
   - Added `spider_max_time` configuration to `web/reNgine/definitions.py`, `default_yaml_config.yaml`, and `full_yaml_config.yaml`.
 
-### [v3.7.6] - 2026-07-23
-
 #### Fixed
+
+- **Vigolium Smart Retry — Phase-Split & Heuristic Fix**:
+  - Fixed a false-positive proxy-bypass retry in `_run_vigolium_phase`: when Nuclei hits its internal 30-minute `KnownIssueScan` phase deadline it is killed before flushing the `scan` summary record's `total_requests` field, causing the heuristic to incorrectly conclude the proxy had blocked all traffic and restart the entire vigolium pipeline from scratch.
+  - Added `_has_records(output_file)` helper that inspects the JSONL output for any `finding`, `http_record`, or `scan` entries. If records exist, the run is now treated as a partial success and the proxy-bypass retry is suppressed — preserving all findings already written to disk.
+  - The proxy-retry file-erasure logic now also gates on `_has_records`: a non-empty output file is no longer deleted before the no-proxy retry.
+  - Split `vigolium_scan` (Tier 6) into two independent `_run_vigolium_phase` calls: **Phase A** (`--only spidering,discovery`) and **Phase B** (`--only known-issue-scan,dynamic-assessment`), each writing to its own JSONL file. A proxy failure or timeout in Phase B (KnownIssueScan) now triggers an independent Phase B retry without touching Phase A's completed work.
 
 - **OpenAI `max_completion_tokens` Fallback**:
   - Updated LLM generator and connection testing logic to support automatic fallback from `max_tokens` to `max_completion_tokens` whenever OpenAI returns HTTP 400 (`Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.`).
   - Ensures compatibility across newer OpenAI models (such as `o1`, `o3-mini`, etc.) for all LLM calls and connectivity validations.
 
-### [v3.7.5] - 2026-07-23
-
-#### Fixed
-
 - **Vigolium Scans Temporal Timeout Fix**:
   - Resolved `Activity complete after timeout` error restarts on `go-executor-queue` by making `GoExecutorTaskWorkflow`'s `start_to_close_timeout` dynamic and configurable via `input_data` (defaulting to 12 hours).
   - Forwarded execution timeouts (`timeout_seconds`) from `stream_command` and `run_command` to `GoExecutorTaskWorkflow`.
   - Updated default task command timeouts to 12 hours (43,200s) and aligned Vigolium activity timeouts (`RunVigoliumScanActivity`, `RunVigoliumAnalysisActivity`, `RunVigoliumDiscoveryActivity`, `RunVigoliumHarvestActivity`) across `MasterScanWorkflow`, `SingleTaskRetryWorkflow`, and `assessment_workflow.py`.
-
-### [v3.7.4] - 2026-07-22
 
 #### Added
 

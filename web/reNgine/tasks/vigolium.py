@@ -63,6 +63,23 @@ def _iter_jsonl(output_file):
                 logger.warning(f"vigolium: skipping non-JSON line: {line[:80]}")
 
 
+def _has_records(output_file) -> bool:
+    """Return True if the output file contains any finding, http_record, or scan entries.
+
+    Used to distinguish between a genuine proxy block (zero output) and a tool that
+    completed partially — e.g. KnownIssueScan where Nuclei hit its internal timeout
+    and was curtailed before flushing the scan-summary record, but still wrote
+    hundreds of findings to disk.  In that case the proxy is innocent and retrying
+    the entire command would discard all valid work already done.
+    """
+    if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
+        return False
+    for record in _iter_jsonl(output_file):
+        if record.get('type') in ('finding', 'http_record', 'scan'):
+            return True
+    return False
+
+
 def parse_vigolium_finding(task_instance, finding_data, subdomain):
     """Save a single vigolium finding record to the Vulnerability model.
 
@@ -178,19 +195,34 @@ def _run_vigolium_phase(task_instance, cmd, output_file, phase_label, save_http_
             logger.warning(f"Vigolium {phase_label} produced no output file.")
             return False
 
-        # Look for the scan-summary record; if total_requests == 0 the proxy blocked all traffic.
+        # Look for the scan-summary record; if total_requests > 0 the proxy was fine.
         with open(output_file, 'r') as f:
             for line in f:
                 try:
                     record = json.loads(line)
                     if record.get('type') == 'scan':
-                        if record.get('data', {}).get('total_requests', 0) == 0:
-                            return False
-                        return True
+                        total_req = record.get('data', {}).get('total_requests', 0)
+                        if total_req > 0:
+                            return True
+                        # total_requests == 0 in the summary — fall through to record check
+                        # before concluding proxy failure (Nuclei deadline may have prevented
+                        # the summary from being flushed correctly).
+                        break
                 except Exception:
                     pass
 
-        # No scan-summary record found — output may be partial; treat as proxy failure.
+        # No valid scan-summary (or total_requests == 0).  Before blaming the proxy,
+        # check whether the file already contains real findings from phases that ran
+        # successfully.  KnownIssueScan's Nuclei sub-runner can be curtailed at its
+        # internal deadline and still emit findings — the proxy was not the cause.
+        if _has_records(output_file):
+            logger.info(
+                f"Vigolium {phase_label}: scan-summary absent or shows 0 requests but "
+                f"{output_file} contains records — treating as partial success, "
+                f"proxy retry suppressed."
+            )
+            return True
+
         return False
 
     success = False
@@ -198,11 +230,17 @@ def _run_vigolium_phase(task_instance, cmd, output_file, phase_label, save_http_
         proxy_cmd = f"{cmd} --proxy {proxy}"
         success = run_cmd_and_check(proxy_cmd)
         if not success:
-            logger.warning(f"Vigolium {phase_label} failed or made 0 requests using proxy {proxy}. Retrying without proxy...")
-            # Remove output file so the retry starts fresh
-            if os.path.exists(output_file):
+            logger.warning(
+                f"Vigolium {phase_label} failed or made 0 requests using proxy {proxy}. "
+                f"Retrying without proxy..."
+            )
+            # Only erase the output file before the no-proxy retry if it is genuinely
+            # empty.  If records exist from phases that completed before the proxy
+            # started blocking, preserve them — the retry will overwrite the file
+            # anyway (vigolium appends), so deleting here risks losing valid data.
+            if os.path.exists(output_file) and not _has_records(output_file):
                 os.remove(output_file)
-            
+
     if not success:
         run_cmd_and_check(cmd)
 
@@ -308,15 +346,12 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
         for url in target_urls:
             f.write(f"{url}\n")
 
-    output_file = f"{results_dir}/findings.jsonl"
-
-    cmd = (
+    # Shared base command — no --only and no -o yet; added per phase below.
+    base_cmd = (
         f"cat {targets_file} | vigolium scan"
         f" --stateless"
         f" --format jsonl"
         f" --verbose"
-        f" -o {output_file}"
-        # f" --only known-issue-scan,dynamic-assessment"
         f" -c {concurrency}"
         f" -r {rate_limit}"
         f" --timeout {timeout}"
@@ -327,12 +362,38 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
     )
 
     if modules:
-        cmd += f" -m {','.join(modules)}"
-
+        base_cmd += f" -m {','.join(modules)}"
 
     proxy = get_random_proxy()
 
-    _run_vigolium_phase(self, cmd, output_file, "Vulnerability Scan", save_http_records=False, proxy=proxy)
+    # --- Phase A: Spidering + Discovery ---
+    # Crawls and actively probes all targets to build the URL graph.  Runs first
+    # so that any spidering-discovered endpoints are available for Phase B.
+    # ExternalHarvest is excluded — vigolium skips it in --stateless mode anyway
+    # (it requires an active database session to ingest passive sources).
+    output_file_discovery = f"{results_dir}/findings_discovery.jsonl"
+    cmd_a = base_cmd + f" --only spidering,discovery -o {output_file_discovery}"
+    _run_vigolium_phase(
+        self, cmd_a, output_file_discovery,
+        "Scan/Discovery (spidering+discovery)",
+        save_http_records=False,
+        proxy=proxy,
+    )
+
+    # --- Phase B: KnownIssueScan + DynamicAssessment ---
+    # Runs the Nuclei-based template scanner and the dynamic interaction engine
+    # against the full target list.  Kept as a separate _run_vigolium_phase call
+    # so that a KnownIssueScan Nuclei timeout (which clears total_requests in the
+    # scan-summary) only triggers a Phase B proxy-retry, never a Phase A restart.
+    output_file_vuln = f"{results_dir}/findings_vuln.jsonl"
+    cmd_b = base_cmd + f" --only known-issue-scan,dynamic-assessment -o {output_file_vuln}"
+    _run_vigolium_phase(
+        self, cmd_b, output_file_vuln,
+        "Scan/Vulnerability (known-issue-scan+dynamic-assessment)",
+        save_http_records=False,
+        proxy=proxy,
+    )
+
     return "Vigolium scan completed"
 
 
