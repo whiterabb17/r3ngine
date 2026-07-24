@@ -24,6 +24,7 @@ from reNgine.definitions import (
     VIGOLIUM_MODULES,
     VIGOLIUM_RATE_LIMIT,
     VIGOLIUM_SEVERITY_FILTER,
+    VIGOLIUM_SPIDER_MAX_TIME,
     VIGOLIUM_STRATEGY,
     VIGOLIUM_TIMEOUT,
     VULNERABILITY_SCAN,
@@ -275,6 +276,7 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
     concurrency = vig_config.get(VIGOLIUM_CONCURRENCY, 50)
     rate_limit = vig_config.get(VIGOLIUM_RATE_LIMIT, 100)
     timeout = _ensure_duration(vig_config.get(VIGOLIUM_TIMEOUT, '300s'))
+    spider_max_time = _ensure_duration(vig_config.get(VIGOLIUM_SPIDER_MAX_TIME, '75m'))
     modules = vig_config.get(VIGOLIUM_MODULES, [])
     severity_filter = vig_config.get(VIGOLIUM_SEVERITY_FILTER, [])
 
@@ -318,6 +320,7 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
         f" -c {concurrency}"
         f" -r {rate_limit}"
         f" --timeout {timeout}"
+        f" --spider-max-time {spider_max_time}"
         f" --strategy {strategy}"
         f" --skip-dependency-check"
         f" --omit-response"
@@ -479,6 +482,7 @@ def vigolium_analysis(self, ctx={}, description=None):
     concurrency = analysis_config.get(VIGOLIUM_CONCURRENCY, 20)
     rate_limit = analysis_config.get(VIGOLIUM_RATE_LIMIT, 50)
     timeout = _ensure_duration(analysis_config.get(VIGOLIUM_TIMEOUT, '10s'))
+    spider_max_time = _ensure_duration(analysis_config.get(VIGOLIUM_SPIDER_MAX_TIME, '75m'))
 
     if self.subscan and self.subdomain:
         subdomains = list(Subdomain.objects.filter(pk=self.subdomain.id))
@@ -508,6 +512,7 @@ def vigolium_analysis(self, ctx={}, description=None):
         f" -c {concurrency}"
         f" -r {rate_limit}"
         f" --timeout {timeout}"
+        f" --spider-max-time {spider_max_time}"
         f" --strategy {strategy}"
         f" --skip-dependency-check"
         f" --omit-response"

@@ -258,6 +258,7 @@ VIGOLIUM_STRATEGY = 'strategy'
 VIGOLIUM_CONCURRENCY = 'concurrency'
 VIGOLIUM_RATE_LIMIT = 'rate_limit'
 VIGOLIUM_TIMEOUT = 'timeout'
+VIGOLIUM_SPIDER_MAX_TIME = 'spider_max_time'
 VIGOLIUM_MODULES = 'modules'
 VIGOLIUM_SEVERITY_FILTER = 'severity_filter'
 
@@ -267,6 +268,7 @@ VIGOLIUM_DEFAULT_CONFIG = {
     'concurrency': 50,
     'rate_limit': 100,
     'timeout': '15s',
+    'spider_max_time': '75m',
 }
 
 # Tier 1 — passive ingestion harvest (works with root domain only, no subdomains needed)
@@ -293,6 +295,7 @@ VIGOLIUM_DEFAULT_ANALYSIS_CONFIG = {
     'concurrency': 20,
     'rate_limit': 50,
     'timeout': '10s',
+    'spider_max_time': '75m',
 }
 
 # Tier 3 — spidering within fetch_url against fetched URL set
@@ -301,6 +304,7 @@ VIGOLIUM_DEFAULT_SPIDER_CONFIG = {
     'concurrency': 30,
     'rate_limit': 80,
     'timeout': '20s',
+    'spider_max_time': '75m',
 }
 
 RUN_VIGOLIUM_AUDIT = 'run_vigolium_audit'

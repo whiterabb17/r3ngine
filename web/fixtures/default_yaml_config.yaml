@@ -138,6 +138,7 @@ vulnerability_scan: {
     'concurrency': 50,
     'rate_limit': 100,
     'timeout': '15s',
+    'spider_max_time': '75m',
     # 'modules': [],                # Restrict to specific Vigolium modules (empty = all)
     # 'severity_filter': []         # known-issue-scan severities to include (empty = all)
   }
@@ -220,7 +221,8 @@ vigolium_analysis: {
   'strategy': 'balanced',           # Options: fast, balanced, thorough
   'concurrency': 20,
   'rate_limit': 50,
-  'timeout': '10s'
+  'timeout': '10s',
+  'spider_max_time': '75m'
 }
 
 vigolium_audit: {

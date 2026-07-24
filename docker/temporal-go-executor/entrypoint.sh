@@ -159,6 +159,7 @@ vigolium config set known_issue_scan.severities "critical,high,medium,low,info" 
 vigolium config set dynamic-assessment.max_feedback_rounds=3 || true
 vigolium config set known_issue_scan.enrich_targets=true || true
 vigolium config set discovery.enrich_targets=true || true
+vigolium config set spidering.max_duration "75m" || true
 vigolium update
 vigolium doctor --fix
 

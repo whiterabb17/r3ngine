@@ -159,6 +159,7 @@ def fetch_url(self, urls=[], ctx={}, description=None):
 		vig_concurrency = vig_spider_config.get(VIGOLIUM_CONCURRENCY, 30)
 		vig_rate_limit = vig_spider_config.get(VIGOLIUM_RATE_LIMIT, 80)
 		vig_timeout = _ensure_vigolium_duration(vig_spider_config.get(VIGOLIUM_TIMEOUT, '20s'))
+		vig_spider_max_time = _ensure_vigolium_duration(vig_spider_config.get(VIGOLIUM_SPIDER_MAX_TIME, '75m'))
 		vig_strategy = vig_spider_config.get(VIGOLIUM_STRATEGY, 'balanced')
 
 		vig_cmd = (
@@ -171,6 +172,7 @@ def fetch_url(self, urls=[], ctx={}, description=None):
 			f" -c {vig_concurrency}"
 			f" -r {vig_rate_limit}"
 			f" --timeout {vig_timeout}"
+			f" --spider-max-time {vig_spider_max_time}"
 			f" --strategy {vig_strategy}"
 			f" --skip-dependency-check"
 		)

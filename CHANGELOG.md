@@ -1,5 +1,14 @@
 # Changelog
 
+### [v3.7.7] - 2026-07-24
+
+#### Enhanced
+
+- **Vigolium Spidering Phase Max Time Limit**:
+  - Configured container-wide Vigolium `spidering.max_duration` setting to `75m` in Docker entrypoints (`temporal-go-executor` and `temporal-python-orchestrator`).
+  - Updated Vigolium task routines (`vigolium_scan`, `vigolium_analysis`, and `fetch_url` spidering) to support and pass `--spider-max-time` (`75m` default) CLI flags.
+  - Added `spider_max_time` configuration to `web/reNgine/definitions.py`, `default_yaml_config.yaml`, and `full_yaml_config.yaml`.
+
 ### [v3.7.6] - 2026-07-23
 
 #### Fixed
