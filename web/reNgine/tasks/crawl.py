@@ -156,16 +156,20 @@ def fetch_url(self, urls=[], ctx={}, description=None):
 		vigolium_urls_file = f'{self.results_dir}/urls_vigolium.txt'
 
 		vig_spider_config = config.get('vigolium_spider', {})
+		vuln_vig_config = config.get('vulnerability_scan', {}).get('vigolium', {})
 		vig_concurrency = vig_spider_config.get(VIGOLIUM_CONCURRENCY, 30)
 		vig_rate_limit = vig_spider_config.get(VIGOLIUM_RATE_LIMIT, 80)
 		vig_timeout = _ensure_vigolium_duration(vig_spider_config.get(VIGOLIUM_TIMEOUT, '20s'))
 		vig_spider_max_time = _ensure_vigolium_duration(vig_spider_config.get(VIGOLIUM_SPIDER_MAX_TIME, '75m'))
 		vig_strategy = vig_spider_config.get(VIGOLIUM_STRATEGY, 'balanced')
+		vig_scope_origin = vig_spider_config.get(VIGOLIUM_SCOPE_ORIGIN, vuln_vig_config.get(VIGOLIUM_SCOPE_ORIGIN, 'balanced'))
+		vig_skip_spidering = vig_spider_config.get(VIGOLIUM_SKIP_SPIDERING, vuln_vig_config.get(VIGOLIUM_SKIP_SPIDERING, False))
 
+		phases = "ingestion,discovery" if vig_skip_spidering else "ingestion,spidering,discovery"
 		vig_cmd = (
 			f"vigolium scan"
 			f" -T {input_path}"
-			f" --only ingestion,discovery"
+			f" --only {phases}"
 			f" --stateless"
 			f" --format jsonl"
 			f" -o {vigolium_jsonl}"
@@ -174,8 +178,11 @@ def fetch_url(self, urls=[], ctx={}, description=None):
 			f" --timeout {vig_timeout}"
 			f" --spider-max-time {vig_spider_max_time}"
 			f" --strategy {vig_strategy}"
+			f" --scope-origin {vig_scope_origin}"
 			f" --skip-dependency-check"
 		)
+		if vig_skip_spidering:
+			vig_cmd += " --skip spidering"
 		proxy = get_random_proxy()
 		if proxy:
 			vig_cmd += f" --proxy {proxy}"
