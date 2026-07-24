@@ -261,6 +261,10 @@ VIGOLIUM_TIMEOUT = 'timeout'
 VIGOLIUM_SPIDER_MAX_TIME = 'spider_max_time'
 VIGOLIUM_MODULES = 'modules'
 VIGOLIUM_SEVERITY_FILTER = 'severity_filter'
+VIGOLIUM_RUN_PHASE_A = 'run_phase_a'     # Phase A: spidering + discovery
+VIGOLIUM_RUN_PHASE_B = 'run_phase_b'     # Phase B: known-issue-scan + dynamic-assessment
+VIGOLIUM_SCOPE_ORIGIN = 'scope_origin'   # Host scope strictness: all, relaxed, balanced, strict
+VIGOLIUM_SKIP_SPIDERING = 'skip_spidering'  # Remove spidering from Phase A (runs discovery only)
 
 VIGOLIUM_DEFAULT_CONFIG = {
     'run_vigolium': True,
@@ -268,7 +272,11 @@ VIGOLIUM_DEFAULT_CONFIG = {
     'concurrency': 50,
     'rate_limit': 100,
     'timeout': '15s',
-    'spider_max_time': '75m',
+    'spider_max_time': '20m',
+    'run_phase_a': True,   # Phase A: spidering + discovery
+    'run_phase_b': True,   # Phase B: known-issue-scan + dynamic-assessment
+    'scope_origin': 'balanced',  # Host scope strictness: all, relaxed, balanced, strict
+    'skip_spidering': False,      # When True, spidering is removed from Phase A (discovery only)
 }
 
 # Tier 1 — passive ingestion harvest (works with root domain only, no subdomains needed)

@@ -179,7 +179,7 @@ function serialiseConfigToYaml(config: EngineConfig): string {
     }
     if (c.run_nuclei) s.nuclei = { use_nuclei_config: c.nuclei.use_nuclei_config, severities: c.nuclei.severities, ...(c.nuclei.tags.length ? { tags: c.nuclei.tags } : {}), ...(c.nuclei.templates.length ? { templates: c.nuclei.templates } : {}), ...(c.nuclei.custom_templates.length ? { custom_templates: c.nuclei.custom_templates } : {}) };
     s.cpanel_scanner = { run_cpanel2shell: c.cpanel_scanner.run_cpanel2shell, cpanel_user_wordlist: c.cpanel_scanner.cpanel_user_wordlist, proxy_type: c.cpanel_scanner.proxy_type };
-    if (c.run_vigolium) s.vigolium = { strategy: c.vigolium.strategy, concurrency: c.vigolium.concurrency, rate_limit: c.vigolium.rate_limit, timeout: c.vigolium.timeout };
+    if (c.run_vigolium) s.vigolium = { strategy: c.vigolium.strategy, concurrency: c.vigolium.concurrency, rate_limit: c.vigolium.rate_limit, timeout: c.vigolium.timeout, run_phase_a: c.vigolium.run_phase_a, run_phase_b: c.vigolium.run_phase_b, scope_origin: c.vigolium.scope_origin, skip_spidering: c.vigolium.skip_spidering };
     writeSection('vulnerability_scan', s);
   }
 
@@ -434,6 +434,10 @@ function parseYamlToConfig(yamlStr: string): EngineConfig {
           concurrency: vig.concurrency ?? 50,
           rate_limit: vig.rate_limit ?? 100,
           timeout: vig.timeout ?? '15s',
+          run_phase_a: vig.run_phase_a ?? true,
+          run_phase_b: vig.run_phase_b ?? true,
+          scope_origin: (vig.scope_origin as 'all' | 'relaxed' | 'balanced' | 'strict') ?? 'balanced',
+          skip_spidering: vig.skip_spidering ?? false,
         },
       };
     }, def.vulnerability_scan.config) as EngineConfig['vulnerability_scan'],

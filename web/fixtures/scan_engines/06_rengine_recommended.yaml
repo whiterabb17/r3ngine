@@ -69,6 +69,10 @@
           concurrency: 50
           rate_limit: 100
           timeout: 15s
+          run_phase_a: true
+          run_phase_b: true
+          scope_origin: balanced
+          skip_spidering: false
       vigolium_discovery:
         run_vigolium_discovery: true
         strategy: balanced

@@ -244,6 +244,10 @@
           concurrency: 30
           rate_limit: 100
           timeout: 600s
+          run_phase_a: true
+          run_phase_b: true
+          scope_origin: balanced
+          skip_spidering: false
         cpanel_scanner:
           run_cpanel2shell: true
           cpanel_user_wordlist: /usr/src/app/wordlist/cpanel_users.txt

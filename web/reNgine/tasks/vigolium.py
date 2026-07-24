@@ -23,7 +23,11 @@ from reNgine.definitions import (
     VIGOLIUM_HARVEST,
     VIGOLIUM_MODULES,
     VIGOLIUM_RATE_LIMIT,
+    VIGOLIUM_RUN_PHASE_A,
+    VIGOLIUM_RUN_PHASE_B,
+    VIGOLIUM_SCOPE_ORIGIN,
     VIGOLIUM_SEVERITY_FILTER,
+    VIGOLIUM_SKIP_SPIDERING,
     VIGOLIUM_SPIDER_MAX_TIME,
     VIGOLIUM_STRATEGY,
     VIGOLIUM_TIMEOUT,
@@ -317,6 +321,15 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
     spider_max_time = _ensure_duration(vig_config.get(VIGOLIUM_SPIDER_MAX_TIME, '20m'))
     modules = vig_config.get(VIGOLIUM_MODULES, [])
     severity_filter = vig_config.get(VIGOLIUM_SEVERITY_FILTER, [])
+    # Phase toggles — both default True so existing behaviour is unchanged
+    run_phase_a = vig_config.get(VIGOLIUM_RUN_PHASE_A, True)
+    run_phase_b = vig_config.get(VIGOLIUM_RUN_PHASE_B, True)
+    scope_origin = vig_config.get(VIGOLIUM_SCOPE_ORIGIN, 'balanced')
+    skip_spidering = vig_config.get(VIGOLIUM_SKIP_SPIDERING, False)
+
+    if not run_phase_a and not run_phase_b:
+        logger.info("Vigolium scan: both Phase A and Phase B are disabled. Skipping.")
+        return "Vigolium scan skipped (all phases disabled)"
 
     if urls:
         target_urls = urls
@@ -357,12 +370,16 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
         f" --timeout {timeout}"
         f" --spider-max-time {spider_max_time}"
         f" --strategy {strategy}"
+        f" --scope-origin {scope_origin}"
         f" --skip-dependency-check"
         f" --omit-response"
     )
 
     if modules:
         base_cmd += f" -m {','.join(modules)}"
+
+    if skip_spidering:
+        base_cmd += " --skip spidering"
 
     proxy = get_random_proxy()
 
@@ -371,28 +388,36 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
     # so that any spidering-discovered endpoints are available for Phase B.
     # ExternalHarvest is excluded — vigolium skips it in --stateless mode anyway
     # (it requires an active database session to ingest passive sources).
-    output_file_discovery = f"{results_dir}/findings_discovery.jsonl"
-    cmd_a = base_cmd + f" --only spidering,discovery -o {output_file_discovery}"
-    _run_vigolium_phase(
-        self, cmd_a, output_file_discovery,
-        "Scan/Discovery (spidering+discovery)",
-        save_http_records=False,
-        proxy=proxy,
-    )
+    # When skip_spidering is True, --skip spidering is already set on base_cmd,
+    # so only the discovery probe runs (no browser crawl).
+    if run_phase_a:
+        output_file_discovery = f"{results_dir}/findings_discovery.jsonl"
+        cmd_a = base_cmd + f" --only spidering,discovery -o {output_file_discovery}"
+        _run_vigolium_phase(
+            self, cmd_a, output_file_discovery,
+            "Scan/Discovery (spidering+discovery)",
+            save_http_records=False,
+            proxy=proxy,
+        )
+    else:
+        logger.info("Vigolium Phase A (spidering+discovery) skipped by configuration.")
 
     # --- Phase B: KnownIssueScan + DynamicAssessment ---
     # Runs the Nuclei-based template scanner and the dynamic interaction engine
     # against the full target list.  Kept as a separate _run_vigolium_phase call
     # so that a KnownIssueScan Nuclei timeout (which clears total_requests in the
     # scan-summary) only triggers a Phase B proxy-retry, never a Phase A restart.
-    output_file_vuln = f"{results_dir}/findings_vuln.jsonl"
-    cmd_b = base_cmd + f" --only known-issue-scan,dynamic-assessment -o {output_file_vuln}"
-    _run_vigolium_phase(
-        self, cmd_b, output_file_vuln,
-        "Scan/Vulnerability (known-issue-scan+dynamic-assessment)",
-        save_http_records=False,
-        proxy=proxy,
-    )
+    if run_phase_b:
+        output_file_vuln = f"{results_dir}/findings_vuln.jsonl"
+        cmd_b = base_cmd + f" --only known-issue-scan,dynamic-assessment -o {output_file_vuln}"
+        _run_vigolium_phase(
+            self, cmd_b, output_file_vuln,
+            "Scan/Vulnerability (known-issue-scan+dynamic-assessment)",
+            save_http_records=False,
+            proxy=proxy,
+        )
+    else:
+        logger.info("Vigolium Phase B (known-issue-scan+dynamic-assessment) skipped by configuration.")
 
     return "Vigolium scan completed"
 
