@@ -350,3 +350,61 @@ export const useRejectVulnerability = () => {
     }
   });
 };
+
+export interface SeverityValidationResponse {
+  status: boolean;
+  current_severity?: string;
+  suggested_severity?: string;
+  suggested_cvss_score?: number | null;
+  confidence?: string;
+  reasoning?: string;
+  key_factors?: string[];
+  vulnerability_id?: number;
+  vulnerability_name?: string;
+  error?: string;
+}
+
+export const useValidateVulnerabilitySeverity = () => {
+  return useMutation({
+    mutationFn: async (id: number): Promise<SeverityValidationResponse> => {
+      const response = await fetch(`/api/listVulnerability/${id}/validate_severity/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${response.status}: Severity validation failed`);
+      }
+      return response.json();
+    }
+  });
+};
+
+export const useUpdateVulnerabilitySeverity = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, severity, cvss_score, reason }: { id: number; severity: string; cvss_score?: number | null; reason?: string }) => {
+      const response = await fetch(`/api/listVulnerability/${id}/update_severity/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ severity, cvss_score, reason }),
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${response.status}: Severity update failed`);
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
+    }
+  });
+};

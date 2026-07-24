@@ -311,3 +311,51 @@ class LLMAttackPathExplainer(LLMBaseGenerator):
         )
         user_message = f"Attack Path ID: {path_id}\n\nPath Details:\n{path_details_str}"
         return self._call_llm(system_message, user_message)
+
+
+class LLMSeverityValidator(LLMBaseGenerator):
+    """Generates an AI-powered severity assessment and validation for a vulnerability finding."""
+
+    def validate_severity(self, vulnerability_context: str) -> dict:
+        import json
+        from reNgine.definitions import LLM_VULNERABILITY_SEVERITY_VALIDATION_SYSTEM_PROMPT
+        
+        try:
+            vulnerability_context = _sanitize_for_prompt(vulnerability_context)
+        except ValueError as e:
+            return {'status': False, 'error': str(e)}
+
+        raw_response = self._call_llm(LLM_VULNERABILITY_SEVERITY_VALIDATION_SYSTEM_PROMPT, vulnerability_context)
+
+        if raw_response.startswith("Error:"):
+            return {'status': False, 'error': raw_response}
+
+        # Clean JSON block if model returned markdown code blocks
+        clean_json = raw_response.strip()
+        if clean_json.startswith("```"):
+            clean_json = re.sub(r'^```(?:json)?\n?', '', clean_json)
+            clean_json = re.sub(r'\n?```$', '', clean_json)
+        clean_json = clean_json.strip()
+
+        try:
+            parsed = json.loads(clean_json)
+            return {
+                'status': True,
+                'suggested_severity': str(parsed.get('suggested_severity', 'info')).lower(),
+                'suggested_cvss_score': parsed.get('suggested_cvss_score'),
+                'confidence': parsed.get('confidence', 'High'),
+                'reasoning': parsed.get('reasoning', ''),
+                'key_factors': parsed.get('key_factors', []),
+                'raw_response': raw_response,
+            }
+        except Exception as e:
+            self.logger.warning(f"Failed to parse LLM severity validation JSON: {str(e)}. Fallback raw string returned.")
+            return {
+                'status': True,
+                'suggested_severity': 'info',
+                'suggested_cvss_score': None,
+                'confidence': 'Low',
+                'reasoning': raw_response,
+                'key_factors': [],
+                'raw_response': raw_response,
+            }

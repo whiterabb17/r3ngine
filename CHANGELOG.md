@@ -41,6 +41,13 @@
   - Report generation runs asynchronously in a background thread. A polling modal in the UI updates status every 3 seconds and presents a **DOWNLOAD REPORT** button on completion.
   - Allowlist-validated optional sections, cross-target scan-ownership enforcement, and generic client-facing error messages (exception details remain server-side) — consistent with the existing security posture.
 
+- **AI Vulnerability Severity Validation**:
+  - Added a **Validate Severity (AI)** action to the Vulnerability Table (row context menu and expanded row detail view).
+  - Queries active LLM configuration (`LLMSeverityValidator` in `web/reNgine/llm.py`) with complete finding context (name, description, scanner tool, target URL, CVEs, CWEs, extracted results, current severity).
+  - The LLM re-evaluates the vulnerability against CVSS v3.1 / OWASP standards to detect misclassified findings (e.g. WPScan / scanner mislabeling XSS as Info).
+  - Renders an interactive modal preview presenting side-by-side **Current Severity** vs **AI Suggested Severity**, confidence rating, suggested CVSS score, detailed AI rationale, and key risk factors.
+  - Allows users to accept or fine-tune the updated severity level, updating the database record and refreshing the vulnerability table in real-time.
+
 ### [v3.7.3] - 2026-07-09
 
 #### Added

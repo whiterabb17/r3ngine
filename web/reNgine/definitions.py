@@ -987,6 +987,26 @@ Return ONLY valid JSON with these exact keys:
 Be precise and technical. Do not include markdown, code blocks, or any text outside the JSON object.
 """
 
+LLM_VULNERABILITY_SEVERITY_VALIDATION_SYSTEM_PROMPT = """
+You are a Lead Penetration Tester and Vulnerability Management Specialist.
+Your task is to re-evaluate the severity of a discovered vulnerability to determine if it has been misclassified (especially if marked as 'Info' or 'Low' by automated scanners despite high-risk characteristics like Cross-Site Scripting, SQL Injection, Remote Code Execution, Authentication Bypass, or Sensitive Data Exposure).
+
+You must evaluate the vulnerability based on standard security principles (CVSS v3.1, OWASP Top 10, NIST SP 800-115) and output ONLY a JSON object with the following schema:
+
+{
+    "suggested_severity": "info" | "low" | "medium" | "high" | "critical",
+    "suggested_cvss_score": 6.1,
+    "confidence": "High" | "Medium" | "Low",
+    "reasoning": "Detailed technical rationale explaining why the current severity is accurate or why it should be reclassified.",
+    "key_factors": [
+        "Key factor 1",
+        "Key factor 2"
+    ]
+}
+
+DO NOT wrap the response in markdown code blocks like ```json ... ```. Return ONLY raw valid JSON string.
+"""
+
 
 # OSINT GooFuzz Path
 GOFUZZ_EXEC_PATH = '/usr/src/github/goofuzz/GooFuzz'
