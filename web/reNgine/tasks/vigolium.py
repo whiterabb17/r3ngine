@@ -388,14 +388,15 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
     # so that any spidering-discovered endpoints are available for Phase B.
     # ExternalHarvest is excluded — vigolium skips it in --stateless mode anyway
     # (it requires an active database session to ingest passive sources).
-    # When skip_spidering is True, --skip spidering is already set on base_cmd,
-    # so only the discovery probe runs (no browser crawl).
+    # When skip_spidering is True, spidering is omitted from --only so only the
+    # discovery probe runs (no browser crawl), and --skip spidering is on base_cmd.
     if run_phase_a:
         output_file_discovery = f"{results_dir}/findings_discovery.jsonl"
-        cmd_a = base_cmd + f" --only spidering,discovery -o {output_file_discovery}"
+        phase_a_phases = "discovery" if skip_spidering else "spidering,discovery"
+        cmd_a = base_cmd + f" --only {phase_a_phases} -o {output_file_discovery}"
         _run_vigolium_phase(
             self, cmd_a, output_file_discovery,
-            "Scan/Discovery (spidering+discovery)",
+            f"Scan/Discovery ({phase_a_phases})",
             save_http_records=False,
             proxy=proxy,
         )
@@ -499,6 +500,7 @@ def vigolium_discovery(self, ctx={}, description=None):
     logger.info("Starting Vigolium Discovery")
 
     discovery_config = self.yaml_configuration.get('vigolium_discovery', {})
+    vuln_vig = self.yaml_configuration.get(VULNERABILITY_SCAN, {}).get(VIGOLIUM, {})
     if not discovery_config.get(RUN_VIGOLIUM_DISCOVERY, True):
         logger.info("Vigolium discovery disabled in configuration. Skipping.")
         return
@@ -507,6 +509,8 @@ def vigolium_discovery(self, ctx={}, description=None):
     concurrency = discovery_config.get(VIGOLIUM_CONCURRENCY, 40)
     rate_limit = discovery_config.get(VIGOLIUM_RATE_LIMIT, 100)
     timeout = _ensure_duration(discovery_config.get(VIGOLIUM_TIMEOUT, '30s'))
+    scope_origin = discovery_config.get(VIGOLIUM_SCOPE_ORIGIN, vuln_vig.get(VIGOLIUM_SCOPE_ORIGIN, 'balanced'))
+    skip_spidering = discovery_config.get(VIGOLIUM_SKIP_SPIDERING, vuln_vig.get(VIGOLIUM_SKIP_SPIDERING, False))
 
     if self.subscan and self.subdomain:
         target_hosts = [f"https://{self.subdomain.name}"]
@@ -540,8 +544,11 @@ def vigolium_discovery(self, ctx={}, description=None):
         f" -r {rate_limit}"
         f" --timeout {timeout}"
         f" --strategy {strategy}"
+        f" --scope-origin {scope_origin}"
         f" --skip-dependency-check"
     )
+    if skip_spidering:
+        cmd += " --skip spidering"
 
     proxy = get_random_proxy()
 
@@ -560,6 +567,7 @@ def vigolium_analysis(self, ctx={}, description=None):
     logger.info("Starting Vigolium Dynamic Analysis")
 
     analysis_config = self.yaml_configuration.get('vigolium_analysis', {})
+    vuln_vig = self.yaml_configuration.get(VULNERABILITY_SCAN, {}).get(VIGOLIUM, {})
     if not analysis_config.get(RUN_VIGOLIUM_ANALYSIS, True):
         logger.info("Vigolium analysis disabled in configuration. Skipping.")
         return
@@ -569,6 +577,8 @@ def vigolium_analysis(self, ctx={}, description=None):
     rate_limit = analysis_config.get(VIGOLIUM_RATE_LIMIT, 50)
     timeout = _ensure_duration(analysis_config.get(VIGOLIUM_TIMEOUT, '10s'))
     spider_max_time = _ensure_duration(analysis_config.get(VIGOLIUM_SPIDER_MAX_TIME, '20m'))
+    scope_origin = analysis_config.get(VIGOLIUM_SCOPE_ORIGIN, vuln_vig.get(VIGOLIUM_SCOPE_ORIGIN, 'balanced'))
+    skip_spidering = analysis_config.get(VIGOLIUM_SKIP_SPIDERING, vuln_vig.get(VIGOLIUM_SKIP_SPIDERING, False))
 
     if self.subscan and self.subdomain:
         subdomains = list(Subdomain.objects.filter(pk=self.subdomain.id))
@@ -589,20 +599,25 @@ def vigolium_analysis(self, ctx={}, description=None):
 
     output_file = f"{results_dir}/analysis.jsonl"
 
+    only_phases = "external-harvest,discovery,known-issue-scan,dynamic-assessment" if skip_spidering else "external-harvest,spidering,discovery,known-issue-scan,dynamic-assessment"
+
     cmd = (
         f"cat {targets_file} | vigolium scan"
         f" --stateless"
         f" --format jsonl"
         f" -o {output_file}"
-        f" --only external-harvest,spidering,discovery,known-issue-scan,dynamic-assessment"
+        f" --only {only_phases}"
         f" -c {concurrency}"
         f" -r {rate_limit}"
         f" --timeout {timeout}"
         f" --spider-max-time {spider_max_time}"
         f" --strategy {strategy}"
+        f" --scope-origin {scope_origin}"
         f" --skip-dependency-check"
         f" --omit-response"
     )
+    if skip_spidering:
+        cmd += " --skip spidering"
 
     proxy = get_random_proxy()
 
