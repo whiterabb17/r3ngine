@@ -181,8 +181,6 @@ def fetch_url(self, urls=[], ctx={}, description=None):
 			f" --scope-origin {vig_scope_origin}"
 			f" --skip-dependency-check"
 		)
-		if vig_skip_spidering:
-			vig_cmd += " --skip spidering"
 		proxy = get_random_proxy()
 		if proxy:
 			vig_cmd += f" --proxy {proxy}"

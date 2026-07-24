@@ -378,9 +378,6 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
     if modules:
         base_cmd += f" -m {','.join(modules)}"
 
-    if skip_spidering:
-        base_cmd += " --skip spidering"
-
     proxy = get_random_proxy()
 
     # --- Phase A: Spidering + Discovery ---
@@ -547,9 +544,6 @@ def vigolium_discovery(self, ctx={}, description=None):
         f" --scope-origin {scope_origin}"
         f" --skip-dependency-check"
     )
-    if skip_spidering:
-        cmd += " --skip spidering"
-
     proxy = get_random_proxy()
 
     _run_vigolium_phase(self, cmd, output_file, f"Discovery ({len(target_hosts)} targets)", save_http_records=True, proxy=proxy)
@@ -616,8 +610,6 @@ def vigolium_analysis(self, ctx={}, description=None):
         f" --skip-dependency-check"
         f" --omit-response"
     )
-    if skip_spidering:
-        cmd += " --skip spidering"
 
     proxy = get_random_proxy()
 
