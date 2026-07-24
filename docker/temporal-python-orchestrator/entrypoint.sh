@@ -311,10 +311,6 @@ fi
 
 vulnx update
 
-# Configure vigolium to scan all severity levels for known issues
-vigolium config set known_issue_scan.severities "critical,high,medium,low,info" || true
-vigolium config set spidering.max_duration "75m" || true
-
 # Split oversized nuclei tags
 # echo "[entrypoint] Running Nuclei tag splitter..."
 # python3 /usr/src/scripts/nuclei_tag_splitter.py
