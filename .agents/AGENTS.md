@@ -67,9 +67,10 @@ Optional local aid:
 - **CRITICAL**: This project relies **exclusively** on Temporal for background tasks and orchestration. **Celery is NOT used anymore in this project.** Never assume, suggest, or attempt to use Celery syntax, patterns, or terminology. All task logs and statuses are managed through Temporal workers.
 
 ## Vulnerability Parsing & Scan Engine Execution
+- **Vigolium CLI Phase Gating**: In the Vigolium CLI, the `--only` flag explicitly dictates active phases and overrides `--skip`. To skip spidering or any other phase in Vigolium tasks, omit the phase name directly from the `--only` parameter (e.g., `--only discovery` instead of `--only spidering,discovery`) rather than combining `--skip spidering` with `--only`.
 - **Nmap Vulners Parser**: Vulnerabilities are nested inside the indings list. CVE IDs must be explicitly extracted from this list by filtering for IDs starting with CVE- (e.g., [f['id'] for f in findings if f['id'].startswith('CVE-')]).
 - **Nuclei Parser**: Nuclei JSON outputs use **hyphenated keys** in the info.classification dictionary (e.g., cve-id, cwe-id, cvss-score). Do not use underscore variants (cve_id) when parsing Nuclei outputs without falling back to the hyphenated version.
-- **Nuclei Tag Splitting**: When uto_update_templates is enabled, the 
+- **Nuclei Tag Splitting**: When  uto_update_templates is enabled, the 
 uclei -update-templates command overwrites split templates on disk. To prevent breaking batch tags (like cve_1), the tag splitter script (docker/scripts/nuclei_tag_splitter.py) must be executed immediately *after* the template update and *before* the scan runs.
 
 ## Frontend UI (Vulnerabilities)

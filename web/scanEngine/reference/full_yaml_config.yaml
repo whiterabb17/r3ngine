@@ -303,6 +303,7 @@ vigolium_analysis:
   concurrency: 20
   rate_limit: 50
   timeout: 10s
+  spider_max_time: 75m
 
 # ---------------------------------------------------------------------------
 # TIER 5 — WAF Detection
@@ -382,6 +383,7 @@ vulnerability_scan:
     concurrency: 50
     rate_limit: 100
     timeout: 15s
+    spider_max_time: 75m
     modules: []                   # Restrict to specific modules (empty = all)
     severity_filter: []           # Severity levels to include (empty = all)
 

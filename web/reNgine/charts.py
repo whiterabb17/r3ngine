@@ -500,6 +500,98 @@ def generate_stress_error_breakdown_chart(error_breakdown):
     return base64.b64encode(img_bytes).decode('utf-8')
 
 
+def generate_severity_trend_chart(severity_trend: list) -> str:
+    """Grouped bar chart — one group per scan, bars = severity levels."""
+    if not severity_trend:
+        return ''
+
+    scan_labels = [row['date'].strftime('%Y-%m-%d') for row in severity_trend]
+    severity_levels = [
+        ('critical', '#991b1b', 'Critical'),
+        ('high', '#dc2626', 'High'),
+        ('medium', '#f97316', 'Medium'),
+        ('low', '#eab308', 'Low'),
+        ('info', '#3b82f6', 'Info'),
+    ]
+
+    traces = []
+    for key, color, label in severity_levels:
+        traces.append(go.Bar(
+            name=label,
+            x=scan_labels,
+            y=[row[key] for row in severity_trend],
+            marker_color=color,
+        ))
+
+    fig = go.Figure(data=traces)
+    fig.update_layout(
+        barmode='group',
+        xaxis_title='Scan Date',
+        yaxis_title='Finding Count',
+        showlegend=True,
+        margin=dict(t=40, b=60, l=60, r=40),
+        width=800,
+        height=400,
+        legend=dict(orientation='h', y=-0.3),
+        plot_bgcolor='#ffffff',
+        paper_bgcolor='#ffffff',
+        font=dict(family='Inter, sans-serif', size=11, color='#1e293b'),
+    )
+
+    img_bytes = to_image(fig, format='png')
+    return base64.b64encode(img_bytes).decode('utf-8')
+
+
+def generate_findings_timeline_chart(findings_timeline: list) -> str:
+    """Line chart — new findings, resolved, and total open per scan."""
+    if len(findings_timeline) < 2:
+        return ''
+
+    scan_labels = [row['date'].strftime('%Y-%m-%d') for row in findings_timeline]
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        name='New Findings',
+        x=scan_labels,
+        y=[row['new_findings'] for row in findings_timeline],
+        mode='lines+markers',
+        line=dict(color='#dc2626', width=2),
+        marker=dict(size=7),
+    ))
+    fig.add_trace(go.Scatter(
+        name='Resolved',
+        x=scan_labels,
+        y=[row['resolved'] for row in findings_timeline],
+        mode='lines+markers',
+        line=dict(color='#16a34a', width=2),
+        marker=dict(size=7),
+    ))
+    fig.add_trace(go.Scatter(
+        name='Open (Total)',
+        x=scan_labels,
+        y=[row['open_total'] for row in findings_timeline],
+        mode='lines+markers',
+        line=dict(color='#3b82f6', width=2, dash='dot'),
+        marker=dict(size=7),
+    ))
+
+    fig.update_layout(
+        xaxis_title='Scan Date',
+        yaxis_title='Count',
+        showlegend=True,
+        margin=dict(t=40, b=60, l=60, r=40),
+        width=800,
+        height=380,
+        legend=dict(orientation='h', y=-0.3),
+        plot_bgcolor='#ffffff',
+        paper_bgcolor='#ffffff',
+        font=dict(family='Inter, sans-serif', size=11, color='#1e293b'),
+    )
+
+    img_bytes = to_image(fig, format='png')
+    return base64.b64encode(img_bytes).decode('utf-8')
+
+
 def generate_stress_endpoint_heatmap(endpoints_tested, response_code_distribution):
     """
     Generates a heatmap visualization for endpoints and response codes.

@@ -1,5 +1,53 @@
 # Changelog
 
+### [v3.7.4] - 2026-07-24
+
+#### Enhanced
+
+- **Vigolium Spidering Phase Max Time Limit**:
+  - Configured container-wide Vigolium `spidering.max_duration` setting to `75m` in Docker entrypoints (`temporal-go-executor` and `temporal-python-orchestrator`).
+  - Updated Vigolium task routines (`vigolium_scan`, `vigolium_analysis`, and `fetch_url` spidering) to support and pass `--spider-max-time` (`75m` default) CLI flags.
+  - Added `spider_max_time` configuration to `web/reNgine/definitions.py`, `default_yaml_config.yaml`, and `full_yaml_config.yaml`.
+
+#### Fixed
+
+- **Vigolium Smart Retry — Phase-Split & Heuristic Fix**:
+  - Fixed a false-positive proxy-bypass retry in `_run_vigolium_phase`: when Nuclei hits its internal 30-minute `KnownIssueScan` phase deadline it is killed before flushing the `scan` summary record's `total_requests` field, causing the heuristic to incorrectly conclude the proxy had blocked all traffic and restart the entire vigolium pipeline from scratch.
+  - Added `_has_records(output_file)` helper that inspects the JSONL output for any `finding`, `http_record`, or `scan` entries. If records exist, the run is now treated as a partial success and the proxy-bypass retry is suppressed — preserving all findings already written to disk.
+  - The proxy-retry file-erasure logic now also gates on `_has_records`: a non-empty output file is no longer deleted before the no-proxy retry.
+  - Split `vigolium_scan` (Tier 6) into two independent `_run_vigolium_phase` calls: **Phase A** (`--only spidering,discovery`) and **Phase B** (`--only known-issue-scan,dynamic-assessment`), each writing to its own JSONL file. A proxy failure or timeout in Phase B (KnownIssueScan) now triggers an independent Phase B retry without touching Phase A's completed work.
+
+- **OpenAI `max_completion_tokens` Fallback**:
+  - Updated LLM generator and connection testing logic to support automatic fallback from `max_tokens` to `max_completion_tokens` whenever OpenAI returns HTTP 400 (`Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.`).
+  - Ensures compatibility across newer OpenAI models (such as `o1`, `o3-mini`, etc.) for all LLM calls and connectivity validations.
+
+- **Vigolium Scans Temporal Timeout Fix**:
+  - Resolved `Activity complete after timeout` error restarts on `go-executor-queue` by making `GoExecutorTaskWorkflow`'s `start_to_close_timeout` dynamic and configurable via `input_data` (defaulting to 12 hours).
+  - Forwarded execution timeouts (`timeout_seconds`) from `stream_command` and `run_command` to `GoExecutorTaskWorkflow`.
+  - Updated default task command timeouts to 12 hours (43,200s) and aligned Vigolium activity timeouts (`RunVigoliumScanActivity`, `RunVigoliumAnalysisActivity`, `RunVigoliumDiscoveryActivity`, `RunVigoliumHarvestActivity`) across `MasterScanWorkflow`, `SingleTaskRetryWorkflow`, and `assessment_workflow.py`.
+
+#### Added
+
+- **Target Report Generation**:
+  - A new **TARGET REPORT** button in the Vulnerabilities tab of the Target Summary page lets users generate a multi-scan PDF intelligence report covering the entire history of a target — not just a single scan.
+  - Select 2 or more completed scans to include. The report aggregates data across all selected scans and produces a cross-scan view of how the attack surface and vulnerability posture have changed over time.
+  - **Cross-Scan Vulnerability Tracking Timeline**: Every unique vulnerability (keyed by host + name + type) is tracked across each selected scan with status columns — `Open`, `Resolved (Auto)`, `Resolved (Manual)`, `False Positive`, `Accepted Risk`, `Not Detected`, and `—` (not yet active). First-seen and remediation dates are captured automatically.
+  - **Severity Trend Chart**: A stacked bar chart showing counts of Critical / High / Medium / Low / Info findings per scan, rendered as an embedded base64 PNG in the PDF.
+  - **Findings Timeline Chart**: A multi-line chart tracking new findings, resolved findings, and open total across the scan timeline.
+  - **Executive Summary**: Risk boxes by severity (Critical / High / Medium / Low / Info), plus total unique findings, resolved count, and new-in-latest-scan count.
+  - **11 Optional Report Sections** (user-selectable before generation): Subdomain Changes, Attack Surface Trend, Exposure Intelligence, Certificates, WAF Detection, Endpoints, Directories, S3 Buckets, Employees, Email Breaches, Secret Leaks.
+  - **Cyber Pro PDF Template**: Dark-themed cover page with corner marks, border accents, and footer strip; full table of contents with WeasyPrint page-reference links; all sections follow the existing `cyber_pro.html` design language.
+  - **Report Branding**: All colours (primary accent, cover background), company name, logo, footer text, and show/hide settings are loaded from the configured `VulnerabilityReportSetting` — same source as scan reports.
+  - Report generation runs asynchronously in a background thread. A polling modal in the UI updates status every 3 seconds and presents a **DOWNLOAD REPORT** button on completion.
+  - Allowlist-validated optional sections, cross-target scan-ownership enforcement, and generic client-facing error messages (exception details remain server-side) — consistent with the existing security posture.
+
+- **AI Vulnerability Severity Validation**:
+  - Added a **Validate Severity (AI)** action to the Vulnerability Table (row context menu and expanded row detail view).
+  - Queries active LLM configuration (`LLMSeverityValidator` in `web/reNgine/llm.py`) with complete finding context (name, description, scanner tool, target URL, CVEs, CWEs, extracted results, current severity).
+  - The LLM re-evaluates the vulnerability against CVSS v3.1 / OWASP standards to detect misclassified findings (e.g. WPScan / scanner mislabeling XSS as Info).
+  - Renders an interactive modal preview presenting side-by-side **Current Severity** vs **AI Suggested Severity**, confidence rating, suggested CVSS score, detailed AI rationale, and key risk factors.
+  - Allows users to accept or fine-tune the updated severity level, updating the database record and refreshing the vulnerability table in real-time.
+
 ### [v3.7.3] - 2026-07-09
 
 #### Added

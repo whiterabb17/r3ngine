@@ -268,3 +268,133 @@ class TestURLParserScan(TestCase):
             urls=['https://example.com/page?x=1'],
         )
         self.assertTrue(result)
+
+
+class TestSourcemapperFiltering(TestCase):
+    @patch('reNgine.tasks.auth_discovery.extract_auth_candidates')
+    @patch('reNgine.tasks.crawl.run_command')
+    @patch('requests.get')
+    def test_sourcemapper_filters_non_js_urls(self, mock_get, mock_run_cmd, mock_extract_auth):
+        from reNgine.tasks.crawl import web_api_discovery
+        proxy = _make_proxy({'uses_tools': ['sourcemapper']})
+        proxy.results_dir = '/tmp/test_results'
+        proxy.scan_id = 1
+        proxy.activity_id = 'act-1'
+        proxy.scan = MagicMock()
+        proxy.scan.id = 1
+        proxy.domain = MagicMock()
+        proxy.yaml_configuration = {'web_api_discovery': {'uses_tools': ['sourcemapper']}}
+
+        # Given non-map non-js URLs
+        urls = [
+            'https://example.com',
+            'https://example.com/index.html',
+            'https://example.com/sitemap.xml',
+        ]
+        with patch('reNgine.tasks.crawl.Subdomain.objects.filter') as mock_filter:
+            mock_filter.return_value.first.return_value = MagicMock(name='example.com')
+            web_api_discovery(proxy, urls=urls, ctx={'api_discovery_tools': ['sourcemapper']})
+
+        # requests.get should not even be called for non-js/non-map URLs
+        mock_get.assert_not_called()
+        # run_command should not be called with sourcemapper
+        for call_args in mock_run_cmd.call_args_list:
+            cmd = call_args[0][0] if call_args[0] else call_args[1].get('cmd', '')
+            self.assertNotIn('sourcemapper ', cmd)
+
+    @patch('reNgine.tasks.auth_discovery.extract_auth_candidates')
+    @patch('reNgine.tasks.crawl.run_command')
+    @patch('requests.get')
+    def test_sourcemapper_runs_on_valid_sourcemap_candidate(self, mock_get, mock_run_cmd, mock_extract_auth):
+        from reNgine.tasks.crawl import web_api_discovery
+        proxy = _make_proxy({'uses_tools': ['sourcemapper']})
+        proxy.results_dir = '/tmp/test_results'
+        proxy.scan_id = 1
+        proxy.activity_id = 'act-1'
+        proxy.scan = MagicMock()
+        proxy.scan.id = 1
+        proxy.domain = MagicMock()
+        proxy.yaml_configuration = {'web_api_discovery': {'uses_tools': ['sourcemapper']}}
+
+        # Given a direct .map URL
+        urls = ['https://example.com/app.js.map']
+        with patch('reNgine.tasks.crawl.Subdomain.objects.filter') as mock_filter:
+            mock_filter.return_value.first.return_value = MagicMock(name='example.com')
+            web_api_discovery(proxy, urls=urls, ctx={'api_discovery_tools': ['sourcemapper']})
+
+        # sourcemapper command should be run for app.js.map
+        ran_sourcemapper = False
+        for call_args in mock_run_cmd.call_args_list:
+            cmd = call_args[0][0] if call_args[0] else call_args[1].get('cmd', '')
+            if 'sourcemapper ' in cmd and 'app.js.map' in cmd:
+                ran_sourcemapper = True
+                break
+        self.assertTrue(ran_sourcemapper, "sourcemapper should have executed on direct .map target")
+
+
+class TestGrpcurlCircuitBreaker(TestCase):
+    @patch('reNgine.tasks.crawl.save_vulnerability')
+    @patch('reNgine.tasks.auth_discovery.extract_auth_candidates')
+    @patch('reNgine.tasks.crawl.run_command')
+    def test_grpcurl_deduplicates_target_hosts(self, mock_run_cmd, mock_extract_auth, mock_save_vuln):
+        from reNgine.tasks.crawl import web_api_discovery
+        proxy = _make_proxy({'uses_tools': ['grpcurl']})
+        proxy.results_dir = '/tmp/test_results'
+        proxy.scan_id = 1
+        proxy.activity_id = 'act-1'
+        proxy.scan = MagicMock()
+        proxy.scan.id = 1
+        proxy.domain = MagicMock()
+        proxy.yaml_configuration = {'web_api_discovery': {'uses_tools': ['grpcurl']}}
+
+        mock_run_cmd.return_value = (0, "grpc.reflection.v1alpha.ServerReflection\n")
+
+        # 5 URLs sharing the same hostname
+        urls = [
+            'https://example.com/page1',
+            'https://example.com/page2',
+            'https://example.com/page3',
+            'https://example.com/api/v1',
+            'https://example.com/login',
+        ]
+        with patch('reNgine.tasks.crawl.Subdomain.objects.filter') as mock_filter:
+            mock_filter.return_value.first.return_value = MagicMock(name='example.com')
+            web_api_discovery(proxy, urls=urls, ctx={'api_discovery_tools': ['grpcurl']})
+
+        # grpcurl should be called only ONCE for example.com:443
+        grpcurl_calls = [
+            c[0][0] for c in mock_run_cmd.call_args_list if c[0] and 'grpcurl ' in c[0][0]
+        ]
+        self.assertEqual(len(grpcurl_calls), 1, f"Expected 1 grpcurl call, got {len(grpcurl_calls)}: {grpcurl_calls}")
+        self.assertIn('example.com:443', grpcurl_calls[0])
+        mock_save_vuln.assert_called_once()
+
+    @patch('reNgine.tasks.crawl.save_vulnerability')
+    @patch('reNgine.tasks.auth_discovery.extract_auth_candidates')
+    @patch('reNgine.tasks.crawl.run_command')
+    def test_grpcurl_circuit_breaker_on_dial_failure(self, mock_run_cmd, mock_extract_auth, mock_save_vuln):
+        from reNgine.tasks.crawl import web_api_discovery
+        proxy = _make_proxy({'uses_tools': ['grpcurl']})
+        proxy.results_dir = '/tmp/test_results'
+        proxy.scan_id = 1
+        proxy.activity_id = 'act-1'
+        proxy.scan = MagicMock()
+        proxy.scan.id = 1
+        proxy.domain = MagicMock()
+        proxy.yaml_configuration = {'web_api_discovery': {'uses_tools': ['grpcurl']}}
+
+        mock_run_cmd.return_value = (1, 'Failed to dial target host "unreachable.com:443": context deadline exceeded')
+
+        urls = ['https://unreachable.com/path1', 'https://unreachable.com/path2']
+        with patch('reNgine.tasks.crawl.Subdomain.objects.filter') as mock_filter:
+            mock_filter.return_value.first.return_value = MagicMock(name='unreachable.com')
+            web_api_discovery(proxy, urls=urls, ctx={'api_discovery_tools': ['grpcurl']})
+
+        # grpcurl should attempt unreachable.com:443 only once and record failure
+        grpcurl_calls = [
+            c[0][0] for c in mock_run_cmd.call_args_list if c[0] and 'grpcurl ' in c[0][0]
+        ]
+        self.assertEqual(len(grpcurl_calls), 1)
+        mock_save_vuln.assert_not_called()
+
+

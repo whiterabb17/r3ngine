@@ -258,8 +258,13 @@ VIGOLIUM_STRATEGY = 'strategy'
 VIGOLIUM_CONCURRENCY = 'concurrency'
 VIGOLIUM_RATE_LIMIT = 'rate_limit'
 VIGOLIUM_TIMEOUT = 'timeout'
+VIGOLIUM_SPIDER_MAX_TIME = 'spider_max_time'
 VIGOLIUM_MODULES = 'modules'
 VIGOLIUM_SEVERITY_FILTER = 'severity_filter'
+VIGOLIUM_RUN_PHASE_A = 'run_phase_a'     # Phase A: spidering + discovery
+VIGOLIUM_RUN_PHASE_B = 'run_phase_b'     # Phase B: known-issue-scan + dynamic-assessment
+VIGOLIUM_SCOPE_ORIGIN = 'scope_origin'   # Host scope strictness: all, relaxed, balanced, strict
+VIGOLIUM_SKIP_SPIDERING = 'skip_spidering'  # Remove spidering from Phase A (runs discovery only)
 
 VIGOLIUM_DEFAULT_CONFIG = {
     'run_vigolium': True,
@@ -267,6 +272,11 @@ VIGOLIUM_DEFAULT_CONFIG = {
     'concurrency': 50,
     'rate_limit': 100,
     'timeout': '15s',
+    'spider_max_time': '20m',
+    'run_phase_a': True,   # Phase A: spidering + discovery
+    'run_phase_b': True,   # Phase B: known-issue-scan + dynamic-assessment
+    'scope_origin': 'balanced',  # Host scope strictness: all, relaxed, balanced, strict
+    'skip_spidering': False,      # When True, spidering is removed from Phase A (discovery only)
 }
 
 # Tier 1 — passive ingestion harvest (works with root domain only, no subdomains needed)
@@ -293,6 +303,7 @@ VIGOLIUM_DEFAULT_ANALYSIS_CONFIG = {
     'concurrency': 20,
     'rate_limit': 50,
     'timeout': '10s',
+    'spider_max_time': '75m',
 }
 
 # Tier 3 — spidering within fetch_url against fetched URL set
@@ -301,6 +312,7 @@ VIGOLIUM_DEFAULT_SPIDER_CONFIG = {
     'concurrency': 30,
     'rate_limit': 80,
     'timeout': '20s',
+    'spider_max_time': '75m',
 }
 
 RUN_VIGOLIUM_AUDIT = 'run_vigolium_audit'
@@ -973,6 +985,26 @@ Return ONLY valid JSON with these exact keys:
 }
 
 Be precise and technical. Do not include markdown, code blocks, or any text outside the JSON object.
+"""
+
+LLM_VULNERABILITY_SEVERITY_VALIDATION_SYSTEM_PROMPT = """
+You are a Lead Penetration Tester and Vulnerability Management Specialist.
+Your task is to re-evaluate the severity of a discovered vulnerability to determine if it has been misclassified (especially if marked as 'Info' or 'Low' by automated scanners despite high-risk characteristics like Cross-Site Scripting, SQL Injection, Remote Code Execution, Authentication Bypass, or Sensitive Data Exposure).
+
+You must evaluate the vulnerability based on standard security principles (CVSS v3.1, OWASP Top 10, NIST SP 800-115) and output ONLY a JSON object with the following schema:
+
+{
+    "suggested_severity": "info" | "low" | "medium" | "high" | "critical",
+    "suggested_cvss_score": 6.1,
+    "confidence": "High" | "Medium" | "Low",
+    "reasoning": "Detailed technical rationale explaining why the current severity is accurate or why it should be reclassified.",
+    "key_factors": [
+        "Key factor 1",
+        "Key factor 2"
+    ]
+}
+
+DO NOT wrap the response in markdown code blocks like ```json ... ```. Return ONLY raw valid JSON string.
 """
 
 

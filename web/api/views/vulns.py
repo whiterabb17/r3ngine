@@ -492,6 +492,93 @@ class VulnerabilityViewSet(viewsets.ModelViewSet):
 			'reason': reason
 		}, status=status.HTTP_200_OK)
 
+	@action(detail=True, methods=['post'])
+	def validate_severity(self, request, pk=None):
+		"""Validate vulnerability severity using LLM."""
+		from reNgine.llm import LLMSeverityValidator
+		from reNgine.definitions import NUCLEI_REVERSE_SEVERITY_MAP
+		from dashboard.models import LLMConfig
+
+		if not LLMConfig.objects.filter(is_active=True).exists():
+			return Response({
+				'status': False,
+				'error': 'No active LLM configuration found. Please configure an LLM in Settings.'
+			}, status=status.HTTP_400_BAD_REQUEST)
+
+		vuln = self.get_object()
+		
+		# Format context string for LLM input
+		cve_list = [cve.name for cve in vuln.cve_ids.all()]
+		cwe_list = [cwe.name for cwe in vuln.cwe_ids.all()]
+		curr_severity_str = NUCLEI_REVERSE_SEVERITY_MAP.get(vuln.severity, 'info')
+
+		vuln_context = f"""
+Vulnerability Title: {vuln.name}
+Current Assigned Severity: {curr_severity_str} (Numeric: {vuln.severity})
+Source Tool: {vuln.source or 'Unknown'}
+URL / Target: {vuln.http_url or 'N/A'}
+Template ID: {vuln.template_id or 'N/A'}
+Description: {vuln.description or 'N/A'}
+Impact: {vuln.impact or 'N/A'}
+Remediation: {vuln.remediation or 'N/A'}
+CVSS Score: {vuln.cvss_score if vuln.cvss_score is not None else 'N/A'}
+CVSS Metrics: {vuln.cvss_metrics or 'N/A'}
+Associated CVEs: {', '.join(cve_list) if cve_list else 'None'}
+Associated CWEs: {', '.join(cwe_list) if cwe_list else 'None'}
+Extracted Results: {', '.join(vuln.extracted_results) if vuln.extracted_results else 'None'}
+"""
+		vuln_context = re.sub(r'\t', '', vuln_context)
+		validator = LLMSeverityValidator(logger=logger)
+		res = validator.validate_severity(vuln_context)
+		
+		if not res.get('status'):
+			return Response({
+				'status': False,
+				'error': res.get('error', 'LLM evaluation failed')
+			}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+		res['current_severity'] = curr_severity_str
+		res['vulnerability_id'] = vuln.id
+		res['vulnerability_name'] = vuln.name
+		return Response(res, status=status.HTTP_200_OK)
+
+	@action(detail=True, methods=['post'])
+	def update_severity(self, request, pk=None):
+		"""Update vulnerability severity based on accepted AI recommendation or manual input."""
+		from reNgine.definitions import NUCLEI_REVERSE_SEVERITY_MAP
+
+		vuln = self.get_object()
+		new_severity = request.data.get('severity')
+		cvss_score = request.data.get('cvss_score')
+		reason = request.data.get('reason', 'Updated via AI Severity Validation')
+
+		if new_severity is None:
+			return Response({'error': 'Severity field is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+		# Normalize severity input
+		numeric_severity = self._normalize_severity_filter(new_severity)
+		if numeric_severity is None or numeric_severity < 0:
+			return Response({'error': f'Invalid severity value: {new_severity}'}, status=status.HTTP_400_BAD_REQUEST)
+
+		vuln.severity = numeric_severity
+		if cvss_score is not None and str(cvss_score).replace('.', '', 1).isdigit():
+			try:
+				vuln.cvss_score = float(cvss_score)
+			except ValueError:
+				pass
+
+		vuln.validation_reason = reason
+		vuln.save()
+
+		return Response({
+			'status': True,
+			'message': 'Vulnerability severity updated successfully.',
+			'id': vuln.id,
+			'severity': NUCLEI_REVERSE_SEVERITY_MAP.get(vuln.severity, 'info'),
+			'severity_code': vuln.severity,
+			'cvss_score': vuln.cvss_score,
+		}, status=status.HTTP_200_OK)
+
 class ExposurePagination(PageNumberPagination):
 	page_size = 10
 	page_size_query_param = 'length'

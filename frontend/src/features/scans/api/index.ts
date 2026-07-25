@@ -439,6 +439,7 @@ export const useCheckEmailBreach = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
         },
         body: JSON.stringify({ email_address: emailAddress, scan_id: scanId }),
         credentials: 'include'

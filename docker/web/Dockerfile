@@ -128,9 +128,9 @@ RUN git clone --depth 1 https://github.com/vigolium/vigolium /build/vigolium
 
 WORKDIR /build/vigolium
 
-# Build embedded binaries (vigolium-audit via bun, jsscan via bun)
+# Build embedded binaries (vigolium-audit via bun, jstangle via bun)
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-    make ensure-audit && make ensure-jsscan
+    make ensure-audit && make ensure-jstangle
 
 # Compile vigolium binary
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -666,7 +666,7 @@ RUN playwright install-deps chromium && \
 # Copy application source (placed last — changes most frequently, so layers
 # above this line are fully cached on code-only rebuilds)
 # ---------------------------------------------------------------------------
-COPY docker/gf-patterns/ /usr/src/gf-patterns/
+COPY web/gf-patterns/ /usr/src/gf-patterns/
 COPY web/ /usr/src/app/
 #RUN mkdir /usr/src/scripts 
 #COPY docker/scripts/nuclei_tag_splitter.py /usr/src/scripts/nuclei_tag_splitter.py

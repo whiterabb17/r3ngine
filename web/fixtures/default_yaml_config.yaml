@@ -138,6 +138,11 @@ vulnerability_scan: {
     'concurrency': 50,
     'rate_limit': 100,
     'timeout': '15s',
+    'spider_max_time': '20m',
+    'run_phase_a': true,            # Phase A: spidering + discovery
+    'run_phase_b': true,            # Phase B: known-issue-scan + dynamic-assessment
+    'scope_origin': 'balanced',     # all=follow any host, relaxed=same apex, balanced=same host+common subdomains, strict=exact host only
+    'skip_spidering': false,        # Skip browser-based spidering within Phase A (uses --skip spidering)
     # 'modules': [],                # Restrict to specific Vigolium modules (empty = all)
     # 'severity_filter': []         # known-issue-scan severities to include (empty = all)
   }
@@ -220,7 +225,8 @@ vigolium_analysis: {
   'strategy': 'balanced',           # Options: fast, balanced, thorough
   'concurrency': 20,
   'rate_limit': 50,
-  'timeout': '10s'
+  'timeout': '10s',
+  'spider_max_time': '75m'
 }
 
 vigolium_audit: {

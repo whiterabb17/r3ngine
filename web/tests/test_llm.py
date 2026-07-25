@@ -34,6 +34,34 @@ class TestLLMSSLAndSecurity(TestCase):
         self.assertNotIn("proxies", call_kwargs,
                          "proxies override must not be set")
 
+    def test_openai_fallback_to_max_completion_tokens(self):
+        """OpenAI call must fallback to max_completion_tokens when max_tokens returns 400 error."""
+        from reNgine.definitions import OPENAI
+        gen = self._make_generator(OPENAI)
+
+        # Mock initial 400 response for max_tokens
+        mock_400 = MagicMock()
+        mock_400.status_code = 400
+        mock_400.text = "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."
+
+        # Mock second 200 response for max_completion_tokens
+        mock_200 = MagicMock()
+        mock_200.status_code = 200
+        mock_200.json.return_value = {
+            "choices": [{"message": {"content": "fallback success"}}]
+        }
+
+        with patch("requests.post", side_effect=[mock_400, mock_200]) as mock_post:
+            result = gen._call_openai("sys", "user", max_tokens=100)
+
+        self.assertEqual(result, "fallback success")
+        self.assertEqual(mock_post.call_count, 2)
+
+        # Verify second call used max_completion_tokens instead of max_tokens
+        second_call_json = mock_post.call_args_list[1].kwargs["json"]
+        self.assertNotIn("max_tokens", second_call_json)
+        self.assertEqual(second_call_json.get("max_completion_tokens"), 100)
+
     def test_anthropic_system_field_separate(self):
         """Anthropic call must send system_message as top-level 'system' field, not in messages."""
         from reNgine.definitions import ANTHROPIC

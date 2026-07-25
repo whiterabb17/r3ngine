@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { operations } from '@/types/api';
-import type { VulnerabilityResponse } from '../types';
+import type { Vulnerability, VulnerabilityResponse } from '../types';
 
 
 export interface VulnerabilityFilters {
@@ -55,6 +55,30 @@ export const useVulnerabilities = (projectSlug: string, page = 1, searchQuery = 
     },
 
     enabled: !!projectSlug,
+  });
+};
+
+export const useVulnerability = (id: number | null, projectSlug?: string) => {
+  return useQuery<Vulnerability>({
+    queryKey: ['vulnerability', id, projectSlug],
+    queryFn: async () => {
+      if (!id) throw new Error('No vulnerability ID provided');
+      const url = new URL(`${window.location.origin}/api/listVulnerability/${id}/`);
+      url.searchParams.append('format', 'json');
+      if (projectSlug) {
+        url.searchParams.append('project', projectSlug);
+      }
+
+      const response = await fetch(url.toString(), {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch vulnerability details');
+      }
+      return await response.json() as Vulnerability;
+    },
+    enabled: !!id,
   });
 };
 
@@ -318,6 +342,64 @@ export const useRejectVulnerability = () => {
       });
       if (!response.ok) {
         throw new Error('Failed to reject vulnerability');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
+    }
+  });
+};
+
+export interface SeverityValidationResponse {
+  status: boolean;
+  current_severity?: string;
+  suggested_severity?: string;
+  suggested_cvss_score?: number | null;
+  confidence?: string;
+  reasoning?: string;
+  key_factors?: string[];
+  vulnerability_id?: number;
+  vulnerability_name?: string;
+  error?: string;
+}
+
+export const useValidateVulnerabilitySeverity = () => {
+  return useMutation({
+    mutationFn: async (id: number): Promise<SeverityValidationResponse> => {
+      const response = await fetch(`/api/listVulnerability/${id}/validate_severity/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${response.status}: Severity validation failed`);
+      }
+      return response.json();
+    }
+  });
+};
+
+export const useUpdateVulnerabilitySeverity = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, severity, cvss_score, reason }: { id: number; severity: string; cvss_score?: number | null; reason?: string }) => {
+      const response = await fetch(`/api/listVulnerability/${id}/update_severity/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ severity, cvss_score, reason }),
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${response.status}: Severity update failed`);
       }
       return response.json();
     },

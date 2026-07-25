@@ -203,3 +203,56 @@ export const useResolveIP = () => {
     }
   });
 };
+
+export const useTargetScans = (targetId: number) => {
+  return useQuery<{ id: number; start_scan_date: string; scan_status: number }[]>({
+    queryKey: ['target-scans', targetId],
+    queryFn: async () => {
+      const response = await fetch(`/api/listScans/?target_id=${targetId}`, {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to fetch scans');
+      const data = await response.json();
+      return Array.isArray(data) ? data : data.results ?? [];
+    },
+    enabled: !!targetId,
+  });
+};
+
+export const useCreateTargetReport = () => {
+  return useMutation({
+    mutationFn: async (params: {
+      domainId: number;
+      scanIds: number[];
+      includedSections: string[];
+    }) => {
+      const response = await fetch(`/scan/target/create_report/${params.domainId}/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          scan_ids: params.scanIds.join(','),
+          included_sections: params.includedSections.join(','),
+        }),
+      });
+      if (!response.ok) throw new Error('Failed to create target report');
+      return response.json() as Promise<{ status: boolean; report_id: number }>;
+    },
+  });
+};
+
+export const fetchTargetReportStatus = async (reportId: number) => {
+  const response = await fetch(`/scan/target/report/status/${reportId}/`, {
+    credentials: 'include',
+  });
+  if (!response.ok) throw new Error('Failed to fetch report status');
+  return response.json() as Promise<{
+    status: number;
+    error_message: string | null;
+    report_url: string | null;
+    completed_at: string | null;
+  }>;
+};

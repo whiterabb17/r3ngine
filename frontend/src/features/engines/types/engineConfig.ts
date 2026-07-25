@@ -195,6 +195,10 @@ export interface VigoliumVulnConfig {
   concurrency: number;
   rate_limit: number;
   timeout: string;
+  run_phase_a: boolean;  // Phase A: spidering + discovery
+  run_phase_b: boolean;  // Phase B: known-issue-scan + dynamic-assessment
+  scope_origin: 'all' | 'relaxed' | 'balanced' | 'strict';
+  skip_spidering: boolean;
 }
 
 export interface VulnerabilityScanConfig {
@@ -384,7 +388,7 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
       wpscan_enumeration: 'vp,vt,u', wpscan_detection_mode: 'mixed',
       nuclei: { use_nuclei_config: false, severities: ['unknown', 'info', 'low', 'medium', 'high', 'critical'], tags: [], templates: [], custom_templates: [] },
       cpanel_scanner: { run_cpanel2shell: true, cpanel_user_wordlist: '/usr/src/app/wordlist/cpanel_users.txt', proxy_type: 'rotating' },
-      vigolium: { strategy: 'balanced', concurrency: 50, rate_limit: 100, timeout: '15s' },
+      vigolium: { strategy: 'balanced', concurrency: 50, rate_limit: 100, timeout: '15s', run_phase_a: true, run_phase_b: true, scope_origin: 'balanced', skip_spidering: false },
     },
   },
   attack_path_modeling: { enabled: false, config: { top_n: 5 } },

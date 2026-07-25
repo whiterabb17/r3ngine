@@ -916,19 +916,30 @@ def _test_llm_provider(provider: str, api_key: str, model: str) -> dict:
             return {'status': 'error', 'message': 'OpenAI API key is required.', 'response': ''}
         use_model = model or 'gpt-3.5-turbo'
         try:
+            payload = {
+                "model": use_model,
+                "messages": [
+                    {"role": "system", "content": TEST_SYSTEM},
+                    {"role": "user", "content": TEST_PROMPT},
+                ],
+                "max_tokens": 20,
+            }
             resp = req_lib.post(
                 "https://api.openai.com/v1/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json={
-                    "model": use_model,
-                    "messages": [
-                        {"role": "system", "content": TEST_SYSTEM},
-                        {"role": "user", "content": TEST_PROMPT},
-                    ],
-                    "max_tokens": 20,
-                },
+                json=payload,
                 timeout=30,
             )
+            # Retrying with max_completion_tokens if the model does not support max_tokens parameter
+            if resp.status_code == 400 and ("max_tokens" in resp.text and "max_completion_tokens" in resp.text):
+                payload.pop("max_tokens", None)
+                payload["max_completion_tokens"] = 20
+                resp = req_lib.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json=payload,
+                    timeout=30,
+                )
             resp.raise_for_status()
             response_text = resp.json()['choices'][0]['message']['content'].strip()
             return {'status': 'success', 'message': 'OpenAI connection successful.', 'response': response_text}

@@ -52,6 +52,21 @@ for the business and what an attacker could achieve.
 
 ---
 
+## Feature: Vulnerability Severity Validation (`LLMSeverityValidator`)
+
+### Purpose
+
+Re-evaluates scanner findings (especially those misclassified as `Info` or `Low` by tools like WPScan or Nuclei due to missing CVSS metadata) using configured LLM providers. Analyzes vulnerability type, URL, CVE, CWE, description, and evidence against CVSS v3.1 / OWASP standards.
+
+### Workflow
+
+1. Triggered via `POST /api/listVulnerability/{id}/validate_severity/` from row context menu or expanded row detail view in the Vulnerability Table.
+2. `LLMSeverityValidator` in `web/reNgine/llm.py` queries active `LLMConfig`.
+3. Returns JSON containing `suggested_severity`, `suggested_cvss_score`, `confidence`, `reasoning`, and `key_factors`.
+4. Frontend presents a comparison UI allowing the user to review, fine-tune, and accept the reclassified severity via `POST /api/listVulnerability/{id}/update_severity/`.
+
+---
+
 ## Feature: Attack Path Modeling Engine (APME)
 
 ### Overview

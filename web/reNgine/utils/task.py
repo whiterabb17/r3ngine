@@ -247,7 +247,7 @@ def run_command(
         activity_id=None,
         remove_ansi_sequence=False,
         proxy=None,
-        timeout=7200,
+        timeout=43200,
         env=None
     ):
     """Run a given command using subprocess module.
@@ -329,6 +329,7 @@ def run_command(
                     "scan_id": scan_history_id or 0,
                     "command_id": command_rec_id or 0,
                     "working_dir": cwd or "",
+                    "timeout_seconds": timeout,
                 },
                 id=f"go-exec-{tool}-{command_rec_id or int(time.time())}",
                 task_queue="python-orchestrator-queue"
@@ -910,7 +911,7 @@ def stream_command(
 		activity_id=None, 
 		trunc_char=None,
 		proxy=None,
-		timeout=3600,
+		timeout=43200,
 		route_to_executor=True,
 		max_output_chars=_COMMAND_OUTPUT_MAX_CHARS,
 	):
@@ -987,6 +988,7 @@ def stream_command(
 					"scan_id": scan_history_id or 0,
 					"command_id": command_rec_id or 0,
 					"working_dir": cwd or "",
+					"timeout_seconds": timeout,
 				},
 				id=workflow_id,
 				task_queue="python-orchestrator-queue"
