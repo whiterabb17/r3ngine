@@ -5168,7 +5168,8 @@ def send_hackerone_report(vulnerability_id):
 		'https://api.hackerone.com/v1/hackers/reports',
 		auth=(api_key.username, api_key.key),
 		json=data,
-		headers=headers
+		headers=headers,
+		timeout=30
 	)
 	response = r.json()
 	status_code = r.status_code
@@ -7628,8 +7629,18 @@ def generate_impact_assessment(self, scan_history_id=None, vulnerability_id=None
 	"""
 	logger.warning("[TIER7][IMPACT] Starting AI impact assessment | scan_id=%s vuln_id=%s", scan_history_id, vulnerability_id)
 
-	from reNgine.llm import LLMImpactGenerator
+	from reNgine.llm import LLMImpactGenerator, llm_env_enabled
 	from reNgine.privacy import PIIGate
+
+	# Bail out before the per-vulnerability loop rather than inside it. Every
+	# iteration makes up to two provider calls, so with the provider unreachable
+	# this task used to spend its whole retry budget failing 100 times over.
+	if not llm_env_enabled():
+		logger.warning(
+			"[TIER7][IMPACT] LLM disabled (LLM_ENABLED unset) — skipping | scan_id=%s",
+			scan_history_id,
+		)
+		return False
 
 	# Cap the per-run vuln limit so the activity stays well inside start_to_close_timeout.
 	# Single-vuln calls from the dashboard UI bypass this via vulnerability_id.

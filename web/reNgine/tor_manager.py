@@ -32,7 +32,10 @@ class TorManager:
 
     def _get_client(self):
         try:
-            return docker.from_env()
+            # is_running() is polled from the UI through TorStatusAPIView, which
+            # runs on a web worker. The docker SDK default timeout is 60s, long
+            # enough for one unresponsive socket to park that worker.
+            return docker.from_env(timeout=10)
         except docker.errors.DockerException as e:
             raise TorUnavailableError(f"Docker socket not available: {e}")
 

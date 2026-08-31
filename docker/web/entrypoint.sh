@@ -24,9 +24,13 @@ cd /usr/src/app
 echo "Collecting static files..."
 python3 manage.py collectstatic --noinput --clear
 
-# Create any pending migrations then apply them
-echo "Making migrations..."
-python3 manage.py makemigrations --noinput
+# Only autogenerate migrations in development. In production this wrote
+# migration files that exist in the container but not in git, so the next
+# deploy started from a different migration history than the repository.
+if [ "$DEBUG" = "1" ]; then
+    echo "Making migrations..."
+    python3 manage.py makemigrations --noinput
+fi
 echo "Running migrations..."
 python3 manage.py migrate --noinput
 

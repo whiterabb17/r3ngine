@@ -1,9 +1,25 @@
 import openai
+import os
 import re
 import logging
 import requests
 
 _logger = logging.getLogger(__name__)
+
+# Master switch for every LLM call. Off by default: with no active LLMConfig the
+# generators used to fall back to Ollama, but no `ollama` service exists in
+# docker/docker-compose.yml (only the ollama_data volume), so each call burned
+# its retry budget on "Failed to resolve 'ollama'" and dragged out every scan.
+# Set LLM_ENABLED=1 and configure a provider to turn the features back on.
+LLM_DISABLED_MESSAGE = (
+    "Error: LLM features are disabled "
+    "(set LLM_ENABLED=1 and activate an LLM provider in settings)"
+)
+
+
+def llm_env_enabled():
+    """True when the LLM_ENABLED environment switch is turned on."""
+    return os.environ.get('LLM_ENABLED', '0').strip().lower() in ('1', 'true', 'yes', 'on')
 
 _PROMPT_INJECTION_RE = re.compile(
     r'(ignore\s+(previous|all|above|prior)\s+(instructions?|prompts?|context)|'
@@ -45,22 +61,30 @@ class LLMBaseGenerator:
         self.gate = PIIGate()
         self.config = LLMConfig.objects.filter(is_active=True).first()
         if not self.config:
-            self.logger.warning("No active LLM configuration found. Defaulting to Ollama/llama3.")
-            # Fallback or create a dummy config if needed
-            self.model_name = 'llama3'
-            self.provider = OLLAMA
+            # Deliberately no Ollama fallback here — see LLM_DISABLED_MESSAGE.
+            self.model_name = None
+            self.provider = None
             self.api_key = None
         else:
             self.model_name = self.config.selected_model
             self.provider = self.config.provider
             self.api_key = self.config.api_key
+        self.enabled = llm_env_enabled() and self.config is not None
+        if not self.enabled:
+            self.logger.info(
+                "LLM features disabled (LLM_ENABLED=%s, active config=%s)",
+                os.environ.get('LLM_ENABLED', '0'), bool(self.config),
+            )
 
     def _call_llm(self, system_message, user_message):
         """Unified method to call the configured LLM provider with PII protection."""
+        if not self.enabled:
+            return LLM_DISABLED_MESSAGE
+
         # Anonymize inputs
         masked_system = self.gate.anonymize(system_message)
         masked_user = self.gate.anonymize(user_message)
-        
+
         response = ""
         if self.provider == OLLAMA:
             response = self._call_ollama(masked_system, masked_user)
@@ -80,7 +104,7 @@ class LLMBaseGenerator:
         try:
             prompt = system_message + "\nUser: " + user_message
             prompt = re.sub(r'\t', '', prompt)
-            llm = Ollama(base_url=OLLAMA_INSTANCE, model=self.model_name)
+            llm = Ollama(base_url=OLLAMA_INSTANCE, model=self.model_name, timeout=120)
             return llm.invoke(prompt)
         except Exception as e:
             self.logger.error(f"Ollama Error: {str(e)}")

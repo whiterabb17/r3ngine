@@ -508,7 +508,8 @@ def test_hackerone(request, slug):
         r = requests.get(
             'https://api.hackerone.com/v1/hackers/payments/balance',
             auth=(body['username'], body['api_key']),
-            headers = headers
+            headers = headers,
+            timeout=30
         )
         if r.status_code == 200:
             return http.JsonResponse({"status": 200})

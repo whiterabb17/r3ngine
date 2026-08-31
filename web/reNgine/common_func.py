@@ -1365,7 +1365,7 @@ def send_telegram_message(message):
 	telegram_bot_token = notif.telegram_bot_token
 	telegram_bot_chat_id = notif.telegram_bot_chat_id
 	send_url = f'https://api.telegram.org/bot{telegram_bot_token}/sendMessage?chat_id={telegram_bot_chat_id}&parse_mode=Markdown&text={message}'
-	requests.get(send_url)
+	requests.get(send_url, timeout=15)
 
 
 def send_slack_message(message):
@@ -1388,7 +1388,7 @@ def send_slack_message(message):
 		validate_external_url(hook_url)
 	except ValueError:
 		return
-	requests.post(url=hook_url, data=json.dumps(message), headers=headers)
+	requests.post(url=hook_url, data=json.dumps(message), headers=headers, timeout=15)
 
 def send_lark_message(message):
 	"""Send lark message.
@@ -1410,7 +1410,7 @@ def send_lark_message(message):
 		validate_external_url(hook_url)
 	except ValueError:
 		return
-	requests.post(url=hook_url, data=json.dumps(message), headers=headers)
+	requests.post(url=hook_url, data=json.dumps(message), headers=headers, timeout=15)
 
 def send_discord_message(
 		message,
@@ -1785,7 +1785,9 @@ def reverse_whois(lookup_keyword):
 		"Accept-Encoding": "gzip, deflate",
 		"Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8"
 	}
-	response = requests.get(url, headers=headers)
+	# Reached synchronously from the ReverseWhois API view — without a timeout a
+	# slow viewdns.info parks a web worker indefinitely.
+	response = requests.get(url, headers=headers, timeout=30)
 	soup = BeautifulSoup(response.content, 'lxml')
 	table = soup.find("table", {"border" : "1"})
 	try:
@@ -1823,9 +1825,10 @@ def get_domain_historical_ip_address(domain):
 		"Accept-Encoding": "gzip, deflate",
 		"Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8"
 	}
-	response = requests.get(url, headers=headers)
+	# Same as above: DomainIPHistory calls this straight from the request path.
+	response = requests.get(url, headers=headers, timeout=30)
 	soup = BeautifulSoup(response.content, 'lxml')
-	table = soup.find("table", {"border" : "1"})					   
+	table = soup.find("table", {"border" : "1"})
 	for row in table or []:
 		ip = row.findAll('td')[0].getText()
 		location = row.findAll('td')[1].getText()
@@ -2011,8 +2014,10 @@ def update_or_create_port(port_number, service_name=None, description=None):
 			description=description
 		)
 		created = True
-	finally:
-		return port, created
+	# Not in a `finally`: that swallowed every error other than DoesNotExist,
+	# and when the create() itself failed `port` was unbound, so the caller saw
+	# an UnboundLocalError instead of the real database error.
+	return port, created
 	
 
 def exclude_urls_by_patterns(exclude_paths, urls):

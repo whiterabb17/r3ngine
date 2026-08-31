@@ -264,7 +264,8 @@ class HackerOneProgramViewSet(viewsets.ViewSet):
 			response = requests.get(
 				url,
 				headers=headers,
-				auth=(username, api_key)
+				auth=(username, api_key),
+				timeout=30
 			)
 
 			if response.status_code == 401:
@@ -325,7 +326,8 @@ class HackerOneProgramViewSet(viewsets.ViewSet):
 		response = requests.get(
 			url,
 			headers=headers,
-			auth=(username, api_key)
+			auth=(username, api_key),
+			timeout=30
 		)
 
 		if response.status_code == 401:
@@ -554,11 +556,12 @@ class OllamaManager(APIView):
 		try:
 			pull_model_api = f'{OLLAMA_INSTANCE}/api/pull'
 			_response = requests.post(
-				pull_model_api, 
+				pull_model_api,
 				json={
 					'name': model_name,
 					'stream': False
-				}
+				},
+				timeout=600
 			).json()
 			if _response.get('error'):
 				response['status'] = False
@@ -578,10 +581,11 @@ class OllamaManager(APIView):
 		}
 		try:
 			_response = requests.delete(
-				delete_model_api, 
+				delete_model_api,
 				json={
 					'name': model_name
-				}
+				},
+				timeout=60
 			).json()
 			if _response.get('error'):
 				response['status'] = False
@@ -2626,7 +2630,7 @@ class RengineUpdateCheck(APIView):
 					return version.parse('0.0.0')
 
 		try:
-			response = requests.get(github_api).json()
+			response = requests.get(github_api, timeout=15).json()
 			if 'message' in response and 'rate limit' in response['message'].lower():
 				return_response['message'] = 'RateLimited'
 			elif isinstance(response, list) and len(response) > 0:
@@ -2643,7 +2647,7 @@ class RengineUpdateCheck(APIView):
 		# Fallback: check .version file in master branch
 		version_url = 'https://raw.githubusercontent.com/whiterabb17/r3ngine/main/web/.version'
 		try:
-			raw_version_response = requests.get(version_url)
+			raw_version_response = requests.get(version_url, timeout=15)
 			if raw_version_response.status_code == 200:
 				raw_version = raw_version_response.text.strip().replace('v', '')
 				# If raw_version is higher than latest release or no release found
@@ -2788,6 +2792,11 @@ class TorStatusAPIView(APIView):
 			running = TorManager().is_running()
 			return Response({'running': running})
 		except TorUnavailableError:
+			return Response({'running': False})
+		except Exception as e:
+			# A docker socket that errors or times out should read as "tor is
+			# not running", not as a 500 on a status probe the UI polls.
+			logger.warning('[TorStatus] Could not determine TOR state: %s', e)
 			return Response({'running': False})
 
 
@@ -3030,6 +3039,12 @@ class GithubToolCheckGetLatestRelease(APIView):
 
 class ScanStatus(APIView):
 	permission_classes = [IsPenetrationTester]
+
+	# The completed buckets were already capped, but running/pending were not.
+	# This endpoint is polled from the dashboard, so an unbounded queue meant a
+	# poll could serialize the entire backlog into a web worker at once.
+	_ACTIVE_LIMIT = 100
+
 	def get(self, request):
 		req = self.request
 		slug = self.request.GET.get('project', None)
@@ -3045,12 +3060,13 @@ class ScanStatus(APIView):
 			ScanHistory.objects
 			.filter(domain__project__slug=slug)
 			.order_by('-start_scan_date')
-			.filter(scan_status=1)
+			.filter(scan_status=1)[:self._ACTIVE_LIMIT]
 		)
 		pending_scans = (
 			ScanHistory.objects
 			.filter(domain__project__slug=slug)
-			.filter(scan_status=-1)
+			.order_by('-start_scan_date')
+			.filter(scan_status=-1)[:self._ACTIVE_LIMIT]
 		)
 
 		# subtasks
@@ -3064,12 +3080,13 @@ class ScanStatus(APIView):
 			SubScan.objects
 			.filter(scan_history__domain__project__slug=slug)
 			.order_by('-start_scan_date')
-			.filter(status=1)
+			.filter(status=1)[:self._ACTIVE_LIMIT]
 		)
 		pending_tasks = (
 			SubScan.objects
 			.filter(scan_history__domain__project__slug=slug)
-			.filter(status=-1)
+			.order_by('-start_scan_date')
+			.filter(status=-1)[:self._ACTIVE_LIMIT]
 		)
 		response = {
 			'scans': {
@@ -3213,8 +3230,7 @@ class IPToDomain(APIView):
 				'ip_address': ip_address,
 				'message': f'Exception {e}'
 			}
-		finally:
-			return Response(response)
+		return Response(response)
 
 
 class VulnerabilityReport(APIView):
