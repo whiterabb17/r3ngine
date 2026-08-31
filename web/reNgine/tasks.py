@@ -4142,9 +4142,23 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 	if hasattr(self, 'activity') and self.activity:
 		self.activity.title = "Nuclei Scan"
 		self.activity.save()
-	
-	logger.warning(f'cmd: {cmd}')
-	
+
+	# One grep-able marker per nuclei invocation. The workflow calls this once per
+	# severity per tag batch, so without scan_id/severity/tags on the line there is
+	# no way to tell which of those runs any given output belongs to — which is why
+	# a narrow run looked indistinguishable from nuclei not running at all.
+	try:
+		_target_count = sum(1 for _ in open(input_path))
+	except OSError:
+		_target_count = -1
+	_nuclei_started = time.time()
+	logger.warning(
+		'[NUCLEI] START | scan_id=%s severity=%s tags=%s templates=%s targets=%s',
+		self.scan_id, severities_str or '-', tags or '-',
+		','.join(templates) or '-', _target_count,
+	)
+	logger.warning('[NUCLEI] CMD | scan_id=%s | %s', self.scan_id, cmd)
+
 	results = []
 	notif = Notification.objects.first()
 	send_status = notif.send_scan_status_notif if notif else False
@@ -4276,6 +4290,19 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 					send_hackerone_report(vuln.id)
 			except Exception as e:
 				logger.warning(f"HackerOne report send failed for vuln {vuln.id}: {e}")
+
+	logger.warning(
+		'[NUCLEI] DONE | scan_id=%s severity=%s tags=%s targets=%s findings=%d elapsed=%ss',
+		self.scan_id, severities_str or '-', tags or '-', _target_count,
+		len(results), round(time.time() - _nuclei_started, 1),
+	)
+	if not results:
+		# Distinguishes "ran and matched nothing" from "never ran" — the two were
+		# indistinguishable in the log before, which is what made nuclei look broken.
+		logger.warning(
+			'[NUCLEI] DONE | scan_id=%s NO findings for this severity/tag slice '
+			'(nuclei ran; narrow by design, not a failure)', self.scan_id,
+		)
 
 	# Write results to JSON file
 	with open(self.output_path, 'w') as f:

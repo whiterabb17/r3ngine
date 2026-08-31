@@ -458,10 +458,26 @@ LOGGING = {
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
-        # Temporal SDK — suppress noise, only errors
+        # Temporal SDK internals (client, core bridge) — suppress noise.
         'temporalio': {
             'handlers': ['error_file'],
             'level': 'ERROR',
+            'propagate': False,
+        },
+        # Our own workflow/activity code logs through the temporalio.workflow and
+        # temporalio.activity adapters, NOT through a reNgine logger. Both used to
+        # fall under the 'temporalio' rule above, so every activity.logger.info()
+        # was dropped for being below ERROR, and the ERROR ones (a failing nuclei
+        # run, "Nuclei scan failed — continuing") went only to errors.log inside
+        # the container. Nothing reached `docker logs`. Route them to the console.
+        'temporalio.workflow': {
+            'handlers': ['task', 'error_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'temporalio.activity': {
+            'handlers': ['task', 'error_file'],
+            'level': 'INFO',
             'propagate': False,
         },
     },

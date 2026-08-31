@@ -980,9 +980,20 @@ class NucleiPlannerWorkflow:
 
         # --- Stage 1: Primary scanners ---
 
+        if not vuln_config.get('run_nuclei', True):
+            workflow.logger.warning(
+                "[NUCLEI] SKIPPED | scan_id=%s — run_nuclei is false in the scan engine config",
+                ctx.get('scan_history_id'),
+            )
+
         if vuln_config.get('run_nuclei', True):
             nuclei_specific_config = vuln_config.get('nuclei', {})
             severities = nuclei_specific_config.get('severity') or NUCLEI_DEFAULT_SEVERITIES
+            workflow.logger.info(
+                "[NUCLEI] PLAN | scan_id=%s severities=%s — one nuclei run per severity "
+                "per tag batch, so expect several narrow runs rather than one wide one",
+                ctx.get('scan_history_id'), ','.join(severities),
+            )
 
             if workflow.patched("nuclei-proxy-rotation"):
                 proxies_file_path = None
@@ -1029,8 +1040,9 @@ class NucleiPlannerWorkflow:
                     # (MasterScanWorkflow) will only block tier 7 if this entire child
                     # workflow raises, not because nuclei specifically failed.
                     workflow.logger.error(
-                        "Nuclei scan failed for scan_id=%s — continuing with remaining "
-                        "tier 6 tools. error=%s",
+                        "[NUCLEI] ABANDONED | scan_id=%s — nuclei gave up after retries, "
+                        "continuing with remaining tier 6 tools. The scan will still be "
+                        "reported as finished, so this line is the only trace. error=%s",
                         ctx.get('scan_history_id'), str(_nuclei_err),
                     )
                 finally:
@@ -1080,8 +1092,9 @@ class NucleiPlannerWorkflow:
                             )
                 except Exception as _nuclei_err:
                     workflow.logger.error(
-                        "Nuclei scan failed for scan_id=%s — continuing with remaining "
-                        "tier 6 tools. error=%s",
+                        "[NUCLEI] ABANDONED | scan_id=%s — nuclei gave up after retries, "
+                        "continuing with remaining tier 6 tools. The scan will still be "
+                        "reported as finished, so this line is the only trace. error=%s",
                         ctx.get('scan_history_id'), str(_nuclei_err),
                     )
 
