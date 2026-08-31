@@ -4,7 +4,15 @@ echo "Checking frontend dependencies..."
 cd /usr/src/app/frontend
 if [ ! -d "node_modules" ] || [ package.json -nt node_modules ]; then
     echo "Installing/updating frontend dependencies (changes detected)..."
-    npm install
+    # `npm install` rewrites package-lock.json, and because ../frontend is a
+    # bind-mount that dirtied the tracked lockfile in the deploy checkout on
+    # every boot, which then blocked git checkout. `npm ci` never writes the
+    # lockfile and installs exactly what is committed.
+    if [ -f "package-lock.json" ]; then
+        npm ci || echo "npm ci failed (lockfile out of sync with package.json?) — leaving node_modules as-is"
+    else
+        npm install --no-save
+    fi
 else
     echo "Frontend dependencies are up to date."
 fi

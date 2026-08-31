@@ -79,3 +79,10 @@ backups/
 release_notes.md
 web/killer
 
+
+# Key material must never be committed. A stray privkey.pem turned up untracked
+# in a deploy checkout with no rule covering it, one `git add -A` from landing
+# in history. No .pem/.key/.crt is tracked, so these patterns are safe.
+*.pem
+*.key
+*.crt
