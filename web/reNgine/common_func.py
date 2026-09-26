@@ -1325,8 +1325,13 @@ def get_random_user_agent():
 	return _DEFAULT_USER_AGENT
 
 
-def get_random_proxy(http_only=False):
+def get_random_proxy(http_only=False, socks5_only=False):
 	"""Get a random proxy from the list stored in the database.
+
+	Args:
+		http_only: If True, skip TOR and return only http(s) entries.
+		socks5_only: If True, return only socks5:// or socks5h:// entries
+			(Reacher SMTP verify cannot use HTTP or SOCKS4).
 
 	Enhancements over the old implementation:
 	  - **Freshness short-circuit**: if the proxy list was batch-verified by
@@ -1381,6 +1386,15 @@ def get_random_proxy(http_only=False):
 
 	priority_proxies = _normalise(priority_raw)
 	proxies = _normalise(raw_proxies)
+
+	if socks5_only:
+		def _is_socks5(url):
+			lower = url.lower()
+			return lower.startswith('socks5://') or lower.startswith('socks5h://')
+		priority_proxies = [p for p in priority_proxies if _is_socks5(p)]
+		proxies = [p for p in proxies if _is_socks5(p)]
+		if not priority_proxies and not proxies:
+			return ''
 
 	if priority_proxies:
 		server_ip_pre = ''

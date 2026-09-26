@@ -172,7 +172,12 @@ def _make_scan(domain_name='example.com'):
         yaml_configuration='',
     )
     domain = Domain.objects.create(name=domain_name, insert_date=timezone.now())
-    return ScanHistory.objects.create(domain=domain, scan_type=engine, scan_status=2)
+    return ScanHistory.objects.create(
+        domain=domain,
+        scan_type=engine,
+        scan_status=2,
+        start_scan_date=timezone.now(),
+    )
 
 
 class TestBuildCandidates(TestCase):
@@ -259,6 +264,12 @@ class TestParseSocksProxy(TestCase):
         self.assertEqual(parsed['username'], 'alice')
         self.assertEqual(parsed['password'], 'secret')
 
+    def test_socks5h_accepted(self):
+        from reNgine.tasks.email_verification import parse_socks_proxy
+        parsed = parse_socks_proxy('socks5h://127.0.0.1:9050')
+        self.assertEqual(parsed['host'], '127.0.0.1')
+        self.assertEqual(parsed['port'], 9050)
+
     def test_http_proxy_ignored(self):
         from reNgine.tasks.email_verification import parse_socks_proxy
         self.assertIsNone(parse_socks_proxy('http://127.0.0.1:8080'))
@@ -306,7 +317,7 @@ class TestVerifyAddressCli(TestCase):
         self.assertEqual(result['is_reachable'], 'safe')
         self.assertTrue(result['is_role_account'])
 
-    def test_cli_passes_socks_via_env_not_argv(self):
+    def test_cli_passes_socks5_host_port_on_argv(self):
         from reNgine.tasks.email_verification import verify_address
         captured = {}
 
@@ -325,8 +336,13 @@ class TestVerifyAddressCli(TestCase):
                 'proxy_url': 'socks5://u:p@10.0.0.2:1080',
                 'domain': 'example.com',
             })
-        self.assertEqual(captured['cmd'], ['check_if_email_exists', 'a@example.com'])
+        self.assertEqual(captured['cmd'][0], 'check_if_email_exists')
+        self.assertEqual(captured['cmd'][-1], 'a@example.com')
+        self.assertIn('--proxy-host=10.0.0.2', captured['cmd'])
+        self.assertIn('--proxy-port=1080', captured['cmd'])
+        self.assertIn('--proxy-username=u', captured['cmd'])
         self.assertNotIn('--proxy-password', captured['cmd'])
+        self.assertNotIn('--proxy-password=p', captured['cmd'])
         self.assertNotIn('p', captured['cmd'])
         env = captured['kwargs'].get('env') or {}
         self.assertEqual(env.get('PROXY_HOST'), '10.0.0.2')
@@ -385,6 +401,38 @@ class TestVerifyAddressHttp(TestCase):
         self.assertEqual(captured['kwargs']['timeout'], 15)
         self.assertEqual(captured['kwargs']['json']['to_email'], 'a@example.com')
         self.assertEqual(result['is_reachable'], 'safe')
+
+    def test_http_body_includes_socks5_proxy(self):
+        from reNgine.tasks.email_verification import verify_address
+        captured = {}
+
+        class FakeResp:
+            status_code = 200
+            def iter_content(self, chunk_size=1024):
+                yield json.dumps({
+                    'input': 'a@example.com',
+                    'is_reachable': 'safe',
+                    'misc': {},
+                    'mx': {'accepts_mail': True},
+                    'smtp': {'is_catch_all': False},
+                }).encode()
+
+        def fake_post(url, **kwargs):
+            captured['kwargs'] = kwargs
+            return FakeResp()
+
+        with patch('reNgine.tasks.email_verification.requests.post', side_effect=fake_post):
+            verify_address('a@example.com', {
+                'timeout': 15,
+                'http_url': 'https://reacher.internal:8080',
+                'proxy_url': 'socks5://u:secret@10.0.0.2:1080',
+                'domain': 'example.com',
+            })
+        proxy_obj = captured['kwargs']['json'].get('proxy')
+        self.assertEqual(proxy_obj['host'], '10.0.0.2')
+        self.assertEqual(proxy_obj['port'], 1080)
+        self.assertEqual(proxy_obj['username'], 'u')
+        self.assertEqual(proxy_obj['password'], 'secret')
 
     def test_file_url_does_not_call_http_or_cli(self):
         from reNgine.tasks.email_verification import verify_address

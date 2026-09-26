@@ -218,11 +218,14 @@ def parse_socks_proxy(proxy_url: str | None) -> dict | None:
         return None
     parsed = urlparse(proxy_url.strip())
     scheme = (parsed.scheme or '').lower()
-    # Reacher SMTP verification supports SOCKS5 only.
+    # Reacher SMTP verification supports SOCKS5 only (confirmed on the
+    # orchestrator binary: --proxy-host is documented as SOCKS5).
     if scheme not in ('socks5', 'socks5h'):
         return None
     host = parsed.hostname
     if not host:
+        return None
+    if any(ch in host for ch in ('\x00', '\n', '\r', ' ', '\t')):
         return None
     port = parsed.port or 1080
     return {
@@ -231,6 +234,28 @@ def parse_socks_proxy(proxy_url: str | None) -> dict | None:
         'username': parsed.username or '',
         'password': parsed.password or '',
     }
+
+
+def _cli_proxy_argv(socks: dict) -> list[str]:
+    """Host/port (and username) as clap long-options. Password stays off argv."""
+    args = [
+        '--proxy-host=%s' % socks['host'],
+        '--proxy-port=%s' % socks['port'],
+    ]
+    if socks.get('username'):
+        args.append('--proxy-username=%s' % socks['username'])
+    return args
+
+
+def _cli_proxy_env(socks: dict) -> dict:
+    env = os.environ.copy()
+    env['PROXY_HOST'] = socks['host']
+    env['PROXY_PORT'] = str(socks['port'])
+    if socks.get('username'):
+        env['PROXY_USERNAME'] = socks['username']
+    if socks.get('password'):
+        env['PROXY_PASSWORD'] = socks['password']
+    return env
 
 
 def _normalize_reacher_payload(address: str, payload: dict) -> dict:
@@ -260,18 +285,15 @@ def _optional_id(value):
 
 
 def _verify_via_cli(address: str, timeout: int, socks: dict | None, scan_id=None, activity_id=None) -> dict:
-    cmd = [CLI_BINARY, address]
+    cmd = [CLI_BINARY]
     env = None
     if socks:
-        # Reacher reads PROXY_* from the environment. Do not put credentials
-        # on argv — run_command persists the command string in the Command table.
-        env = os.environ.copy()
-        env['PROXY_HOST'] = socks['host']
-        env['PROXY_PORT'] = str(socks['port'])
-        if socks.get('username'):
-            env['PROXY_USERNAME'] = socks['username']
-        if socks.get('password'):
-            env['PROXY_PASSWORD'] = socks['password']
+        # Host/port are first-class CLI args (check_if_email_exists --help).
+        # Password is env-only: run_command stores argv on the Command row and
+        # redact_proxy_credentials only masks URL userinfo, not --proxy-password.
+        cmd.extend(_cli_proxy_argv(socks))
+        env = _cli_proxy_env(socks)
+    cmd.append(address)
     try:
         return_code, output = run_command(
             cmd,

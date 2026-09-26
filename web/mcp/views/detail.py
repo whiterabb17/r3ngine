@@ -178,10 +178,12 @@ def serialize_target_detail(row):
 
 def serialize_vulnerability_detail(row):
     from reNgine.capabilities import suggest_followups_for_vulnerability
+    from mcp.views.validation import serialize_cve_signal
     extracted = list(row.extracted_results or [])
     scan = None
     if row.scan_history_id:
         scan = ScanHistory.objects.select_related('domain').filter(pk=row.scan_history_id).first()
+    cves = list(row.cve_ids.all()[:RELATED_LIST_CAP])
     return {
         **serialize_vulnerability(row),
         'description': row.description,
@@ -192,9 +194,13 @@ def serialize_vulnerability_detail(row):
         'source': row.source,
         'template_id': row.template_id,
         'validation_status': row.validation_status,
+        'validation_confidence': row.validation_confidence,
+        'validation_reason': row.validation_reason,
         'open_status': row.open_status,
         'discovered_date': _dt(row.discovered_date),
-        'cve_ids': [c.name for c in row.cve_ids.all()[:RELATED_LIST_CAP]],
+        'agent_enrichment': row.agent_enrichment or {},
+        'cve_ids': [c.name for c in cves],
+        'cve_signals': [serialize_cve_signal(c) for c in cves],
         'cwe_ids': [c.name for c in row.cwe_ids.all()[:RELATED_LIST_CAP]],
         'tags': [t.name for t in row.tags.all()[:RELATED_LIST_CAP]],
         'extracted_results': extracted[:RELATED_LIST_CAP],
@@ -352,6 +358,60 @@ class McpGetScanDetailView(McpDataView):
             return Response({'error': 'Not found'}, status=404)
         return Response(serialize_scan_detail(row))
 
+
+def _query_bool(params, key: str, default: bool) -> bool:
+    raw = params.get(key)
+    if raw is None or raw == '':
+        return default
+    return str(raw).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+class McpExportScanForAiView(McpDataView):
+    """Same Analyst Assist AI export as the scan-detail UI, as JSON for agents.
+
+    Returns markdown overview, triage prompt, full structured bundle, and
+    manifest — equivalent to the ZIP the UI downloads, without binary packaging.
+    """
+
+    def get(self, request, pk):
+        from reNgine.exporters.ai_bundle import (
+            AiExportOptions,
+            FORMAT_VERSION,
+            build_ai_export_payload,
+        )
+
+        row = (
+            ScanHistory.objects
+            .select_related('domain', 'domain__project', 'scan_type')
+            .filter(pk=pk)
+            .first()
+        )
+        if not row:
+            return Response({'error': 'Not found'}, status=404)
+
+        preset = (request.query_params.get('preset') or 'analyst_assist').strip()
+        if preset != 'analyst_assist':
+            return Response({'error': 'Unsupported preset'}, status=400)
+
+        options = AiExportOptions(
+            preset=preset,
+            include_raw_outputs=_query_bool(request.query_params, 'include_raw_outputs', False),
+            include_timeline=_query_bool(request.query_params, 'include_timeline', True),
+            include_sidecars=_query_bool(request.query_params, 'include_sidecars', True),
+            format_version=request.query_params.get('format_version') or FORMAT_VERSION,
+        )
+
+        include_files = _query_bool(request.query_params, 'include_files', False)
+        try:
+            payload = build_ai_export_payload(scan=row, options=options)
+        except Exception as exc:
+            return Response({'error': f'Failed to build AI export: {exc}'}, status=500)
+
+        # Omit raw file blobs by default — agents use markdown + bundle.
+        if not include_files:
+            payload = {k: v for k, v in payload.items() if k != 'files'}
+
+        return Response(payload)
 
 class McpGetTargetDetailView(McpDataView):
     def get(self, request, pk):

@@ -102,12 +102,16 @@ function usage() {
 Wrapper:
   --repo <url>   git remote (default ${DEFAULT_REPO})
   --dir <path>   checkout path (default ./r3ngine-mcp)
-  --update       git pull, rebuild local MCP, and rebuild/recreate the Docker MCP
-                 sidecar (creates and starts it if missing; uses --profile mcp)
+  --update       git pull, rebuild local MCP (incl. allowlisted cyber skills sync),
+                 and rebuild/recreate the Docker MCP sidecar
+                 (creates and starts it if missing; uses --profile mcp)
   --no-docker    skip Docker image/container ensure (local/stdio only)
 
 Setup options are forwarded to r3ngine-mcp/scripts/install.mjs
   (e.g. --url --key --transport --yes --write-cursor --detach --stop --restart --update)
+
+Cyber skills are portable under r3ngine-mcp/skills/vendor/anthropic/ (not ~/.claude/skills).
+On-demand: node r3ngine-mcp/scripts/sync-cyber-skills.mjs --missing-only
 
 Examples:
   node scripts/install-mcp.mjs --url https://host --key r3n_mcp_… --yes --write-cursor

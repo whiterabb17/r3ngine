@@ -864,6 +864,14 @@ class Vulnerability(models.Model):
 	is_suppressed = models.BooleanField(default=False)
 	group_key = models.CharField(max_length=500, null=True, blank=True, db_index=True)
 	validation_reason = models.TextField(blank=True, null=True, help_text="Reason/justification for status change")
+	agent_enrichment = models.JSONField(
+		default=dict,
+		blank=True,
+		help_text=(
+			"SAFE agent enrichment: impact_classes, validation_verdict, confidence, "
+			"rationale, cve_signals, attck_techniques — never exploit payloads."
+		),
+	)
 
 	class Meta:
 		indexes = [

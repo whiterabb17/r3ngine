@@ -72,6 +72,15 @@ def build_ai_export_zip(scan: ScanHistory, options: AiExportOptions) -> tuple[io
     return builder.build_zip()
 
 
+def build_ai_export_payload(scan: ScanHistory, options: AiExportOptions) -> dict[str, Any]:
+    """Return the same AI assessment bundle the UI zip contains, as structured JSON.
+
+    Intended for MCP / agent consumers that cannot usefully ingest a ZIP download.
+    """
+    builder = AiBundleBuilder(scan=scan, options=options)
+    return builder.build_payload()
+
+
 class AiBundleBuilder:
     def __init__(self, scan: ScanHistory, options: AiExportOptions):
         self.scan = scan
@@ -79,6 +88,17 @@ class AiBundleBuilder:
         self.generated_at = timezone.now()
 
     def build_zip(self) -> tuple[io.BytesIO, str]:
+        payload = self.build_payload()
+        files = payload["files"]
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for name, content in files.items():
+                zip_file.writestr(name, content)
+        zip_buffer.seek(0)
+        return zip_buffer, payload["filename"]
+
+    def build_payload(self) -> dict[str, Any]:
         bundle = self._build_bundle()
         markdown_text = self._render_markdown(bundle)
         prompt_text = self._render_prompt(bundle)
@@ -104,12 +124,21 @@ class AiBundleBuilder:
         manifest = self._build_manifest(bundle=bundle, files=files)
         files["manifest.json"] = self._render_json(manifest)
 
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            for name, content in files.items():
-                zip_file.writestr(name, content)
-        zip_buffer.seek(0)
-        return zip_buffer, self._download_filename()
+        return {
+            "format_version": self.options.format_version,
+            "filename": self._download_filename(),
+            "preset": self.options.preset,
+            "options": {
+                "include_raw_outputs": self.options.include_raw_outputs,
+                "include_timeline": self.options.include_timeline,
+                "include_sidecars": self.options.include_sidecars,
+            },
+            "manifest": manifest,
+            "markdown": markdown_text,
+            "prompt": prompt_text,
+            "bundle": bundle,
+            "files": files,
+        }
 
     def _build_bundle(self) -> dict[str, Any]:
         scan = (
@@ -135,7 +164,8 @@ class AiBundleBuilder:
             .order_by("endpoint__http_url", "name")
         )
         vulnerabilities = list(
-            Vulnerability.objects.filter(scan_history=scan, validation_status='verified')
+            Vulnerability.objects.filter(scan_history=scan)
+            .exclude(validation_status__in=('false_positive', 'accepted_risk'))
             .select_related("subdomain", "endpoint", "target_domain")
             .prefetch_related("tags", "references", "cve_ids", "cwe_ids")
             .order_by("-severity", "-correlation_score", "-discovered_date", "name")
@@ -370,6 +400,7 @@ class AiBundleBuilder:
                 "asset": vuln.subdomain.name if vuln.subdomain else vuln.http_url,
                 "potential_impact": self._truncate_text(impact.potential_impact, MAX_TEXT_PREVIEW),
                 "potential_attack_chain": impact.potential_attack_chain,
+                "agent_path_review": (impact.potential_attack_chain or {}).get("agent_path_review"),
                 "simulated_path": impact.simulated_path,
                 "remediation_priority": impact.remediation_priority,
             })
@@ -458,6 +489,8 @@ class AiBundleBuilder:
             "open_status": vulnerability.open_status,
             "correlation_score": vulnerability.correlation_score,
             "validation_confidence": vulnerability.validation_confidence,
+            "validation_reason": vulnerability.validation_reason,
+            "agent_enrichment": vulnerability.agent_enrichment or {},
             "is_suppressed": vulnerability.is_suppressed,
             "group_key": vulnerability.group_key,
             "cvss_score": vulnerability.cvss_score,
@@ -477,6 +510,7 @@ class AiBundleBuilder:
         }
 
     def _serialize_cve(self, cve) -> dict[str, Any]:
+        public = cve.public_exploits if isinstance(cve.public_exploits, list) else []
         return {
             "name": cve.name,
             "cvss_v31_base_score": cve.cvss_v31_base_score,
@@ -485,6 +519,7 @@ class AiBundleBuilder:
             "is_cisa_kev": cve.is_cisa_kev,
             "patching_priority": cve.patching_priority,
             "is_poc": cve.is_poc,
+            "public_exploit_count": len(public),
         }
 
     def _serialize_secret_leak(self, leak: SecretLeak) -> dict[str, Any]:
@@ -791,6 +826,15 @@ class AiBundleBuilder:
                 if vuln.get("cves"):
                     lines.append(f"  CVEs: `{', '.join(cve['name'] for cve in vuln['cves'][:5])}`")
                 lines.append(f"  Validation: `{vuln['validation_status']}` | Correlation: `{round(vuln.get('correlation_score') or 0, 2)}`")
+                enrichment = vuln.get('agent_enrichment') or {}
+                if enrichment.get('validation_verdict') or enrichment.get('impact_classes'):
+                    classes = ', '.join(enrichment.get('impact_classes') or []) or 'n/a'
+                    verdict = enrichment.get('validation_verdict') or 'n/a'
+                    conf = enrichment.get('confidence')
+                    conf_s = f"{conf:.2f}" if isinstance(conf, (int, float)) else 'n/a'
+                    lines.append(f"  Agent triage: verdict `{verdict}` | impact `{classes}` | confidence `{conf_s}`")
+                    if enrichment.get('rationale'):
+                        lines.append(f"  Agent rationale: {self._truncate_text(enrichment['rationale'], 200)}")
 
         lines.extend(["", "## Correlated Finding Groups", ""])
         top_groups = groups[:MARKDOWN_SECTION_CAPS["other_vulnerability_groups"]]
@@ -830,8 +874,21 @@ class AiBundleBuilder:
             lines.append(f"- `{self._severity_label(hint['severity'])}` {hint['vulnerability']} on `{hint.get('asset') or 'unknown'}`")
             if hint.get("potential_impact"):
                 lines.append(f"  Impact: {self._truncate_text(hint['potential_impact'], 260)}")
+            review = hint.get("agent_path_review") or {}
+            if review.get("feasibility"):
+                conf = review.get("confidence")
+                conf_s = f"{conf:.2f}" if isinstance(conf, (int, float)) else "n/a"
+                lines.append(
+                    f"  Path review: feasibility `{review['feasibility']}` | confidence `{conf_s}`"
+                )
+                if review.get("rationale"):
+                    lines.append(f"  Path rationale: {self._truncate_text(review['rationale'], 200)}")
             if hint.get("potential_attack_chain"):
-                lines.append(f"  Chain Data: `{self._truncate_text(json.dumps(hint['potential_attack_chain'], ensure_ascii=False), 220)}`")
+                # Omit nested agent_path_review from raw dump (already rendered above).
+                chain = dict(hint["potential_attack_chain"]) if isinstance(hint["potential_attack_chain"], dict) else hint["potential_attack_chain"]
+                if isinstance(chain, dict):
+                    chain = {k: v for k, v in chain.items() if k != "agent_path_review"}
+                lines.append(f"  Chain Data: `{self._truncate_text(json.dumps(chain, ensure_ascii=False), 220)}`")
         lines.append("")
         return lines
 

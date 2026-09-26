@@ -168,6 +168,36 @@ class ProxyValidationTests(TestCase):
         result = get_random_proxy(http_only=True)
         self.assertEqual(result, "http://http-proxy.com:8080")
 
+    @patch('reNgine.common_func.requests.Session')
+    @patch('reNgine.common_func.random.shuffle', lambda proxies: None)
+    def test_get_random_proxy_socks5_only_filters_http(self, mock_session):
+        Proxy.objects.create(
+            use_proxy=True,
+            proxies="socks5://socks-proxy.com:1080\nhttp://http-proxy.com:8080"
+        )
+
+        def session_factory():
+            session = MagicMock()
+            session.__enter__.return_value = session
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.text = '1.2.3.4'
+            mock_response.json.return_value = {"ip": "1.2.3.4", "query": "1.2.3.4"}
+            session.get.return_value = mock_response
+            return session
+        mock_session.side_effect = session_factory
+
+        result = get_random_proxy(socks5_only=True)
+        self.assertEqual(result, "socks5://socks-proxy.com:1080")
+
+    def test_get_random_proxy_socks5_only_returns_empty_for_http_pool(self):
+        Proxy.objects.create(
+            use_proxy=True,
+            proxies="http://http-proxy.com:8080"
+        )
+        result = get_random_proxy(socks5_only=True)
+        self.assertEqual(result, '')
+
     def test_get_random_proxy_http_only_ignores_tor(self):
         Proxy.objects.create(
             use_proxy=True,

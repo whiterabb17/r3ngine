@@ -20,6 +20,7 @@
   - Settings → MCP Access: transport (stdio / HTTP / both), named keys (secret shown once), connected agents, session revoke, audit drawer, inspect-only Replay overlay (stored request, agent, and response; never re-dispatches).
   - MCP notes (sidecar **v1.0.3**): list/get for any MCP key; create/update for pentester/sys-admin keys (`TodoNote`); delete remains UI-only.
   - MCP detail tools: companion `r3ngine_get_*_detail` for scan (status-bucketed tasks + finding rollups), target, vulnerability, subdomain, endpoint, exposure, and subscan. Thin `list_*` / `get_*` unchanged. Sidecar bumped to **v1.0.2**.
+  - MCP agent upgrade (sidecar **v1.2.0**): `r3ngine_export_scan_for_ai` exposes the scan-detail **Export for AI** Analyst Assist bundle over MCP (markdown + prompt + structured JSON) for one-shot full scan analysis; capability catalog, singular tool run, follow-up batch plans, OSINT staging verify remain as in **v1.1.0**.
   - MCP agent upgrade (sidecar **v1.1.0**): capability catalog, singular tool run, follow-up batch plans (propose/edit/approve/abort/retry), `suggested_followups` on detail payloads; OSINT staging list/verify with `agent_verified` badges and UI Clear all / Add verified / Clear false positive; `r3ngine-osint` handoff sub-agent.
   - Singular tool UI + installed-arg cache: Subdomains tab **Run single tool** modal; `GET /api/action/tool/<tool>/args/` (and MCP `r3ngine_get_tool_args`) returns schemas from binary `--help` with versioned `ToolArgSchemaCache`; optional `tool_args` on run/follow-up steps (validated, denylisted, no free-form shell); `InstalledExternalTool` live sync (`is_present` / version) + refreshed `fixtures/external_tools.yaml`; `manage.py sync_installed_tools` / `refresh_tool_arg_schemas`.
   - Tool-arg / presence probes prefer Temporal worker containers (`temporal-go-executor` / `temporal-python-orchestrator`) via `docker exec`, so entrypoint binaries that live only on workers (e.g. `kr`) still populate schemas; paths stay worker-encoded.
@@ -35,6 +36,7 @@
   - Replaced noisy `smtp-user-enum` VRFY spraying in built-in email security with Reacher `check-if-email-exists` mailbox verification (CLI default, optional self-hosted HTTP).
   - Confirmed addresses (`is_reachable=safe`) are stored on the scan; catch-all MX aborts enumeration. See `documents/email-verification.md`.
   - Scan detail timeline shows **Mailbox Verification** (`check_if_email_exists`) after port scan: pending at start, running while Reacher executes, then success/fail.
+  - Operator SOCKS5 proxies are passed to Reacher as `--proxy-host` / `--proxy-port` (password via `PROXY_PASSWORD`, not argv). HTTP/SOCKS4 pool entries are skipped for this tool.
 
 - **Email security engine switch**:
   - `email_security.enabled: false` in the scan engine config skips the email security activity and drops mailbox verification from the planned timeline. Absent config remains enabled so existing engines are unchanged.
@@ -48,6 +50,11 @@
   - Marketplace cards load each plugin icon from the public plugin repo (PNG then SVG) instead of a letter placeholder.
 
 #### Fixed
+
+- **Async Temporal activities holding dead DB connections (PR #121)**:
+  - Async activities (including `CheckScanQueueStatusActivity`, the first step of `MasterScanWorkflow`) reached the ORM through plain `asgiref.sync_to_async`. That thread pool is outside `DjangoAwareThreadPoolExecutor`, so once Postgres closed an idle session the cached connection stayed dead and every later call raised `InterfaceError: connection already closed` — new scans sat at 0% while reading RUNNING.
+  - All async activities now use `channels.db.database_sync_to_async` (runs `close_old_connections()` around each call; with `CONN_HEALTH_CHECKS` opens a fresh connection). Orchestrator plugin registry load uses the same wrapper.
+  - Guard test `tests/test_async_activity_db_connections.py` keeps plain `sync_to_async` out of the activities package.
 
 - **Scan History drawer stop actions**:
   - Tasks-tab Stop now posts `subscan_ids` (was a no-op); master-scan Stop posts `scan_ids` in the JSON body instead of an ignored `?scan_id=` query param.

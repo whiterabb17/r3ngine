@@ -95,6 +95,7 @@ Agents can queue allowed work including **subscans** (`r3ngine_start_subscan`) w
 
 `list_*` and thin `get_scan` / `get_target` stay lean for browsing. When an agent needs rollups, relations, or scan task status, use the companion detail tools:
 
+- `r3ngine_export_scan_for_ai` — **preferred for full scan analysis**: same Analyst Assist export as the scan-detail **Export for AI** button (markdown overview, triage prompt, structured bundle + manifest). Optional flags mirror the UI (`include_raw_outputs`, `include_timeline`, `include_sidecars`).
 - `r3ngine_get_scan_detail` — finding counts, severity rollup, tasks grouped by status (initiated / running / success / failed / aborted)
 - `r3ngine_get_target_detail`, `r3ngine_get_vulnerability_detail`, `r3ngine_get_subdomain_detail`, `r3ngine_get_endpoint_detail`, `r3ngine_get_exposure_detail`, `r3ngine_get_subscan_detail` — primary record plus capped related lists
 
