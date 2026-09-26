@@ -18,6 +18,7 @@ from mcp.views.dispatch import (
     McpTriggerApmeView,
 )
 from mcp.views.detail import (
+    McpExportScanForAiView,
     McpGetEndpointDetailView,
     McpGetExposureDetailView,
     McpGetScanDetailView,
@@ -88,6 +89,7 @@ urlpatterns = [
     path('targets/<int:pk>/detail/', McpGetTargetDetailView.as_view()),
     path('targets/<int:pk>/', McpGetTargetView.as_view()),
     path('targets/', McpListTargetsView.as_view()),
+    path('scans/<int:pk>/export-ai/', McpExportScanForAiView.as_view()),
     path('scans/<int:pk>/detail/', McpGetScanDetailView.as_view()),
     path('scans/<int:pk>/', McpGetScanView.as_view()),
     path('scans/', McpListScansView.as_view()),

@@ -11,6 +11,7 @@ PATH_TOOLS = (
     (re.compile(r'^/api/mcp/scans/pause/?$'), {'POST': 'r3ngine_pause_scan'}),
     (re.compile(r'^/api/mcp/scans/resume/?$'), {'POST': 'r3ngine_resume_scan'}),
     (re.compile(r'^/api/mcp/scans/stop/?$'), {'POST': 'r3ngine_stop_scan'}),
+    (re.compile(r'^/api/mcp/scans/\d+/export-ai/?$'), {'GET': 'r3ngine_export_scan_for_ai'}),
     (re.compile(r'^/api/mcp/scans/\d+/detail/?$'), {'GET': 'r3ngine_get_scan_detail'}),
     (re.compile(r'^/api/mcp/scans/\d+/?$'), {'GET': 'r3ngine_get_scan'}),
     (re.compile(r'^/api/mcp/scans/?$'), {'GET': 'r3ngine_list_scans'}),

@@ -353,6 +353,60 @@ class McpGetScanDetailView(McpDataView):
         return Response(serialize_scan_detail(row))
 
 
+def _query_bool(params, key: str, default: bool) -> bool:
+    raw = params.get(key)
+    if raw is None or raw == '':
+        return default
+    return str(raw).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+class McpExportScanForAiView(McpDataView):
+    """Same Analyst Assist AI export as the scan-detail UI, as JSON for agents.
+
+    Returns markdown overview, triage prompt, full structured bundle, and
+    manifest — equivalent to the ZIP the UI downloads, without binary packaging.
+    """
+
+    def get(self, request, pk):
+        from reNgine.exporters.ai_bundle import (
+            AiExportOptions,
+            FORMAT_VERSION,
+            build_ai_export_payload,
+        )
+
+        row = (
+            ScanHistory.objects
+            .select_related('domain', 'domain__project', 'scan_type')
+            .filter(pk=pk)
+            .first()
+        )
+        if not row:
+            return Response({'error': 'Not found'}, status=404)
+
+        preset = (request.query_params.get('preset') or 'analyst_assist').strip()
+        if preset != 'analyst_assist':
+            return Response({'error': 'Unsupported preset'}, status=400)
+
+        options = AiExportOptions(
+            preset=preset,
+            include_raw_outputs=_query_bool(request.query_params, 'include_raw_outputs', False),
+            include_timeline=_query_bool(request.query_params, 'include_timeline', True),
+            include_sidecars=_query_bool(request.query_params, 'include_sidecars', True),
+            format_version=request.query_params.get('format_version') or FORMAT_VERSION,
+        )
+
+        include_files = _query_bool(request.query_params, 'include_files', False)
+        try:
+            payload = build_ai_export_payload(scan=row, options=options)
+        except Exception as exc:
+            return Response({'error': f'Failed to build AI export: {exc}'}, status=500)
+
+        # Omit raw file blobs by default — agents use markdown + bundle.
+        if not include_files:
+            payload = {k: v for k, v in payload.items() if k != 'files'}
+
+        return Response(payload)
+
 class McpGetTargetDetailView(McpDataView):
     def get(self, request, pk):
         row = Domain.objects.select_related('project').filter(pk=pk).first()

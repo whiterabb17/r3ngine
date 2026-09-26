@@ -199,6 +199,41 @@ class McpDetailTests(TestCase):
         res = self.client.get('/api/mcp/scans/999999/detail/')
         self.assertEqual(res.status_code, 404)
 
+    def test_export_scan_for_ai_bundle_and_audit(self):
+        res = self.client.get(f'/api/mcp/scans/{self.scan.id}/export-ai/')
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertEqual(body['format_version'], 'ai-export.v1')
+        self.assertEqual(body['preset'], 'analyst_assist')
+        self.assertIn('markdown', body)
+        self.assertIn('prompt', body)
+        self.assertIn('bundle', body)
+        self.assertIn('manifest', body)
+        self.assertNotIn('files', body)
+        self.assertEqual(body['bundle']['metadata']['scan_id'], self.scan.id)
+        self.assertEqual(body['manifest']['goal'], 'analyst_assist')
+        self.assertIn('detail.example.com', body['markdown'])
+        self.assertTrue(
+            McpAuditEvent.objects.filter(
+                session_id=self.sid,
+                tool_name='r3ngine_export_scan_for_ai',
+            ).exists()
+        )
+
+        with_files = self.client.get(
+            f'/api/mcp/scans/{self.scan.id}/export-ai/',
+            {'include_files': 'true', 'include_timeline': 'false'},
+        )
+        self.assertEqual(with_files.status_code, 200)
+        files_body = with_files.json()
+        self.assertIn('files', files_body)
+        self.assertIn('ai_bundle.md', files_body['files'])
+        self.assertEqual(files_body['options']['include_timeline'], False)
+
+    def test_export_scan_for_ai_404(self):
+        res = self.client.get('/api/mcp/scans/999999/export-ai/')
+        self.assertEqual(res.status_code, 404)
+
     def test_target_detail(self):
         res = self.client.get(f'/api/mcp/targets/{self.domain.id}/detail/')
         self.assertEqual(res.status_code, 200)

@@ -72,6 +72,15 @@ def build_ai_export_zip(scan: ScanHistory, options: AiExportOptions) -> tuple[io
     return builder.build_zip()
 
 
+def build_ai_export_payload(scan: ScanHistory, options: AiExportOptions) -> dict[str, Any]:
+    """Return the same AI assessment bundle the UI zip contains, as structured JSON.
+
+    Intended for MCP / agent consumers that cannot usefully ingest a ZIP download.
+    """
+    builder = AiBundleBuilder(scan=scan, options=options)
+    return builder.build_payload()
+
+
 class AiBundleBuilder:
     def __init__(self, scan: ScanHistory, options: AiExportOptions):
         self.scan = scan
@@ -79,6 +88,17 @@ class AiBundleBuilder:
         self.generated_at = timezone.now()
 
     def build_zip(self) -> tuple[io.BytesIO, str]:
+        payload = self.build_payload()
+        files = payload["files"]
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for name, content in files.items():
+                zip_file.writestr(name, content)
+        zip_buffer.seek(0)
+        return zip_buffer, payload["filename"]
+
+    def build_payload(self) -> dict[str, Any]:
         bundle = self._build_bundle()
         markdown_text = self._render_markdown(bundle)
         prompt_text = self._render_prompt(bundle)
@@ -104,12 +124,21 @@ class AiBundleBuilder:
         manifest = self._build_manifest(bundle=bundle, files=files)
         files["manifest.json"] = self._render_json(manifest)
 
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            for name, content in files.items():
-                zip_file.writestr(name, content)
-        zip_buffer.seek(0)
-        return zip_buffer, self._download_filename()
+        return {
+            "format_version": self.options.format_version,
+            "filename": self._download_filename(),
+            "preset": self.options.preset,
+            "options": {
+                "include_raw_outputs": self.options.include_raw_outputs,
+                "include_timeline": self.options.include_timeline,
+                "include_sidecars": self.options.include_sidecars,
+            },
+            "manifest": manifest,
+            "markdown": markdown_text,
+            "prompt": prompt_text,
+            "bundle": bundle,
+            "files": files,
+        }
 
     def _build_bundle(self) -> dict[str, Any]:
         scan = (
@@ -135,7 +164,8 @@ class AiBundleBuilder:
             .order_by("endpoint__http_url", "name")
         )
         vulnerabilities = list(
-            Vulnerability.objects.filter(scan_history=scan, validation_status='verified')
+            Vulnerability.objects.filter(scan_history=scan)
+            .exclude(validation_status__in=('false_positive', 'accepted_risk'))
             .select_related("subdomain", "endpoint", "target_domain")
             .prefetch_related("tags", "references", "cve_ids", "cwe_ids")
             .order_by("-severity", "-correlation_score", "-discovered_date", "name")
