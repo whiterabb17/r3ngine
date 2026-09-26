@@ -2,7 +2,10 @@ import os
 import yaml
 import uuid as _uuid
 from temporalio import activity
-from asgiref.sync import sync_to_async
+# channels' wrapper, not asgiref's: it refreshes the thread's database connection
+# around each call. The plain one left a dead cached connection in place for
+# good — see check_scan_queue_status_activity for the incident.
+from channels.db import database_sync_to_async
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 from reNgine.utils.logger import get_module_logger
@@ -81,7 +84,7 @@ async def update_assessment_state_activity(input: StateTransitionInput) -> bool:
     from engagements.models import Assessment
     from engagements.services.state_machine import AssessmentStateMachine
 
-    @sync_to_async
+    @database_sync_to_async
     def _do_transition():
         try:
             assessment = Assessment.objects.get(uuid=input.assessment_id)
@@ -156,7 +159,7 @@ async def prepare_assessment_context_activity(input: PrepareAssessmentContextInp
     """
     from temporalio.exceptions import ApplicationError
 
-    @sync_to_async
+    @database_sync_to_async
     def _prepare() -> Dict[str, Any]:
         from django.utils import timezone
         from django.contrib.contenttypes.models import ContentType
@@ -296,7 +299,7 @@ async def auto_validate_findings_activity(assessment_id: str) -> bool:
     from startScan.models import Vulnerability, ScanHistory
     from engagements.models import Assessment
 
-    @sync_to_async
+    @database_sync_to_async
     def _validate():
         try:
             assessment = Assessment.objects.get(uuid=assessment_id)

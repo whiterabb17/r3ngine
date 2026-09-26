@@ -132,6 +132,67 @@ class McpSession(models.Model):
         return self.last_seen_at >= timezone.now() - timedelta(seconds=self.CONNECTED_WINDOW_SECONDS)
 
 
+class FollowupPlan(models.Model):
+    """Durable agent/operator follow-up batch (propose → edit → approve → run)."""
+
+    STATUS_PROPOSED = 'proposed'
+    STATUS_APPROVED = 'approved'
+    STATUS_RUNNING = 'running'
+    STATUS_DONE = 'done'
+    STATUS_FAILED = 'failed'
+    STATUS_ABORTED = 'aborted'
+    STATUS_REJECTED = 'rejected'
+    STATUS_CHOICES = (
+        (STATUS_PROPOSED, 'Proposed'),
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_RUNNING, 'Running'),
+        (STATUS_DONE, 'Done'),
+        (STATUS_FAILED, 'Failed'),
+        (STATUS_ABORTED, 'Aborted'),
+        (STATUS_REJECTED, 'Rejected'),
+    )
+
+    project_slug = models.CharField(max_length=255, db_index=True)
+    scan_id = models.IntegerField(null=True, blank=True, db_index=True)
+    assessment_id = models.IntegerField(null=True, blank=True, db_index=True)
+    status = models.CharField(
+        max_length=16, choices=STATUS_CHOICES, default=STATUS_PROPOSED, db_index=True
+    )
+    rationale = models.TextField(blank=True, default='')
+    steps = models.JSONField(default=list)
+    temporal_workflow_ids = models.JSONField(default=list)
+    retry_count = models.PositiveIntegerField(default=0)
+    operator_edited = models.BooleanField(default=False)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='followup_plans_created',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='followup_plans_updated',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['project_slug', 'status', '-created_at']),
+            models.Index(fields=['scan_id', 'status']),
+            models.Index(fields=['assessment_id', 'status']),
+        ]
+
+    def __str__(self):
+        return f'FollowupPlan {self.id} ({self.status})'
+
+
 class McpAuditEvent(models.Model):
     session = models.ForeignKey(
         McpSession, null=True, blank=True, on_delete=models.SET_NULL, related_name='events'

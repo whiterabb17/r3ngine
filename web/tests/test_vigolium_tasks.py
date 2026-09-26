@@ -292,6 +292,27 @@ class VigoliumTaskGatingTest(TestCase):
             self.assertIn('--only spidering,discovery', commands[0])
             self.assertIn('--only known-issue-scan,dynamic-assessment', commands[1])
 
+    def test_vigolium_scan_passes_subdomain_scope_to_url_collector(self):
+        from reNgine.tasks.vigolium import vigolium_scan
+        task = self._make_task(vuln_enabled=True)
+        task.results_dir = '/tmp/test_scan/subscans/2'
+        task.subdomain_id = 59
+        subdomain = MagicMock()
+        subdomain.id = 59
+        subdomain.name = 'n8n.defijn.io'
+        task.subdomain = subdomain
+        with patch('reNgine.tasks.vigolium._run_vigolium_phase') as mock_run, \
+             patch('os.makedirs'), \
+             patch('builtins.open', mock_open()), \
+             patch('reNgine.common_func.collect_all_scan_urls', return_value=['https://n8n.defijn.io']) as mock_collect:
+            vigolium_scan(task, urls=[], ctx={'subdomain_id': 59, 'subdomain_name': 'n8n.defijn.io'})
+            self.assertTrue(mock_collect.called)
+            passed_ctx = mock_collect.call_args[1]['ctx']
+            self.assertEqual(passed_ctx.get('subdomain_id'), 59)
+            self.assertEqual(passed_ctx.get('subdomain_name'), 'n8n.defijn.io')
+            self.assertEqual(mock_collect.call_args[1]['results_dir'], '/tmp/test_scan/subscans/2')
+            self.assertEqual(mock_run.call_count, 2)
+
 
 class VigoliumActivitiesTest(TestCase):
     def test_activities_are_importable(self):

@@ -134,6 +134,66 @@ class OsintStagingViewSet(viewsets.ModelViewSet):
 			
 		return Response({'status': 'success', 'message': f'Promoted {count} items'})
 
+	@action(detail=False, methods=['post'])
+	def clear_all(self, request):
+		"""Delete all pending staging rows for a scan."""
+		scan_id = request.data.get('scan_id')
+		if not scan_id:
+			return Response({'error': 'scan_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+		qs = OsintStaging.objects.filter(scan_history_id=scan_id, status='pending')
+		count, _ = qs.delete()
+		return Response({'status': 'success', 'message': f'Deleted {count} pending items', 'deleted': count})
+
+	@action(detail=False, methods=['post'])
+	def add_verified(self, request):
+		"""Promote all agent_verified=True rows for a scan (pending)."""
+		from reNgine.tasks import persist_osint_item
+		scan_id = request.data.get('scan_id')
+		if not scan_id:
+			return Response({'error': 'scan_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+		ids = request.data.get('ids')
+		qs = OsintStaging.objects.filter(
+			scan_history_id=scan_id,
+			agent_verified=True,
+			status='pending',
+		)
+		if ids:
+			qs = qs.filter(id__in=ids)
+		count = 0
+		for item in qs:
+			ctx = {
+				'scan_history_id': item.scan_history.id,
+				'domain_id': item.target_domain.id,
+			}
+			persist_osint_item(
+				scan_history=item.scan_history,
+				domain=item.target_domain,
+				osint_type=item.osint_type,
+				e_data=item.content,
+				confidence=item.confidence,
+				source_data=item.metadata.get('source_data') if isinstance(item.metadata, dict) else None,
+				event_type=item.metadata.get('sf_type') if isinstance(item.metadata, dict) else None,
+				ctx=ctx,
+				metadata=item.metadata or {},
+			)
+			item.status = 'validated'
+			item.save(update_fields=['status'])
+			count += 1
+		return Response({'status': 'success', 'message': f'Promoted {count} agent-verified items', 'promoted': count})
+
+	@action(detail=False, methods=['post'])
+	def clear_false_positives(self, request):
+		"""Delete staging rows marked agent_verified=False for a scan."""
+		scan_id = request.data.get('scan_id')
+		if not scan_id:
+			return Response({'error': 'scan_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+		ids = request.data.get('ids')
+		qs = OsintStaging.objects.filter(scan_history_id=scan_id, agent_verified=False)
+		if ids:
+			qs = qs.filter(id__in=ids)
+		count, _ = qs.delete()
+		return Response({'status': 'success', 'message': f'Deleted {count} false positives', 'deleted': count})
+
 	@action(detail=True, methods=['post'])
 	def promote(self, request, pk=None):
 		"""Individual promote."""

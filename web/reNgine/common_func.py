@@ -402,8 +402,12 @@ def collect_all_scan_urls(ctx, results_dir, ignore_files=True):
 	)
 
 	# --- Source 2: Spidering result files ---
+	# Skip unfiltered crawl dumps when scoped to a single subdomain — those files
+	# contain hosts from the whole scan and would break singular / subscan scope.
 	file_urls_before = len(all_urls)
-	if results_dir and os.path.isdir(results_dir):
+	subdomain_id = ctx.get('subdomain_id')
+	subdomain_name = (ctx.get('subdomain_name') or '').lower().rstrip('.')
+	if results_dir and os.path.isdir(results_dir) and not subdomain_id:
 		# fetch_url.txt is the primary consolidated file; urls_*.txt are per-tool outputs
 		candidates = [os.path.join(results_dir, 'fetch_url.txt')]
 		candidates += glob.glob(os.path.join(results_dir, 'urls_*.txt'))
@@ -415,6 +419,25 @@ def collect_all_scan_urls(ctx, results_dir, ignore_files=True):
 					for raw_line in fh:
 						url = raw_line.strip()
 						if url and is_valid_url(url):
+							all_urls.add(url)
+			except OSError as exc:
+				logger.warning(
+					'collect_all_scan_urls: cannot read %s: %s', filepath, exc
+				)
+	elif results_dir and os.path.isdir(results_dir) and subdomain_name:
+		candidates = [os.path.join(results_dir, 'fetch_url.txt')]
+		candidates += glob.glob(os.path.join(results_dir, 'urls_*.txt'))
+		for filepath in candidates:
+			if not os.path.isfile(filepath):
+				continue
+			try:
+				with open(filepath, 'r', errors='replace') as fh:
+					for raw_line in fh:
+						url = raw_line.strip()
+						if not url or not is_valid_url(url):
+							continue
+						host = (urlparse(url).hostname or '').lower().rstrip('.')
+						if host == subdomain_name or host.endswith('.' + subdomain_name):
 							all_urls.add(url)
 			except OSError as exc:
 				logger.warning(
@@ -1302,8 +1325,13 @@ def get_random_user_agent():
 	return _DEFAULT_USER_AGENT
 
 
-def get_random_proxy(http_only=False):
+def get_random_proxy(http_only=False, socks5_only=False):
 	"""Get a random proxy from the list stored in the database.
+
+	Args:
+		http_only: If True, skip TOR and return only http(s) entries.
+		socks5_only: If True, return only socks5:// or socks5h:// entries
+			(Reacher SMTP verify cannot use HTTP or SOCKS4).
 
 	Enhancements over the old implementation:
 	  - **Freshness short-circuit**: if the proxy list was batch-verified by
@@ -1358,6 +1386,15 @@ def get_random_proxy(http_only=False):
 
 	priority_proxies = _normalise(priority_raw)
 	proxies = _normalise(raw_proxies)
+
+	if socks5_only:
+		def _is_socks5(url):
+			lower = url.lower()
+			return lower.startswith('socks5://') or lower.startswith('socks5h://')
+		priority_proxies = [p for p in priority_proxies if _is_socks5(p)]
+		proxies = [p for p in proxies if _is_socks5(p)]
+		if not priority_proxies and not proxies:
+			return ''
 
 	if priority_proxies:
 		server_ip_pre = ''

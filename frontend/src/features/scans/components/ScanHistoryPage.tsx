@@ -68,7 +68,6 @@ import { ScanReportModal } from './ScanReportModal';
 import { StartScanModal } from './StartScanModal';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 
-import { timeout } from 'd3';
 import type { ScanHistory } from '../types';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 
@@ -209,10 +208,11 @@ export const ScanHistoryPage: React.FC = () => {
               fontWeight: 900,
               fontFamily: 'Orbitron',
               animation: 'pulse-spider 2s infinite ease-in-out',
+              boxShadow: `0 0 8px ${tokens.accent.secondary}`,
               '@keyframes pulse-spider': {
-                '0%': { transform: 'scale(1)', filter: `drop-shadow(0 0 0px ${tokens.accent.secondary})` },
-                '50%': { transform: 'scale(1.05)', filter: `drop-shadow(0 0 8px ${tokens.accent.secondary})` },
-                '100%': { transform: 'scale(1)', filter: `drop-shadow(0 0 0px ${tokens.accent.secondary})` },
+                '0%': { transform: 'scale(1)', opacity: 1 },
+                '50%': { transform: 'scale(1.05)', opacity: 0.85 },
+                '100%': { transform: 'scale(1)', opacity: 1 },
               }
             }}
             icon={<Bug size={12} color={tokens.accent.secondary} />}
@@ -244,10 +244,11 @@ export const ScanHistoryPage: React.FC = () => {
               fontWeight: 900,
               fontFamily: 'Orbitron',
               animation: 'pulse-paused 2s infinite ease-in-out',
+              boxShadow: `0 0 4px ${color}`,
               '@keyframes pulse-paused': {
-                '0%': { transform: 'scale(1)', filter: `drop-shadow(0 0 0px ${color})` },
-                '50%': { transform: 'scale(1.02)', filter: `drop-shadow(0 0 4px ${color})` },
-                '100%': { transform: 'scale(1)', filter: `drop-shadow(0 0 0px ${color})` },
+                '0%': { transform: 'scale(1)', opacity: 1 },
+                '50%': { transform: 'scale(1.02)', opacity: 0.88 },
+                '100%': { transform: 'scale(1)', opacity: 1 },
               }
             }}
             icon={<PauseCircle size={12} color={color} />}
@@ -420,7 +421,7 @@ export const ScanHistoryPage: React.FC = () => {
                     sx={{
                       '&:hover': { bgcolor: 'rgba(0, 243, 255, 0.02) !important' },
                       '&.Mui-selected': { bgcolor: `${tokens.accent.primary}0D !important` },
-                      transition: 'all 0.2s',
+                      transition: 'background-color 0.2s, border-color 0.2s',
                       cursor: 'pointer'
                     }}
                   >
@@ -512,12 +513,17 @@ export const ScanHistoryPage: React.FC = () => {
                             borderRadius: 0,
                             bgcolor: 'action.hover',
                             '& .MuiLinearProgress-bar': {
+                              // Do not set position/overflow here — MUI sizes the bar with
+                              // absolute positioning + transform; overriding collapses the fill.
                               bgcolor: (scan.scan_status === 0 || scan.scan_status === 3) ? '#ff003c' : scan.scan_status === 5 ? '#ffab00' : tokens.accent.primary,
                               boxShadow: `0 0 10px ${(scan.scan_status === 0 || scan.scan_status === 3) ? 'rgba(255, 0, 60, 0.5)' : scan.scan_status === 5 ? 'rgba(255, 171, 0, 0.5)' : `${tokens.accent.primary}80`}`,
                               ...((scan.scan_status === 1 || scan.scan_status === -1) && {
-                                background: `linear-gradient(90deg, #00f3ff 0%, #00a8ff 50%, ${tokens.accent.primary} 100%)`,
-                                backgroundSize: '200% 100%',
-                                animation: 'progress-flow 2s linear infinite'
+                                backgroundImage: `linear-gradient(90deg, #00f3ff 0%, #00a8ff 50%, ${tokens.accent.primary} 100%)`,
+                                animation: 'progress-bar-pulse 2s ease-in-out infinite',
+                                '@keyframes progress-bar-pulse': {
+                                  '0%, 100%': { opacity: 1 },
+                                  '50%': { opacity: 0.72 },
+                                },
                               })
                             }
                           }}

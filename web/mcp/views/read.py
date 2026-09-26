@@ -1,4 +1,5 @@
 from django.db import connection
+from django.db.models import Q
 from rest_framework.response import Response
 
 from dashboard.models import Project
@@ -114,8 +115,37 @@ def serialize_employee(row):
     }
 
 
+def serialize_osint_staging(row):
+    meta = row.metadata if isinstance(row.metadata, dict) else {}
+    # Cap metadata keys to keep MCP payloads small for handoff packaging
+    meta_snip = {}
+    for i, (k, v) in enumerate(meta.items()):
+        if i >= 8:
+            break
+        if isinstance(v, (str, int, float, bool)) or v is None:
+            meta_snip[k] = v if not isinstance(v, str) else v[:200]
+        else:
+            meta_snip[k] = str(v)[:200]
+    return {
+        'id': row.id,
+        'osint_type': row.osint_type,
+        'content': (row.content or '')[:500],
+        'source': row.source,
+        'confidence': row.confidence,
+        'status': row.status,
+        'agent_verified': row.agent_verified,
+        'agent_verified_at': _dt(row.agent_verified_at),
+        'scan_id': row.scan_history_id,
+        'target_id': row.target_domain_id,
+        'target_name': row.target_domain.name if row.target_domain_id else None,
+        'discovered_date': _dt(row.discovered_date),
+        'metadata': meta_snip,
+    }
+
+
 def serialize_engine(row):
-    return {'id': row.id, 'engine_name': row.engine_name}
+    from reNgine.capabilities import serialize_engine_detail
+    return serialize_engine_detail(row)
 
 
 class McpListProjectsView(McpDataView):
@@ -277,6 +307,36 @@ class McpListEmployeesView(McpDataView):
         return Response(page_queryset(qs, request, serialize_employee))
 
 
+class McpListOsintStagingView(McpDataView):
+    """Pending (default) OSINT staging rows for the main assessor to package for OSINT verify."""
+
+    def get(self, request):
+        from startScan.models import OsintStaging
+
+        scan_id = request.query_params.get('scan_id')
+        if not scan_id:
+            return Response({'error': 'scan_id is required'}, status=400)
+        if not ScanHistory.objects.filter(pk=scan_id).exists():
+            return Response({'error': 'Not found'}, status=404)
+
+        status_param = (request.query_params.get('status') or 'pending').strip()
+        qs = OsintStaging.objects.filter(scan_history_id=scan_id).select_related('target_domain')
+        if status_param and status_param != 'all':
+            qs = qs.filter(status=status_param)
+        osint_type = request.query_params.get('osint_type')
+        if osint_type:
+            qs = qs.filter(osint_type__iexact=osint_type)
+        query = (request.query_params.get('query') or '').strip()
+        if query:
+            qs = qs.filter(
+                Q(content__icontains=query)
+                | Q(source__icontains=query)
+                | Q(osint_type__icontains=query)
+            )
+        qs = qs.order_by('-confidence', '-discovered_date', '-id')
+        return Response(page_queryset(qs, request, serialize_osint_staging))
+
+
 class McpSearchView(McpDataView):
     def get(self, request):
         query = (request.query_params.get('query') or '').strip()
@@ -352,6 +412,7 @@ class McpAttackPathsView(McpDataView):
                 continue
             paths.append({
                 'path_id': chain.get('apme_path_id'),
+                'impact_assessment_id': assessment.id,
                 'risk': chain.get('risk', 'unknown'),
                 'score': chain.get('score', 0.0),
                 'step_count': len(chain.get('steps', [])),
@@ -359,6 +420,8 @@ class McpAttackPathsView(McpDataView):
                 'potential_impact': assessment.potential_impact,
                 'remediation_priority': assessment.remediation_priority,
                 'vulnerability_id': assessment.vulnerability_id,
+                'agent_path_review': chain.get('agent_path_review') or None,
+                'dismissed': bool(assessment.dismissed),
             })
         return Response({'total_paths': len(paths), 'paths': paths})
 

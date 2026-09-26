@@ -86,6 +86,8 @@ If the master workflow **already completed** but the scan is FAILED (a late task
 
 > **Note:** In normal operation, Temporal handles in-flight recovery by replaying the workflow's event history. `recover_stuck_scans` is the fallback when that history is gone or the scan finished failed.
 
+On every orchestrator start, `recover_stuck_scans` first runs `cleanup_orphan_workflows_for_completed_scans`: it lists Running Temporal workflows, maps scan-scoped ids (`go-exec-*`, `master-scan-*`, `scan-*`, `subscan-*`, …) back to `ScanHistory`, and cancels any whose scan is already `SUCCESS` or `ABORTED` (also arming Redis `scan_stop_{id}` so Go executor subprocesses die). This stops tool workflows that outlived a finalized scan after heartbeat retries or missed parent cancellation.
+
 ---
 
 ## `FinalizeFailedScanActivity`

@@ -85,12 +85,13 @@ def _make_scan_proxy(domain_name='test.example.com'):
     proxy.domain = domain
     proxy.scan = MagicMock()
     proxy.subscan = None
+    proxy.subdomain = None
     return proxy
 
 
 class TestSecondOrderScan(TestCase):
 
-    def _run(self, proxy, urls=None, output_files=None):
+    def _run(self, proxy, urls=None, output_files=None, ctx=None):
         from reNgine.tasks.vuln import second_order_scan
 
         out_dir = os.path.join(proxy.results_dir, 'second_order_out')
@@ -99,10 +100,11 @@ class TestSecondOrderScan(TestCase):
             with open(os.path.join(out_dir, fname), 'w') as fh:
                 json.dump(content, fh)
 
-        with patch('reNgine.tasks.vuln.run_command'), \
+        with patch('reNgine.tasks.vuln.run_command') as mock_run, \
+             patch('reNgine.tasks.vuln.get_http_urls', return_value=[]), \
              patch('reNgine.common_func.save_vulnerability') as mock_save:
-            second_order_scan(proxy, urls=urls or [])
-            return mock_save
+            second_order_scan(proxy, urls=urls or [], ctx=ctx or {})
+            return mock_save, mock_run
 
     def test_non200_finding_saved_with_high_severity(self):
         proxy = _make_scan_proxy()
@@ -115,7 +117,7 @@ class TestSecondOrderScan(TestCase):
                 }
             }
         }
-        mock_save = self._run(proxy, output_files=output)
+        mock_save, _ = self._run(proxy, output_files=output)
         self.assertTrue(mock_save.called)
         call_kwargs = mock_save.call_args[1]
         self.assertEqual(call_kwargs['severity'], 3)
@@ -132,7 +134,7 @@ class TestSecondOrderScan(TestCase):
                 }
             }
         }
-        mock_save = self._run(proxy, output_files=output)
+        mock_save, _ = self._run(proxy, output_files=output)
         call_kwargs = mock_save.call_args[1]
         self.assertEqual(call_kwargs['severity'], 0)
 
@@ -147,7 +149,7 @@ class TestSecondOrderScan(TestCase):
                 }
             }
         }
-        mock_save = self._run(proxy, output_files=output)
+        mock_save, _ = self._run(proxy, output_files=output)
         call_kwargs = mock_save.call_args[1]
         self.assertEqual(call_kwargs['severity'], 0)
         self.assertEqual(call_kwargs['type'], 'Inline Content Discovered')
@@ -159,7 +161,7 @@ class TestSecondOrderScan(TestCase):
             'inline.json': {'LogInline': {}},
             'non-200-url-attributes.json': {'LogNon200Queries': {}},
         }
-        mock_save = self._run(proxy, output_files=output)
+        mock_save, _ = self._run(proxy, output_files=output)
         mock_save.assert_not_called()
 
     def test_malformed_json_does_not_raise(self):
@@ -171,6 +173,7 @@ class TestSecondOrderScan(TestCase):
 
         from reNgine.tasks.vuln import second_order_scan
         with patch('reNgine.tasks.vuln.run_command'), \
+             patch('reNgine.tasks.vuln.get_http_urls', return_value=[]), \
              patch('reNgine.common_func.save_vulnerability'):
             second_order_scan(proxy, urls=[])
 
@@ -178,6 +181,7 @@ class TestSecondOrderScan(TestCase):
         proxy = _make_scan_proxy()
         config_path = '/usr/local/config/second_order_merged.json'
         with patch('reNgine.tasks.vuln.run_command'), \
+             patch('reNgine.tasks.vuln.get_http_urls', return_value=[]), \
              patch('reNgine.common_func.save_vulnerability'):
             from reNgine.tasks.vuln import second_order_scan
             second_order_scan(proxy, urls=[])
@@ -187,6 +191,22 @@ class TestSecondOrderScan(TestCase):
         self.assertIn('LogNon200Queries', cfg)
         self.assertIn('LogQueries', cfg)
         self.assertIn('LogInline', cfg)
+
+    def test_subscan_falls_back_to_subdomain_not_apex(self):
+        """Empty urls + subdomain ctx must target the subdomain, not the apex domain."""
+        proxy = _make_scan_proxy(domain_name='defijn.io')
+        subdomain = MagicMock()
+        subdomain.name = 'n8n.defijn.io'
+        proxy.subdomain = subdomain
+        _, mock_run = self._run(
+            proxy,
+            urls=[],
+            ctx={'subdomain_name': 'n8n.defijn.io', 'subdomain_id': 59},
+        )
+        self.assertTrue(mock_run.called)
+        cmd = mock_run.call_args[0][0]
+        self.assertIn('https://n8n.defijn.io', cmd)
+        self.assertNotIn('-target https://defijn.io ', cmd)
 
 
 class TestNucleiDastProxyFilter(TestCase):

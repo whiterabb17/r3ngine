@@ -177,14 +177,21 @@ export const GeoMap: React.FC<{ data: CountryData[]; disableCard?: boolean }> = 
                         <GeoJSON data={geoJsonData} onEachFeature={onEachFeature} />
                     )}
 
-                    {/* Markers for Countries with Assets */}
-                    {data.map((country) => {
+                    {/* Markers for Countries with Assets — pulse only top 5 by count */}
+                    {(() => {
+                        const topIso = new Set(
+                            [...data].sort((a, b) => b.count - a.count).slice(0, 5).map((c) => c.iso)
+                        );
+                        return data.map((country) => {
                         const coords = countryCentroids[country.iso.toUpperCase()];
                         if (!coords) return null;
 
+                        const shouldPulse = topIso.has(country.iso);
                         const customIcon = L.divIcon({
                             className: 'custom-pulsing-marker',
-                            html: '<div class="map-marker-pulse"></div>',
+                            html: shouldPulse
+                                ? '<div class="map-marker-pulse"></div>'
+                                : '<div class="map-marker-pulse map-marker-static"></div>',
                             iconSize: [12, 12],
                             iconAnchor: [6, 6],
                         });
@@ -212,7 +219,8 @@ export const GeoMap: React.FC<{ data: CountryData[]; disableCard?: boolean }> = 
                                 </LeafletTooltip>
                             </Marker>
                         );
-                    })}
+                        });
+                    })()}
                 </MapContainer>
             </Box>
 

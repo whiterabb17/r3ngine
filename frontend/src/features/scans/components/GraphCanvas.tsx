@@ -33,6 +33,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
   const { setSelectedNode } = useGraphStore();
+  const layoutNameRef = useRef(layoutName);
+  const skipLayoutEffectRef = useRef(true);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -207,12 +209,12 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
     const expandCollapseApi = (cy as any).expandCollapse({
       layoutBy: {
         name: layoutName,
-        animate: true,
+        animate: false,
         randomize: false,
         fit: true
       },
-      fisheye: true,
-      animate: true,
+      fisheye: false,
+      animate: false,
       undoable: false,
       expandCollapseCuePosition: 'top-left',
       expandCollapseCueSize: 16,
@@ -258,10 +260,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
       contextMenuClasses: ['custom-context-menu']
     });
 
-    // Initial Layout
+    // Initial Layout — no animation (compositor-friendly); user refresh may animate
     cy.layout({ 
       name: layoutName,
-      animate: true,
+      animate: false,
       nodeDimensionsIncludeLabels: true,
       ...(layoutName === 'fcose' ? {
         quality: 'default',
@@ -307,7 +309,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
     cyRef.current = cy;
     if (onInit) onInit(cy);
 
+    const onVisibility = () => {
+      if (document.hidden) {
+        cy.stop();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
     return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
       cy.destroy();
     };
   }, [data]);
@@ -338,9 +348,19 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
 
   useEffect(() => {
     if (!cyRef.current) return;
+    // Skip the mount pass — initial layout already ran without animation in the init effect.
+    if (skipLayoutEffectRef.current) {
+      skipLayoutEffectRef.current = false;
+      layoutNameRef.current = layoutName;
+      return;
+    }
+    if (layoutNameRef.current === layoutName) return;
+    layoutNameRef.current = layoutName;
+    // User-triggered layout change — keep brief animation for feedback
     cyRef.current.layout({ 
       name: layoutName,
       animate: true,
+      animationDuration: 300,
       ...(layoutName === 'fcose' ? {
         nodeRepulsion: 4500,
         idealEdgeLength: 100,

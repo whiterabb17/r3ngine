@@ -164,6 +164,11 @@ class TemporalTaskProxy:
         self.filename = f'{task_name}.txt'
         self.activity_id = ctx.get('activity_id')
         self.track = ctx.get('track', True)
+        self.singular_tool_run = bool(ctx.get('singular_tool_run'))
+        from reNgine.task_plan import singular_activity_name
+        self.scan_activity_name = (
+            singular_activity_name(task_name) if self.singular_tool_run else task_name
+        )
 
         # Django ORM objects
         self.scan = ScanHistory.objects.filter(pk=self.scan_id).first()
@@ -203,14 +208,29 @@ class TemporalTaskProxy:
             now = timezone.now()
             execution_id = "temporal-%s" % temporal_activity_id
             with transaction.atomic():
-                # Claim only an INITIATED row. skip_locked=True ensures concurrent
-                # retries do not race on the same row. Status is the claim key so a
-                # retry can keep time_started set (timeline-visible) and still be claimed.
-                activity_row = ScanActivity.objects.select_for_update(skip_locked=True).filter(
-                    scan_of=self.scan,
-                    name=self.task_name,
-                    status=INITIATED_TASK,
-                ).first()
+                # Prefer the pre-created singular/retry row when ctx carries activity_id.
+                # Singular rows live under single_tool_<task> so they never collide with
+                # pipeline INITIATED ghosts that share the bare task slug.
+                claim_name = self.scan_activity_name
+                activity_row = None
+                preferred_id = self.activity_id
+                if preferred_id:
+                    # Pin to the pre-created row. Allow RUNNING so a Temporal
+                    # activity retry can reclaim the same row instead of forking
+                    # a duplicate while the pinned id stays stuck RUNNING.
+                    activity_row = ScanActivity.objects.select_for_update(skip_locked=True).filter(
+                        pk=preferred_id,
+                        scan_of=self.scan,
+                        name=claim_name,
+                        status__in=[INITIATED_TASK, RUNNING_TASK],
+                    ).first()
+                if activity_row is None:
+                    # Claim only an INITIATED row with this activity name namespace.
+                    activity_row = ScanActivity.objects.select_for_update(skip_locked=True).filter(
+                        scan_of=self.scan,
+                        name=claim_name,
+                        status=INITIATED_TASK,
+                    ).first()
 
                 if activity_row:
                     activity_row.status = RUNNING_TASK
@@ -235,7 +255,7 @@ class TemporalTaskProxy:
                     # instead of collapsing into Tier 7 in the timeline.
                     self.activity = ScanActivity.objects.create(
                         scan_of=self.scan,
-                        name=self.task_name,
+                        name=claim_name,
                         title=self.description,
                         target_host=self.target_host,
                         tier=get_task_tier(self.task_name),
@@ -939,6 +959,9 @@ def seed_endpoints_for_crawl_activity(ctx: dict) -> dict:
     logger.log_line("[TEMPORAL]", "START", "task=seed_endpoints_for_crawl scan_id=%s" % scan_id)
 
     subdomains = Subdomain.objects.filter(scan_history_id=scan_id)
+    subdomain_id = ctx.get('subdomain_id')
+    if subdomain_id:
+        subdomains = subdomains.filter(pk=subdomain_id)
     seed_urls = []
 
     for subdomain in subdomains:
@@ -1176,7 +1199,8 @@ def run_fetch_url_activity(ctx: dict) -> bool:
         fetch_url,
         ctx,
         task_name='fetch_url',
-        description='Fetch URL'
+        description='Fetch URL',
+        urls=ctx.get('urls') or [],
     )
 
 
@@ -1359,9 +1383,10 @@ def create_proxy_list_activity(ctx: dict) -> str:
     scan_id = ctx.get('scan_history_id')
     logger.log_line("[TEMPORAL]", "START", f"task=create_proxy_list scan_id={scan_id}")
 
+    # Write the full pool (HTTP + SOCKS). Nuclei accepts socks5:// and http://
+    # entries in a -proxy list file. Stripping SOCKS previously left a single
+    # HTTP proxy on SOCKS-heavy pools and caused "all proxies are dead" timeouts.
     proxies = get_proxy_list()
-    # Socks proxies are routed through proxychains, not passed as per-tool --proxy flags.
-    proxies = [p for p in proxies if not p.startswith('socks')]
     if not proxies:
         logger.log_line("[TEMPORAL]", "COMPLETE", f"task=create_proxy_list scan_id={scan_id} result=no_proxies")
         return None
@@ -1382,7 +1407,7 @@ def create_proxy_list_activity(ctx: dict) -> str:
         )
 
     activity.logger.info(f"[CreateProxyListActivity] scan_id={scan_id} wrote {len(proxies)} proxies to {file_path}")
-    logger.log_line("[TEMPORAL]", "COMPLETE", f"task=create_proxy_list scan_id={scan_id} result=created")
+    logger.log_line("[TEMPORAL]", "COMPLETE", f"task=create_proxy_list scan_id={scan_id} result=created count={len(proxies)}")
     return file_path
 
 @activity.defn(name="CheckTargetBlockingActivity")
@@ -1683,13 +1708,45 @@ def run_nuclei_activity(ctx: dict, severity: str = None, tag_batch: list = None)
     )
 
     # Pre-flight: count endpoints in DB for this scan
-    endpoint_count = EndPoint.objects.filter(scan_history_id=scan_id).count()
+    endpoint_qs = EndPoint.objects.filter(scan_history_id=scan_id)
+    subdomain_id = ctx.get('subdomain_id')
+    if subdomain_id:
+        endpoint_qs = endpoint_qs.filter(subdomain_id=subdomain_id)
+    endpoint_count = endpoint_qs.count()
 
-    if endpoint_count == 0:
-        # No endpoints from http_crawl — derive the root URL from the ScanHistory domain
-        # and use it as a minimum target so Nuclei always has something to scan.
+    # Singular runs: prefer explicit urls only when not subdomain-scoped.
+    # A subdomain singular run always seeds ctx['urls'] with the root http_url;
+    # scanning only that would skip crawled endpoints for the same host.
+    singular_urls = list(ctx.get('urls') or []) if ctx.get('singular_tool_run') else []
+
+    if subdomain_id and endpoint_count > 0:
+        # Let nuclei_scan collect via get_http_urls / collect_all_scan_urls (ctx-scoped).
+        urls = []
+        activity.logger.info(
+            "[RunNucleiActivity] subdomain-scoped scan_id=%s subdomain_id=%s endpoints=%d",
+            scan_id, subdomain_id, endpoint_count,
+        )
+    elif singular_urls:
+        urls = singular_urls
+    elif endpoint_count == 0:
+        # No endpoints from http_crawl — prefer scoped host, then singular urls, then apex.
         scan = ScanHistory.objects.filter(pk=scan_id).first()
-        if scan and scan.domain:
+        scoped = (
+            (ctx.get('subdomain_http_url') or '').strip()
+            or (singular_urls[0] if singular_urls else '')
+            or (
+                f"https://{ctx.get('subdomain_name')}"
+                if ctx.get('subdomain_name') else ''
+            )
+        )
+        if scoped:
+            urls = [scoped]
+            activity.logger.warning(
+                "[RunNucleiActivity] No endpoints for scan_id=%s subdomain_id=%s. "
+                "Falling back to scoped URL: %s",
+                scan_id, subdomain_id, scoped,
+            )
+        elif scan and scan.domain and not subdomain_id:
             root_url = f"https://{scan.domain.name}"
             activity.logger.warning(
                 "[RunNucleiActivity] No endpoints found in DB for scan_id=%s. "
@@ -1699,7 +1756,7 @@ def run_nuclei_activity(ctx: dict, severity: str = None, tag_batch: list = None)
             urls = [root_url]
         else:
             activity.logger.error(
-                "[RunNucleiActivity] No endpoints and no domain found for scan_id=%s. "
+                "[RunNucleiActivity] No endpoints and no scoped target for scan_id=%s. "
                 "Skipping Nuclei scan.",
                 scan_id,
             )
@@ -1916,6 +1973,15 @@ def mark_vulnerability_scan_complete_activity(ctx: dict) -> None:
 
     scan_id = ctx.get('scan_history_id')
     logger.log_line("[TEMPORAL]", "START", "task=mark_vulnerability_scan_complete scan_id=%s" % scan_id)
+    if ctx.get('singular_tool_run'):
+        # Never upsert the pipeline vulnerability_scan row from a singular run —
+        # resume_scan_temporal would treat the master scan's vuln tier as done.
+        # The singular parent (single_tool_vulnerability_scan) is closed via activity_id.
+        logger.log_line(
+            "[TEMPORAL]", "COMPLETE",
+            "task=mark_vulnerability_scan_complete scan_id=%s skipped=singular" % scan_id,
+        )
+        return
     scan = ScanHistory.objects.filter(pk=scan_id).first()
     if not scan:
         logger.log_line("[TEMPORAL]", "COMPLETE", "task=mark_vulnerability_scan_complete scan_id=%s skipped=no_scan" % scan_id)
@@ -3353,12 +3419,20 @@ async def check_scan_queue_status_activity(scan_id: int, queue_type: str) -> boo
     Returns:
         bool: True if it is allowed to proceed (queueing is off, or it's first in line).
     """
-    from asgiref.sync import sync_to_async
+    # database_sync_to_async, not asgiref's sync_to_async: async activity ORM
+    # calls run in an asgiref thread that DjangoAwareThreadPoolExecutor never
+    # touches. Nothing refreshed that thread's cached connection, and once
+    # Postgres closed it (idle timeout / restart) every later call raised
+    # "connection already closed" — CheckScanQueueStatusActivity is the first
+    # step of MasterScanWorkflow, so scans sat at 0% while reading RUNNING.
+    # The channels wrapper runs close_old_connections() around each call, which
+    # with CONN_HEALTH_CHECKS drops a dead connection and opens a fresh one.
+    from channels.db import database_sync_to_async
     from reNgine.temporal_client import TemporalClientProvider
     from temporalio.client import WorkflowExecutionStatus
     from temporalio.service import RPCError, RPCStatusCode
 
-    @sync_to_async
+    @database_sync_to_async
     def _get_queue_state():
         from dashboard.models import UserPreferences
         from startScan.models import ScanHistory, SubScan
@@ -3379,7 +3453,7 @@ async def check_scan_queue_status_activity(scan_id: int, queue_type: str) -> boo
             
         return {"queueing_enabled": True, "running": running}
 
-    @sync_to_async
+    @database_sync_to_async
     def _get_workflow_id(sid, qtype):
         from startScan.models import ScanHistory, SubScan, TemporalWorkflowExecution
         if qtype == "main":
@@ -4260,6 +4334,7 @@ def get_scan_final_status_activity(
     task_succeeded: bool,
     in_flight_names: list | None = None,
     failed_task_name: str | None = None,
+    activity_id: int | None = None,
 ) -> int:
     """Return the scan status after a single-task retry.
 
@@ -4270,6 +4345,8 @@ def get_scan_final_status_activity(
 
     When this retry failed before the activity claimed its row, flip that
     INITIATED row back to FAILED so the timeline and retry button recover.
+    Singular runs pass activity_id so only that pre-created row is closed —
+    never every INITIATED sibling with the same task name.
     """
     from django.utils import timezone as _tz
     from startScan.models import ScanActivity
@@ -4281,7 +4358,21 @@ def get_scan_final_status_activity(
     if failed_task_name:
         pending_names = [n for n in pending_names if n != failed_task_name]
 
-    if not task_succeeded and failed_task_name:
+    if activity_id:
+        row_qs = ScanActivity.objects.filter(
+            pk=activity_id,
+            scan_of_id=scan_id,
+            status__in=[INITIATED_TASK, RUNNING_TASK],
+        )
+        if task_succeeded:
+            row_qs.update(status=SUCCESS_TASK, time_ended=_tz.now())
+        else:
+            row_qs.update(
+                status=FAILED_TASK,
+                error_message="Retry workflow failed before the task completed",
+                time_ended=_tz.now(),
+            )
+    elif not task_succeeded and failed_task_name:
         # Only the in-flight retry row (INITIATED, time_started kept) — not
         # pre-seeded ghost rows with time_started=None.
         ScanActivity.objects.filter(
@@ -4594,7 +4685,8 @@ def _run_email_security_sync(ctx: dict) -> dict:
     proxy_url = None
     try:
         from reNgine.common_func import get_random_proxy
-        proxy_url = get_random_proxy()
+        # Reacher SMTP verify is SOCKS5-only (--proxy-host on the CLI).
+        proxy_url = get_random_proxy(socks5_only=True) or None
     except Exception:
         proxy_url = None
     mailbox = {'confirmed': [], 'checked': 0}

@@ -55,6 +55,7 @@ import {
   X,
   Folder,
   Crosshair,
+  Wrench,
 } from 'lucide-react';
 import { getCsrfToken } from '../../../api/axiosConfig';
 
@@ -68,6 +69,7 @@ import {
   useAddManualSubdomain,
 } from '../../subdomains/api';
 import type { SubdomainFilters } from '../../subdomains/api';
+import { RunSingleToolModal } from '../../subdomains/RunSingleToolModal';
 import { useEngines } from '../../engines/api';
 import { usePlugins } from '../../plugins/api/pluginsApi';
 import { useCreateTodo } from '../../todos/api';
@@ -135,6 +137,7 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
   
   // Modals state
   const [subscanModalOpen, setSubscanModalOpen] = useState(false);
+  const [singleToolModalOpen, setSingleToolModalOpen] = useState(false);
   const [attackSurfaceModalOpen, setAttackSurfaceModalOpen] = useState(false);
   const [todoModalOpen, setTodoModalOpen] = useState(false);
   const [addSubdomainModalOpen, setAddSubdomainModalOpen] = useState(false);
@@ -1002,6 +1005,20 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
                           <Zap size={14} />
                         </IconButton>
                       </Tooltip>
+                      {!!scanId && (
+                        <Tooltip title="Run single tool">
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setTargetSubdomain(sub);
+                              setSingleToolModalOpen(true);
+                            }}
+                            sx={{ color: tokens.accent.primary, bgcolor: `${tokens.accent.primary}0D`, p: 0.5 }}
+                          >
+                            <Wrench size={14} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       <Tooltip title="Add Recon TODO/Note">
                         <IconButton
                           size="small"
@@ -1242,6 +1259,18 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
           </Button>
         </DialogActions>
       </Dialog>
+
+      {targetSubdomain && !!scanId && (
+        <RunSingleToolModal
+          open={singleToolModalOpen}
+          onClose={() => setSingleToolModalOpen(false)}
+          subdomainId={targetSubdomain.id}
+          subdomainName={targetSubdomain.name}
+          scanHistoryId={scanId}
+          onSuccess={(msg) => showNotification(msg)}
+          onError={(msg) => showNotification(msg, 'error')}
+        />
+      )}
 
       {/* Attack Surface Modal */}
       <Dialog

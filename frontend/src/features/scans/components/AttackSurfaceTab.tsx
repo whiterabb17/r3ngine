@@ -36,6 +36,7 @@ const AttackSurfaceContent: React.FC<AttackSurfaceTabProps> = ({ projectSlug, sc
     cyRef.current.layout({ 
       name: layoutName,
       animate: true,
+      animationDuration: 300,
       ...(layoutName === 'fcose' ? {
         nodeRepulsion: 4500,
         idealEdgeLength: 100,

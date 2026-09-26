@@ -393,27 +393,55 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
         logger.info("Vigolium scan: both Phase A and Phase B are disabled. Skipping.")
         return "Vigolium scan skipped (all phases disabled)"
 
+    # Prefer the task results_dir (subscan-local) so concurrent subscans do not
+    # overwrite a shared targets file under the parent scan results dir.
+    _raw_results = getattr(self, 'results_dir', None)
+    if isinstance(_raw_results, str) and _raw_results:
+        base_results = _raw_results
+    else:
+        _scan_dir = getattr(getattr(self, 'scan', None), 'results_dir', None)
+        base_results = _scan_dir if isinstance(_scan_dir, str) and _scan_dir else (
+            f"{RENGINE_HOME}/scan_results/{self.scan_id}"
+        )
+
     if urls:
         target_urls = urls
     else:
         from reNgine.common_func import collect_all_scan_urls
+        scope_ctx = dict(ctx or {})
+        scope_ctx.setdefault('scan_history_id', self.scan_id)
+        if getattr(self, 'domain_id', None) is not None:
+            scope_ctx.setdefault('domain_id', self.domain_id)
+        subdomain = getattr(self, 'subdomain', None)
+        if subdomain is not None:
+            scope_ctx.setdefault('subdomain_id', subdomain.id)
+            scope_ctx.setdefault('subdomain_name', subdomain.name)
+        elif getattr(self, 'subdomain_id', None):
+            scope_ctx.setdefault('subdomain_id', self.subdomain_id)
         target_urls = collect_all_scan_urls(
-            ctx={
-                'scan_history_id': self.scan_id,
-                'domain_id': getattr(self, 'domain_id', None),
-            },
-            results_dir=self.scan.results_dir if hasattr(self, 'scan') and self.scan else f"{RENGINE_HOME}/scan_results/{self.scan_id}",
-            ignore_files=True
+            ctx=scope_ctx,
+            results_dir=base_results,
+            ignore_files=True,
         )
 
     if not target_urls:
-        if self.scan and self.scan.domain:
+        subdomain = getattr(self, 'subdomain', None)
+        name = (
+            (getattr(subdomain, 'name', None) or '').strip()
+            or ((ctx or {}).get('subdomain_name') or '').strip()
+        )
+        http_url = ((ctx or {}).get('subdomain_http_url') or '').strip()
+        if http_url:
+            target_urls = [http_url]
+        elif name:
+            target_urls = [f"https://{name}"]
+        elif self.scan and self.scan.domain:
             target_urls = [f"https://{self.scan.domain.name}"]
         else:
             logger.warning("Vigolium scan: no targets found. Skipping.")
             return
 
-    results_dir = f"{self.scan.results_dir}/vigolium/vuln"
+    results_dir = f"{base_results}/vigolium/vuln"
     os.makedirs(results_dir, exist_ok=True)
 
     targets_file = f"{results_dir}/targets.txt"
@@ -504,7 +532,8 @@ def vigolium_harvest(self, ctx={}, description=None):
     rate_limit = harvest_config.get(VIGOLIUM_RATE_LIMIT, 100)
     timeout = _ensure_duration(harvest_config.get(VIGOLIUM_TIMEOUT, '60s'))
 
-    if self.subscan and self.subdomain:
+    # Prefer subdomain from ctx even when SubScan FK was not stamped on the activity.
+    if getattr(self, 'subdomain', None):
         target_hosts = [f"https://{self.subdomain.name}"]
     else:
         subdomains = list(Subdomain.objects.filter(scan_history=self.scan))
@@ -572,7 +601,7 @@ def vigolium_discovery(self, ctx={}, description=None):
     scope_origin = discovery_config.get(VIGOLIUM_SCOPE_ORIGIN, vuln_vig.get(VIGOLIUM_SCOPE_ORIGIN, 'balanced'))
     skip_spidering = discovery_config.get(VIGOLIUM_SKIP_SPIDERING, vuln_vig.get(VIGOLIUM_SKIP_SPIDERING, False))
 
-    if self.subscan and self.subdomain:
+    if getattr(self, 'subdomain', None):
         target_hosts = [f"https://{self.subdomain.name}"]
     else:
         subdomains = list(Subdomain.objects.filter(scan_history=self.scan))
@@ -637,7 +666,7 @@ def vigolium_analysis(self, ctx={}, description=None):
     scope_origin = analysis_config.get(VIGOLIUM_SCOPE_ORIGIN, vuln_vig.get(VIGOLIUM_SCOPE_ORIGIN, 'balanced'))
     skip_spidering = analysis_config.get(VIGOLIUM_SKIP_SPIDERING, vuln_vig.get(VIGOLIUM_SKIP_SPIDERING, False))
 
-    if self.subscan and self.subdomain:
+    if getattr(self, 'subdomain', None):
         subdomains = list(Subdomain.objects.filter(pk=self.subdomain.id))
     else:
         subdomains = list(Subdomain.objects.filter(scan_history=self.scan))

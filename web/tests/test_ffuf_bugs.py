@@ -658,3 +658,47 @@ class TestDirsearchCliV050(TestCase):
         self.assertTrue(result['dirsearch_base_cmd'].startswith('dirsearch'))
         self.assertIn('-e php', result['dirsearch_base_cmd'])
         self.assertIn('--follow-redirects', result['dirsearch_base_cmd'])
+
+
+class TestHttpxCompatibleProxy(TestCase):
+    """dirsearch 0.5 / httpx rejects socks4:// — resolve to http(s)/socks5 or None."""
+
+    def test_accepts_socks5_and_http(self):
+        from reNgine.tasks.fuzzing import resolve_httpx_compatible_proxy
+
+        self.assertEqual(
+            resolve_httpx_compatible_proxy('socks5://1.2.3.4:1080'),
+            'socks5://1.2.3.4:1080',
+        )
+        self.assertEqual(
+            resolve_httpx_compatible_proxy('http://1.2.3.4:8080'),
+            'http://1.2.3.4:8080',
+        )
+
+    def test_rejects_socks4_when_pool_exhausted(self):
+        from reNgine.tasks.fuzzing import resolve_httpx_compatible_proxy
+
+        with patch('reNgine.tasks.fuzzing.get_random_proxy', return_value='socks4://9.9.9.9:4153'):
+            self.assertIsNone(
+                resolve_httpx_compatible_proxy(
+                    'socks4://193.158.12.141:4153',
+                    tool_name='dirsearch',
+                    max_retries=3,
+                )
+            )
+
+    def test_replaces_socks4_with_socks5_from_pool(self):
+        from reNgine.tasks.fuzzing import resolve_httpx_compatible_proxy
+
+        with patch(
+            'reNgine.tasks.fuzzing.get_random_proxy',
+            side_effect=['socks4://1.1.1.1:1', 'socks5://2.2.2.2:1080'],
+        ):
+            self.assertEqual(
+                resolve_httpx_compatible_proxy(
+                    'socks4://193.158.12.141:4153',
+                    tool_name='dirsearch',
+                    max_retries=5,
+                ),
+                'socks5://2.2.2.2:1080',
+            )

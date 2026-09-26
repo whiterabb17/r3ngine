@@ -80,11 +80,12 @@ import {
   Key,
   X,
   Copy,
+  Square,
   RefreshCw,
   GitBranch,
   Brain
 } from 'lucide-react';
-import { useScanSummary, useActivityLogs, useScanLogs, useFetchWhois, useStopScan, useRetryScanTask, useRetryScanTier } from '../api';
+import { useScanSummary, useActivityLogs, useScanLogs, useFetchWhois, useStopScan, useStopSubScan, useRetryScanTask, useRetryScanTier } from '../api';
 import { getFailureCategoryLabel, summariseTier } from '../utils/failureCategories';
 import { TimelineTierHeader } from './TimelineTierHeader';
 import type { Command, SubScan, Vulnerability, ScanActivity, Subdomain, ScanSummaryResponse, TodoNote } from '../types';
@@ -408,11 +409,11 @@ const StatusBadge: React.FC<{ status: number, compact?: boolean, isSpiderFootRun
           fontFamily: 'Orbitron',
           animation: 'pulse-spider 2s infinite ease-in-out',
           textShadow: isLight ? 'none' : `0 0 10px ${tokens.accent.secondary}40`,
-          boxShadow: `inset 0 0 10px ${tokens.accent.secondary}10`,
+          boxShadow: `inset 0 0 10px ${tokens.accent.secondary}10, 0 0 8px ${tokens.accent.secondary}`,
           '@keyframes pulse-spider': {
-            '0%': { transform: 'scale(1)', filter: `drop-shadow(0 0 0px ${tokens.accent.secondary})` },
-            '50%': { transform: 'scale(1.05)', filter: `drop-shadow(0 0 8px ${tokens.accent.secondary})` },
-            '100%': { transform: 'scale(1)', filter: `drop-shadow(0 0 0px ${tokens.accent.secondary})` },
+            '0%': { transform: 'scale(1)', opacity: 1 },
+            '50%': { transform: 'scale(1.05)', opacity: 0.85 },
+            '100%': { transform: 'scale(1)', opacity: 1 },
           }
         }}>
           <Bug size={compact ? 12 : 18} />
@@ -1095,7 +1096,15 @@ const TimelineItem: React.FC<{ activity: ScanActivity, onClick?: () => void, onR
   );
 };
 
-const SubScanWidget: React.FC<{ subscans: SubScan[], targetName: string }> = ({ subscans, targetName }) => {
+const isStoppableSubScan = (status: number | undefined | null) =>
+  status === -1 || status === 1 || status === 5;
+
+const SubScanWidget: React.FC<{
+  subscans: SubScan[];
+  targetName: string;
+  onStop?: (id: number) => void;
+  stoppingId?: number | null;
+}> = ({ subscans, targetName, onStop, stoppingId }) => {
   const { tokens, isLight } = useThemeTokens();
   return (
     <Stack spacing={1.5}>
@@ -1114,11 +1123,33 @@ const SubScanWidget: React.FC<{ subscans: SubScan[], targetName: string }> = ({ 
             <Typography sx={{ fontSize: '0.85rem', fontWeight: 900, color: tokens.accent.primary, textTransform: 'uppercase', letterSpacing: 1 }}>
               {sub.engine} ON {sub.subdomain_name}
             </Typography>
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', fontWeight: 600, maxWidth: '60%', lineHeight: 1.4 }}>
+            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+              <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', fontWeight: 600, maxWidth: '50%', lineHeight: 1.4 }}>
                 {sub.completed_ago} Took {sub.time_taken}
               </Typography>
-              <StatusBadge status={sub.status} compact />
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <StatusBadge status={sub.status} compact />
+                {onStop && isStoppableSubScan(sub.status) && sub.id != null && (
+                  <MuiTooltip title="Stop in-progress subscan">
+                    <span>
+                      <IconButton
+                        size="small"
+                        disabled={stoppingId === sub.id}
+                        onClick={() => onStop(sub.id!)}
+                        sx={{
+                          color: tokens.accent.error,
+                          border: `1px solid ${tokens.accent.error}4D`,
+                          borderRadius: 1,
+                          p: 0.5,
+                          '&:hover': { bgcolor: `${tokens.accent.error}15`, borderColor: tokens.accent.error },
+                        }}
+                      >
+                        {stoppingId === sub.id ? <CircularProgress size={12} color="inherit" /> : <Square size={12} fill="currentColor" />}
+                      </IconButton>
+                    </span>
+                  </MuiTooltip>
+                )}
+              </Stack>
             </Stack>
           </Stack>
         </Box>
@@ -1599,6 +1630,7 @@ export const ScanDetailPage = () => {
   const { data, isLoading } = useScanSummary(projectSlug, parseInt(scanId));
   const fetchWhois = useFetchWhois(projectSlug, parseInt(scanId));
   const stopScanMutation = useStopScan(projectSlug);
+  const stopSubScanMutation = useStopSubScan(projectSlug);
   const retryScanTaskMutation = useRetryScanTask(projectSlug, parseInt(scanId));
   const retryScanTierMutation = useRetryScanTier(projectSlug, parseInt(scanId));
   const { data: plugins } = usePlugins();
@@ -1997,7 +2029,16 @@ export const ScanDetailPage = () => {
 
       <TacticalPanel title="Sub Scan History" icon={<Activity size={14} />}>
         <Box sx={{ p: 1 }}>
-          <SubScanWidget subscans={data.subscans} targetName={data.target_info.name} />
+          <SubScanWidget
+            subscans={data.subscans}
+            targetName={data.target_info.name}
+            onStop={(id) => {
+              if (window.confirm('Stop this in-progress subscan?')) {
+                stopSubScanMutation.mutate(id);
+              }
+            }}
+            stoppingId={stopSubScanMutation.isPending ? (stopSubScanMutation.variables ?? null) : null}
+          />
         </Box>
       </TacticalPanel>
     </Box>
@@ -2362,10 +2403,11 @@ export const ScanDetailPage = () => {
                     color: tokens.accent.primary,
                     '@keyframes spiderPulse': {
                       '0%': { transform: 'scale(1)', opacity: 0.6 },
-                      '50%': { transform: 'scale(1.15)', opacity: 1, filter: `drop-shadow(0 0 6px ${tokens.accent.primary})` },
+                      '50%': { transform: 'scale(1.15)', opacity: 1 },
                       '100%': { transform: 'scale(1)', opacity: 0.6 },
                     },
-                    animation: 'spiderPulse 2s infinite ease-in-out'
+                    animation: 'spiderPulse 2s infinite ease-in-out',
+                    filter: `drop-shadow(0 0 6px ${tokens.accent.primary})`,
                   }}>
                     <Bug size={20} />
                   </Box>

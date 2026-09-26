@@ -52,10 +52,23 @@ node scripts/install-mcp.mjs --url https://<this-host> --key r3n_mcp_… --yes -
 
 Windows: `.\scripts\install-mcp.ps1 --url https://<this-host> --key r3n_mcp_… --yes`
 
+To pull the latest sidecar, rebuild the local process, and refresh the Docker MCP
+image/container for this stack:
+
+```bash
+node scripts/install-mcp.mjs --update
+```
+
+Install and `--update` both **build and start** the `r3ngine-mcp` compose service
+(using `--profile mcp` on prod compose). If the container never existed, it is
+created from the running stack’s compose project (or `docker/docker-compose.yml`).
+Pass `--no-docker` to force a local/stdio-only setup.
+
 From a checkout of r3ngine-mcp:
 
 ```bash
 npm run setup -- --url https://<this-host> --key r3n_mcp_… --yes
+npm run setup -- --update
 ```
 
 The setup script installs dependencies, builds `dist/`, writes `.env`, opens a throwaway MCP session against `/api/mcp/` to prove the key works, smoke-starts the process, and can merge Cursor / VS Code / Claude Desktop config.
@@ -82,9 +95,22 @@ Agents can queue allowed work including **subscans** (`r3ngine_start_subscan`) w
 
 `list_*` and thin `get_scan` / `get_target` stay lean for browsing. When an agent needs rollups, relations, or scan task status, use the companion detail tools:
 
+- `r3ngine_export_scan_for_ai` — **preferred for full scan analysis**: same Analyst Assist export as the scan-detail **Export for AI** button (markdown overview, triage prompt, structured bundle + manifest). Optional flags mirror the UI (`include_raw_outputs`, `include_timeline`, `include_sidecars`).
 - `r3ngine_get_scan_detail` — finding counts, severity rollup, tasks grouped by status (initiated / running / success / failed / aborted)
 - `r3ngine_get_target_detail`, `r3ngine_get_vulnerability_detail`, `r3ngine_get_subdomain_detail`, `r3ngine_get_endpoint_detail`, `r3ngine_get_exposure_detail`, `r3ngine_get_subscan_detail` — primary record plus capped related lists
 
 Related lists are capped (20); scan activity buckets are capped (100 per status) with full counts in `task_summary`. Raw request/response, traceback, and `results_dir` stay omitted.
+
+## Capabilities, singular tools, and follow-ups
+
+Agents (and the Subdomains tab **Run single tool** modal) can:
+
+1. **`r3ngine_list_capabilities` / `r3ngine_get_engine_detail`** — which pipeline tools and workflows are allowed for an asset kind / engine.
+2. **`r3ngine_get_tool_args`** — host-local CLI schema for a tool (installed binary `--help`, versioned DB cache; seed fallback when the binary is missing). Call this before inventing flags.
+3. **`r3ngine_run_tool`** — start one pipeline tool on a subdomain, endpoint, or URL. Optional `tool_args` must match the schema (denylisted retargeting / filesystem flags; no free-form shell). Timeline rows are namespaced `single_tool_<task>` so they never collide with master-scan claim / tier-retry / resume.
+4. **Follow-up plans** — `propose` → optional `update` → operator `approve` / `abort` / `retry`; detail payloads may include capped `suggested_followups`.
+5. **OSINT staging** — `r3ngine_list_osint_staging` / `r3ngine_verify_osint_staging` with `agent_verified` badges in the UI.
+
+Operators manage keys, sessions, and the audit chain in **Settings → MCP Access**. Sync installed binaries and refresh arg schemas on the web container with `manage.py sync_installed_tools` and `manage.py refresh_tool_arg_schemas` when tools are updated.
 
 See also the [r3ngine-mcp README](../r3ngine-mcp/README.md).

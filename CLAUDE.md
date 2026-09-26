@@ -1,5 +1,5 @@
 # CLAUDE.md
-## Current version: 3.6.3
+## Current version: 3.7.6
 
 Start with:
 1. `README.md`

@@ -1,8 +1,13 @@
 # Changelog
 
-### [v3.7.6] - 2026-09-23
+### [v3.7.6] - 2026-09-25
 
 #### Added
+
+- **Stop in-progress subscans from history**:
+  - Per-row Stop on Sub Scan History, scan-detail Sub Scan History, and the Scan History drawer Tasks tab (INITIATED / RUNNING / PAUSED).
+  - Uses existing `/api/action/stop/scan/` with `subscan_ids` → Temporal `handle.cancel()` on each SubScan workflow id, then marks the row ABORTED.
+  - Redis `scan_stop_{scan_history_id}` kill switch is only armed when the parent master scan is not live, so stopping one subscan does not hard-kill tools still owned by `MasterScanWorkflow`.
 
 - **Scan timeline failure UX (PR #113)**:
   - `ScanActivity.target_host` so fan-out rows show which host a task ran against.
@@ -13,12 +18,17 @@
 - **MCP Access**:
   - Dedicated `/api/mcp/` allowlist with hashed per-user API keys, sessions, and an append-only request/response audit chain.
   - Settings → MCP Access: transport (stdio / HTTP / both), named keys (secret shown once), connected agents, session revoke, audit drawer, inspect-only Replay overlay (stored request, agent, and response; never re-dispatches).
-  - MCP notes: list/get for any MCP key; create/update for pentester/sys-admin keys (`TodoNote`); delete remains UI-only.
+  - MCP notes (sidecar **v1.0.3**): list/get for any MCP key; create/update for pentester/sys-admin keys (`TodoNote`); delete remains UI-only.
   - MCP detail tools: companion `r3ngine_get_*_detail` for scan (status-bucketed tasks + finding rollups), target, vulnerability, subdomain, endpoint, exposure, and subscan. Thin `list_*` / `get_*` unchanged. Sidecar bumped to **v1.0.2**.
+  - MCP agent upgrade (sidecar **v1.2.0**): `r3ngine_export_scan_for_ai` exposes the scan-detail **Export for AI** Analyst Assist bundle over MCP (markdown + prompt + structured JSON) for one-shot full scan analysis; capability catalog, singular tool run, follow-up batch plans, OSINT staging verify remain as in **v1.1.0**.
+  - MCP agent upgrade (sidecar **v1.1.0**): capability catalog, singular tool run, follow-up batch plans (propose/edit/approve/abort/retry), `suggested_followups` on detail payloads; OSINT staging list/verify with `agent_verified` badges and UI Clear all / Add verified / Clear false positive; `r3ngine-osint` handoff sub-agent.
+  - Singular tool UI + installed-arg cache: Subdomains tab **Run single tool** modal; `GET /api/action/tool/<tool>/args/` (and MCP `r3ngine_get_tool_args`) returns schemas from binary `--help` with versioned `ToolArgSchemaCache`; optional `tool_args` on run/follow-up steps (validated, denylisted, no free-form shell); `InstalledExternalTool` live sync (`is_present` / version) + refreshed `fixtures/external_tools.yaml`; `manage.py sync_installed_tools` / `refresh_tool_arg_schemas`.
+  - Tool-arg / presence probes prefer Temporal worker containers (`temporal-go-executor` / `temporal-python-orchestrator`) via `docker exec`, so entrypoint binaries that live only on workers (e.g. `kr`) still populate schemas; paths stay worker-encoded.
+  - Singular runs namespace timeline rows as `single_tool_<task>` so they never claim, tier-retry, or finalize pipeline `ScanActivity` rows; host scope (`subdomain_id` / urls) is honored for port scan, crawl, nuclei, screenshot, OSINT, secrets, and WAF paths; timeline retry restores args from `singular_meta_*.json`.
   - ScanActivity claim/initialize now stamps `subscan` when a subscan reuses a parent-scan row so subscan detail can resolve tasks.
   - `r3ngine-mcp` TypeScript sidecar (stdio + Streamable HTTP). nginx `/mcp` proxies to the sidecar; the container has no database or scan-result volumes.
   - HTTP sidecar rate-limits unauthorized clients (10 failures/IP/minute, `429 Retry-After`) before contacting r3ngine; invalid keys are remembered so Django is not re-probed.
-  - `scripts/install-mcp.mjs` clones `r3ngine-mcp` and runs its Node setup (`npm run setup` in that repo).
+  - `scripts/install-mcp.mjs` clones `r3ngine-mcp` and runs its Node setup (`npm run setup` in that repo). Install and `--update` build and start the `r3ngine-mcp` compose service (`--profile mcp`), creating it when missing by inheriting the running stack’s compose project. `--no-docker` skips the container step.
   - See `documents/mcp.md`.
   - Compose: MCP sidecar is opt-in via `--profile mcp` so a missing sibling clone does not fail the default stack build; nginx resolves MCP/web upstreams per request.
 
@@ -26,6 +36,7 @@
   - Replaced noisy `smtp-user-enum` VRFY spraying in built-in email security with Reacher `check-if-email-exists` mailbox verification (CLI default, optional self-hosted HTTP).
   - Confirmed addresses (`is_reachable=safe`) are stored on the scan; catch-all MX aborts enumeration. See `documents/email-verification.md`.
   - Scan detail timeline shows **Mailbox Verification** (`check_if_email_exists`) after port scan: pending at start, running while Reacher executes, then success/fail.
+  - Operator SOCKS5 proxies are passed to Reacher as `--proxy-host` / `--proxy-port` (password via `PROXY_PASSWORD`, not argv). HTTP/SOCKS4 pool entries are skipped for this tool.
 
 - **Email security engine switch**:
   - `email_security.enabled: false` in the scan engine config skips the email security activity and drops mailbox verification from the planned timeline. Absent config remains enabled so existing engines are unchanged.
@@ -39,6 +50,34 @@
   - Marketplace cards load each plugin icon from the public plugin repo (PNG then SVG) instead of a letter placeholder.
 
 #### Fixed
+
+- **Async Temporal activities holding dead DB connections (PR #121)**:
+  - Async activities (including `CheckScanQueueStatusActivity`, the first step of `MasterScanWorkflow`) reached the ORM through plain `asgiref.sync_to_async`. That thread pool is outside `DjangoAwareThreadPoolExecutor`, so once Postgres closed an idle session the cached connection stayed dead and every later call raised `InterfaceError: connection already closed` — new scans sat at 0% while reading RUNNING.
+  - All async activities now use `channels.db.database_sync_to_async` (runs `close_old_connections()` around each call; with `CONN_HEALTH_CHECKS` opens a fresh connection). Orchestrator plugin registry load uses the same wrapper.
+  - Guard test `tests/test_async_activity_db_connections.py` keeps plain `sync_to_async` out of the activities package.
+
+- **Scan History drawer stop actions**:
+  - Tasks-tab Stop now posts `subscan_ids` (was a no-op); master-scan Stop posts `scan_ids` in the JSON body instead of an ignored `?scan_id=` query param.
+  - SubScan `bulk_stop` uses the same `abort_subscan` path as `/api/action/stop/scan/`.
+
+- **Nuclei / go-executor parsing and proxies**:
+  - Skip nuclei `-stats` (and other non-finding) JSON from go-executor stdout so `parse_nuclei_result` no longer raises `KeyError('info')` and fails `RunNucleiActivity`.
+  - Detect nuclei’s FTL “all proxies are dead” exit, refresh the proxy list, and retry up to three times before skipping that severity/tag slice.
+  - Keep SOCKS entries in the nuclei proxy file (HTTP-only filtering left SOCKS-heavy pools with one dead HTTP entry).
+  - Singular / subscan nuclei tech tags and vuln target resolution stay on the subdomain in ctx (no apex-wide tech pull or apex host fallback); vigolium / second_order / related vuln tools honor the same scoped targets.
+
+- **dirsearch / ffuf httpx proxy schemes**:
+  - Centralize `resolve_httpx_compatible_proxy()` so dirsearch 0.5 (httpx) and ffuf never receive `socks4://` (`Unknown scheme for proxy URL`); draw http(s)/socks5 replacements from the pool or continue without a proxy. Dirsearch also retries on that scheme error, not only the classic proxy-error string.
+
+- **Orphan Temporal tool workflows after completed scans**:
+  - `recover_stuck_scans` cancels leftover child go-exec workflows for scans already SUCCESS/ABORTED so a worker restart does not keep burning CPU on dead work.
+
+- **MCP follow-up / OSINT verify hardening**:
+  - Aborting a follow-up plan no longer stops the parent master scan; require `scan_id` for OSINT staging verify; cancel orphan subscans on partial follow-up failure; reject out-of-scope url/host tool steps.
+
+- **postleaksNg false-positive leaks**:
+  - `run_postleaks` now retries failed runs, refuses to persist findings on non-zero exit, strips ANSI, and filters traceback / connection-error noise so tool failures are not stored as `SecretLeak` rows.
+  - Scan summary scopes `secret_leaks` to the requested scan (not the whole target domain), so sibling-scan junk no longer appears on other scans' LEAKS tabs.
 
 - **Scan correctness and recovery (PR #113)**:
   - Resume workflow ids count from the highest recorded run (no more `master-scan-<id>-run-0` collisions after manual resume).
@@ -87,6 +126,14 @@
   - `SingleTaskRetryWorkflow` did not handle `generate_impact_assessment` on the running worker, raised an uncaught `ApplicationError`, left the scan RUNNING, and the timeline hid the reset INITIATED row (`time_started=None`).
   - Retry now keeps the activity visible, claims INITIATED rows, and restores FAILED status if the retry workflow fails before the task starts — including post-completion retries that keep the parent scan SUCCESS.
   - `retry_failed_tasks_temporal` no longer runs Django ORM inside `asyncio.run()`, which made orchestrator startup recovery fail with `SynchronousOnlyOperation`.
+
+#### Enhanced
+
+- **Frontend GPU / resource cost**:
+  - Replace live SVG `feTurbulence` cyber-noise and `background-attachment: fixed` with a static tiled noise asset and scroll attachment; cap glass `backdrop-filter` at 12px across theme, Shell, and TacticalPanel.
+  - Scan History / Detail: pulse chips and progress bars animate only `transform` / `opacity` (no animated `filter: drop-shadow`); scan list polling is 5s while pending/running/paused/SpiderFoot and 30s when idle.
+  - Cytoscape graphs skip animated initial layout and pause when the tab is hidden; GeoMap pulses only the top five countries; login static overlay no longer uses a per-frame canvas.
+  - Exposures use server-side pagination; Shell proxy polling no longer runs in background tabs; idle vuln-table text glows move to hover.
 
 ### [v3.7.4] - 2026-07-24
 

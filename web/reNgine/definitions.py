@@ -130,6 +130,11 @@ NUCLEI_CONCURRENCY = 'concurrency'
 # the environment. Raise them only when the pool is actually reliable.
 NUCLEI_PROXY_MAX_CONCURRENCY = int(os.environ.get('NUCLEI_PROXY_MAX_CONCURRENCY', 20))
 NUCLEI_PROXY_MAX_RATE_LIMIT = int(os.environ.get('NUCLEI_PROXY_MAX_RATE_LIMIT', 50))
+# nuclei exits with FTL "all proxies are dead" when every entry in the -proxy
+# file fails. Retry the same slice this many times (refreshing the proxy file
+# between attempts) before skipping that slice and moving on.
+NUCLEI_PROXY_DEAD_MAX_ATTEMPTS = int(os.environ.get('NUCLEI_PROXY_DEAD_MAX_ATTEMPTS', 3))
+NUCLEI_PROXY_DEAD_MARKER = 'all proxies are dead'
 # Wall-clock budget for the nuclei stage of Tier 6. Once it is spent the
 # remaining tag batches are skipped so that the rest of Tier 6 (Acunetix,
 # WPScan, cPanel, S3, Dalfox) and the whole of Tier 7 still run, instead of

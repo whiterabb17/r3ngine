@@ -106,6 +106,12 @@ def osint(self, host=None, ctx={}, description=None):
     results = {}
 
     results = []
+    osint_host = (
+        (ctx.get('subdomain_name') or '').strip()
+        or (self.scan.domain.name if self.scan and self.scan.domain else '')
+    )
+    if ctx.get('singular_tool_run') and not osint_host:
+        osint_host = self.scan.domain.name if self.scan and self.scan.domain else ''
 
     if "discover" in config:
         ctx["track"] = False
@@ -113,7 +119,7 @@ def osint(self, host=None, ctx={}, description=None):
             osint_discovery(
                 self,
                 config=config,
-                host=self.scan.domain.name,
+                host=osint_host,
                 scan_history_id=self.scan.id,
                 activity_id=self.activity_id,
                 results_dir=self.results_dir,
@@ -129,7 +135,7 @@ def osint(self, host=None, ctx={}, description=None):
         results.append(
             dorking(
                 config=config,
-                host=self.scan.domain.name,
+                host=osint_host,
                 scan_history_id=self.scan.id,
                 activity_id=self.activity_id,
                 results_dir=self.results_dir,
@@ -922,7 +928,12 @@ def secret_scanning(self, config=None, host=None, ctx=None, **kwargs):
             or {}
         )
 
+    ctx = ctx or {}
     endpoints = EndPoint.objects.filter(scan_history=self.scan)
+    if ctx.get('subdomain_id'):
+        endpoints = endpoints.filter(subdomain_id=ctx['subdomain_id'])
+    elif ctx.get('singular_tool_run') and ctx.get('subdomain_name'):
+        endpoints = endpoints.filter(subdomain__name=ctx['subdomain_name'])
     # Sensitive extensions to scan
     SENSITIVE_EXTENSIONS = (
         ".js",

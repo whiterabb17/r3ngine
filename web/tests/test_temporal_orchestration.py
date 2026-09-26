@@ -407,6 +407,139 @@ class TestTemporalOrchestration(TestCase):
         self.assertTrue(mock_retry_failed.call_args.kwargs.get('auto'))
         scan_failed.delete()
 
+    def test_resolve_scan_id_for_workflow_conventions(self):
+        """Workflow id conventions used by tool/child workflows map back to ScanHistory."""
+        from reNgine.tasks.scan_init import _resolve_scan_id_for_workflow
+        from reNgine.definitions import SUCCESS_TASK
+        from startScan.models import Command, SubScan
+        from django.utils import timezone
+
+        scan = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_type=self.engine,
+            start_scan_date=timezone.now(),
+            scan_status=SUCCESS_TASK,
+        )
+        cmd = Command.objects.create(
+            scan_history=scan,
+            command='vigolium scan --only discovery',
+            time=timezone.now(),
+        )
+        subdomain = Subdomain.objects.create(name='sub.temporal-test.local', target_domain=self.domain, scan_history=scan)
+        subscan = SubScan.objects.create(
+            scan_history=scan,
+            subdomain=subdomain,
+            type='vulnerability_scan',
+            status=SUCCESS_TASK,
+            start_scan_date=timezone.now(),
+        )
+
+        self.assertEqual(_resolve_scan_id_for_workflow(f'go-exec-vigolium-{cmd.id}'), scan.id)
+        self.assertEqual(_resolve_scan_id_for_workflow(f'go-exec-ike-scan-{cmd.id}'), scan.id)
+        self.assertEqual(_resolve_scan_id_for_workflow(f'master-scan-{scan.id}-run-2'), scan.id)
+        self.assertEqual(_resolve_scan_id_for_workflow(f'scan-{scan.id}-deadbeef'), scan.id)
+        self.assertEqual(_resolve_scan_id_for_workflow(f'subscan-{subscan.id}-abcdef12'), scan.id)
+        self.assertIsNone(_resolve_scan_id_for_workflow('temporal-sys-scheduler:startup-sync-recover-stuck-scans'))
+        self.assertIsNone(_resolve_scan_id_for_workflow('startup-sync-recover-stuck-scans-20260924'))
+        scan.delete()
+
+    @patch('reNgine.utils.scan_cancellation.set_scan_stop_kill_switch')
+    @patch('reNgine.temporal_client.TemporalClientProvider.cancel_workflow')
+    @patch('reNgine.temporal_client.TemporalClientProvider.get_client', new_callable=AsyncMock)
+    def test_cleanup_cancels_go_exec_for_success_scan(
+        self, mock_get_client, mock_cancel_workflow, mock_kill_switch
+    ):
+        """Orphan go-exec workflows for SUCCESS scans are cancelled and kill-switched."""
+        from reNgine.tasks.scan_init import cleanup_orphan_workflows_for_completed_scans
+        from reNgine.definitions import RUNNING_TASK, SUCCESS_TASK
+        from startScan.models import Command
+        from django.utils import timezone
+
+        done = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_type=self.engine,
+            start_scan_date=timezone.now(),
+            scan_status=SUCCESS_TASK,
+        )
+        live = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_type=self.engine,
+            start_scan_date=timezone.now(),
+            scan_status=RUNNING_TASK,
+        )
+        cmd_done = Command.objects.create(
+            scan_history=done, command='vigolium', time=timezone.now(),
+        )
+        cmd_live = Command.objects.create(
+            scan_history=live, command='vigolium', time=timezone.now(),
+        )
+
+        orphan_id = f'go-exec-vigolium-{cmd_done.id}'
+        live_id = f'go-exec-vigolium-{cmd_live.id}'
+
+        class _Wf:
+            def __init__(self, wid):
+                self.id = wid
+
+        async def _list(_query=None):
+            for wid in (orphan_id, live_id, 'temporal-sys-scheduler:x'):
+                yield _Wf(wid)
+
+        mock_client = MagicMock()
+        mock_client.list_workflows = _list
+        mock_get_client.return_value = mock_client
+
+        cancelled = cleanup_orphan_workflows_for_completed_scans()
+
+        mock_cancel_workflow.assert_called_once_with(orphan_id)
+        self.assertEqual(len(cancelled), 1)
+        self.assertEqual(cancelled[0][0], orphan_id)
+        mock_kill_switch.assert_called_once_with(done.id, enabled=True)
+
+        done.delete()
+        live.delete()
+
+    @patch('reNgine.tasks.scan_init.cleanup_orphan_workflows_for_completed_scans')
+    @patch('reNgine.tasks.scan_init.resume_scan_temporal')
+    @patch('reNgine.temporal_client.TemporalClientProvider.get_client', new_callable=AsyncMock)
+    def test_recover_stuck_scans_runs_orphan_cleanup_first(
+        self, mock_get_client, mock_resume_scan, mock_cleanup
+    ):
+        """Startup recovery always sweeps orphan workflows before resuming stuck scans."""
+        from reNgine.tasks import recover_stuck_scans
+        from reNgine.definitions import RUNNING_TASK, FAILED_TASK
+        from temporalio.service import RPCError, RPCStatusCode
+        from django.utils import timezone
+
+        ScanHistory.objects.filter(scan_status__in=[RUNNING_TASK, FAILED_TASK]).delete()
+        ScanHistory.objects.create(
+            domain=self.domain,
+            scan_type=self.engine,
+            start_scan_date=timezone.now(),
+            scan_status=RUNNING_TASK,
+            recovery_count=0,
+            workflow_ids=['stuck-for-cleanup-order'],
+        )
+
+        mock_client = MagicMock()
+
+        def mock_get_handle(_workflow_id):
+            h = MagicMock()
+
+            async def mock_describe():
+                raise RPCError("Workflow not found", RPCStatusCode.NOT_FOUND, "details")
+
+            h.describe = mock_describe
+            return h
+
+        mock_client.get_workflow_handle.side_effect = mock_get_handle
+        mock_get_client.return_value = mock_client
+
+        recover_stuck_scans()
+
+        mock_cleanup.assert_called_once()
+        mock_resume_scan.assert_called_once()
+
 
 class TestWorkflowStructuralInvariants(TestCase):
     """AST-level checks that enforce structural guarantees introduced by:

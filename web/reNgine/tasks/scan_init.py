@@ -1120,11 +1120,146 @@ def resume_scan_temporal(scan_id, auto=False):
 	logger.info(f"Resumed scan {scan_id} with remaining tasks: {remaining_tasks}")
 
 
+# Workflow IDs that are infrastructure / schedules, never scan tool work.
+_ORPHAN_CLEANUP_SKIP_PREFIXES = (
+	'temporal-sys-',
+	'startup-sync-',
+	'daily-cron-',
+)
+
+
+def _resolve_scan_id_for_workflow(workflow_id: str):
+	"""Map a Temporal workflow id to a ScanHistory pk, or None if unknown.
+
+	Supports master/scan/subscan/go-exec/stress-test id conventions used by
+	r3ngine. Returns None for infrastructure workflows and unrecognised ids.
+	"""
+	import re
+	from startScan.models import Command, SubScan
+
+	if not workflow_id or workflow_id.startswith(_ORPHAN_CLEANUP_SKIP_PREFIXES):
+		return None
+
+	# go-exec-{tool}-{command_id} — tool name may contain hyphens
+	m = re.match(r'^go-exec-(.+)-(\d+)$', workflow_id)
+	if m:
+		command_id = int(m.group(2))
+		return (
+			Command.objects
+			.filter(pk=command_id)
+			.values_list('scan_history_id', flat=True)
+			.first()
+		)
+
+	m = re.match(r'^master-scan-(\d+)(?:-run-\d+)?$', workflow_id)
+	if m:
+		return int(m.group(1))
+
+	m = re.match(r'^scan-(\d+)-', workflow_id)
+	if m:
+		return int(m.group(1))
+
+	m = re.match(r'^subscan-(\d+)-', workflow_id)
+	if m:
+		return (
+			SubScan.objects
+			.filter(pk=int(m.group(1)))
+			.values_list('scan_history_id', flat=True)
+			.first()
+		)
+
+	m = re.match(r'^stress-test-(\d+)$', workflow_id)
+	if m:
+		return int(m.group(1))
+
+	m = re.match(r'^scheduled-master-(\d+)$', workflow_id)
+	if m:
+		return int(m.group(1))
+
+	return None
+
+
+def cleanup_orphan_workflows_for_completed_scans():
+	"""Cancel Temporal workflows still running for scans that are already done.
+
+	On orchestrator restart, child GoExecutorTaskWorkflows (and other scan-scoped
+	workflows) can outlive a SUCCESS/ABORTED ScanHistory — e.g. after a heartbeat
+	timeout retry while the parent already finalized. Listing Running workflows and
+	cancelling those whose scan is terminal stops orphan tool processes.
+
+	Also arms the Redis ``scan_stop_{id}`` kill switch so the Go executor hard-stops
+	in-flight subprocesses for those scans.
+	"""
+	import asyncio
+	from startScan.models import ScanHistory
+	from reNgine.definitions import ABORTED_TASK, SUCCESS_TASK
+	from reNgine.temporal_client import TemporalClientProvider, run_and_close
+	from reNgine.utils.scan_cancellation import set_scan_stop_kill_switch
+
+	logger.info("[RECOVERY] cleanup_orphan_workflows_for_completed_scans triggered")
+
+	async def _list_running_ids():
+		client = await TemporalClientProvider.get_client()
+		ids = []
+		async for wf in client.list_workflows("ExecutionStatus = 'Running'"):
+			wid = wf.id
+			if wid.startswith(_ORPHAN_CLEANUP_SKIP_PREFIXES):
+				continue
+			ids.append(wid)
+		return ids
+
+	loop = asyncio.new_event_loop()
+	try:
+		running_ids = run_and_close(loop, _list_running_ids())
+	except Exception as e:
+		logger.error("[RECOVERY] cleanup_orphan_workflows_for_completed_scans failed listing workflows: %s", e)
+		return []
+
+	cancelled = []
+	armed_kill = set()
+	for wid in running_ids:
+		scan_id = _resolve_scan_id_for_workflow(wid)
+		if not scan_id:
+			continue
+
+		status = (
+			ScanHistory.objects
+			.filter(pk=scan_id)
+			.values_list('scan_status', flat=True)
+			.first()
+		)
+		if status not in (SUCCESS_TASK, ABORTED_TASK):
+			continue
+
+		try:
+			TemporalClientProvider.cancel_workflow(wid)
+			cancelled.append((wid, scan_id, status))
+			logger.warning(
+				"[RECOVERY] Cancelled orphan workflow '%s' for completed scan %d (scan_status=%s)",
+				wid, scan_id, status,
+			)
+		except Exception as e:
+			logger.warning(
+				"[RECOVERY] Failed to cancel orphan workflow '%s': %s", wid, e,
+			)
+
+		if scan_id not in armed_kill:
+			set_scan_stop_kill_switch(scan_id, enabled=True)
+			armed_kill.add(scan_id)
+
+	logger.info(
+		"[RECOVERY] cleanup_orphan_workflows_for_completed_scans complete — cancelled=%d",
+		len(cancelled),
+	)
+	return cancelled
+
+
 def recover_stuck_scans():
 	"""Recover scans stuck due to a crash or Temporal state loss.
 
 	Called on orchestrator startup.
 
+	- First cancel orphan Temporal workflows belonging to SUCCESS/ABORTED scans.
 	- RUNNING scans whose workflow is gone (crash): resume remaining pipeline tasks.
 	- FAILED scans whose MasterScanWorkflow already completed: retry only the
 	  unsuccessful ScanActivity rows. Do not start a new MasterScanWorkflow.
@@ -1139,6 +1274,9 @@ def recover_stuck_scans():
 	from reNgine.temporal_client import TemporalClientProvider, run_and_close
 
 	logger.info("[RECOVERY] recover_stuck_scans triggered")
+
+	# Drop tool/child workflows still Running after their scan already finished.
+	cleanup_orphan_workflows_for_completed_scans()
 
 	async def _workflow_state(workflow_id):
 		from temporalio.client import WorkflowExecutionStatus

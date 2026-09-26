@@ -1081,7 +1081,11 @@ class NucleiPlannerWorkflow:
 
         if vuln_config.get('run_nuclei', True):
             nuclei_specific_config = vuln_config.get('nuclei', {})
-            severities = nuclei_specific_config.get('severity') or NUCLEI_DEFAULT_SEVERITIES
+            severities = (
+                nuclei_specific_config.get('severities')
+                or nuclei_specific_config.get('severity')
+                or NUCLEI_DEFAULT_SEVERITIES
+            )
             workflow.logger.info(
                 "[NUCLEI] PLAN | scan_id=%s severities=%s — all severities go in a "
                 "single -severity flag, so expect one run per tag batch",
@@ -3729,6 +3733,8 @@ class SingleTaskRetryWorkflow:
                 await workflow.execute_activity("EnrichScanCVEsActivity", ctx, start_to_close_timeout=timedelta(minutes=45), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("CalculateRiskScoresActivity", ctx, start_to_close_timeout=timedelta(minutes=30), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("GenerateImpactAssessmentActivity", ctx, start_to_close_timeout=timedelta(hours=1), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_LLM, task_queue="python-orchestrator-queue")
+            elif task_name == "dalfox_xss_scan":
+                await workflow.execute_activity("RunDalfoxActivity", ctx, start_to_close_timeout=timedelta(hours=2), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
             elif task_name == "waf_bypass":
                 await workflow.execute_activity("RunWAFBypassActivity", ctx, start_to_close_timeout=timedelta(hours=1), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_NETWORK_SCAN, task_queue="python-orchestrator-queue")
             elif task_name == "post_crawl_osint":
@@ -3787,7 +3793,13 @@ class SingleTaskRetryWorkflow:
         # back to SUCCESS so a failed re-run cannot reopen a completed scan.
         final_status = await workflow.execute_activity(
             "GetScanFinalStatusActivity",
-            args=[scan_id, task_succeeded, ctx.get("retry_batch_names") or [], task_name],
+            args=[
+                scan_id,
+                task_succeeded,
+                ctx.get("retry_batch_names") or [],
+                task_name,
+                ctx.get("activity_id"),
+            ],
             start_to_close_timeout=timedelta(minutes=2),
             retry_policy=_RETRY_INTERNAL,
             task_queue="python-orchestrator-queue",
@@ -3805,4 +3817,127 @@ class SingleTaskRetryWorkflow:
 
         return {"status": "SUCCESS" if task_succeeded else "FAILED", "task_name": task_name}
 
+
+@workflow.defn(name="FollowupPlanWorkflow")
+class FollowupPlanWorkflow:
+    """Execute follow-up plan steps sequentially; stop on first failure unless continue_on_error."""
+
+    @workflow.run
+    async def run(self, payload: dict) -> dict:
+        plan_id = payload.get('plan_id')
+        only_step_ids = payload.get('step_ids')  # optional filter for retry
+        plan = await workflow.execute_activity(
+            "FollowupLoadPlanActivity",
+            args=[plan_id],
+            start_to_close_timeout=timedelta(minutes=2),
+            retry_policy=_RETRY_INTERNAL,
+            task_queue="python-orchestrator-queue",
+        )
+        steps = plan.get('steps') or []
+        if only_step_ids:
+            id_set = set(only_step_ids)
+            steps = [s for s in steps if s.get('id') in id_set]
+
+        overall_ok = True
+        for step in steps:
+            if step.get('status') == 'succeeded':
+                continue
+            aborted = await workflow.execute_activity(
+                "FollowupCheckAbortActivity",
+                args=[plan_id],
+                start_to_close_timeout=timedelta(seconds=30),
+                retry_policy=_RETRY_INTERNAL,
+                task_queue="python-orchestrator-queue",
+            )
+            if aborted:
+                overall_ok = False
+                break
+
+            await workflow.execute_activity(
+                "FollowupUpdateStepActivity",
+                args=[plan_id, step['id'], 'running', None, None, None],
+                start_to_close_timeout=timedelta(minutes=2),
+                retry_policy=_RETRY_INTERNAL,
+                task_queue="python-orchestrator-queue",
+            )
+
+            result = await workflow.execute_activity(
+                "FollowupDispatchStepActivity",
+                args=[plan_id, step],
+                start_to_close_timeout=timedelta(minutes=10),
+                retry_policy=_RETRY_INTERNAL,
+                task_queue="python-orchestrator-queue",
+            )
+            if not result.get('ok'):
+                overall_ok = False
+                await workflow.execute_activity(
+                    "FollowupUpdateStepActivity",
+                    args=[plan_id, step['id'], 'failed', result.get('error') or 'dispatch failed', None, None],
+                    start_to_close_timeout=timedelta(minutes=2),
+                    retry_policy=_RETRY_INTERNAL,
+                    task_queue="python-orchestrator-queue",
+                )
+                if not step.get('continue_on_error'):
+                    break
+                continue
+
+            wf_id = result.get('workflow_id')
+            act_id = result.get('activity_id')
+            await workflow.execute_activity(
+                "FollowupUpdateStepActivity",
+                args=[plan_id, step['id'], 'running', None, wf_id, act_id],
+                start_to_close_timeout=timedelta(minutes=2),
+                retry_policy=_RETRY_INTERNAL,
+                task_queue="python-orchestrator-queue",
+            )
+
+            if result.get('wait') and wf_id:
+                wait_res = await workflow.execute_activity(
+                    "FollowupWaitWorkflowActivity",
+                    args=[wf_id],
+                    start_to_close_timeout=timedelta(hours=48),
+                    heartbeat_timeout=timedelta(minutes=5),
+                    retry_policy=_RETRY_INTERNAL,
+                    task_queue="python-orchestrator-queue",
+                )
+                # Also wait extra workflow ids from subscan fan-out
+                for extra in result.get('workflow_ids') or []:
+                    if extra and extra != wf_id:
+                        await workflow.execute_activity(
+                            "FollowupWaitWorkflowActivity",
+                            args=[extra],
+                            start_to_close_timeout=timedelta(hours=48),
+                            heartbeat_timeout=timedelta(minutes=5),
+                            retry_policy=_RETRY_INTERNAL,
+                            task_queue="python-orchestrator-queue",
+                        )
+                if not wait_res.get('ok'):
+                    overall_ok = False
+                    await workflow.execute_activity(
+                        "FollowupUpdateStepActivity",
+                        args=[plan_id, step['id'], 'failed', wait_res.get('error') or 'step failed', wf_id, act_id],
+                        start_to_close_timeout=timedelta(minutes=2),
+                        retry_policy=_RETRY_INTERNAL,
+                        task_queue="python-orchestrator-queue",
+                    )
+                    if not step.get('continue_on_error'):
+                        break
+                    continue
+
+            await workflow.execute_activity(
+                "FollowupUpdateStepActivity",
+                args=[plan_id, step['id'], 'succeeded', None, wf_id, act_id],
+                start_to_close_timeout=timedelta(minutes=2),
+                retry_policy=_RETRY_INTERNAL,
+                task_queue="python-orchestrator-queue",
+            )
+
+        final = await workflow.execute_activity(
+            "FollowupFinalizePlanActivity",
+            args=[plan_id, overall_ok],
+            start_to_close_timeout=timedelta(minutes=2),
+            retry_policy=_RETRY_INTERNAL,
+            task_queue="python-orchestrator-queue",
+        )
+        return {'plan_id': plan_id, **final}
 

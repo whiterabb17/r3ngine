@@ -205,6 +205,52 @@ def build_dirsearch_run_cmd(base_cmd, target_url, output_path, proxy=None):
 	return cmd
 
 
+_HTTPX_PROXY_SCHEMES = ('http://', 'https://', 'socks5://', 'socks5h://')
+_KNOWN_PROXY_SCHEMES = _HTTPX_PROXY_SCHEMES + ('socks4://', 'socks4a://')
+
+
+def _is_httpx_compatible_proxy(proxy):
+	"""True when *proxy* uses a scheme httpx (dirsearch 0.5 / ffuf path) accepts."""
+	if not proxy:
+		return False
+	return proxy.lower().startswith(_HTTPX_PROXY_SCHEMES)
+
+
+def resolve_httpx_compatible_proxy(proxy, tool_name='tool', max_retries=25):
+	"""Return an httpx-compatible proxy, or None if none can be found.
+
+	dirsearch 0.5 (httpx) rejects ``socks4://`` with
+	``ValueError: Unknown scheme for proxy URL``. Prefer http(s)/socks5; if the
+	given proxy is socks4, draw replacements from the pool before giving up.
+	"""
+	if not proxy:
+		return None
+
+	candidate = proxy.strip()
+	if not candidate.lower().startswith(_KNOWN_PROXY_SCHEMES):
+		candidate = 'http://' + candidate
+
+	if _is_httpx_compatible_proxy(candidate):
+		return candidate
+
+	for _ in range(max_retries):
+		new_proxy = get_random_proxy()
+		if not new_proxy:
+			break
+		if not new_proxy.lower().startswith(_KNOWN_PROXY_SCHEMES):
+			new_proxy = 'http://' + new_proxy
+		if _is_httpx_compatible_proxy(new_proxy):
+			return new_proxy
+
+	logger.warning(
+		'%s proxy requirement: no http(s)/socks5 proxy after %d retries '
+		'(socks4 not supported by httpx); continuing without proxy',
+		tool_name,
+		max_retries,
+	)
+	return None
+
+
 def _flush_ds_batch(batch, dirscan_ds, ctx, scan, subdomain_id=0, max_repeat=10):
 	"""Persist a batch of dirsearch result dicts with batched DB writes."""
 	if not batch or not scan:
@@ -453,6 +499,9 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 		ffuf_base_cmd += ' -ac' if auto_calibration else ''
 		if not auto_calibration and mc:
 			ffuf_base_cmd += f' -mc {mc}'
+		if ctx and ctx.get('singular_tool_run') and ctx.get('extra_cli_args'):
+			from reNgine.tool_args import append_extra_cli_args
+			ffuf_base_cmd = append_extra_cli_args(ffuf_base_cmd, ctx.get('extra_cli_args') or [])
 
 		has_ua = any('user-agent' in h.lower() for h in custom_headers_list)
 		if not has_ua:
@@ -592,23 +641,8 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 					try:
 						_fuzz_url = target_url if target_url.endswith('/') else target_url + '/'
 						fcmd = ffuf_base_cmd + f' -u {_fuzz_url}FUZZ -json'
-						
-						ffuf_proxy = proxy
-						if ffuf_proxy and ffuf_proxy.startswith('socks4'):
-							for _ in range(25):
-								new_proxy = get_random_proxy()
-								if not new_proxy:
-									ffuf_proxy = None
-									break
-								if not new_proxy.startswith('http') and not new_proxy.startswith('socks'):
-									new_proxy = 'http://' + new_proxy
-								if new_proxy.startswith('http') or new_proxy.startswith('socks5'):
-									ffuf_proxy = new_proxy
-									break
-							else:
-								ffuf_proxy = None
-								logger.warning('ffuf proxy requirement: failed to find an http/s or socks5 proxy after 25 retries (socks4 not supported), bypassing proxy for ffuf')
-							
+
+						ffuf_proxy = resolve_httpx_compatible_proxy(proxy, tool_name='ffuf')
 						fcmd += f' -x {ffuf_proxy}' if ffuf_proxy else ''
 						fcmd = opsec.apply_stealth('ffuf', fcmd, proxy=ffuf_proxy)
 
@@ -684,7 +718,10 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 							)
 							return opsec.apply_stealth('dirsearch', cmd, proxy=p)
 
-						current_proxy = proxy
+						# dirsearch 0.5 / httpx rejects socks4:// schemes
+						current_proxy = resolve_httpx_compatible_proxy(
+							proxy, tool_name='dirsearch'
+						)
 						dcmd = _build_dcmd(current_proxy)
 
 						dirscan_ds = DirectoryScan.objects.create(
@@ -698,7 +735,10 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 						logger.warning('dirsearch command: %s', dcmd)
 
 						if parse_only is None:
-							_PROXY_ERROR = 'Error with the proxy:'
+							_PROXY_ERRORS = (
+								'Error with the proxy:',
+								'Unknown scheme for proxy URL',
+							)
 							_max_proxy_retries = 2
 							_attempt = 0
 							while True:
@@ -709,16 +749,13 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 									scan_id=self.scan_id,
 									activity_id=self.activity_id
 								)
-								if _PROXY_ERROR not in ds_output:
+								if not any(err in ds_output for err in _PROXY_ERRORS):
 									break
 								if _attempt < _max_proxy_retries:
 									_attempt += 1
-									current_proxy = get_random_proxy()
-									if current_proxy and not any(
-										current_proxy.startswith(s)
-										for s in ['http://', 'https://', 'socks4://', 'socks5://']
-									):
-										current_proxy = 'http://' + current_proxy
+									current_proxy = resolve_httpx_compatible_proxy(
+										get_random_proxy(), tool_name='dirsearch'
+									)
 									logger.warning(
 										'dirsearch proxy error (attempt %d/%d), retrying with new proxy',
 										_attempt, _max_proxy_retries

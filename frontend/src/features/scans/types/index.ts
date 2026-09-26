@@ -167,6 +167,9 @@ export interface OsintStaging {
   source: string;
   confidence: number;
   metadata: Record<string, unknown>;
+  status?: string;
+  agent_verified?: boolean | null;
+  agent_verified_at?: string | null;
   discovered_date: string;
   discovered_date_humanized: string;
   target_domain_name: string;

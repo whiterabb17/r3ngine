@@ -168,17 +168,49 @@ class TestCreateProxyListActivity(TestCase):
         os.remove(file_path)
 
     def test_create_proxy_list_socks_proxy(self):
-        """If it returns a socks proxy, then it's Tor and should not create the list."""
+        """SOCKS proxies are included in the nuclei proxy file (full pool)."""
         from scanEngine.models import Proxy
         from reNgine.temporal_activities import create_proxy_list_activity
-        
-        # Test case where socks proxy is explicitly given or tor is enabled
-        Proxy.objects.create(use_proxy=True, proxies="socks5://127.0.0.1:9050")
-        
+        import os
+
+        Proxy.objects.create(use_proxy=True, proxies="socks5://127.0.0.1:9050\nhttp://127.0.0.1:8080")
+
         ctx = {'scan_history_id': 9999}
         file_path = create_proxy_list_activity(ctx)
-        
-        self.assertIsNone(file_path)
+
+        self.assertIsNotNone(file_path)
+        self.assertTrue(os.path.exists(file_path))
+        with open(file_path, 'r') as f:
+            body = f.read()
+        self.assertIn('socks5://127.0.0.1:9050', body)
+        self.assertIn('http://127.0.0.1:8080', body)
+        os.remove(file_path)
+
+    def test_create_proxy_list_writes_full_pool(self):
+        """Nuclei must receive every configured proxy, not a socks-stripped subset."""
+        from scanEngine.models import Proxy
+        from reNgine.temporal_activities import create_proxy_list_activity
+        import os
+
+        Proxy.objects.create(
+            use_proxy=True,
+            proxies='\n'.join([
+                'socks5://10.0.0.1:1080',
+                'socks4://10.0.0.2:1080',
+                'http://10.0.0.3:8080',
+                '10.0.0.4:8080',
+            ]),
+        )
+        file_path = create_proxy_list_activity({'scan_history_id': 9998})
+        self.assertIsNotNone(file_path)
+        with open(file_path, 'r') as f:
+            lines = [l.strip() for l in f if l.strip()]
+        self.assertEqual(len(lines), 4)
+        self.assertIn('socks5://10.0.0.1:1080', lines)
+        self.assertIn('socks4://10.0.0.2:1080', lines)
+        self.assertIn('http://10.0.0.3:8080', lines)
+        self.assertIn('http://10.0.0.4:8080', lines)
+        os.remove(file_path)
 
     def test_create_proxy_list_not_enabled(self):
         """If not enabled (returns empty list), skip."""

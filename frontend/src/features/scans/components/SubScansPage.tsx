@@ -26,8 +26,12 @@ import {
   Play,
   Filter
 } from 'lucide-react';
-import { useSubScans, useBulkStopSubScans, useBulkDeleteSubScans } from '../api';
+import { useSubScans, useBulkStopSubScans, useBulkDeleteSubScans, useStopSubScan } from '../api';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+
+/** INITIATED / RUNNING / PAUSED — statuses an operator can stop. */
+const isStoppableSubScan = (status: number | undefined | null) =>
+  status === -1 || status === 1 || status === 5;
 
 export const SubScansPage: React.FC = () => {
   const theme = useTheme();
@@ -35,6 +39,7 @@ export const SubScansPage: React.FC = () => {
   const { projectSlug = 'default' } = useParams({ strict: false }) as any;
   const { data, isLoading, isError } = useSubScans(projectSlug);
   const stopMutation = useBulkStopSubScans(projectSlug);
+  const stopOneMutation = useStopSubScan(projectSlug);
   const deleteMutation = useBulkDeleteSubScans(projectSlug);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -93,6 +98,12 @@ export const SubScansPage: React.FC = () => {
       deleteMutation.mutate(selectedIds, {
         onSuccess: () => setSelectedIds([])
       });
+    }
+  };
+
+  const handleStopOne = (id: number, label: string) => {
+    if (window.confirm(`Stop in-progress subscan on ${label}?`)) {
+      stopOneMutation.mutate(id);
     }
   };
 
@@ -340,22 +351,43 @@ export const SubScansPage: React.FC = () => {
                     />
                   </td>
                   <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                    <Button
-                      variant="contained"
-                      size="small"
-                      component={RouterLink}
-                      to={`/${projectSlug}/scan/detail/${scan.scan_history}`}
-                      sx={{ 
-                        fontSize: '10px', 
-                        fontFamily: 'Orbitron',
-                        bgcolor: `${tokens.accent.primary}15`,
-                        color: tokens.accent.primary,
-                        border: `1px solid ${tokens.accent.primary}`,
-                        '&:hover': { bgcolor: `${tokens.accent.primary}33` }
-                      }}
-                    >
-                      VIEW RESULTS
-                    </Button>
+                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', alignItems: 'center' }}>
+                      {isStoppableSubScan(scan.status) && (
+                        <Tooltip title="Stop in-progress subscan">
+                          <span>
+                            <IconButton
+                              size="small"
+                              disabled={stopOneMutation.isPending}
+                              onClick={() => handleStopOne(scan.id!, scan.subdomain_name || `#${scan.id}`)}
+                              sx={{
+                                color: tokens.accent.error,
+                                border: `1px solid ${tokens.accent.error}4D`,
+                                borderRadius: 1,
+                                '&:hover': { bgcolor: `${tokens.accent.error}15`, borderColor: tokens.accent.error },
+                              }}
+                            >
+                              <Square size={14} fill="currentColor" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      )}
+                      <Button
+                        variant="contained"
+                        size="small"
+                        component={RouterLink}
+                        to={`/${projectSlug}/scan/detail/${scan.scan_history}`}
+                        sx={{ 
+                          fontSize: '10px', 
+                          fontFamily: 'Orbitron',
+                          bgcolor: `${tokens.accent.primary}15`,
+                          color: tokens.accent.primary,
+                          border: `1px solid ${tokens.accent.primary}`,
+                          '&:hover': { bgcolor: `${tokens.accent.primary}33` }
+                        }}
+                      >
+                        VIEW RESULTS
+                      </Button>
+                    </Box>
                   </td>
                 </tr>
               ))

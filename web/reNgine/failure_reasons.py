@@ -188,6 +188,7 @@ _RULES: tuple[_Rule, ...] = (
             "proxy pool",
             "no valid proxy",
             "no working proxy",
+            "all proxies are dead",
             "tunnel connection failed",
             "socks5",
             "socks4",

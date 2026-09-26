@@ -29,6 +29,7 @@ import {
 } from '../api/mcp';
 import { McpKeysPanel } from './McpKeysPanel';
 import { McpConnectedAgentsPanel } from './McpConnectedAgentsPanel';
+import { McpFollowupsPanel } from './McpFollowupsPanel';
 import { McpReplayDialog } from './McpReplayDialog';
 
 export const McpAccessPage: React.FC = () => {
@@ -94,6 +95,9 @@ export const McpAccessPage: React.FC = () => {
             document.getElementById(`mcp-key-${keyId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }}
         />
+      </Box>
+      <Box sx={{ mt: 3 }}>
+        <McpFollowupsPanel />
       </Box>
 
       <Box sx={{ mt: 3 }}>

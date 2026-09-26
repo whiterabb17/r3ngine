@@ -49,7 +49,7 @@ verify_domain_mailboxes
 
 ## Backends
 
-**CLI (default):** `check_if_email_exists <email>` as an argv list, `shell=False`, timeout `timeout+5` seconds. SOCKS5 scan proxies map to `PROXY_*` environment variables (never argv — `run_command` stores the command string). SOCKS4 and HTTP proxies are ignored (Reacher SMTP verify is SOCKS5-only). Outbound TCP/25 from the orchestrator must be open.
+**CLI (default):** `check_if_email_exists [--proxy-host=HOST --proxy-port=PORT] <email>` as an argv list, `shell=False`, timeout `timeout+5` seconds. Operator SOCKS5 proxies (including TOR `socks5://tor:9050`) are selected via `get_random_proxy(socks5_only=True)` and passed as `--proxy-host` / `--proxy-port` / `--proxy-username`. `--proxy-password` is **not** put on argv (`run_command` stores the command string); the password is `PROXY_PASSWORD` in the subprocess environment. SOCKS4 and HTTP proxies are skipped (Reacher SMTP verify is SOCKS5-only). Outbound TCP/25 from the orchestrator must be open unless a SOCKS5 proxy is in use.
 
 **Optional HTTP:** engine `http_url` is an origin only. The activity always `POST {origin}/v0/check_email` with `{"to_email": "..."}`, no redirects, TLS verify, 64 KiB body cap.
 
@@ -89,6 +89,7 @@ Do not put raw CLI/HTTP bodies or SMTP transcripts in logs, exceptions, or vulne
 - No `shell=True`.
 - Operator `http_url` is still parsed as a URL: `http`/`https` only, no userinfo, no `file`/`gopher`, no link-local metadata IP.
 - Sequential checks + delay + cap + catch-all abort.
+- SOCKS5 proxies use `--proxy-host` / `--proxy-port` on argv; proxy passwords stay in `PROXY_PASSWORD` (never Command-row argv).
 - No new public API; this runs only inside the authenticated scan activity.
 
 ## Data written

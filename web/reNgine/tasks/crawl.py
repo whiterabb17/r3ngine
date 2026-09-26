@@ -1250,6 +1250,9 @@ def http_crawl(
 	# Apply OpSec stealth
 	opsec = get_opsec_manager()
 	cmd = opsec.apply_stealth('httpx', cmd, proxy=proxy)
+	if ctx.get('singular_tool_run') and ctx.get('extra_cli_args'):
+		from reNgine.tool_args import append_extra_cli_args
+		cmd = append_extra_cli_args(cmd, ctx.get('extra_cli_args') or [])
 
 	results = []
 	endpoint_ids = []

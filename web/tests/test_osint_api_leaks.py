@@ -157,7 +157,7 @@ class TestAPILeaks(TestCase):
         run_postleaks(FakeSelf(), 'example-test.local', self.scan, '/tmp')
 
         leaks = SecretLeak.objects.filter(scan_history=self.scan, tool_name='postleaksNg')
-        self.assertGreater(leaks.count(), 0)
+        self.assertEqual(leaks.count(), 2)
 
     @patch('reNgine.osint.api_leaks.run_command')
     @patch('reNgine.osint.api_leaks._get_proxy', return_value=None)
@@ -170,6 +170,72 @@ class TestAPILeaks(TestCase):
 
         leaks = SecretLeak.objects.filter(scan_history=self.scan, tool_name='postleaksNg')
         self.assertEqual(leaks.count(), 0)
+
+    @patch('reNgine.osint.api_leaks.run_command')
+    @patch('reNgine.osint.api_leaks._get_proxy', return_value=None)
+    def test_postleaks_skips_on_nonzero_exit_after_retries(self, mock_proxy, mock_run):
+        from reNgine.osint.api_leaks import run_postleaks
+
+        # Real failure shape from scan 4 / postleaksNg Connection refused
+        traceback_output = (
+            '\x1b[94m[*] Looking for data in Postman.com\n'
+            '\x1b[94m[*] Searching for requests IDs\x1b[0m\n'
+            'Traceback (most recent call last):\n'
+            '  File "/root/.local/share/uv/tools/postleaksng/lib/python3.14/site-packages/urllib3/connection.py", line 239, in _new_conn\n'
+            '    sock = connection.create_connection(\n'
+            'ConnectionRefusedError: [Errno 111] Connection refused\n'
+            "urllib3.exceptions.NewConnectionError: HTTPSConnection(host='www.postman.com', port=443): "
+            'Failed to establish a new connection: [Errno 111] Connection refused\n'
+            'requests.exceptions.ConnectionError: HTTPSConnectionPool(host=\'www.postman.com\', port=443): '
+            'Max retries exceeded with url: /_api/ws/proxy\n'
+        )
+        mock_run.return_value = (1, traceback_output)
+
+        run_postleaks(FakeSelf(), 'example-test.local', self.scan, '/tmp')
+
+        self.assertEqual(mock_run.call_count, 3)
+        leaks = SecretLeak.objects.filter(scan_history=self.scan, tool_name='postleaksNg')
+        self.assertEqual(leaks.count(), 0)
+
+    @patch('reNgine.osint.api_leaks.run_command')
+    @patch('reNgine.osint.api_leaks._get_proxy', return_value=None)
+    def test_postleaks_retries_then_succeeds(self, mock_proxy, mock_run):
+        from reNgine.osint.api_leaks import run_postleaks
+
+        mock_run.side_effect = [
+            (1, 'ConnectionRefusedError: connection refused\n'),
+            (0, 'API_KEY=recovered_secret\n'),
+        ]
+
+        run_postleaks(FakeSelf(), 'example-test.local', self.scan, '/tmp')
+
+        self.assertEqual(mock_run.call_count, 2)
+        leaks = SecretLeak.objects.filter(scan_history=self.scan, tool_name='postleaksNg')
+        self.assertEqual(leaks.count(), 1)
+        self.assertIn('API_KEY=recovered_secret', leaks.first().match_content)
+
+    @patch('reNgine.osint.api_leaks.run_command')
+    @patch('reNgine.osint.api_leaks._get_proxy', return_value=None)
+    def test_postleaks_filters_noise_on_success_exit(self, mock_proxy, mock_run):
+        from reNgine.osint.api_leaks import run_postleaks
+
+        # exit 0 but stdout still contains banners / traceback-shaped noise
+        mixed = (
+            '\x1b[94m[*] Looking for data in Postman.com\n'
+            'API_KEY=real_value\n'
+            'Traceback (most recent call last):\n'
+            'File "/tmp/site-packages/foo.py", line 1\n'
+            'plain_status_line_without_sep\n'
+            'DB_PASSWORD=other\n'
+        )
+        mock_run.return_value = (0, mixed)
+
+        run_postleaks(FakeSelf(), 'example-test.local', self.scan, '/tmp')
+
+        leaks = SecretLeak.objects.filter(scan_history=self.scan, tool_name='postleaksNg')
+        self.assertEqual(leaks.count(), 2)
+        contents = set(leaks.values_list('match_content', flat=True))
+        self.assertEqual(contents, {'API_KEY=real_value', 'DB_PASSWORD=other'})
 
     # ------------------------------------------------------------------
     # SwaggerSpy internet mode

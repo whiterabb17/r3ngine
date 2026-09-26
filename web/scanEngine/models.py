@@ -242,9 +242,44 @@ class InstalledExternalTool(models.Model):
     is_github_cloned = models.BooleanField(default=False)
     github_clone_path = models.CharField(max_length=1500, null=True, blank=True)
     subdomain_gathering_command = models.CharField(max_length=300, null=True, blank=True)
+    # Live inventory — filled by sync_installed_tools(), not by fixtures.
+    is_present = models.BooleanField(default=False)
+    resolved_path = models.CharField(max_length=1500, null=True, blank=True)
+    detected_version = models.CharField(max_length=200, null=True, blank=True)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    last_sync_error = models.CharField(max_length=500, null=True, blank=True)
 
     def __str__(self):
         return self.name
+
+
+class ToolArgSchemaCache(models.Model):
+    """Cached CLI flag schema from an installed binary's --help output."""
+
+    SOURCE_HELP = 'help'
+    SOURCE_SEED = 'seed_fallback'
+    SOURCE_CHOICES = (
+        (SOURCE_HELP, 'Help'),
+        (SOURCE_SEED, 'Seed fallback'),
+    )
+
+    pipeline_tool = models.CharField(max_length=100, db_index=True)
+    binary_name = models.CharField(max_length=100)
+    binary_path = models.CharField(max_length=1500, blank=True, default='')
+    version_fingerprint = models.CharField(max_length=200, blank=True, default='')
+    schema = models.JSONField(default=list, blank=True)
+    raw_help_hash = models.CharField(max_length=64, blank=True, default='')
+    fetched_at = models.DateTimeField(null=True, blank=True)
+    source = models.CharField(max_length=32, choices=SOURCE_CHOICES, default=SOURCE_SEED)
+
+    class Meta:
+        unique_together = (('pipeline_tool', 'binary_name'),)
+        indexes = [
+            models.Index(fields=['pipeline_tool', 'binary_name'], name='toolargs_pipe_bin_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.pipeline_tool}:{self.binary_name}'
 
 
 class HardwareProfile(models.Model):

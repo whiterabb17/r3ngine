@@ -159,7 +159,7 @@ export const useInstallStatus = (installId: string | null) => {
     queryFn: () => fetchInstallStatus(installId!),
     enabled: !!installId,
     refetchInterval: (query) =>
-      query.state.data?.status === 'running' ? 800 : false,
+      query.state.data?.status === 'running' ? 2000 : false,
   });
 };
 

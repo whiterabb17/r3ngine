@@ -58,6 +58,9 @@ def waf_detection(self, ctx={}, description=None):
 	)
 
 	cmd = f'wafw00f -i {input_path} -o {self.output_path}'
+	if ctx.get('singular_tool_run') and ctx.get('extra_cli_args'):
+		from reNgine.tool_args import append_extra_cli_args
+		cmd = append_extra_cli_args(cmd, ctx.get('extra_cli_args') or [])
 	logger.info(f'Running WAFW00F on {input_path}')
 	run_command(
 		cmd,
@@ -134,15 +137,19 @@ def waf_bypass(self, ctx={}, description=None):
 	"""
 	Tests various WAF bypass techniques.
 	"""
-	if 'waf_bypass' not in self.scan.tasks:
+	if not ctx.get('singular_tool_run') and 'waf_bypass' not in (self.scan.tasks or []):
 		return
 
 	config = self.yaml_configuration.get('waf_bypass') or {}
 	use_nuclei = config.get('use_nuclei', True)
 	use_benchmarking = config.get('use_benchmarking', True)
 
-	# Get all subdomains with WAFs in this scan
+	# Get subdomains with WAFs in this scan (scoped for singular / subscan runs).
 	subdomains = Subdomain.objects.filter(scan_history=self.scan).exclude(waf=None)
+	if ctx.get('subdomain_id'):
+		subdomains = subdomains.filter(pk=ctx['subdomain_id'])
+	elif ctx.get('singular_tool_run') and ctx.get('hosts'):
+		subdomains = subdomains.filter(name__in=list(ctx.get('hosts') or []))
 
 	for subdomain in subdomains:
 		logger.info(f"Starting WAF Bypass tests for {subdomain.name}")

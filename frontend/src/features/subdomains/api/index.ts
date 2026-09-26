@@ -64,6 +64,87 @@ export const useInitiateSubscan = () => {
   });
 };
 
+export interface CapabilityTool {
+  kind: string;
+  name: string;
+  title: string;
+  asset_kinds: string[];
+  risk: string;
+}
+
+export interface ToolArgField {
+  name: string;
+  long_flag?: string;
+  short_flag?: string | null;
+  type: 'bool' | 'int' | 'float' | 'string' | 'enum' | string;
+  takes_value?: boolean;
+  description?: string;
+  dangerous?: boolean;
+  default?: unknown;
+}
+
+export interface ToolArgsPayload {
+  pipeline_tool: string;
+  retry_task_name?: string;
+  binaries?: string[];
+  binary_name?: string;
+  binary_path?: string;
+  version?: string | null;
+  is_present?: boolean;
+  cached?: boolean;
+  source?: string;
+  fetched_at?: string | null;
+  schema: ToolArgField[];
+}
+
+export const useCapabilities = () => {
+  return useQuery<{ pipeline_tasks: CapabilityTool[] }>({
+    queryKey: ['capabilities'],
+    queryFn: async () => {
+      const response = await axios.get('/api/action/capabilities/');
+      return response.data;
+    },
+    staleTime: 60_000,
+  });
+};
+
+export const useToolArgs = (tool: string | null) => {
+  return useQuery<ToolArgsPayload>({
+    queryKey: ['tool-args', tool],
+    queryFn: async () => {
+      const response = await axios.get(`/api/action/tool/${encodeURIComponent(tool!)}/args/`);
+      return response.data;
+    },
+    enabled: !!tool,
+    staleTime: 30_000,
+  });
+};
+
+export const useRunTool = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      tool: string;
+      asset_type: 'subdomain' | 'endpoint' | 'url' | 'host';
+      asset_id: number;
+      scan_history_id: number;
+      tool_args?: Record<string, unknown>;
+    }) => {
+      const response = await axios.post('/api/action/tool/run/', params, {
+        headers: { 'X-CSRFToken': getCsrfToken() },
+      });
+      if (response.data?.status === false) {
+        throw new Error(response.data.message || 'Tool run failed');
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scan-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['subdomains'] });
+    },
+  });
+};
+
 export const useGPTAttackSurface = () => {
   return useMutation({
     mutationFn: async (subdomainId: number) => {

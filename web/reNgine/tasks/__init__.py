@@ -155,6 +155,7 @@ from reNgine.tasks.subdomain import (
 from reNgine.tasks.scan_init import (
     SCAN_PIPELINE_DEFINITION,
     sync_all_scans_to_graph,
+    cleanup_orphan_workflows_for_completed_scans,
     finish_osint,
     finish_osint_discovery,
     initiate_scan_temporal,

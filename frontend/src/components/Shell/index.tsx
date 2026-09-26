@@ -118,7 +118,6 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const { data: unreadData } = useUnreadCount(projectSlug);
   const { data: proxySettings } = useProxySettings(projectSlug, {
     refetchInterval: 15000,
-    refetchIntervalInBackground: true,
   });
   const [proxyWarningOpen, setProxyWarningOpen] = useState(false);
   const [hasWarnedForLowProxyStock, setHasWarnedForLowProxyStock] = useState(false);
@@ -960,8 +959,8 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
                 paper: {
                   sx: {
                     width: 300,
-                    bgcolor: alpha(theme.palette.background.paper, 0.8),
-                    backdropFilter: 'blur(25px)',
+                    bgcolor: alpha(theme.palette.background.paper, 0.95),
+                    backdropFilter: 'blur(12px)',
                     borderLeft: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
                     boxShadow: `-10px 0 30px ${alpha('#000', 0.5)}`,
                     backgroundImage: 'none',

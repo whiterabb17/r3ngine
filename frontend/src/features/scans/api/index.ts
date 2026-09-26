@@ -56,7 +56,17 @@ export const useScans = (projectSlug: string) => {
       return (data.results || []) as ScanHistory[];
     },
     enabled: !!projectSlug,
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const rows = query.state.data ?? [];
+      const live = rows.some(
+        (s) =>
+          s.scan_status === -1 ||
+          s.scan_status === 1 ||
+          s.scan_status === 5 ||
+          s.is_spiderfoot_running
+      );
+      return live ? 5000 : 30000;
+    },
   });
 };
 
@@ -175,7 +185,11 @@ export const useSubScans = (projectSlug: string) => {
       return Array.isArray(data) ? data : data.results || [];
     },
     enabled: !!projectSlug,
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const rows = query.state.data ?? [];
+      const live = rows.some((s) => s.status === -1 || s.status === 1 || s.status === 5);
+      return live ? 5000 : 30000;
+    },
   });
 };
 
@@ -196,6 +210,35 @@ export const useBulkStopSubScans = (projectSlug: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subscans', projectSlug] });
+      queryClient.invalidateQueries({ queryKey: ['scan-status', projectSlug] });
+      queryClient.invalidateQueries({ queryKey: ['scan-summary'] });
+    },
+  });
+};
+
+/** Stop a single in-progress SubScan via Temporal workflow cancellation. */
+export const useStopSubScan = (projectSlug: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch('/api/action/stop/scan/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ subscan_ids: [id] }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to stop subscan');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['subscans', projectSlug] });
+      queryClient.invalidateQueries({ queryKey: ['scan-status', projectSlug] });
+      queryClient.invalidateQueries({ queryKey: ['scan-summary'] });
     },
   });
 };
@@ -235,7 +278,17 @@ export const useScansHistory = (project: string) => {
       return (data.results || []) as ScanHistory[];
     },
     enabled: !!project,
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const rows = query.state.data ?? [];
+      const live = rows.some(
+        (s) =>
+          s.scan_status === -1 ||
+          s.scan_status === 1 ||
+          s.scan_status === 5 ||
+          s.is_spiderfoot_running
+      );
+      return live ? 5000 : 30000;
+    },
   });
 };
 
@@ -480,17 +533,21 @@ export const useStopScanAction = (projectSlug: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: number) => {
-      const response = await fetch(`/api/action/stop/scan/?scan_id=${id}`, {
+      const response = await fetch('/api/action/stop/scan/', {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
         },
         credentials: 'include',
+        body: JSON.stringify({ scan_ids: [id] }),
       });
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scan-status', projectSlug] });
+      queryClient.invalidateQueries({ queryKey: ['scans-history', projectSlug] });
+      queryClient.invalidateQueries({ queryKey: ['scan-summary'] });
     }
   });
 };
@@ -681,6 +738,70 @@ export const useBulkPromoteOsint = () => {
       queryClient.invalidateQueries({ queryKey: ['emails'] });
       queryClient.invalidateQueries({ queryKey: ['subdomains'] });
       queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+};
+
+const osintCsrfHeaders = () => ({
+  'Content-Type': 'application/json',
+  'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+});
+
+export const useClearAllOsintStaging = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (scanId: number) => {
+      const response = await fetch('/api/osintStaging/clear_all/', {
+        method: 'POST',
+        headers: osintCsrfHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ scan_id: scanId }),
+      });
+      if (!response.ok) throw new Error('Clear all failed');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['osint-staging'] });
+    },
+  });
+};
+
+export const useAddVerifiedOsintStaging = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (scanId: number) => {
+      const response = await fetch('/api/osintStaging/add_verified/', {
+        method: 'POST',
+        headers: osintCsrfHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ scan_id: scanId }),
+      });
+      if (!response.ok) throw new Error('Add verified failed');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['osint-staging'] });
+      queryClient.invalidateQueries({ queryKey: ['emails'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+};
+
+export const useClearFalsePositiveOsintStaging = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (scanId: number) => {
+      const response = await fetch('/api/osintStaging/clear_false_positives/', {
+        method: 'POST',
+        headers: osintCsrfHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ scan_id: scanId }),
+      });
+      if (!response.ok) throw new Error('Clear false positives failed');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['osint-staging'] });
     },
   });
 };

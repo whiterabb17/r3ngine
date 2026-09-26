@@ -276,7 +276,10 @@ class ScanSummaryAPIView(APIView):
         osint_staging = OsintStaging.objects.filter(scan_history=scan).order_by('-confidence', '-discovered_date')
         emails = Email.objects.filter(emails__domain=target).annotate(breach_count=Count('emailbreach')).distinct()
         exposed_count = emails.exclude(password__isnull=True).count()
-        secret_leaks = SecretLeak.objects.filter(scan_history__domain=target)
+        # Scan-scoped: domain-wide filtering previously attributed sibling-scan
+        # false positives (e.g. postleaksNg traceback rows) to every scan for
+        # the same target on the LEAKS tab.
+        secret_leaks = SecretLeak.objects.filter(scan_history=scan)
         secret_leaks_count = secret_leaks.count()
         exploitable_count = vulnerabilities.exclude(exploit_url__isnull=True).exclude(exploit_url__exact='').count()
         matched_gf_count = []

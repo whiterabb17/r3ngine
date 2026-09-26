@@ -1162,17 +1162,20 @@ def stream_command(
 			with open(history_file, mode) as f:
 				f.write(f'\n{cmd}\n{return_code}\n{output}\n------------------\n')
 
-		# Yield stdout line by line
-		for line in stdout.splitlines():
-			line = line.replace('\x00', '').strip()
-			if not line:
-				continue
-			item = line
-			try:
-				item = json.loads(line)
-			except json.JSONDecodeError:
-				pass
-			yield item
+		# Yield stdout then stderr line by line. Fatal markers such as nuclei's
+		# "all proxies are dead" land on stderr when routed through the Go
+		# executor; skipping stderr would make that failure invisible to callers.
+		for stream_text in (stdout, stderr):
+			for line in stream_text.splitlines():
+				line = line.replace('\x00', '').strip()
+				if not line:
+					continue
+				item = line
+				try:
+					item = json.loads(line)
+				except json.JSONDecodeError:
+					pass
+				yield item
 
 		if conf_path and os.path.exists(conf_path):
 			os.remove(conf_path)

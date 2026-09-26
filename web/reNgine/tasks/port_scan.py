@@ -85,6 +85,9 @@ def port_scan(self, hosts=[], ctx={}, description=None, prepare_only=False, pars
 	cmd += f' -passive' if passive else ''
 	cmd += f' -exclude-ports {exclude_ports_str}' if exclude_ports else ''
 	cmd += f' -silent'
+	if ctx.get('singular_tool_run') and ctx.get('extra_cli_args'):
+		from reNgine.tool_args import append_extra_cli_args
+		cmd = append_extra_cli_args(cmd, ctx.get('extra_cli_args') or [])
 
 	if prepare_only:
 		return {

@@ -148,7 +148,37 @@ _TIER1_TO_5 = [
 
 def get_task_tier(name: str) -> int:
     """Return the timeline tier a task belongs to (7 for unplanned/post-processing)."""
-    return _TASK_TIER.get(name, 7)
+    return _TASK_TIER.get(pipeline_task_name(name), 7)
+
+
+# ---------------------------------------------------------------------------
+# Singular tool runs use a distinct ScanActivity.name namespace so they never
+# claim, retry, or finalize pipeline / tier-retry rows that share a task slug.
+# Workflow dispatch still uses the bare pipeline task name.
+# ---------------------------------------------------------------------------
+SINGLE_TOOL_ACTIVITY_PREFIX = 'single_tool_'
+
+
+def singular_activity_name(task_name: str) -> str:
+    """ScanActivity.name for a singular tool run (idempotent)."""
+    name = (task_name or '').strip()
+    if not name:
+        return name
+    if name.startswith(SINGLE_TOOL_ACTIVITY_PREFIX):
+        return name
+    return f'{SINGLE_TOOL_ACTIVITY_PREFIX}{name}'
+
+
+def pipeline_task_name(activity_name: str) -> str:
+    """Strip single_tool_ prefix to recover the pipeline task slug."""
+    name = (activity_name or '').strip()
+    if name.startswith(SINGLE_TOOL_ACTIVITY_PREFIX):
+        return name[len(SINGLE_TOOL_ACTIVITY_PREFIX):]
+    return name
+
+
+def is_singular_activity_name(activity_name: str) -> bool:
+    return (activity_name or '').startswith(SINGLE_TOOL_ACTIVITY_PREFIX)
 
 
 def email_security_enabled(yaml_configuration: dict) -> bool:

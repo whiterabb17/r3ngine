@@ -1,7 +1,6 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.utils import timezone
 from startScan.models import SubScan
 from .serializers import SubScanSerializer
 from .permissions import HasPermission
@@ -40,17 +39,16 @@ class SubScanViewSet(viewsets.ModelViewSet):
         ids = request.data.get('ids', [])
         if not ids:
             return Response({'status': False, 'message': 'No IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        from reNgine.temporal_client import TemporalClientProvider
+
+        from reNgine.utils.scan_cancellation import abort_subscan
+        from reNgine.definitions import SUCCESS_TASK
+
         subscans = SubScan.objects.filter(id__in=ids)
+        stopped = 0
         for subscan in subscans:
-            if subscan.workflow_ids:
-                for wf_id in subscan.workflow_ids:
-                    try:
-                        TemporalClientProvider.cancel_workflow(wf_id)
-                    except Exception:
-                        pass
-            subscan.status = ABORTED_TASK
-            subscan.stop_scan_date = timezone.now()
-            subscan.save()
-        return Response({'status': True, 'message': f'Stopped {len(ids)} subscans'})
+            if subscan.status in (SUCCESS_TASK, ABORTED_TASK):
+                continue
+            result = abort_subscan(subscan)
+            if result.get('status'):
+                stopped += 1
+        return Response({'status': True, 'message': f'Stopped {stopped} subscans'})

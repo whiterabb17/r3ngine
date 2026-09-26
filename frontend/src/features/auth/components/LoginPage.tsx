@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Paper,
@@ -14,73 +14,27 @@ import { Eye, EyeOff, User, Lock, ExternalLink } from 'lucide-react';
 import { useAppContext } from '../../../context/AppContext';
 import { useLogin } from '../api';
 
-const StaticOverlay: React.FC = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rafRef = useRef<number>(0);
-  const lastFrameRef = useRef<number>(0);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const INTERVAL = 1000 / 15; // 15fps — analog static cadence
-
-    const resize = () => {
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-    };
-    resize();
-    const ro = new ResizeObserver(resize);
-    ro.observe(canvas);
-
-    const draw = (timestamp: number) => {
-      rafRef.current = requestAnimationFrame(draw);
-      if (timestamp - lastFrameRef.current < INTERVAL) return;
-      lastFrameRef.current = timestamp;
-
-      const { width, height } = canvas;
-      if (width === 0 || height === 0) return;
-      const imageData = ctx.createImageData(width, height);
-      const data = imageData.data;
-
-      for (let i = 0; i < data.length; i += 4) {
-        if (Math.random() > 0.862) {
-          const brightness = Math.floor(Math.random() * 180 + 20);
-          data[i]     = Math.floor(brightness * 0.08); // R — minimal, keeps cyan
-          data[i + 1] = Math.floor(brightness * 0.85); // G
-          data[i + 2] = brightness;                     // B
-          data[i + 3] = Math.floor(Math.random() * 44 + 9); // alpha 9–53 (+15%)
-        }
-      }
-
-      ctx.putImageData(imageData, 0, 0);
-    };
-
-    rafRef.current = requestAnimationFrame(draw);
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-      ro.disconnect();
-    };
-  }, []);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        borderRadius: 'inherit',
-        pointerEvents: 'none',
-        zIndex: 0,
-      }}
-    />
-  );
-};
+/** Static grain overlay — same look as animated canvas static, zero rAF cost */
+const StaticOverlay: React.FC = () => (
+  <Box
+    aria-hidden
+    sx={{
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+      borderRadius: 'inherit',
+      pointerEvents: 'none',
+      zIndex: 0,
+      backgroundImage: 'url("/staticfiles/img/cyber_noise.png")',
+      backgroundSize: '128px 128px',
+      backgroundRepeat: 'repeat',
+      opacity: 0.22,
+      mixBlendMode: 'overlay',
+    }}
+  />
+);
 
 export const LoginPage: React.FC = () => {
   const { version } = useAppContext();
@@ -139,12 +93,12 @@ export const LoginPage: React.FC = () => {
         width: '100%',
         maxWidth: 400,
         bgcolor: 'rgba(10, 10, 15, 0.9)',
-        backdropFilter: 'blur(20px)',
+        backdropFilter: 'blur(12px)',
         border: '1px solid rgba(255, 255, 255, 0.1)',
         borderRadius: 4,
         overflow: 'hidden',
         boxShadow: '0 0 40px rgba(0, 0, 0, 0.4)',
-        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: 'border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
         '&:hover': {
           borderColor: 'rgba(0, 243, 255, 0.3)',
           boxShadow: '0 0 50px rgba(0, 243, 255, 0.1)'

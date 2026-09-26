@@ -51,7 +51,8 @@ body {
   transition: background-color 0.4s var(--r3-transition);
 }
 
-/* Grain Effect Layer - Only active in Hacker theme */
+/* Grain Effect Layer - Only active in Hacker theme.
+   Static tiled PNG (no live SVG feTurbulence / CSS filter). */
 body.cyber-noise::after {
   content: "" !important;
   display: block !important;
@@ -60,14 +61,13 @@ body.cyber-noise::after {
   left: 0 !important;
   width: 100% !important;
   height: 100% !important;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E") !important;
-  background-size: 100px 100px !important;
+  background-image: url("/staticfiles/img/cyber_noise.png") !important;
+  background-size: 128px 128px !important;
   background-repeat: repeat !important;
   opacity: 0.2 !important;
   z-index: 9999 !important;
   pointer-events: none !important;
   mix-blend-mode: overlay !important;
-  filter: contrast(120%) brightness(100%) !important;
 }
 
 h1,
@@ -92,7 +92,7 @@ h6 {
 }
 
 .glass-panel {
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
   border: 1px solid var(--r3-border-subtle);
   border-radius: 12px;
   background: var(--r3-bg-glass);
@@ -131,6 +131,10 @@ h6 {
   box-shadow: 0 0 10px color-mix(in srgb, var(--r3-accent-primary) 50%, transparent);
   animation: mapPulse 2s infinite;
   border: 1px solid color-mix(in srgb, var(--r3-text-primary) 50%, transparent);
+}
+
+.map-marker-pulse.map-marker-static {
+  animation: none;
 }
 
 /* Tactical Map Tooltip */
@@ -175,22 +179,42 @@ h6 {
   animation: spin 2s linear infinite;
 }
 
-@keyframes progress-flow {
-  0% { background-position: 0% 50%; }
-  100% { background-position: 200% 50%; }
+/* Shimmer stripe for non-MUI progress tracks (wrappers).
+   Do NOT apply to `.MuiLinearProgress-bar` — that bar is position:absolute
+   and sized via transform; relative/overflow collapse the fill. */
+@keyframes progress-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
 }
 
 .progress-bar-flow {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--r3-accent-primary) 85%, transparent);
+}
+
+.progress-bar-flow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
   background: linear-gradient(
     90deg,
-    color-mix(in srgb, var(--r3-accent-primary) 80%, transparent) 0%,
-    color-mix(in srgb, var(--r3-accent-info) 100%, transparent) 25%,
-    color-mix(in srgb, var(--r3-accent-primary) 80%, transparent) 50%,
-    color-mix(in srgb, var(--r3-accent-info) 100%, transparent) 75%,
-    color-mix(in srgb, var(--r3-accent-primary) 80%, transparent) 100%
-  ) !important;
-  background-size: 200% 100% !important;
-  animation: progress-flow 2s linear infinite !important;
+    transparent 0%,
+    color-mix(in srgb, var(--r3-accent-info) 90%, transparent) 50%,
+    transparent 100%
+  );
+  animation: progress-shimmer 2s linear infinite;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-marker-pulse,
+  .progress-bar-flow::after,
+  .tactical-pulse-dots > div,
+  .spin {
+    animation: none !important;
+  }
 }
 
 /* Cytoscape Context Menu */

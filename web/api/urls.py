@@ -17,6 +17,20 @@ class ThrottledTokenObtainPairView(TokenObtainPairView):
 from .views import *
 # Not re-exported by api.views (which lists its scan-view imports explicitly).
 from .views.scan import ScanTierRetryAPIView
+from .views.followups import (
+    ListCapabilitiesAPIView,
+    EngineDetailAPIView,
+    ToolRunAPIView,
+    ToolArgsAPIView,
+    FollowupProposeAPIView,
+    FollowupPlanDetailAPIView,
+    FollowupUpdateAPIView,
+    FollowupApproveAPIView,
+    FollowupAbortAPIView,
+    FollowupRetryAPIView,
+    FollowupListAPIView,
+    FollowupMetricsAPIView,
+)
 from .dashboard_views import DashboardAPIView, CWEInfoAPIView
 from .target_summary_views import TargetSummaryAPIView
 from .scan_summary_views import ScanSummaryAPIView, ScanAiExportAPIView
@@ -420,6 +434,54 @@ urlpatterns = [
         'action/retry/task/<int:pk>/',
         ScanActivityRetryAPIView.as_view(),
         name='retry_task'),
+    path(
+        'action/tool/run/',
+        ToolRunAPIView.as_view(),
+        name='tool_run'),
+    path(
+        'action/tool/<str:tool>/args/',
+        ToolArgsAPIView.as_view(),
+        name='tool_args'),
+    path(
+        'action/capabilities/',
+        ListCapabilitiesAPIView.as_view(),
+        name='list_capabilities'),
+    path(
+        'action/engines/<int:pk>/',
+        EngineDetailAPIView.as_view(),
+        name='engine_detail'),
+    path(
+        'action/followups/',
+        FollowupListAPIView.as_view(),
+        name='followup_list'),
+    path(
+        'action/followups/propose/',
+        FollowupProposeAPIView.as_view(),
+        name='followup_propose'),
+    path(
+        'action/followups/metrics/',
+        FollowupMetricsAPIView.as_view(),
+        name='followup_metrics'),
+    path(
+        'action/followups/<int:pk>/',
+        FollowupPlanDetailAPIView.as_view(),
+        name='followup_detail'),
+    path(
+        'action/followups/<int:pk>/update/',
+        FollowupUpdateAPIView.as_view(),
+        name='followup_update'),
+    path(
+        'action/followups/<int:pk>/approve/',
+        FollowupApproveAPIView.as_view(),
+        name='followup_approve'),
+    path(
+        'action/followups/<int:pk>/abort/',
+        FollowupAbortAPIView.as_view(),
+        name='followup_abort'),
+    path(
+        'action/followups/<int:pk>/retry/',
+        FollowupRetryAPIView.as_view(),
+        name='followup_retry'),
     path(
         'action/retry/tier/<int:scan_id>/<int:tier>/',
         ScanTierRetryAPIView.as_view(),

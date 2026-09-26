@@ -6,9 +6,16 @@ from django.conf import settings
 
 from startScan.models import ScanActivity, SubScan
 from reNgine.temporal_client import TemporalClientProvider
-from reNgine.definitions import ABORTED_TASK, RUNNING_TASK, PAUSED_TASK
+from reNgine.definitions import (
+    ABORTED_TASK,
+    INITIATED_TASK,
+    RUNNING_TASK,
+    PAUSED_TASK,
+)
 
 logger = logging.getLogger(__name__)
+
+_PARENT_LIVE_STATUSES = (INITIATED_TASK, RUNNING_TASK, PAUSED_TASK)
 
 
 def _scan_stop_key(scan_id: int) -> str:
@@ -32,27 +39,42 @@ def set_scan_stop_kill_switch(scan_id: int, enabled: bool, ttl_seconds: int = 24
 
 
 def abort_subscan(subscan):
+    """Stop an in-progress SubScan via Temporal cancellation.
+
+    Primary path is ``handle.cancel()`` on every workflow id recorded on the
+    SubScan. SubScanWorkflow already treats ``asyncio.CancelledError`` as a
+    terminal abort and skips post-scan finalize, so DB state is updated here.
+
+    The Redis ``scan_stop_{scan_history_id}`` kill switch is only armed when the
+    parent master scan is not live. Arming it while MasterScanWorkflow is still
+    running would hard-kill go-executor tools that still belong to the parent.
+    """
     try:
-        set_scan_stop_kill_switch(subscan.scan_history_id, enabled=True)
+        parent = getattr(subscan, 'scan_history', None)
+        parent_live = bool(
+            parent is not None and parent.scan_status in _PARENT_LIVE_STATUSES
+        )
+        if not parent_live and subscan.scan_history_id:
+            set_scan_stop_kill_switch(subscan.scan_history_id, enabled=True)
 
         # Cancel all workflows FIRST, then update DB state
-        for wf_id in subscan.workflow_ids:
+        for wf_id in (subscan.workflow_ids or []):
             try:
                 TemporalClientProvider.cancel_workflow(wf_id)
             except Exception as e:
-                logger.error(f"Failed to cancel workflow {wf_id} for subscan {subscan.id}: {e}")
+                logger.error("Failed to cancel workflow %s for subscan %s: %s", wf_id, subscan.id, e)
 
         # Now update DB state after workflows are cancelled
         subscan.status = ABORTED_TASK
         subscan.stop_scan_date = timezone.now()
-        subscan.save()
+        subscan.save(update_fields=['status', 'stop_scan_date'])
 
         from reNgine.tasks import create_scan_activity
-        create_scan_activity(subscan.scan_history.id, "Subscan aborted", ABORTED_TASK)
+        create_scan_activity(subscan.scan_history_id, "Subscan aborted", ABORTED_TASK)
 
         return {'status': True}
     except Exception as e:
-        logger.error(f"abort_subscan failed for subscan {subscan.id}: {e}")
+        logger.error("abort_subscan failed for subscan %s: %s", subscan.id, e)
         return {'status': False, 'message': str(e)}
 
 

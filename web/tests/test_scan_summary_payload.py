@@ -27,7 +27,7 @@ from reNgine.definitions import (
     ABORTED_TASK, FAILED_TASK, INITIATED_TASK, RUNNING_TASK, SUCCESS_TASK,
 )
 from scanEngine.models import EngineType
-from startScan.models import Command, ScanActivity, ScanHistory, Vulnerability
+from startScan.models import Command, ScanActivity, ScanHistory, Vulnerability, SecretLeak
 from targetApp.models import Domain
 
 User = get_user_model()
@@ -456,3 +456,37 @@ class SeverityAggregateTests(ScanSummaryPayloadTestCase):
                       'vulnerability_count'):
             with self.subTest(field=field):
                 self.assertEqual(payload[field], 0)
+
+
+class SecretLeakScanScopeTests(ScanSummaryPayloadTestCase):
+    """LEAKS on scan detail must not inherit sibling-scan rows for the same domain."""
+
+    def test_secret_leaks_are_scoped_to_the_requested_scan(self) -> None:
+        sibling = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_type=self.engine,
+            scan_status=SUCCESS_TASK,
+            start_scan_date=timezone.now(),
+            tasks=['osint'],
+        )
+        SecretLeak.objects.create(
+            scan_history=sibling,
+            tool_name='postleaksNg',
+            secret_type='postman_leak',
+            source_url='postman://sp.test.example',
+            match_content='Traceback (most recent call last):',
+            status='unverified',
+        )
+        SecretLeak.objects.create(
+            scan_history=self.scan,
+            tool_name='postleaksNg',
+            secret_type='postman_leak',
+            source_url='postman://sp.test.example',
+            match_content='API_KEY=mine',
+            status='unverified',
+        )
+
+        payload = self._payload()
+        self.assertEqual(payload['secret_leaks_count'], 1)
+        self.assertEqual(len(payload['secret_leaks']), 1)
+        self.assertEqual(payload['secret_leaks'][0]['match_content'], 'API_KEY=mine')

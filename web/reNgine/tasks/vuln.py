@@ -12,7 +12,13 @@ from reNgine.definitions import *
 from reNgine.utils.opsec import OpSecManager, ProxychainsWrapper, get_opsec_manager
 from reNgine.utils.task import run_command, run_command_with_retry, stream_command, activity_heartbeat_safe, save_endpoint, save_subdomain
 from reNgine.tech_mapping import get_nuclei_tags_from_techs
-from reNgine.tasks.parsers import parse_nuclei_result, parse_dalfox_result, parse_crlfuzz_result, parse_s3scanner_result
+from reNgine.tasks.parsers import (
+	is_nuclei_finding,
+	parse_nuclei_result,
+	parse_dalfox_result,
+	parse_crlfuzz_result,
+	parse_s3scanner_result,
+)
 from reNgine.tasks.llm import get_vulnerability_gpt_report, add_gpt_description_db
 from reNgine.tasks.crawl import parse_curl_output
 from reNgine.tasks.notifications import send_hackerone_report
@@ -24,6 +30,63 @@ from startScan.models import *
 from scanEngine.models import Proxy
 
 logger = logging.getLogger(__name__)
+
+
+def _nuclei_line_is_proxy_dead(line) -> bool:
+	"""Return True when a nuclei output line reports that every proxy failed."""
+	if not isinstance(line, str):
+		return False
+	cleaned = remove_ansi_escape_sequences(line).lower()
+	return NUCLEI_PROXY_DEAD_MARKER in cleaned
+
+
+def _refresh_nuclei_proxy_file(proxies_file_path: str) -> bool:
+	"""Rewrite the nuclei proxy file from the current pool.
+
+	Writes the full pool (HTTP + SOCKS). Nuclei accepts both schemes in a
+	-proxy list file; filtering SOCKS left SOCKS-heavy pools with one dead
+	HTTP entry and triggered "all proxies are dead" fatal exits.
+
+	Returns:
+		bool: True when the file was rewritten with at least one proxy.
+	"""
+	proxies = get_proxy_list()
+	if not proxies:
+		return False
+	with open(proxies_file_path, 'w') as f:
+		f.write('\n'.join(proxies))
+	try:
+		os.chmod(proxies_file_path, 0o600)
+	except OSError:
+		pass
+	return True
+
+
+def _resolve_scoped_http_targets(self, urls, ctx):
+	"""Resolve HTTP targets, preferring explicit urls then subdomain-scoped DB URLs.
+
+	Subscans must never fall back to the apex domain when a subdomain is in ctx.
+	"""
+	if urls:
+		return list(urls)
+	targets = get_http_urls(is_alive=False, ignore_files=True, ctx=ctx) or []
+	if targets:
+		return targets
+	subdomain = getattr(self, 'subdomain', None)
+	name = (
+		(getattr(subdomain, 'name', None) or '').strip()
+		or (ctx.get('subdomain_name') or '').strip()
+	)
+	http_url = (ctx.get('subdomain_http_url') or '').strip()
+	if http_url:
+		return [http_url]
+	if name:
+		return [f'https://{name}']
+	domain = getattr(self, 'domain', None)
+	if domain and getattr(domain, 'name', None):
+		return [f'https://{domain.name}']
+	return []
+
 
 # Merged second-order config — covers takeover, CDN, JS, parameter, and title detection.
 # Written to disk before each scan run so we never depend on a GitHub download.
@@ -186,8 +249,11 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 		tech_tags = []
 		all_techs = set()
 		if self.scan:
-			# Get all technologies discovered for this scan
+			# Get technologies discovered for this scan — scope to subdomain on subscans.
 			subdomains = Subdomain.objects.filter(scan_history=self.scan)
+			_sub_id = ctx.get('subdomain_id') or getattr(self, 'subdomain_id', None)
+			if _sub_id:
+				subdomains = subdomains.filter(pk=_sub_id)
 			all_techs = set()
 			for sub in subdomains:
 				# assuming technologies is a many-to-many field with 'name' attribute
@@ -311,34 +377,39 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 	cmd = 'nuclei -j -hang-monitor -stats'
 	cmd += ' -config /root/.config/nuclei/config.yaml' if use_nuclei_conf else ''
 	cmd += f' -irr'
+	if ctx.get('singular_tool_run') and ctx.get('extra_cli_args'):
+		from reNgine.tool_args import append_extra_cli_args
+		cmd = append_extra_cli_args(cmd, ctx.get('extra_cli_args') or [])
 
 	# Apply OpSec stealth
 	proxy_obj = Proxy.objects.first()
-	proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
+	# When a proxy file is already supplied by NucleiPlannerWorkflow, do not
+	# call get_random_proxy() — it re-validates and may strip the pool before
+	# nuclei even starts, which then makes a dead-proxy refresh look empty.
+	proxy = None
+	if not (proxies_file_path and os.path.exists(proxies_file_path)):
+		proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
 	opsec = get_opsec_manager()
-	cmd = opsec.apply_stealth('nuclei', cmd, proxy=proxy)
+	cmd_base = opsec.apply_stealth('nuclei', cmd, proxy=proxy)
 	formatted_headers = ' '.join(f'-H "{header}"' for header in custom_headers)
 	if formatted_headers:
-		cmd += f' {formatted_headers}'
-	cmd += f' '
-	
-	if proxies_file_path and os.path.exists(proxies_file_path):
-		cmd += f' -proxy {proxies_file_path}'
-	elif proxy:
-		cmd += f' -proxy {proxy}' 
-	cmd += f' -l {input_path}'
-	cmd += f' -c {str(concurrency)}' if concurrency > 0 else ''
+		cmd_base += f' {formatted_headers}'
+	cmd_base += f' '
+	# -proxy is attached per attempt below so a dead-proxy retry can refresh the
+	# list (or pick a different single proxy) without rebuilding the whole command.
+	cmd_base += f' -l {input_path}'
+	cmd_base += f' -c {str(concurrency)}' if concurrency > 0 else ''
 
-	cmd += f' -retries {retries}' if retries > 0 else ''
-	cmd += f' -rl {rate_limit}' if rate_limit > 0 else ''
+	cmd_base += f' -retries {retries}' if retries > 0 else ''
+	cmd_base += f' -rl {rate_limit}' if rate_limit > 0 else ''
 	if severities_str:
-		cmd += f' -severity {severities_str}'
-	#cmd += f' -timeout {str(timeout)}' if timeout and timeout > 0 else ''
+		cmd_base += f' -severity {severities_str}'
+	#cmd_base += f' -timeout {str(timeout)}' if timeout and timeout > 0 else ''
 	if tags:
-		cmd += f" -tags '{tags}'"
-	#cmd += f' -silent'
+		cmd_base += f" -tags '{tags}'"
+	#cmd_base += f' -silent'
 	for tpl in templates:
-		cmd += f' -t {tpl}'
+		cmd_base += f' -t {tpl}'
 	
 	if is_wordpress_detected and wordfence_exists:
 		# Wordfence templates live at /root/nuclei-templates/wordfence — already included
@@ -364,148 +435,218 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 		self.scan_id, severities_str or '-', tags or '-',
 		','.join(templates) or '-', _target_count,
 	)
-	logger.warning(
-		'[NUCLEI] CMD | scan_id=%s | %s', self.scan_id, redact_proxy_credentials(cmd)
-	)
 
 	results = []
 	notif = Notification.objects.first()
 	send_status = notif.send_scan_status_notif if notif else False
 
 	import json
-	line_source = stream_command(
-		cmd,
-		history_file=self.history_file,
-		scan_id=self.scan_id,
-		activity_id=self.activity_id)
+	proxy_dead_skip = False
+	for attempt in range(1, NUCLEI_PROXY_DEAD_MAX_ATTEMPTS + 1):
+		if attempt > 1:
+			logger.warning(
+				'[NUCLEI] PROXY DEAD RETRY | scan_id=%s attempt=%d/%d — refreshing proxies',
+				self.scan_id, attempt, NUCLEI_PROXY_DEAD_MAX_ATTEMPTS,
+			)
+			if proxies_file_path:
+				# Prefer a fresh write from the configured pool. If the pool was
+				# emptied or unavailable, keep the existing file so transient
+				# dial timeouts can still be retried with the same list.
+				if not _refresh_nuclei_proxy_file(proxies_file_path):
+					if not os.path.exists(proxies_file_path):
+						logger.warning(
+							'[NUCLEI] PROXY DEAD SKIP | scan_id=%s — proxy file gone '
+							'and pool empty after refresh',
+							self.scan_id,
+						)
+						proxy_dead_skip = True
+						results = []
+						break
+					logger.warning(
+						'[NUCLEI] PROXY DEAD RETRY | scan_id=%s — pool empty, '
+						'reusing existing proxy file',
+						self.scan_id,
+					)
+			elif proxy_obj and proxy_obj.use_proxy:
+				proxy = get_random_proxy()
 
-	for line in line_source:
-		if not isinstance(line, dict):
-			continue
+		cmd = cmd_base
+		if proxies_file_path and os.path.exists(proxies_file_path):
+			cmd += f' -proxy {proxies_file_path}'
+		elif proxy:
+			cmd += f' -proxy {proxy}'
 
-		results.append(line)
-
-		# Gather nuclei results
-		vuln_data = parse_nuclei_result(line)
-
-		# Get corresponding subdomain
-		http_url = sanitize_url(line.get('matched-at'))
-		subdomain_name = get_subdomain_from_url(http_url)
-
-		subdomain, _ = save_subdomain(subdomain_name, ctx=ctx)
-		if not subdomain:
-			continue
-
-		severity_value = line['info'].get('severity', 'unknown')
-
-		# Get or create EndPoint object
-		response = line.get('response')
-		httpx_crawl = False if response else enable_http_crawl # avoid yet another httpx crawl
-		endpoint, _ = save_endpoint(
-			http_url,
-			crawl=httpx_crawl,
-			subdomain=subdomain,
-			ctx=ctx)
-		if endpoint:
-			http_url = endpoint.http_url
-			if not httpx_crawl:
-				output = parse_curl_output(response)
-				endpoint.http_status = output['http_status']
-				endpoint.save()
-
-		# Register Auth Candidate if Nuclei flagged it as login or auth
-		tags_list = line.get('info', {}).get('tags', []) or []
-		if any(tag in tags_list for tag in ['login', 'auth', 'admin', 'default-login', 'bruteforce', 'panel']):
-			from reNgine.utilities import save_auth_candidate
-			save_auth_candidate(
-				scan_history=self.scan,
-				target=http_url,
-				protocol='http',
-				port=int(urlparse(http_url).port or (443 if 'https' in http_url else 80)),
-				source_tool='Nuclei',
-				metadata={'tags': tags_list, 'template_id': line.get('template-id')},
-				subdomain=subdomain,
-				endpoint=endpoint
+		if attempt == 1:
+			logger.warning(
+				'[NUCLEI] CMD | scan_id=%s | %s', self.scan_id, redact_proxy_credentials(cmd)
+			)
+		else:
+			logger.warning(
+				'[NUCLEI] CMD RETRY | scan_id=%s attempt=%d | %s',
+				self.scan_id, attempt, redact_proxy_credentials(cmd),
 			)
 
-		# Get or create Vulnerability object
-		vuln, created = save_vulnerability(
-			target_domain=self.domain,
-			http_url=http_url,
-			scan_history=self.scan,
-			subscan=self.subscan,
-			subdomain=subdomain,
-			**vuln_data)
-		if not vuln or not created:
-			continue
+		results = []
+		proxy_dead = False
+		line_source = stream_command(
+			cmd,
+			history_file=self.history_file,
+			scan_id=self.scan_id,
+			activity_id=self.activity_id)
 
-		# Print vuln
-		logger.warning(str(vuln))
+		for line in line_source:
+			if isinstance(line, str):
+				if _nuclei_line_is_proxy_dead(line):
+					proxy_dead = True
+					logger.warning(
+						'[NUCLEI] PROXY DEAD | scan_id=%s attempt=%d/%d | %s',
+						self.scan_id, attempt, NUCLEI_PROXY_DEAD_MAX_ATTEMPTS,
+						remove_ansi_escape_sequences(line),
+					)
+				continue
+			if not isinstance(line, dict):
+				continue
+			# Go-executor buffers nuclei stdout (incl. -stats JSON). Skip those.
+			if not is_nuclei_finding(line):
+				continue
 
-		# Send notification for all vulnerabilities except info
-		url = vuln.http_url or vuln.subdomain
-		send_vuln = (
-			notif and
-			notif.send_vuln_notif and
-			vuln and
-			severity_value in ['low', 'medium', 'high', 'critical'])
-		if send_vuln:
-			fields = {
-				'Severity': f'**{severity_value.upper()}**',
-				'URL': http_url,
-				'Subdomain': subdomain_name,
-				'Name': vuln.name,
-				'Type': vuln.type,
-				'Description': vuln.description,
-				'Template': vuln.template_url,
-				'Tags': vuln.get_tags_str() or "N/A",
-				'CVEs': vuln.get_cve_str(),
-				'CWEs': vuln.get_cwe_str(),
-				'References': vuln.get_refs_str()
-			}
-			severity_map = {
-				'low': 'info',
-				'medium': 'warning',
-				'high': 'error',
-				'critical': 'error'
-			}
-			self.notify(
-				f'vulnerability_scan_#{vuln.id}',
-				severity_map[severity_value],
-				fields,
-				add_meta_info=False)
+			results.append(line)
 
-		# Send report to hackerone
-		hackerone_query = Hackerone.objects.filter(send_report=True)
-		api_key_check_query = HackerOneAPIKey.objects.filter(
-			Q(username__isnull=False) & Q(key__isnull=False)
-		)
+			# Gather nuclei results
+			vuln_data = parse_nuclei_result(line)
+			if not vuln_data:
+				continue
 
-		send_report = (
-			hackerone_query.exists() and
-			api_key_check_query.exists() and
-			severity_value not in ('info', 'low') and
-			vuln.target_domain.h1_team_handle
-		)
+			# Get corresponding subdomain
+			http_url = sanitize_url(line.get('matched-at'))
+			subdomain_name = get_subdomain_from_url(http_url)
 
-		if send_report:
-			hackerone = hackerone_query.first()
-			try:
-				if hackerone.send_critical and severity_value == 'critical':
-					send_hackerone_report(vuln.id)
-				elif hackerone.send_high and severity_value == 'high':
-					send_hackerone_report(vuln.id)
-				elif hackerone.send_medium and severity_value == 'medium':
-					send_hackerone_report(vuln.id)
-			except Exception as e:
-				logger.warning(f"HackerOne report send failed for vuln {vuln.id}: {e}")
+			subdomain, _ = save_subdomain(subdomain_name, ctx=ctx)
+			if not subdomain:
+				continue
+
+			severity_value = (line.get('info') or {}).get('severity', 'unknown')
+
+			# Get or create EndPoint object
+			response = line.get('response')
+			httpx_crawl = False if response else enable_http_crawl # avoid yet another httpx crawl
+			endpoint, _ = save_endpoint(
+				http_url,
+				crawl=httpx_crawl,
+				subdomain=subdomain,
+				ctx=ctx)
+			if endpoint:
+				http_url = endpoint.http_url
+				if not httpx_crawl:
+					output = parse_curl_output(response)
+					endpoint.http_status = output['http_status']
+					endpoint.save()
+
+			# Register Auth Candidate if Nuclei flagged it as login or auth
+			tags_list = (line.get('info') or {}).get('tags', []) or []
+			if any(tag in tags_list for tag in ['login', 'auth', 'admin', 'default-login', 'bruteforce', 'panel']):
+				from reNgine.utilities import save_auth_candidate
+				save_auth_candidate(
+					scan_history=self.scan,
+					target=http_url,
+					protocol='http',
+					port=int(urlparse(http_url).port or (443 if 'https' in http_url else 80)),
+					source_tool='Nuclei',
+					metadata={'tags': tags_list, 'template_id': line.get('template-id')},
+					subdomain=subdomain,
+					endpoint=endpoint
+				)
+
+			# Get or create Vulnerability object
+			vuln, created = save_vulnerability(
+				target_domain=self.domain,
+				http_url=http_url,
+				scan_history=self.scan,
+				subscan=self.subscan,
+				subdomain=subdomain,
+				**vuln_data)
+			if not vuln or not created:
+				continue
+
+			# Print vuln
+			logger.warning(str(vuln))
+
+			# Send notification for all vulnerabilities except info
+			url = vuln.http_url or vuln.subdomain
+			send_vuln = (
+				notif and
+				notif.send_vuln_notif and
+				vuln and
+				severity_value in ['low', 'medium', 'high', 'critical'])
+			if send_vuln:
+				fields = {
+					'Severity': f'**{severity_value.upper()}**',
+					'URL': http_url,
+					'Subdomain': subdomain_name,
+					'Name': vuln.name,
+					'Type': vuln.type,
+					'Description': vuln.description,
+					'Template': vuln.template_url,
+					'Tags': vuln.get_tags_str() or "N/A",
+					'CVEs': vuln.get_cve_str(),
+					'CWEs': vuln.get_cwe_str(),
+					'References': vuln.get_refs_str()
+				}
+				severity_map = {
+					'low': 'info',
+					'medium': 'warning',
+					'high': 'error',
+					'critical': 'error'
+				}
+				self.notify(
+					f'vulnerability_scan_#{vuln.id}',
+					severity_map[severity_value],
+					fields,
+					add_meta_info=False)
+
+			# Send report to hackerone
+			hackerone_query = Hackerone.objects.filter(send_report=True)
+			api_key_check_query = HackerOneAPIKey.objects.filter(
+				Q(username__isnull=False) & Q(key__isnull=False)
+			)
+
+			send_report = (
+				hackerone_query.exists() and
+				api_key_check_query.exists() and
+				severity_value not in ('info', 'low') and
+				vuln.target_domain.h1_team_handle
+			)
+
+			if send_report:
+				hackerone = hackerone_query.first()
+				try:
+					if hackerone.send_critical and severity_value == 'critical':
+						send_hackerone_report(vuln.id)
+					elif hackerone.send_high and severity_value == 'high':
+						send_hackerone_report(vuln.id)
+					elif hackerone.send_medium and severity_value == 'medium':
+						send_hackerone_report(vuln.id)
+				except Exception as e:
+					logger.warning(f"HackerOne report send failed for vuln {vuln.id}: {e}")
+
+		if not proxy_dead:
+			break
+
+		if attempt >= NUCLEI_PROXY_DEAD_MAX_ATTEMPTS:
+			logger.warning(
+				'[NUCLEI] PROXY DEAD SKIP | scan_id=%s — gave up after %d attempts',
+				self.scan_id, NUCLEI_PROXY_DEAD_MAX_ATTEMPTS,
+			)
+			proxy_dead_skip = True
+			results = []
 
 	logger.warning(
-		'[NUCLEI] DONE | scan_id=%s severity=%s tags=%s targets=%s findings=%d elapsed=%ss',
+		'[NUCLEI] DONE | scan_id=%s severity=%s tags=%s targets=%s findings=%d elapsed=%ss%s',
 		self.scan_id, severities_str or '-', tags or '-', _target_count,
 		len(results), round(time.time() - _nuclei_started, 1),
+		' (skipped: all proxies dead)' if proxy_dead_skip else '',
 	)
-	if not results:
+	if not results and not proxy_dead_skip:
 		# Distinguishes "ran and matched nothing" from "never ran" — the two were
 		# indistinguishable in the log before, which is what made nuclei look broken.
 		logger.warning(
@@ -637,6 +778,9 @@ def dalfox_xss_scan(self, urls=[], ctx={}, description=None):
 	cmd += f' --user-agent {user_agent}' if user_agent else ''
 	cmd += f' --workers {threads}' if threads else ''
 	cmd += f' --format json'
+	if ctx.get('singular_tool_run') and ctx.get('extra_cli_args'):
+		from reNgine.tool_args import append_extra_cli_args
+		cmd = append_extra_cli_args(cmd, ctx.get('extra_cli_args') or [])
 
 	results = []
 	for line in stream_command(
@@ -1020,6 +1164,20 @@ def semgrep_scan(self, ctx={}, mode='vulnerability', description=None):
 	# But to be robust, we'll download files ourselves if the directory is empty
 	SENSITIVE_EXTENSIONS = ('.js', '.env', '.php', '.asp', '.aspx', '.jsp', '.jspx', '.txt', '.log', '.conf', '.config', '.bak', '.old', '.json', '.yaml', '.yml', '.html', '.htm')
 
+	# Subscan / singular runs must only pull URLs for the scoped host.
+	subdomain_id = ctx.get('subdomain_id')
+	subdomain_name = (ctx.get('subdomain_name') or '').lower().rstrip('.')
+	if not subdomain_name and getattr(self, 'subdomain', None):
+		subdomain_name = (self.subdomain.name or '').lower().rstrip('.')
+		if not subdomain_id:
+			subdomain_id = self.subdomain.id
+
+	def _url_in_subdomain_scope(url_str):
+		if not subdomain_name:
+			return True
+		host = (urlparse(url_str).hostname or '').lower().rstrip('.')
+		return host == subdomain_name or host.endswith('.' + subdomain_name)
+
 	# Load URLs from fetch_url output files and tool-specific files
 	urls_from_files = set()
 	if os.path.exists(results_dir):
@@ -1030,15 +1188,20 @@ def semgrep_scan(self, ctx={}, mode='vulnerability', description=None):
 					with open(fpath, 'r', encoding='utf-8', errors='ignore') as f_in:
 						for line in f_in:
 							url_str = line.strip()
-							if url_str:
+							if url_str and _url_in_subdomain_scope(url_str):
 								urls_from_files.add(url_str)
 					logger.warning("[SEMGREP] Loaded %d URLs from file: %s", len(urls_from_files), fpath)
 				except Exception as e:
 					logger.error("[SEMGREP] Failed to read file %s: %s", fpath, e)
 
 	endpoints = EndPoint.objects.filter(scan_history_id=scan_id)
+	if subdomain_id:
+		endpoints = endpoints.filter(subdomain_id=subdomain_id)
 	endpoint_urls = set(e.http_url for e in endpoints if e.http_url)
-	logger.warning("[SEMGREP] Sources: %d endpoint URLs from DB, %d URLs from result files", len(endpoint_urls), len(urls_from_files))
+	logger.warning(
+		"[SEMGREP] Sources: %d endpoint URLs from DB, %d URLs from result files (subdomain_id=%s)",
+		len(endpoint_urls), len(urls_from_files), subdomain_id,
+	)
 	all_urls = endpoint_urls | urls_from_files
 	logger.warning("[SEMGREP] Total combined URLs before extension filter: %d", len(all_urls))
 
@@ -1397,7 +1560,10 @@ def second_order_scan(self, urls=[], ctx={}, description=None):
 	with open(config_path, 'w') as fh:
 		json.dump(_SECOND_ORDER_MERGED_CONFIG, fh)
 
-	targets = urls or ["https://%s" % self.domain.name]
+	targets = _resolve_scoped_http_targets(self, urls, ctx)
+	if not targets:
+		logger.warning('second_order: no scoped targets to scan, skipping.')
+		return
 	out_dir = "%s/second_order_out" % self.results_dir
 	os.makedirs(out_dir, exist_ok=True)
 
@@ -1434,7 +1600,7 @@ def nuclei_dast_scan(self, urls=[], ctx={}, description=None):
 	"""Nuclei DAST Scan"""
 	from reNgine.common_func import save_vulnerability, get_http_urls, sanitize_url, get_subdomain_from_url
 	from reNgine.utils.task import stream_command, save_subdomain, save_endpoint
-	from reNgine.tasks.parsers import parse_nuclei_result
+	from reNgine.tasks.parsers import is_nuclei_finding, parse_nuclei_result
 	import os
 
 	logger.info('Nuclei DAST scan started')
@@ -1478,8 +1644,11 @@ def nuclei_dast_scan(self, urls=[], ctx={}, description=None):
 			history_file=self.history_file,
 			scan_id=self.scan_id,
 			activity_id=self.activity_id):
-		if not isinstance(line, dict): continue
+		if not is_nuclei_finding(line):
+			continue
 		vuln_data = parse_nuclei_result(line)
+		if not vuln_data:
+			continue
 		http_url = sanitize_url(line.get('matched-at'))
 		subdomain_name = get_subdomain_from_url(http_url)
 		subdomain, _ = save_subdomain(subdomain_name, ctx=ctx)

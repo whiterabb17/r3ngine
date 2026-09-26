@@ -627,12 +627,6 @@ class ScanActivityRetryAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        if activity_obj.subscan_id is not None:
-            return Response(
-                {"status": False, "message": "Retrying subscan tasks is not yet supported"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         scan = activity_obj.scan_of
 
         if scan is None:
@@ -650,6 +644,8 @@ class ScanActivityRetryAPIView(APIView):
 
         # Single-task retry accepts FAILED and ABORTED. Tier retry stays
         # FAILED-only so a stop/cancel does not offer "Retry Tier".
+        # Subscan-linked activities are retryable with the same rules (parity
+        # with parent-scan rows); subdomain context is stamped into ctx below.
         if scan.scan_status != SUCCESS_TASK and activity_obj.status not in (
             FAILED_TASK, ABORTED_TASK,
         ):
@@ -664,8 +660,16 @@ class ScanActivityRetryAPIView(APIView):
             # Reset the failed activity row so _create_scan_activity can claim it.
             # Keep time_started so the timeline does not hide it as a ghost
             # INITIATED row (those are filtered when time_started is null).
+            # Singular parents stay RUNNING (workflow starts immediately; children
+            # may never reclaim this row — e.g. single_tool_vulnerability_scan).
+            from reNgine.task_plan import is_singular_activity_name
+            reset_status = (
+                RUNNING_TASK
+                if is_singular_activity_name(activity_obj.name)
+                else INITIATED_TASK
+            )
             ScanActivity.objects.filter(pk=activity_obj.pk).update(
-                status=INITIATED_TASK,
+                status=reset_status,
                 time_ended=None,
                 error_message=None,
                 traceback=None,
@@ -685,24 +689,102 @@ class ScanActivityRetryAPIView(APIView):
         set_scan_stop_kill_switch(scan.id, enabled=False)
 
         yaml_config = yaml.safe_load(scan.scan_type.yaml_configuration or "")
+        from reNgine.task_plan import is_singular_activity_name, pipeline_task_name
+        from urllib.parse import urlparse
+
+        task_name = pipeline_task_name(activity_obj.name)
+        singular = is_singular_activity_name(activity_obj.name)
+
         ctx = {
             "scan_history_id": scan.id,
             "engine_id": scan.scan_type.id,
             "domain_id": scan.domain.id,
             "results_dir": scan.results_dir,
             "yaml_configuration": yaml_config or {},
-            "tasks": [activity_obj.name],
+            "tasks": [task_name],
             "original_scan_status": original_scan_status,
+            "activity_id": activity_obj.id,
         }
+        if singular:
+            # Keep singular namespace / host scope on timeline retry.
+            ctx["singular_tool_run"] = True
+            host_raw = (activity_obj.target_host or "").strip()
+            if host_raw:
+                hostname = (
+                    urlparse(host_raw).hostname
+                    if "://" in host_raw
+                    else host_raw.split("/")[0]
+                )
+                if hostname:
+                    http_url = (
+                        host_raw
+                        if "://" in host_raw
+                        else f"https://{hostname}/"
+                    )
+                    ctx["subdomain_name"] = hostname
+                    ctx["subdomain_http_url"] = http_url
+                    ctx["hosts"] = [hostname]
+                    ctx["urls"] = [http_url]
+                    ctx["target_host"] = hostname
+                    from startScan.models import Subdomain
+                    sub = Subdomain.objects.filter(
+                        scan_history=scan, name=hostname,
+                    ).first()
+                    if sub:
+                        ctx["subdomain_id"] = sub.id
+            # Restore tool_args / yaml overlay written at singular start.
+            try:
+                import json
+                import os
+                from reNgine.tool_args import merge_yaml_overlay
+                meta_path = os.path.join(
+                    scan.results_dir or '', f'singular_meta_{activity_obj.id}.json',
+                )
+                if os.path.isfile(meta_path):
+                    with open(meta_path, encoding='utf-8') as fh:
+                        meta = json.load(fh) or {}
+                    overlay = meta.get('yaml_overlay') or {}
+                    if overlay:
+                        ctx['yaml_configuration'] = merge_yaml_overlay(
+                            ctx.get('yaml_configuration') or {},
+                            task_name,
+                            overlay,
+                        )
+                    ctx['singular_tool_args'] = meta.get('sanitized') or {}
+                    ctx['extra_cli_args'] = meta.get('extra_cli_args') or []
+                    if meta.get('subdomain_id') and not ctx.get('subdomain_id'):
+                        ctx['subdomain_id'] = meta['subdomain_id']
+                    if meta.get('subdomain_name') and not ctx.get('subdomain_name'):
+                        ctx['subdomain_name'] = meta['subdomain_name']
+                    if meta.get('http_url') and not ctx.get('urls'):
+                        ctx['urls'] = [meta['http_url']]
+                        ctx['subdomain_http_url'] = meta['http_url']
+            except Exception:
+                logger.exception(
+                    'Failed to restore singular_meta for activity %s', activity_obj.id,
+                )
+        if activity_obj.subscan_id is not None:
+            subscan = activity_obj.subscan
+            ctx["subscan_id"] = activity_obj.subscan_id
+            if subscan and subscan.subdomain_id:
+                ctx["subdomain_id"] = subscan.subdomain_id
+                ctx["subdomain_name"] = subscan.subdomain.name
+                ctx["subdomain_http_url"] = (
+                    subscan.subdomain.http_url
+                    or f"https://{subscan.subdomain.name}/"
+                )
+                ctx["hosts"] = [subscan.subdomain.name]
+                ctx["urls"] = [ctx["subdomain_http_url"]]
+                ctx["target_host"] = subscan.subdomain.name
         workflow_id = (
-            f"retry-{activity_obj.name}-{scan.id}-{int(timezone.now().timestamp())}"
+            f"retry-{task_name}-{scan.id}-{activity_obj.id}-{int(timezone.now().timestamp())}"
         )
 
         async def _start():
             client = await TemporalClientProvider.get_client()
             await client.start_workflow(
                 "SingleTaskRetryWorkflow",
-                args=[ctx, activity_obj.name],
+                args=[ctx, task_name],
                 id=workflow_id,
                 task_queue="python-orchestrator-queue",
             )
@@ -741,6 +823,7 @@ RETRYABLE_TASK_NAMES = frozenset({
     'secret_scanning',
     'vigolium_analysis',
     'vulnerability_scan',
+    'dalfox_xss_scan',
     'waf_bypass',
     'post_crawl_osint',
     'http_crawl_bridge',
@@ -796,7 +879,7 @@ class ScanTierRetryAPIView(APIView):
         from reNgine.definitions import (
             FAILED_TASK, RUNNING_TASK, INITIATED_TASK, PAUSED_TASK,
         )
-        from reNgine.task_plan import get_task_tier
+        from reNgine.task_plan import get_task_tier, is_singular_activity_name
         from reNgine.temporal_client import TemporalClientProvider
 
         try:
@@ -836,6 +919,11 @@ class ScanTierRetryAPIView(APIView):
                 skipped.append(self._skip(
                     activity, 'subscan_unsupported',
                     'Retrying subscan tasks is not yet supported',
+                ))
+            elif is_singular_activity_name(activity.name):
+                skipped.append(self._skip(
+                    activity, 'singular_tool',
+                    'Singular tool runs are not included in tier retry',
                 ))
             elif activity.name not in RETRYABLE_TASK_NAMES:
                 skipped.append(self._skip(

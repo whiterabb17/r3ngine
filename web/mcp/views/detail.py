@@ -106,9 +106,31 @@ def _severity_counts(vuln_qs):
 
 
 def serialize_scan_detail(row):
+    from reNgine.capabilities import RISK_ACTIVE, ASSET_SUBDOMAIN
     activities = ScanActivity.objects.filter(scan_of_id=row.id)
     task_summary, tasks = bucket_activities(activities)
     vulns = Vulnerability.objects.filter(scan_history_id=row.id)
+    # Coverage-gap suggestions: empty failed/aborted buckets → propose retry or follow-up
+    suggestions = []
+    for failed in tasks.get('failed') or []:
+        suggestions.append({
+            'tool': failed.get('name'),
+            'asset_type': ASSET_SUBDOMAIN,
+            'reason': f"Retry failed task {failed.get('title') or failed.get('name')}",
+            'risk': RISK_ACTIVE,
+            'step_kind': 'retry_task',
+            'task_id': failed.get('id'),
+        })
+        if len(suggestions) >= 3:
+            break
+    if not suggestions and (task_summary.get('success') or 0) == 0:
+        suggestions.append({
+            'tool': 'port_scan',
+            'asset_type': ASSET_SUBDOMAIN,
+            'reason': 'No successful tasks yet — consider port scan follow-up on hot hosts',
+            'risk': RISK_ACTIVE,
+            'step_kind': 'run_tool',
+        })
     return {
         **serialize_scan(row),
         'engine_name': row.scan_type.engine_name if row.scan_type_id else None,
@@ -125,6 +147,7 @@ def serialize_scan_detail(row):
         'severity_counts': _severity_counts(vulns),
         'task_summary': task_summary,
         'tasks': tasks,
+        'suggested_followups': suggestions[:3],
     }
 
 
@@ -154,10 +177,13 @@ def serialize_target_detail(row):
 
 
 def serialize_vulnerability_detail(row):
+    from reNgine.capabilities import suggest_followups_for_vulnerability
+    from mcp.views.validation import serialize_cve_signal
     extracted = list(row.extracted_results or [])
     scan = None
     if row.scan_history_id:
         scan = ScanHistory.objects.select_related('domain').filter(pk=row.scan_history_id).first()
+    cves = list(row.cve_ids.all()[:RELATED_LIST_CAP])
     return {
         **serialize_vulnerability(row),
         'description': row.description,
@@ -168,9 +194,13 @@ def serialize_vulnerability_detail(row):
         'source': row.source,
         'template_id': row.template_id,
         'validation_status': row.validation_status,
+        'validation_confidence': row.validation_confidence,
+        'validation_reason': row.validation_reason,
         'open_status': row.open_status,
         'discovered_date': _dt(row.discovered_date),
-        'cve_ids': [c.name for c in row.cve_ids.all()[:RELATED_LIST_CAP]],
+        'agent_enrichment': row.agent_enrichment or {},
+        'cve_ids': [c.name for c in cves],
+        'cve_signals': [serialize_cve_signal(c) for c in cves],
         'cwe_ids': [c.name for c in row.cwe_ids.all()[:RELATED_LIST_CAP]],
         'tags': [t.name for t in row.tags.all()[:RELATED_LIST_CAP]],
         'extracted_results': extracted[:RELATED_LIST_CAP],
@@ -180,10 +210,12 @@ def serialize_vulnerability_detail(row):
         'target_id': row.target_domain_id,
         'target_name': row.target_domain.name if row.target_domain_id else None,
         'scan': serialize_scan(scan) if scan else None,
+        'suggested_followups': suggest_followups_for_vulnerability(row),
     }
 
 
 def serialize_subdomain_detail(row):
+    from reNgine.capabilities import suggest_followups_for_subdomain
     vulns = (
         Vulnerability.objects.filter(subdomain_id=row.id)
         .select_related('subdomain')
@@ -210,10 +242,12 @@ def serialize_subdomain_detail(row):
         },
         'recent_vulnerabilities': [serialize_vulnerability(v) for v in _cap(vulns)],
         'recent_endpoints': [serialize_endpoint(e) for e in _cap(endpoints)],
+        'suggested_followups': suggest_followups_for_subdomain(row),
     }
 
 
 def serialize_endpoint_detail(row):
+    from reNgine.capabilities import suggest_followups_for_endpoint
     vulns = (
         Vulnerability.objects.filter(endpoint_id=row.id)
         .select_related('subdomain')
@@ -242,6 +276,7 @@ def serialize_endpoint_detail(row):
             }
             for p in _cap(params)
         ],
+        'suggested_followups': suggest_followups_for_endpoint(row),
     }
 
 
@@ -323,6 +358,60 @@ class McpGetScanDetailView(McpDataView):
             return Response({'error': 'Not found'}, status=404)
         return Response(serialize_scan_detail(row))
 
+
+def _query_bool(params, key: str, default: bool) -> bool:
+    raw = params.get(key)
+    if raw is None or raw == '':
+        return default
+    return str(raw).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+class McpExportScanForAiView(McpDataView):
+    """Same Analyst Assist AI export as the scan-detail UI, as JSON for agents.
+
+    Returns markdown overview, triage prompt, full structured bundle, and
+    manifest — equivalent to the ZIP the UI downloads, without binary packaging.
+    """
+
+    def get(self, request, pk):
+        from reNgine.exporters.ai_bundle import (
+            AiExportOptions,
+            FORMAT_VERSION,
+            build_ai_export_payload,
+        )
+
+        row = (
+            ScanHistory.objects
+            .select_related('domain', 'domain__project', 'scan_type')
+            .filter(pk=pk)
+            .first()
+        )
+        if not row:
+            return Response({'error': 'Not found'}, status=404)
+
+        preset = (request.query_params.get('preset') or 'analyst_assist').strip()
+        if preset != 'analyst_assist':
+            return Response({'error': 'Unsupported preset'}, status=400)
+
+        options = AiExportOptions(
+            preset=preset,
+            include_raw_outputs=_query_bool(request.query_params, 'include_raw_outputs', False),
+            include_timeline=_query_bool(request.query_params, 'include_timeline', True),
+            include_sidecars=_query_bool(request.query_params, 'include_sidecars', True),
+            format_version=request.query_params.get('format_version') or FORMAT_VERSION,
+        )
+
+        include_files = _query_bool(request.query_params, 'include_files', False)
+        try:
+            payload = build_ai_export_payload(scan=row, options=options)
+        except Exception as exc:
+            return Response({'error': f'Failed to build AI export: {exc}'}, status=500)
+
+        # Omit raw file blobs by default — agents use markdown + bundle.
+        if not include_files:
+            payload = {k: v for k, v in payload.items() if k != 'files'}
+
+        return Response(payload)
 
 class McpGetTargetDetailView(McpDataView):
     def get(self, request, pk):
