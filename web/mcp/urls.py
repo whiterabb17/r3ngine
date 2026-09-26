@@ -27,6 +27,12 @@ from mcp.views.detail import (
     McpGetTargetDetailView,
     McpGetVulnerabilityDetailView,
 )
+from mcp.views.validation import (
+    McpAnalyzeVulnerabilityView,
+    McpEnrichAttackPathView,
+    McpEnrichVulnerabilityView,
+    McpValidateVulnerabilityView,
+)
 from mcp.views.notes import McpNoteDetailView, McpNotesListCreateView
 from mcp.views.osint_verify import McpVerifyOsintStagingView
 from mcp.views.read import (
@@ -100,6 +106,9 @@ urlpatterns = [
     path('subdomains/', McpListSubdomainsView.as_view()),
     path('endpoints/<int:pk>/detail/', McpGetEndpointDetailView.as_view()),
     path('endpoints/', McpListEndpointsView.as_view()),
+    path('vulnerabilities/<int:pk>/analyze/', McpAnalyzeVulnerabilityView.as_view()),
+    path('vulnerabilities/<int:pk>/enrich/', McpEnrichVulnerabilityView.as_view()),
+    path('vulnerabilities/<int:pk>/validation/', McpValidateVulnerabilityView.as_view()),
     path('vulnerabilities/<int:pk>/detail/', McpGetVulnerabilityDetailView.as_view()),
     path('vulnerabilities/', McpListVulnerabilitiesView.as_view()),
     path('exposures/<int:pk>/detail/', McpGetExposureDetailView.as_view()),
@@ -110,6 +119,7 @@ urlpatterns = [
     path('osint-staging/', McpListOsintStagingView.as_view()),
     path('search/', McpSearchView.as_view()),
     path('dashboard/', McpDashboardView.as_view()),
+    path('attack-paths/<str:path_id>/enrich/', McpEnrichAttackPathView.as_view()),
     path('attack-paths/', McpAttackPathsView.as_view()),
     path('engines/<int:pk>/', McpGetEngineDetailView.as_view()),
     path('engines/', McpListEnginesView.as_view()),

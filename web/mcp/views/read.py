@@ -412,6 +412,7 @@ class McpAttackPathsView(McpDataView):
                 continue
             paths.append({
                 'path_id': chain.get('apme_path_id'),
+                'impact_assessment_id': assessment.id,
                 'risk': chain.get('risk', 'unknown'),
                 'score': chain.get('score', 0.0),
                 'step_count': len(chain.get('steps', [])),
@@ -419,6 +420,8 @@ class McpAttackPathsView(McpDataView):
                 'potential_impact': assessment.potential_impact,
                 'remediation_priority': assessment.remediation_priority,
                 'vulnerability_id': assessment.vulnerability_id,
+                'agent_path_review': chain.get('agent_path_review') or None,
+                'dismissed': bool(assessment.dismissed),
             })
         return Response({'total_paths': len(paths), 'paths': paths})
 

@@ -400,6 +400,7 @@ class AiBundleBuilder:
                 "asset": vuln.subdomain.name if vuln.subdomain else vuln.http_url,
                 "potential_impact": self._truncate_text(impact.potential_impact, MAX_TEXT_PREVIEW),
                 "potential_attack_chain": impact.potential_attack_chain,
+                "agent_path_review": (impact.potential_attack_chain or {}).get("agent_path_review"),
                 "simulated_path": impact.simulated_path,
                 "remediation_priority": impact.remediation_priority,
             })
@@ -488,6 +489,8 @@ class AiBundleBuilder:
             "open_status": vulnerability.open_status,
             "correlation_score": vulnerability.correlation_score,
             "validation_confidence": vulnerability.validation_confidence,
+            "validation_reason": vulnerability.validation_reason,
+            "agent_enrichment": vulnerability.agent_enrichment or {},
             "is_suppressed": vulnerability.is_suppressed,
             "group_key": vulnerability.group_key,
             "cvss_score": vulnerability.cvss_score,
@@ -507,6 +510,7 @@ class AiBundleBuilder:
         }
 
     def _serialize_cve(self, cve) -> dict[str, Any]:
+        public = cve.public_exploits if isinstance(cve.public_exploits, list) else []
         return {
             "name": cve.name,
             "cvss_v31_base_score": cve.cvss_v31_base_score,
@@ -515,6 +519,7 @@ class AiBundleBuilder:
             "is_cisa_kev": cve.is_cisa_kev,
             "patching_priority": cve.patching_priority,
             "is_poc": cve.is_poc,
+            "public_exploit_count": len(public),
         }
 
     def _serialize_secret_leak(self, leak: SecretLeak) -> dict[str, Any]:
@@ -821,6 +826,15 @@ class AiBundleBuilder:
                 if vuln.get("cves"):
                     lines.append(f"  CVEs: `{', '.join(cve['name'] for cve in vuln['cves'][:5])}`")
                 lines.append(f"  Validation: `{vuln['validation_status']}` | Correlation: `{round(vuln.get('correlation_score') or 0, 2)}`")
+                enrichment = vuln.get('agent_enrichment') or {}
+                if enrichment.get('validation_verdict') or enrichment.get('impact_classes'):
+                    classes = ', '.join(enrichment.get('impact_classes') or []) or 'n/a'
+                    verdict = enrichment.get('validation_verdict') or 'n/a'
+                    conf = enrichment.get('confidence')
+                    conf_s = f"{conf:.2f}" if isinstance(conf, (int, float)) else 'n/a'
+                    lines.append(f"  Agent triage: verdict `{verdict}` | impact `{classes}` | confidence `{conf_s}`")
+                    if enrichment.get('rationale'):
+                        lines.append(f"  Agent rationale: {self._truncate_text(enrichment['rationale'], 200)}")
 
         lines.extend(["", "## Correlated Finding Groups", ""])
         top_groups = groups[:MARKDOWN_SECTION_CAPS["other_vulnerability_groups"]]
@@ -860,8 +874,21 @@ class AiBundleBuilder:
             lines.append(f"- `{self._severity_label(hint['severity'])}` {hint['vulnerability']} on `{hint.get('asset') or 'unknown'}`")
             if hint.get("potential_impact"):
                 lines.append(f"  Impact: {self._truncate_text(hint['potential_impact'], 260)}")
+            review = hint.get("agent_path_review") or {}
+            if review.get("feasibility"):
+                conf = review.get("confidence")
+                conf_s = f"{conf:.2f}" if isinstance(conf, (int, float)) else "n/a"
+                lines.append(
+                    f"  Path review: feasibility `{review['feasibility']}` | confidence `{conf_s}`"
+                )
+                if review.get("rationale"):
+                    lines.append(f"  Path rationale: {self._truncate_text(review['rationale'], 200)}")
             if hint.get("potential_attack_chain"):
-                lines.append(f"  Chain Data: `{self._truncate_text(json.dumps(hint['potential_attack_chain'], ensure_ascii=False), 220)}`")
+                # Omit nested agent_path_review from raw dump (already rendered above).
+                chain = dict(hint["potential_attack_chain"]) if isinstance(hint["potential_attack_chain"], dict) else hint["potential_attack_chain"]
+                if isinstance(chain, dict):
+                    chain = {k: v for k, v in chain.items() if k != "agent_path_review"}
+                lines.append(f"  Chain Data: `{self._truncate_text(json.dumps(chain, ensure_ascii=False), 220)}`")
         lines.append("")
         return lines
 

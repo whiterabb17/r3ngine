@@ -178,10 +178,12 @@ def serialize_target_detail(row):
 
 def serialize_vulnerability_detail(row):
     from reNgine.capabilities import suggest_followups_for_vulnerability
+    from mcp.views.validation import serialize_cve_signal
     extracted = list(row.extracted_results or [])
     scan = None
     if row.scan_history_id:
         scan = ScanHistory.objects.select_related('domain').filter(pk=row.scan_history_id).first()
+    cves = list(row.cve_ids.all()[:RELATED_LIST_CAP])
     return {
         **serialize_vulnerability(row),
         'description': row.description,
@@ -192,9 +194,13 @@ def serialize_vulnerability_detail(row):
         'source': row.source,
         'template_id': row.template_id,
         'validation_status': row.validation_status,
+        'validation_confidence': row.validation_confidence,
+        'validation_reason': row.validation_reason,
         'open_status': row.open_status,
         'discovered_date': _dt(row.discovered_date),
-        'cve_ids': [c.name for c in row.cve_ids.all()[:RELATED_LIST_CAP]],
+        'agent_enrichment': row.agent_enrichment or {},
+        'cve_ids': [c.name for c in cves],
+        'cve_signals': [serialize_cve_signal(c) for c in cves],
         'cwe_ids': [c.name for c in row.cwe_ids.all()[:RELATED_LIST_CAP]],
         'tags': [t.name for t in row.tags.all()[:RELATED_LIST_CAP]],
         'extracted_results': extracted[:RELATED_LIST_CAP],
