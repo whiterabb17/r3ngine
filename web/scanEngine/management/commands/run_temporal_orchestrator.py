@@ -711,11 +711,13 @@ class Command(BaseCommand):
             # -------------------------------------------------------------------
             # Load dynamic plugins from the Temporal Registry
             # -------------------------------------------------------------------
-            from asgiref.sync import sync_to_async
+            # Same connection-aware wrapper as async activities: plugin registry
+            # hits Plugin.objects, and plain sync_to_async can cache a dead conn.
+            from channels.db import database_sync_to_async
             from plugins.temporal_registry import PluginTemporalRegistry
             try:
-                plugin_workflows = await sync_to_async(PluginTemporalRegistry.get_all_plugin_workflows)()
-                plugin_activities = await sync_to_async(PluginTemporalRegistry.get_all_plugin_activities)()
+                plugin_workflows = await database_sync_to_async(PluginTemporalRegistry.get_all_plugin_workflows)()
+                plugin_activities = await database_sync_to_async(PluginTemporalRegistry.get_all_plugin_activities)()
                 
                 # Append to existing
                 _p2_workflows = [UserHuntWorkflow, URLBypassWorkflow, WordPressWorkflow,

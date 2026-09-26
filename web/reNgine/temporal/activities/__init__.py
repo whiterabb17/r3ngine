@@ -3419,12 +3419,20 @@ async def check_scan_queue_status_activity(scan_id: int, queue_type: str) -> boo
     Returns:
         bool: True if it is allowed to proceed (queueing is off, or it's first in line).
     """
-    from asgiref.sync import sync_to_async
+    # database_sync_to_async, not asgiref's sync_to_async: async activity ORM
+    # calls run in an asgiref thread that DjangoAwareThreadPoolExecutor never
+    # touches. Nothing refreshed that thread's cached connection, and once
+    # Postgres closed it (idle timeout / restart) every later call raised
+    # "connection already closed" — CheckScanQueueStatusActivity is the first
+    # step of MasterScanWorkflow, so scans sat at 0% while reading RUNNING.
+    # The channels wrapper runs close_old_connections() around each call, which
+    # with CONN_HEALTH_CHECKS drops a dead connection and opens a fresh one.
+    from channels.db import database_sync_to_async
     from reNgine.temporal_client import TemporalClientProvider
     from temporalio.client import WorkflowExecutionStatus
     from temporalio.service import RPCError, RPCStatusCode
 
-    @sync_to_async
+    @database_sync_to_async
     def _get_queue_state():
         from dashboard.models import UserPreferences
         from startScan.models import ScanHistory, SubScan
@@ -3445,7 +3453,7 @@ async def check_scan_queue_status_activity(scan_id: int, queue_type: str) -> boo
             
         return {"queueing_enabled": True, "running": running}
 
-    @sync_to_async
+    @database_sync_to_async
     def _get_workflow_id(sid, qtype):
         from startScan.models import ScanHistory, SubScan, TemporalWorkflowExecution
         if qtype == "main":

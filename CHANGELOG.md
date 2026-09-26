@@ -50,6 +50,11 @@
 
 #### Fixed
 
+- **Async Temporal activities holding dead DB connections (PR #121)**:
+  - Async activities (including `CheckScanQueueStatusActivity`, the first step of `MasterScanWorkflow`) reached the ORM through plain `asgiref.sync_to_async`. That thread pool is outside `DjangoAwareThreadPoolExecutor`, so once Postgres closed an idle session the cached connection stayed dead and every later call raised `InterfaceError: connection already closed` — new scans sat at 0% while reading RUNNING.
+  - All async activities now use `channels.db.database_sync_to_async` (runs `close_old_connections()` around each call; with `CONN_HEALTH_CHECKS` opens a fresh connection). Orchestrator plugin registry load uses the same wrapper.
+  - Guard test `tests/test_async_activity_db_connections.py` keeps plain `sync_to_async` out of the activities package.
+
 - **Scan History drawer stop actions**:
   - Tasks-tab Stop now posts `subscan_ids` (was a no-op); master-scan Stop posts `scan_ids` in the JSON body instead of an ignored `?scan_id=` query param.
   - SubScan `bulk_stop` uses the same `abort_subscan` path as `/api/action/stop/scan/`.
