@@ -4677,7 +4677,8 @@ def _run_email_security_sync(ctx: dict) -> dict:
     proxy_url = None
     try:
         from reNgine.common_func import get_random_proxy
-        proxy_url = get_random_proxy()
+        # Reacher SMTP verify is SOCKS5-only (--proxy-host on the CLI).
+        proxy_url = get_random_proxy(socks5_only=True) or None
     except Exception:
         proxy_url = None
     mailbox = {'confirmed': [], 'checked': 0}

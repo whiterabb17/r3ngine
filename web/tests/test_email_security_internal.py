@@ -61,7 +61,9 @@ class TestEmailSecurityCallsVerifier(TestCase):
 
         engine = EngineType.objects.create(engine_name='es-wire', yaml_configuration='')
         domain = Domain.objects.create(name='example.com', insert_date=timezone.now())
-        scan = ScanHistory.objects.create(domain=domain, scan_type=engine, scan_status=2)
+        scan = ScanHistory.objects.create(
+            domain=domain, scan_type=engine, scan_status=2, start_scan_date=timezone.now(),
+        )
         ctx = {
             'scan_history_id': scan.id,
             'domain_name': 'example.com',
@@ -83,6 +85,40 @@ class TestEmailSecurityCallsVerifier(TestCase):
         mock_v.assert_called_once()
         self.assertEqual(mock_v.call_args[0][0], 'example.com')
         self.assertIn('activity_id', mock_v.call_args.kwargs)
+        self.assertIsNone(mock_v.call_args.kwargs.get('proxy_url'))
         names = [call.kwargs.get('name') for call in mock_sv.call_args_list]
         self.assertIn('Valid Mailboxes Confirmed', names)
         self.assertEqual(result.get('mailboxes_confirmed'), 1)
+
+    def test_activity_selects_socks5_proxy_for_mailbox(self):
+        from django.utils import timezone
+        from startScan.models import ScanHistory
+        from targetApp.models import Domain
+        from scanEngine.models import EngineType
+        from reNgine.temporal.activities import _run_email_security_sync
+
+        engine = EngineType.objects.create(engine_name='es-proxy', yaml_configuration='')
+        domain = Domain.objects.create(name='example.com', insert_date=timezone.now())
+        scan = ScanHistory.objects.create(
+            domain=domain, scan_type=engine, scan_status=2, start_scan_date=timezone.now(),
+        )
+        ctx = {
+            'scan_history_id': scan.id,
+            'domain_name': 'example.com',
+            'yaml_configuration': {},
+        }
+        with patch('reNgine.tasks.email_security.check_spf', return_value={'found': True, 'record': 'v=spf1 -all', 'weak': False}), \
+             patch('reNgine.tasks.email_security.check_dmarc', return_value={'found': True, 'record': 'v=DMARC1; p=reject', 'policy': 'reject'}), \
+             patch('reNgine.tasks.email_security.check_dkim', return_value={'found': True, 'selector': 'google', 'record': 'v=DKIM1'}), \
+             patch('reNgine.common_func.get_random_proxy', return_value='socks5://u:p@10.0.0.2:1080') as mock_proxy, \
+             patch('reNgine.tasks.email_verification.verify_domain_mailboxes', return_value={
+                 'catch_all': False,
+                 'checked': 0,
+                 'confirmed': [],
+                 'findings': [],
+                 'skipped_reason': None,
+             }) as mock_v, \
+             patch('reNgine.common_func.save_vulnerability'):
+            _run_email_security_sync(ctx)
+        mock_proxy.assert_called_once_with(socks5_only=True)
+        self.assertEqual(mock_v.call_args.kwargs.get('proxy_url'), 'socks5://u:p@10.0.0.2:1080')

@@ -35,6 +35,7 @@
   - Replaced noisy `smtp-user-enum` VRFY spraying in built-in email security with Reacher `check-if-email-exists` mailbox verification (CLI default, optional self-hosted HTTP).
   - Confirmed addresses (`is_reachable=safe`) are stored on the scan; catch-all MX aborts enumeration. See `documents/email-verification.md`.
   - Scan detail timeline shows **Mailbox Verification** (`check_if_email_exists`) after port scan: pending at start, running while Reacher executes, then success/fail.
+  - Operator SOCKS5 proxies are passed to Reacher as `--proxy-host` / `--proxy-port` (password via `PROXY_PASSWORD`, not argv). HTTP/SOCKS4 pool entries are skipped for this tool.
 
 - **Email security engine switch**:
   - `email_security.enabled: false` in the scan engine config skips the email security activity and drops mailbox verification from the planned timeline. Absent config remains enabled so existing engines are unchanged.
