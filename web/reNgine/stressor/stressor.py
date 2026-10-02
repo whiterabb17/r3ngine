@@ -609,7 +609,7 @@ class Layer4(Thread):
     def FIVEMTOKEN(self) -> None:
         global BYTES_SEND, REQUESTS_SENT
 
-        # Generete token and guid
+        # Generate token and guid
         token = str(uuid4())
         steamid_min = 76561197960265728
         steamid_max = 76561199999999999

@@ -1172,7 +1172,7 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
                 AVAILABLE TASKS
               </Typography>
               <FormGroup>
-                {[...selectedEngine.tasks]
+                {[...(selectedEngine.subscan_tasks ?? selectedEngine.tasks)]
                   .sort((a, b) => {
                     const ai = TASK_TIER_ORDER.indexOf(a);
                     const bi = TASK_TIER_ORDER.indexOf(b);

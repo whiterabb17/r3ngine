@@ -169,7 +169,7 @@ def send_task_notif(
 		subscan_id (int, optional): SuScan id.
 		engine_id (int, optional): EngineType id.
 		severity (str, optional): Severity (will be mapped to notif colors)
-		add_meta_info (bool, optional): Wheter to add scan / subscan info to notif.
+		add_meta_info (bool, optional): Whether to add scan / subscan info to notif.
 		update_fields (dict, optional): Fields key / value to update.
 	"""
 	from startScan.models import SubScan

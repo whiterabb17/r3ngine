@@ -5,6 +5,10 @@ import validators
 from urllib.parse import urlparse
 
 from django.conf import settings
+from datetime import timedelta, timezone as dt_timezone
+
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from reNgine.common_func import *
 from reNgine.definitions import *
@@ -140,20 +144,80 @@ def _get_acunetix_profile_id(base_url: str, headers: dict, verify, timeout: int)
 	return fallback_profile_id
 
 
-def _create_or_reuse_acunetix_target(base_url: str, headers: dict, verify, timeout: int, target_name: str, target_url: str):
-	targets_resp = requests.get(
-		f"{base_url}/api/v1/targets",
-		headers=headers,
-		verify=verify,
-		timeout=timeout,
-	)
-	if targets_resp.status_code == 200:
-		targets_data = targets_resp.json()
-		existing_target = _find_acunetix_target(targets_data, target_name, target_url)
-		if existing_target:
-			return existing_target.get('target_id')
+def _acunetix_target_host(address: str) -> str:
+	address = str(address or '').rstrip('/')
+	return (urlparse(address).hostname or address).lower()
 
+
+ACUNETIX_TARGET_PAGE_SIZE = 100
+ACUNETIX_MAX_TARGET_PAGES = 200
+
+
+def _list_acunetix_targets(base_url: str, headers: dict, verify, timeout: int) -> dict | None:
+	"""Map host -> target_id for every AWVS target, or None when the list cannot be read.
+
+	A plain GET /targets returns one page, so a per-host lookup against it misses
+	every target past that page and registers the host a second time. Pages are
+	requested by offset; a page holding only targets already seen (a server that
+	ignores the offset) ends the walk instead of looping.
+	"""
+	targets: dict = {}
+	seen_ids: set = set()
+	for page in range(ACUNETIX_MAX_TARGET_PAGES):
+		resp = requests.get(
+			f"{base_url}/api/v1/targets",
+			params={'c': page * ACUNETIX_TARGET_PAGE_SIZE, 'l': ACUNETIX_TARGET_PAGE_SIZE},
+			headers=headers,
+			verify=verify,
+			timeout=timeout,
+		)
+		if resp.status_code != 200:
+			logger.warning("Could not list Acunetix targets: status=%s", resp.status_code)
+			return None
+		page_targets = (resp.json() or {}).get('targets') or []
+		new_targets = [t for t in page_targets if t.get('target_id') not in seen_ids]
+		for target in new_targets:
+			seen_ids.add(target.get('target_id'))
+			host = _acunetix_target_host(target.get('address'))
+			if host and target.get('target_id'):
+				targets.setdefault(host, target['target_id'])
+		if len(page_targets) < ACUNETIX_TARGET_PAGE_SIZE or not new_targets:
+			return targets
+	logger.warning("Stopped listing Acunetix targets after %d pages", ACUNETIX_MAX_TARGET_PAGES)
+	return targets
+
+
+def _create_or_reuse_acunetix_target(
+		base_url: str,
+		headers: dict,
+		verify,
+		timeout: int,
+		target_name: str,
+		target_url: str,
+		known_targets: dict | None = None):
+	"""Return the target_id for `target_name`, creating the AWVS target when missing.
+
+	`known_targets` (from _list_acunetix_targets) replaces the per-call lookup and is
+	updated with every target created, so a long submission pass reads the list once.
+	"""
 	normalized_url = _normalize_acunetix_target_url(target_url, target_name)
+	if known_targets is not None:
+		existing_id = known_targets.get(_acunetix_target_host(normalized_url))
+		if existing_id:
+			return existing_id
+	else:
+		targets_resp = requests.get(
+			f"{base_url}/api/v1/targets",
+			headers=headers,
+			verify=verify,
+			timeout=timeout,
+		)
+		if targets_resp.status_code == 200:
+			targets_data = targets_resp.json()
+			existing_target = _find_acunetix_target(targets_data, target_name, target_url)
+			if existing_target:
+				return existing_target.get('target_id')
+
 	create_payload = {
 		'address': normalized_url,
 		'description': f'r3ngine target {target_name}',
@@ -175,6 +239,8 @@ def _create_or_reuse_acunetix_target(base_url: str, headers: dict, verify, timeo
 	create_data = create_resp.json()
 	target_id = create_data.get('target_id')
 	if target_id:
+		if known_targets is not None:
+			known_targets[_acunetix_target_host(normalized_url)] = target_id
 		return target_id
 
 	refetched_targets_resp = requests.get(
@@ -214,6 +280,43 @@ def _start_acunetix_scan_direct(base_url: str, headers: dict, verify, timeout: i
 		)
 		return None
 	return scan_resp.json()
+
+
+def _existing_acunetix_scan(base_url: str, headers: dict, verify, timeout: int, target_id: str, since):
+	"""The target's latest AWVS scan started at or after ``since``, unless it failed.
+
+	A Temporal retry (the previous attempt was killed, e.g. by its time limit) or a
+	manual retry of the step would otherwise start another multi-hour scan of the
+	same target. A scan still running is waited for; one that completed or was
+	aborted by the operator already holds the findings to import. A failed scan is
+	not reused, so retrying after an AWVS-side failure scans again.
+
+	Returns ``{'scan_id': ..., 'status': ...}`` or None.
+	"""
+	if since is None:
+		return None
+	resp = requests.get(
+		f"{base_url}/api/v1/scans?q=target_id:{target_id}",
+		headers=headers, verify=verify, timeout=timeout,
+	)
+	if resp.status_code != 200:
+		logger.warning("Could not list Acunetix scans for target_id=%s (status %s)", target_id, resp.status_code)
+		return None
+	candidates = []
+	for scan in resp.json().get('scans', []):
+		session = scan.get('current_session') or {}
+		started = parse_datetime(session.get('start_date') or '')
+		if started is not None and timezone.is_naive(started):
+			started = timezone.make_aware(started, dt_timezone.utc)
+		if not scan.get('scan_id') or started is None or started < since:
+			continue
+		candidates.append((started, scan['scan_id'], session.get('status')))
+	if not candidates:
+		return None
+	_started, scan_id, status = max(candidates)
+	if status == 'failed':
+		return None
+	return {'scan_id': scan_id, 'status': status}
 
 
 def _fetch_acunetix_vulnerabilities(vulns_url: str, headers: dict, verify, timeout: int):
@@ -327,17 +430,29 @@ def acunetix_scan(
 		if not target_id:
 			return _fail(self, f"Could not create or locate Acunetix target for {target_name}")
 
-		scan_info = _start_acunetix_scan_direct(
+		existing = _existing_acunetix_scan(
 			base_url=base_url,
 			headers=headers,
 			verify=_acunetix_verify,
 			timeout=settings.ACUNETIX_REQUEST_TIMEOUT,
 			target_id=target_id,
-		) or {}
-		scan_id = scan_info.get('scan_id')
-
-		if not target_id:
-			return _fail(self, f"Target {target_name} not found in Acunetix after start_scan.")
+			since=scan_history.start_scan_date if scan_history else None,
+		)
+		if existing:
+			scan_id = existing['scan_id']
+			logger.info(
+				"Reusing Acunetix scan %s for %s (status %s), started during this scan",
+				scan_id, target_name, existing['status'],
+			)
+		else:
+			scan_info = _start_acunetix_scan_direct(
+				base_url=base_url,
+				headers=headers,
+				verify=_acunetix_verify,
+				timeout=settings.ACUNETIX_REQUEST_TIMEOUT,
+				target_id=target_id,
+			) or {}
+			scan_id = scan_info.get('scan_id')
 
 		# If scan_id wasn't in scan_info, try to find it from scans query by target_id
 		if not scan_id:
@@ -355,6 +470,7 @@ def acunetix_scan(
 		max_retries = settings.ACUNETIX_MAX_RETRIES
 		poll_interval = settings.ACUNETIX_POLL_INTERVAL
 		retries = 0
+		current_status = None
 		while retries < max_retries:
 			scan_resp = requests.get(f"{base_url}/api/v1/scans/{scan_id}", headers=headers, verify=_acunetix_verify, timeout=settings.ACUNETIX_REQUEST_TIMEOUT)
 			if scan_resp.status_code == 200:
@@ -363,11 +479,10 @@ def acunetix_scan(
 				current_status = current_session.get('status')
 				logger.info("Acunetix scan %s status: %s (retry %s/%s)", scan_id, current_status, retries, max_retries)
 
-				if current_status == 'completed':
-					logger.info("Acunetix scan for %s completed.", target_name)
+				if current_status in ('completed', 'failed', 'aborted'):
+					# A stopped or failed scan still holds what it found until then.
+					logger.info("Acunetix scan for %s ended with status %s.", target_name, current_status)
 					break
-				elif current_status in ['failed', 'aborted']:
-					return _fail(self, f"Acunetix scan for {target_name} ended with status: {current_status}.")
 			else:
 				logger.warning("Failed to fetch scan status for %s, status code: %s", scan_id, scan_resp.status_code)
 
@@ -426,6 +541,7 @@ def acunetix_scan(
 				failed_resp.status_code, len(v_list),
 			)
 
+		imported = 0
 		if v_list:
 			logger.info("Found %s vulnerabilities in Acunetix scan report.", len(v_list))
 			for vuln in v_list:
@@ -479,7 +595,23 @@ def acunetix_scan(
 						save_v_data['subscan'] = subscan
 
 					save_vulnerability(**save_v_data)
+					imported += 1
 
+		if current_status == 'failed':
+			# Retrying is worthwhile here: the failed scan is not reused, so the next
+			# attempt scans again, and saving the same finding again is a no-op.
+			return _fail(
+				self,
+				f"Acunetix scan for {target_name} ended with status: failed; "
+				f"imported {imported} finding(s) it reported before failing.",
+			)
+		if current_status == 'aborted':
+			# Stopped by the operator: keep what it found and do not retry, which
+			# would start another scan of the same target.
+			logger.warning(
+				"Acunetix scan for %s was aborted; imported %d finding(s) found before it stopped.",
+				target_name, imported,
+			)
 		return True
 
 	except Exception as e:
@@ -552,48 +684,54 @@ def get_live_subdomains_for_submission(scan_history_id: int):
 DEFAULT_RESUBMIT_AFTER_DAYS = 3
 MIN_RESUBMIT_AFTER_DAYS = 1
 
+DEFAULT_SUBMISSION_BATCH_SIZE = 20
+MAX_SUBMISSION_BATCH_SIZE = 200
+DEFAULT_SUBMISSION_BATCH_PAUSE = 5
+MAX_SUBMISSION_BATCH_PAUSE = 300
+DEFAULT_MAX_SCANS_PER_RUN = 20
+MAX_SCANS_PER_RUN = 500
+
+
+def _resolve_int_option(raw, name: str, default: int, minimum: int, maximum: int | None = None) -> int:
+	"""Turn an engine YAML value into an int within [minimum, maximum].
+
+	A non-numeric value falls back to the default rather than raising out of the
+	task; an out-of-range one is clamped.
+	"""
+	if raw is None:
+		return default
+
+	try:
+		value = int(raw)
+	except (TypeError, ValueError):
+		logger.warning("Ignoring malformed Acunetix %s %r, using %d", name, raw, default)
+		return default
+
+	if value < minimum:
+		logger.warning("Acunetix %s %s is below the minimum of %d, clamping", name, value, minimum)
+		return minimum
+	if maximum is not None and value > maximum:
+		logger.warning("Acunetix %s %s is above the maximum of %d, clamping", name, value, maximum)
+		return maximum
+	return value
+
 
 def _resolve_resubmit_after_days(raw) -> int:
 	"""Turn the engine YAML value into a usable re-submission window.
 
 	The window is what stops a daily scan re-registering the same host, so a
-	value of 0 (cutoff = now, everything looks stale) defeats its only purpose,
-	and a non-numeric value would otherwise raise out of the task.
+	value of 0 (cutoff = now, everything looks stale) defeats its only purpose.
 	"""
-	if raw is None:
-		return DEFAULT_RESUBMIT_AFTER_DAYS
-
-	try:
-		days = int(raw)
-	except (TypeError, ValueError):
-		logger.warning(
-			"Ignoring malformed Acunetix resubmit_after_days %r, using %d day(s)",
-			raw, DEFAULT_RESUBMIT_AFTER_DAYS,
-		)
-		return DEFAULT_RESUBMIT_AFTER_DAYS
-
-	if days < MIN_RESUBMIT_AFTER_DAYS:
-		logger.warning(
-			"Acunetix resubmit_after_days %s is below the %d day minimum, clamping",
-			days, MIN_RESUBMIT_AFTER_DAYS,
-		)
-		return MIN_RESUBMIT_AFTER_DAYS
-
-	return days
+	return _resolve_int_option(
+		raw, 'resubmit_after_days', DEFAULT_RESUBMIT_AFTER_DAYS, MIN_RESUBMIT_AFTER_DAYS,
+	)
 
 
-def _recently_submitted_hosts(hosts: list, resubmit_after_days: int) -> dict:
-	"""Map host -> last submission time for hosts pushed within the window."""
-	from datetime import timedelta
-
-	from django.utils import timezone as _tz
-
+def _last_submissions(hosts: list) -> dict:
+	"""Map host -> last submission time for every host ever pushed to Acunetix."""
 	from dashboard.models import AcunetixTargetSubmission
 
-	cutoff = _tz.now() - timedelta(days=resubmit_after_days)
-	rows = AcunetixTargetSubmission.objects.filter(
-		host__in=hosts, last_submitted_at__gte=cutoff
-	).values_list('host', 'last_submitted_at')
+	rows = AcunetixTargetSubmission.objects.filter(host__in=hosts).values_list('host', 'last_submitted_at')
 	return dict(rows)
 
 
@@ -641,12 +779,17 @@ def _submit_acunetix_host(
 		headers: dict,
 		verify,
 		start_scan_on_submit: bool,
-		scan_history_id) -> bool:
+		scan_history_id,
+		known_targets: dict | None = None,
+		defer_scan_reason: str | None = None) -> bool:
 	"""Submit one host and write its timeline row. Never raises.
 
 	Every host is independent: a timeout on the AWVS call, a failed scan start
 	or a colliding insert is recorded against this host only, so the caller can
 	carry on with the rest of the list.
+
+	With `defer_scan_reason` the target is added but no scan is started, and the
+	host is not recorded as submitted, so a later run still starts its scan.
 	"""
 	command = f"acunetix submit {host}"
 	try:
@@ -657,6 +800,7 @@ def _submit_acunetix_host(
 			timeout=settings.ACUNETIX_REQUEST_TIMEOUT,
 			target_name=host,
 			target_url=target_url,
+			known_targets=known_targets,
 		)
 		if not target_id:
 			_record_submission(
@@ -665,6 +809,16 @@ def _submit_acunetix_host(
 				return_code=1,
 			)
 			return False
+
+		if defer_scan_reason:
+			_record_submission(
+				task, command,
+				"TARGET ADDED — target_id=%s url=%s; scan not started: %s" % (
+					target_id, target_url, defer_scan_reason,
+				),
+				return_code=0,
+			)
+			return True
 
 		scan_started = False
 		if start_scan_on_submit:
@@ -712,8 +866,14 @@ def acunetix_submit_live_subdomains(
 	"""Register every live subdomain of a scan as an Acunetix target.
 
 	Each host is submitted at most once per `resubmit_after_days` window, and every
-	decision — submitted, skipped, failed — is written as a Command row on this
-	task's timeline entry, so the scan timeline shows exactly what was added.
+	decision — submitted, skipped, deferred, failed — is written as a Command row on
+	this task's timeline entry, so the scan timeline shows exactly what was added.
+
+	Hosts go out in batches of `submission_batch_size` with `submission_batch_pause`
+	seconds between batches. With `start_scan_on_submit`, at most `max_scans_per_run`
+	scans are started; the hosts past that limit are added as targets only and are
+	not recorded as submitted, so the next run starts the next slice of them instead
+	of queueing hundreds of scans in Acunetix at once.
 
 	Args:
 		scan_history_id: ScanHistory PK.
@@ -732,6 +892,18 @@ def acunetix_submit_live_subdomains(
 		acunetix_config.get('resubmit_after_days', DEFAULT_RESUBMIT_AFTER_DAYS)
 	)
 	start_scan_on_submit = bool(acunetix_config.get('start_scan_on_submit', False))
+	batch_size = _resolve_int_option(
+		acunetix_config.get('submission_batch_size'), 'submission_batch_size',
+		DEFAULT_SUBMISSION_BATCH_SIZE, 1, MAX_SUBMISSION_BATCH_SIZE,
+	)
+	batch_pause = _resolve_int_option(
+		acunetix_config.get('submission_batch_pause'), 'submission_batch_pause',
+		DEFAULT_SUBMISSION_BATCH_PAUSE, 0, MAX_SUBMISSION_BATCH_PAUSE,
+	)
+	max_scans = _resolve_int_option(
+		acunetix_config.get('max_scans_per_run'), 'max_scans_per_run',
+		DEFAULT_MAX_SCANS_PER_RUN, 1, MAX_SCANS_PER_RUN,
+	)
 
 	creds = AcunetixAPIKey.objects.first()
 	if not (creds and creds.server_url and creds.api_key):
@@ -743,7 +915,9 @@ def acunetix_submit_live_subdomains(
 		return True
 
 	hosts = [s.name for s in subdomains]
-	recent = _recently_submitted_hosts(hosts, resubmit_after_days)
+	last_submitted = _last_submissions(hosts)
+	cutoff = timezone.now() - timedelta(days=resubmit_after_days)
+	recent = {host: at for host, at in last_submitted.items() if at >= cutoff}
 	logger.info(
 		"Acunetix submission for scan %s: %d live subdomains, %d already sent in the last %d day(s)",
 		scan_history_id, len(hosts), len(recent), resubmit_after_days,
@@ -754,13 +928,10 @@ def acunetix_submit_live_subdomains(
 	import os as _os
 	verify = _os.environ.get('ACUNETIX_CA_BUNDLE', False)
 
-	submitted, skipped, failed = 0, 0, 0
+	pending = []
 	for subdomain in subdomains:
 		host = subdomain.name
-		target_url = subdomain.http_url or f"https://{host}"
-
 		if host in recent:
-			skipped += 1
 			_record_submission(
 				self,
 				f"acunetix submit {host}",
@@ -768,26 +939,55 @@ def acunetix_submit_live_subdomains(
 				f"(within {resubmit_after_days}d window)",
 				return_code=0,
 			)
-			continue
-
-		if _submit_acunetix_host(
-			self,
-			host=host,
-			target_url=target_url,
-			base_url=base_url,
-			headers=headers,
-			verify=verify,
-			start_scan_on_submit=start_scan_on_submit,
-			scan_history_id=scan_history_id,
-		):
-			submitted += 1
 		else:
-			failed += 1
+			pending.append((host, subdomain.http_url or f"https://{host}"))
+	skipped = len(subdomains) - len(pending)
+	# Never-submitted hosts first, then the longest-waiting ones, so with a scan
+	# limit per run the end of a long host list is not starved once the hosts at
+	# its start leave the re-submission window again.
+	pending.sort(key=lambda item: (item[0] in last_submitted, last_submitted.get(item[0], cutoff)))
+
+	known_targets = None
+	try:
+		if pending:
+			known_targets = _list_acunetix_targets(base_url, headers, verify, settings.ACUNETIX_REQUEST_TIMEOUT)
+	except (requests.exceptions.RequestException, ValueError) as exc:
+		logger.warning("Could not list Acunetix targets, looking each host up instead: %s", type(exc).__name__)
+
+	defer_reason = f"the limit of {max_scans} scans per run was reached; a later scan run starts it"
+	submitted, deferred, failed = 0, 0, 0
+	batches = [pending[i:i + batch_size] for i in range(0, len(pending), batch_size)]
+	for index, batch in enumerate(batches, start=1):
+		if index > 1 and batch_pause:
+			time.sleep(batch_pause)
+		logger.info(
+			"Acunetix submission for scan %s: batch %d/%d (%d hosts)",
+			scan_history_id, index, len(batches), len(batch),
+		)
+		for host, target_url in batch:
+			defer = start_scan_on_submit and submitted >= max_scans
+			if not _submit_acunetix_host(
+				self,
+				host=host,
+				target_url=target_url,
+				base_url=base_url,
+				headers=headers,
+				verify=verify,
+				start_scan_on_submit=start_scan_on_submit,
+				scan_history_id=scan_history_id,
+				known_targets=known_targets,
+				defer_scan_reason=defer_reason if defer else None,
+			):
+				failed += 1
+			elif defer:
+				deferred += 1
+			else:
+				submitted += 1
 
 	logger.info(
-		"Acunetix submission complete for scan %s: submitted=%d skipped=%d failed=%d",
-		scan_history_id, submitted, skipped, failed,
+		"Acunetix submission complete for scan %s: submitted=%d deferred=%d skipped=%d failed=%d",
+		scan_history_id, submitted, deferred, skipped, failed,
 	)
-	if failed and not submitted:
+	if failed and not (submitted or deferred):
 		return _fail(self, f"All {failed} Acunetix target submissions failed.")
 	return True

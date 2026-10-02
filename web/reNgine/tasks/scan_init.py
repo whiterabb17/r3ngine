@@ -796,9 +796,26 @@ def retry_failed_tasks_temporal(scan, auto=False):
 	import asyncio
 	import yaml as _yaml
 
+	from reNgine.task_plan import retry_dispatch_name
+
 	names = _unsuccessful_task_names(scan)
 	if not names:
 		logger.info("[RECOVERY] Scan %s has no unsuccessful tasks to retry", scan.id)
+		return []
+
+	# A timeline row is named after the activity that wrote it, which is not
+	# always the step SingleTaskRetryWorkflow dispatches on (nuclei_scan comes
+	# from vulnerability_scan). Sending the row name made the retry fail at once.
+	dispatch_by_row = {}
+	for name in names:
+		dispatch = retry_dispatch_name(name)
+		if dispatch is None:
+			logger.warning("[RECOVERY] Scan %s: task %s cannot be retried on its own, leaving it failed", scan.id, name)
+		elif dispatch in dispatch_by_row.values():
+			logger.info("[RECOVERY] Scan %s: task %s is re-run by the %s retry", scan.id, name, dispatch)
+		else:
+			dispatch_by_row[name] = dispatch
+	if not dispatch_by_row:
 		return []
 
 	if auto:
@@ -822,10 +839,13 @@ def retry_failed_tasks_temporal(scan, auto=False):
 	# ORM must stay outside the async starter. recover_stuck_scans runs from a
 	# Temporal activity; Django raises SynchronousOnlyOperation if we query
 	# inside asyncio.run().
-	for task_name in names:
-		scan.scanactivity_set.filter(
-			name=task_name, status=FAILED_TASK
-		).update(
+	batch_names = list(dispatch_by_row)
+	for row_name, task_name in dispatch_by_row.items():
+		failed_rows = scan.scanactivity_set.filter(name=row_name, status=FAILED_TASK)
+		# The row GetScanFinalStatusActivity closes when the retry ends, so a
+		# failure before the step claims it never leaves it INITIATED.
+		activity_id = failed_rows.order_by('-time_started', '-id').values_list('id', flat=True).first()
+		failed_rows.update(
 			status=INITIATED_TASK,
 			time_ended=None,
 			error_message=None,
@@ -838,10 +858,11 @@ def retry_failed_tasks_temporal(scan, auto=False):
 			'yaml_configuration': yaml_config,
 			'tasks': [task_name],
 			'original_scan_status': FAILED_TASK,
-			'retry_batch_names': names,
+			'retry_batch_names': batch_names,
+			'activity_id': activity_id,
 			'task_name': task_name,
 			'workflow_id': (
-				f"retry-{task_name}-{scan_id}-{int(timezone.now().timestamp())}"
+				f"retry-{row_name}-{scan_id}-{int(timezone.now().timestamp())}"
 			),
 		})
 

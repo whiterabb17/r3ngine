@@ -348,11 +348,17 @@ vulnerability_scan:
   # soon as the HTTP crawl establishes liveness, instead of only scanning the
   # apex domain in Tier 6. Each host is sent at most once per
   # resubmit_after_days; every submission and skip is written to the scan
-  # timeline under "Acunetix Target Submission".
+  # timeline under "Acunetix Target Submission". Hosts go out in batches of
+  # submission_batch_size with submission_batch_pause seconds between them.
+  # With start_scan_on_submit, at most max_scans_per_run scans are started; the
+  # other hosts are added as targets only and get their scan on a later run.
   acunetix:
     submit_live_subdomains: false
     resubmit_after_days: 3
     start_scan_on_submit: false
+    submission_batch_size: 20
+    submission_batch_pause: 5
+    max_scans_per_run: 20
   run_wpscan: true
   run_wptaint_scan: true
   run_s3scanner: true

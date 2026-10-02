@@ -70,9 +70,15 @@ window.Cytoscape = cytoscape;
 
 
 
+import { reloadOnceForStaleBuild } from './utils/staleBuild';
 import '@fontsource/orbitron/index.css';
 import '@fontsource/inter/index.css';
 import '@fontsource/bangers/index.css';
+
+// A chunk of the previous build failed to load after a redeploy: load the new build.
+window.addEventListener('vite:preloadError', (event) => {
+  if (reloadOnceForStaleBuild()) event.preventDefault();
+});
 
 ReactDOMClient.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

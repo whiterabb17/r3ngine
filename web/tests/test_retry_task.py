@@ -217,6 +217,46 @@ class RetryFailedTasksTemporalTests(TestCase):
         self.assertEqual(kwargs["args"][1], "generate_impact_assessment")
         self.assertEqual(kwargs["args"][0]["scan_history_id"], scan.id)
 
+    def _retry(self, *row_names):
+        from reNgine.tasks.scan_init import retry_failed_tasks_temporal
+
+        scan = _make_scan(status=FAILED_TASK)
+        rows = [_make_activity(scan, name=name, status=FAILED_TASK) for name in row_names]
+        client = MagicMock()
+        client.start_workflow = AsyncMock()
+        with patch("reNgine.temporal_client.TemporalClientProvider.get_client",
+                   new_callable=AsyncMock, return_value=client):
+            started = retry_failed_tasks_temporal(scan, auto=True)
+        scan.refresh_from_db()
+        return scan, rows, started, client.start_workflow
+
+    def test_a_nuclei_row_is_retried_through_the_vulnerability_scan_step(self):
+        """Recovery sent the row name, which SingleTaskRetryWorkflow rejects at once."""
+        _, (row,), started, start = self._retry("nuclei_scan")
+
+        self.assertEqual(started, ["vulnerability_scan"])
+        ctx, task_name = start.call_args.kwargs["args"]
+        self.assertEqual(task_name, "vulnerability_scan")
+        self.assertEqual(ctx["tasks"], ["vulnerability_scan"])
+        self.assertEqual(ctx["activity_id"], row.id, "the row is closed even if the retry fails early")
+        row.refresh_from_db()
+        self.assertEqual(row.status, INITIATED_TASK)
+
+    def test_rows_of_one_step_start_a_single_retry(self):
+        _, _, started, start = self._retry("nuclei_scan", "vulnerability_scan")
+
+        self.assertEqual(started, ["vulnerability_scan"])
+        self.assertEqual(start.await_count, 1)
+
+    def test_a_row_that_cannot_be_retried_leaves_the_scan_alone(self):
+        scan, (row,), started, start = self._retry("crlfuzz_scan")
+
+        self.assertEqual(started, [])
+        start.assert_not_awaited()
+        self.assertEqual(scan.scan_status, FAILED_TASK, "nothing runs, so the scan must not show RUNNING")
+        row.refresh_from_db()
+        self.assertEqual(row.status, FAILED_TASK)
+
 
 from reNgine.temporal_activities import get_scan_final_status_activity, initialize_scan_tasks_activity
 
@@ -265,6 +305,19 @@ class GetScanFinalStatusTests(TestCase):
             scan.id, True, ["generate_impact_assessment", "sync_graph"]
         )
         self.assertEqual(result, RUNNING_TASK)
+
+    def test_a_planned_row_that_never_started_does_not_hold_the_scan_running(self):
+        import uuid
+        scan = _make_scan()
+        _make_activity(scan, name="generate_impact_assessment", status=SUCCESS_TASK)
+        ScanActivity.objects.create(
+            scan_of=scan, task_uid=uuid.uuid4(), name="sync_graph", title="Graph Sync",
+            tier=7, status=INITIATED_TASK, time="2026-06-21T10:00:00Z", time_started=None,
+        )
+        result = get_scan_final_status_activity(
+            scan.id, True, ["generate_impact_assessment", "sync_graph"]
+        )
+        self.assertEqual(result, SUCCESS_TASK)
 
     def test_failed_retry_marks_visible_initiated_row_failed(self):
         scan = _make_scan()
@@ -347,3 +400,49 @@ class TierStalenessTests(TestCase):
 
         old_row.refresh_from_db()
         self.assertEqual(old_row.tier, 3)
+
+
+class RetryTaskDispatchNameTests(TestCase):
+    """Rows named after their activity are retried as the step that runs them."""
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        self.client.force_login(User.objects.create_superuser("dispatch", "d@test.example", "password"))
+
+    def _retry(self, name):
+        scan = _make_scan(status=SUCCESS_TASK)
+        act = _make_activity(scan, name=name, status=FAILED_TASK)
+        temporal = MagicMock()
+        temporal.start_workflow = AsyncMock()
+        with patch("reNgine.temporal_client.TemporalClientProvider.get_client", new=AsyncMock(return_value=temporal)):
+            resp = self.client.post(reverse("api:retry_task", kwargs={"pk": act.pk}), content_type="application/json")
+        return resp, temporal.start_workflow, scan, act
+
+    def test_a_nuclei_row_is_retried_through_the_vulnerability_scan_step(self):
+        resp, start, _scan, _act = self._retry("nuclei_scan")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(start.call_args.kwargs["args"][1], "vulnerability_scan")
+        self.assertTrue(start.call_args.kwargs["id"].startswith("retry-vulnerability_scan-"))
+
+    def test_the_acunetix_row_is_retried_through_run_acunetix(self):
+        resp, start, _scan, _act = self._retry("acunetix_scan")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(start.call_args.kwargs["args"][1], "run_acunetix")
+
+    def test_a_row_the_workflow_cannot_retry_is_refused_without_changes(self):
+        resp, start, scan, act = self._retry("crlfuzz_scan")
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(resp.json()["status"])
+        start.assert_not_called()
+        act.refresh_from_db()
+        scan.refresh_from_db()
+        self.assertEqual(act.status, FAILED_TASK)
+        self.assertEqual(scan.scan_status, SUCCESS_TASK)
+
+    def test_dispatch_names_always_name_a_step_the_workflow_handles(self):
+        from reNgine.task_plan import RETRY_TASK_ALIASES, RETRYABLE_TASK_NAMES, retry_dispatch_name
+        for row, step in RETRY_TASK_ALIASES.items():
+            self.assertIn(step, RETRYABLE_TASK_NAMES)
+            self.assertEqual(retry_dispatch_name(row), step)
+            self.assertEqual(retry_dispatch_name(f"single_tool_{row}"), step)
+        self.assertIsNone(retry_dispatch_name("crlfuzz_scan"))

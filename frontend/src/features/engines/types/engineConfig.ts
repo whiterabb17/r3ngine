@@ -309,7 +309,22 @@ export interface AcunetixConfig {
   resubmit_after_days: number;
   /** Also start an Acunetix scan for each freshly submitted target. */
   start_scan_on_submit: boolean;
+  /** Hosts sent to Acunetix per batch. */
+  submission_batch_size: number;
+  /** Seconds to wait between batches. */
+  submission_batch_pause: number;
+  /** Scans started per run; the remaining hosts are added as targets and scanned on a later run. */
+  max_scans_per_run: number;
 }
+
+export const DEFAULT_ACUNETIX_CONFIG: AcunetixConfig = {
+  submit_live_subdomains: false,
+  resubmit_after_days: 3,
+  start_scan_on_submit: false,
+  submission_batch_size: 20,
+  submission_batch_pause: 5,
+  max_scans_per_run: 20,
+};
 
 export interface VulnerabilityScanConfig {
   run_nuclei: boolean;
@@ -548,7 +563,7 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
       concurrency: 50, rate_limit: 150, retries: 1,
       intensity: 'normal', fetch_gpt_report: true, enable_http_crawl: true,
       wpscan_enumeration: 'vp,vt,u', wpscan_detection_mode: 'mixed',
-      acunetix: { submit_live_subdomains: false, resubmit_after_days: 3, start_scan_on_submit: false },
+      acunetix: { ...DEFAULT_ACUNETIX_CONFIG },
       nuclei: {
         use_nuclei_config: false, auto_update_templates: true,
         severities: ['unknown', 'info', 'low', 'medium', 'high', 'critical'], tags: [], templates: [], custom_templates: [],

@@ -618,10 +618,14 @@ def get_scan_final_status_activity(
         )
 
     if pending_names:
+        # Every retry path keeps time_started on the row it re-queues. A planned
+        # row that never started has none and never will, so counting it would
+        # keep the scan RUNNING for good.
         still_running = ScanActivity.objects.filter(
             scan_of_id=scan_id,
             name__in=pending_names,
             status__in=[INITIATED_TASK, RUNNING_TASK],
+            time_started__isnull=False,
         ).exists()
         if still_running:
             return RUNNING_TASK

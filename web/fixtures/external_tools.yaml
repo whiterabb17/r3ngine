@@ -156,7 +156,7 @@
   fields:
     logo_url: null
     name: hakrawler
-    description: Fast golang web crawler for gathering URLs and JavaSript file locations.
+    description: Fast golang web crawler for gathering URLs and JavaScript file locations.
       This is basically a simple implementation of the awesome Gocolly library.
     github_url: https://github.com/hakluke/hakrawler
     license_url: https://github.com/hakluke/hakrawler/blob/master/LICENSE

@@ -18,10 +18,16 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 class EngineSerializer(serializers.ModelSerializer):
 
 	tasks = serializers.SerializerMethodField('get_tasks')
+	subscan_tasks = serializers.SerializerMethodField('get_subscan_tasks')
 	configured_tools_count = serializers.SerializerMethodField('get_configured_tools_count')
 
 	def get_tasks(self, instance):
 		return instance.tasks
+
+	def get_subscan_tasks(self, instance):
+		"""The engine's tasks a subscan can run; the YAML also holds settings-only sections."""
+		from reNgine.temporal.workflows.subscan import is_subscan_task
+		return [task for task in instance.tasks if is_subscan_task(task)]
 
 	def get_configured_tools_count(self, instance):
 		"""
@@ -108,6 +114,7 @@ class EngineSerializer(serializers.ModelSerializer):
 			'engine_name',
 			'yaml_configuration',
 			'tasks',
+			'subscan_tasks',
 			'configured_tools_count'
 		]
 

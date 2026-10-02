@@ -27,8 +27,11 @@ export default defineConfig(({ command }) => ({
       output: {
         // Main entry points should NOT have hashes for Django compatibility
         entryFileNames: 'assets/[name].js',
-        // Chunks should NOT have hashes for stable template integration
-        chunkFileNames: 'assets/[name].js',
+        // Chunks carry a content hash: a tab still running the previous build must
+        // never load a chunk of the new one under the same name (their minified
+        // export names differ). Only the entry keeps a stable name, for the
+        // Django template; it imports the hashed chunks itself.
+        chunkFileNames: 'assets/[name]-[hash].js',
         // Assets like CSS should also have stable names if possible
         assetFileNames: 'assets/[name].[ext]',
         manualChunks: (id) => {

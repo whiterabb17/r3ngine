@@ -17,6 +17,14 @@ from targetApp.models import *
 from scanEngine.models import EngineType, OpSec, Proxy
 from dashboard.models import AcunetixAPIKey, WpScanAPIKey
 
+def _no_existing_scans():
+    """AWVS answer to the scans-by-target query when the target has no scan yet."""
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.json.return_value = {'scans': []}
+    return resp
+
+
 class ToolExecutionTest(TransactionTestCase):
     def setUp(self):
         self.domain_name = "defijn.io"
@@ -297,6 +305,7 @@ class ToolExecutionTest(TransactionTestCase):
 
                 mock_requests_get.side_effect = [
                     mock_targets_resp,
+                    _no_existing_scans(),
                     mock_profiles_resp,
                     mock_scan_status_resp,
                     mock_scan_status_resp,
@@ -363,6 +372,7 @@ class ToolExecutionTest(TransactionTestCase):
 
             mock_requests_get.side_effect = [
                 mock_targets_resp,
+                _no_existing_scans(),
                 mock_profiles_resp,
                 mock_scan_status_resp,
                 mock_scan_status_resp,
@@ -430,6 +440,7 @@ class ToolExecutionTest(TransactionTestCase):
 
             mock_requests_get.side_effect = [
                 mock_targets_resp,
+                _no_existing_scans(),
                 mock_profiles_resp,
                 mock_scan_status_resp,
                 mock_scan_status_resp,

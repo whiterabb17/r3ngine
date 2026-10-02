@@ -40,6 +40,7 @@ vulnerability_scan:
     tags: [cve]
   acunetix:
     resubmit_after_days: 7
+    max_scans_per_run: 10
 `;
 
 describe('useEngineConfig YAML parsing', () => {
@@ -57,6 +58,9 @@ describe('useEngineConfig YAML parsing', () => {
     expect(config.vulnerability_scan.config.nuclei.templates).toEqual([]);
     expect(config.vulnerability_scan.config.acunetix?.resubmit_after_days).toBe(7);
     expect(config.vulnerability_scan.config.acunetix?.submit_live_subdomains).toBe(false);
+    expect(config.vulnerability_scan.config.acunetix?.max_scans_per_run).toBe(10);
+    expect(config.vulnerability_scan.config.acunetix?.submission_batch_size).toBe(20);
+    expect(config.vulnerability_scan.config.acunetix?.submission_batch_pause).toBe(5);
   });
 
   it('treats a section given as a scalar as enabled with default settings', () => {

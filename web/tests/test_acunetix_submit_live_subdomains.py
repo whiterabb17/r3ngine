@@ -104,12 +104,23 @@ class _SubmissionTestBase(TestCase):
             scan_of=self.scan, name='acunetix_submit', title='Acunetix Target Submission',
             tier=2, status=1, time=timezone.now(), time_started=timezone.now(),
         )
-        for name in ('a.sub.example', 'b.sub.example'):
+        self._add_live_subdomains('a.sub.example', 'b.sub.example')
+        self.ctx = self._ctx()
+        # AWVS is never contacted: the target list is empty and batch pauses are instant.
+        self.list_targets = self._start_patch('reNgine.tasks.acunetix._list_acunetix_targets', return_value={})
+        self.sleep = self._start_patch('reNgine.tasks.acunetix.time.sleep')
+
+    def _start_patch(self, target: str, **kwargs):
+        patcher = patch(target, **kwargs)
+        self.addCleanup(patcher.stop)
+        return patcher.start()
+
+    def _add_live_subdomains(self, *names: str) -> None:
+        for name in names:
             Subdomain.objects.create(
                 scan_history=self.scan, target_domain=self.domain, name=name,
                 http_status=200, http_url=f'https://{name}', discovered_date=timezone.now(),
             )
-        self.ctx = self._ctx()
 
     def _ctx(self, **acunetix_overrides) -> dict:
         config = {'resubmit_after_days': 3}
@@ -342,6 +353,175 @@ class ResolveResubmitWindowTests(unittest.TestCase):
         self.assertEqual(_resolve_resubmit_after_days(None), DEFAULT_RESUBMIT_AFTER_DAYS)
         self.assertEqual(_resolve_resubmit_after_days('soon'), DEFAULT_RESUBMIT_AFTER_DAYS)
         self.assertEqual(_resolve_resubmit_after_days([3]), DEFAULT_RESUBMIT_AFTER_DAYS)
+
+    def test_int_options_are_clamped_to_their_range(self) -> None:
+        from reNgine.tasks.acunetix import _resolve_int_option
+
+        self.assertEqual(_resolve_int_option(None, 'x', 20, 1, 200), 20)
+        self.assertEqual(_resolve_int_option('50', 'x', 20, 1, 200), 50)
+        self.assertEqual(_resolve_int_option(0, 'x', 20, 1, 200), 1)
+        self.assertEqual(_resolve_int_option(10_000, 'x', 20, 1, 200), 200)
+        self.assertEqual(_resolve_int_option('many', 'x', 20, 1, 200), 20)
+
+
+class SubmissionBatchingTests(_SubmissionTestBase):
+    """Many live subdomains go out in small batches, and only a few scans start per run."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self._add_live_subdomains('c.sub.example', 'd.sub.example', 'e.sub.example')
+        keys = self._start_patch('reNgine.tasks.acunetix.AcunetixAPIKey')
+        keys.objects.first.return_value = _creds()
+        self.create = self._start_patch(
+            'reNgine.tasks.acunetix._create_or_reuse_acunetix_target', return_value='tgt-1')
+        self.start = self._start_patch(
+            'reNgine.tasks.acunetix._start_acunetix_scan_direct', return_value={'scan_id': 'scan-1'})
+
+    def _outputs(self) -> dict:
+        return {c.command.split()[-1]: c.output for c in Command.objects.filter(activity=self.activity)}
+
+    def test_hosts_are_sent_in_batches_with_a_pause_between_them(self) -> None:
+        task = self._task()
+        self.assertTrue(self._run(task, self._ctx(submission_batch_size=2, submission_batch_pause=7)))
+
+        self.assertEqual(self.create.call_count, 5)
+        self.assertEqual([c.args for c in self.sleep.call_args_list], [(7,), (7,)], '3 batches, 2 pauses')
+        self.assertEqual(AcunetixTargetSubmission.objects.count(), 5)
+
+    def test_no_pause_when_it_is_zero(self) -> None:
+        self.assertTrue(self._run(self._task(), self._ctx(submission_batch_size=1, submission_batch_pause=0)))
+        self.sleep.assert_not_called()
+
+    def test_scans_past_the_per_run_limit_are_left_for_the_next_run(self) -> None:
+        ctx = self._ctx(start_scan_on_submit=True, max_scans_per_run=2)
+
+        self.assertTrue(self._run(self._task(), ctx))
+
+        self.assertEqual(self.start.call_count, 2)
+        self.assertEqual(self.create.call_count, 5, 'every host is still added as a target')
+        self.assertEqual(
+            sorted(AcunetixTargetSubmission.objects.values_list('host', flat=True)),
+            ['a.sub.example', 'b.sub.example'],
+        )
+        outputs = self._outputs()
+        for host in ('c.sub.example', 'd.sub.example', 'e.sub.example'):
+            self.assertTrue(outputs[host].startswith('TARGET ADDED'), outputs[host])
+            self.assertIn('limit of 2 scans per run', outputs[host])
+
+        Command.objects.all().delete()
+        self.start.reset_mock()
+        self.assertTrue(self._run(self._task(), ctx))
+
+        self.assertEqual(self.start.call_count, 2, 'the next run starts the next slice')
+        self.assertEqual(
+            sorted(AcunetixTargetSubmission.objects.values_list('host', flat=True)),
+            ['a.sub.example', 'b.sub.example', 'c.sub.example', 'd.sub.example'],
+        )
+
+    def test_never_submitted_hosts_get_the_scans_before_returning_ones(self) -> None:
+        for host, days_ago in (('a.sub.example', 4), ('b.sub.example', 9)):
+            AcunetixTargetSubmission.objects.create(
+                host=host, acunetix_target_id='old', last_submitted_at=timezone.now() - timedelta(days=days_ago),
+            )
+
+        self.assertTrue(self._run(self._task(), self._ctx(start_scan_on_submit=True, max_scans_per_run=4)))
+
+        submitted_hosts = [c.kwargs['target_name'] for c in self.create.call_args_list]
+        self.assertEqual(
+            submitted_hosts,
+            ['c.sub.example', 'd.sub.example', 'e.sub.example', 'b.sub.example', 'a.sub.example'],
+            'new hosts by name, then the longest-waiting first',
+        )
+        self.assertTrue(self._outputs()['a.sub.example'].startswith('TARGET ADDED'))
+
+    def test_a_scan_that_did_not_start_does_not_use_up_the_limit(self) -> None:
+        self.start.side_effect = [None, {'scan_id': 'scan-2'}, {'scan_id': 'scan-3'}]
+
+        self.assertTrue(self._run(self._task(), self._ctx(start_scan_on_submit=True, max_scans_per_run=2)))
+
+        self.assertEqual(self.start.call_count, 3)
+        outputs = self._outputs()
+        self.assertTrue(outputs['a.sub.example'].startswith('FAILED'))
+        self.assertTrue(outputs['c.sub.example'].startswith('SUBMITTED'))
+        self.assertTrue(outputs['d.sub.example'].startswith('TARGET ADDED'))
+
+    def test_the_target_list_is_read_once_and_shared_by_every_host(self) -> None:
+        self.list_targets.return_value = {'a.sub.example': 'tgt-a'}
+
+        self._run(self._task())
+
+        self.list_targets.assert_called_once()
+        self.assertTrue(all(
+            c.kwargs['known_targets'] is self.list_targets.return_value for c in self.create.call_args_list
+        ))
+
+    def test_an_unreadable_target_list_falls_back_to_per_host_lookups(self) -> None:
+        self.list_targets.side_effect = requests.exceptions.ConnectionError('unreachable')
+
+        self.assertTrue(self._run(self._task()))
+
+        self.assertEqual(self.create.call_count, 5)
+        self.assertTrue(all(c.kwargs['known_targets'] is None for c in self.create.call_args_list))
+
+
+class AcunetixTargetListTests(unittest.TestCase):
+    """The AWVS target list is paged; a lookup against page one alone duplicates targets."""
+
+    BASE = 'https://acu.local'
+
+    @staticmethod
+    def _page(start: int, count: int) -> _FakeResponse:
+        return _FakeResponse(200, {'targets': [
+            {'target_id': f'tgt-{i}', 'address': f'https://h{i}.sub.example/'} for i in range(start, start + count)
+        ]})
+
+    def _list(self, responses):
+        from reNgine.tasks.acunetix import _list_acunetix_targets
+        with patch('reNgine.tasks.acunetix.requests.get', side_effect=responses) as mock_get:
+            return _list_acunetix_targets(self.BASE, {}, False, 5), mock_get
+
+    def test_every_page_is_read(self) -> None:
+        targets, mock_get = self._list([self._page(0, 100), self._page(100, 3)])
+
+        self.assertEqual(len(targets), 103)
+        self.assertEqual(targets['h102.sub.example'], 'tgt-102')
+        self.assertEqual([c.kwargs['params']['c'] for c in mock_get.call_args_list], [0, 100])
+
+    def test_a_server_ignoring_the_offset_does_not_loop(self) -> None:
+        targets, mock_get = self._list([self._page(0, 100), self._page(0, 100)])
+
+        self.assertEqual(len(targets), 100)
+        self.assertEqual(mock_get.call_count, 2)
+
+    def test_an_error_status_means_no_list(self) -> None:
+        targets, _ = self._list([_FakeResponse(401)])
+        self.assertIsNone(targets)
+
+
+class KnownTargetsLookupTests(unittest.TestCase):
+
+    def _call(self, known: dict, create_resp: _FakeResponse = None):
+        from reNgine.tasks.acunetix import _create_or_reuse_acunetix_target
+        with patch('reNgine.tasks.acunetix.requests.get') as mock_get, \
+                patch('reNgine.tasks.acunetix.requests.post', return_value=create_resp) as mock_post:
+            target_id = _create_or_reuse_acunetix_target(
+                'https://acu.local', {}, False, 5, 'www.sub.example', 'https://www.sub.example',
+                known_targets=known,
+            )
+        mock_get.assert_not_called()
+        return target_id, mock_post
+
+    def test_a_known_host_is_reused_without_a_request(self) -> None:
+        target_id, mock_post = self._call({'www.sub.example': 'tgt-www'})
+        self.assertEqual(target_id, 'tgt-www')
+        mock_post.assert_not_called()
+
+    def test_a_created_target_is_remembered(self) -> None:
+        known: dict = {}
+        target_id, mock_post = self._call(known, _FakeResponse(201, {'target_id': 'tgt-new'}))
+        self.assertEqual(target_id, 'tgt-new')
+        self.assertEqual(known, {'www.sub.example': 'tgt-new'})
+        mock_post.assert_called_once()
 
 
 class AcunetixScanFailureTests(TestCase):

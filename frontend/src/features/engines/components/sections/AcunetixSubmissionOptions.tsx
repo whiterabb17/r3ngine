@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Checkbox, FormControlLabel, Grid, TextField, Typography } from '@mui/material';
 import type { AcunetixConfig } from '../../types/engineConfig';
+import { BoundedNumberField } from '../shared/BoundedNumberField';
 import { useScannerOptionStyles } from './scannerOptionStyles';
 
 interface Props {
@@ -55,6 +56,30 @@ export const AcunetixSubmissionOptions: React.FC<Props> = ({ config, onChange })
               />
             }
             label={<Typography variant="body2">Start a scan for each new target</Typography>}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <BoundedNumberField
+            label="Batch size" value={config.submission_batch_size} min={1} max={200}
+            onChange={(submission_batch_size) => set({ submission_batch_size })} sx={fieldSx}
+            helperText="Hosts sent per batch"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <BoundedNumberField
+            label="Pause between batches (s)" value={config.submission_batch_pause} min={0} max={300}
+            onChange={(submission_batch_pause) => set({ submission_batch_pause })} sx={fieldSx}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <BoundedNumberField
+            label="Max scans per run" value={config.max_scans_per_run} min={1} max={500}
+            onChange={(max_scans_per_run) => set({ max_scans_per_run })} sx={fieldSx}
+            helperText={
+              config.start_scan_on_submit
+                ? 'The rest are added as targets and scanned on a later run'
+                : 'Applies when scans are started on submit'
+            }
           />
         </Grid>
       </Grid>
