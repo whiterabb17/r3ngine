@@ -229,7 +229,7 @@ class TestTierRetrySkipsUndispatchableTasks(TierRetryTestCase):
             call.kwargs['args'][0]['activity_id']: call.kwargs['args'][1]
             for call in start_workflow.await_args_list
         }
-        self.assertEqual(dispatched, {nuclei.id: 'vulnerability_scan', acunetix.id: 'run_acunetix'})
+        self.assertEqual(dispatched, {nuclei.id: 'nuclei_scan', acunetix.id: 'run_acunetix'})
 
     def test_tier_of_only_undispatchable_tasks_is_a_reported_no_op(self):
         start_workflow = self._mock_temporal()

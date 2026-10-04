@@ -151,7 +151,7 @@ class ToolExecutionTest(TransactionTestCase):
             self.assertIn("cPanel User Exposure", [v.name for v in vulns])
 
     def test_maigret_execution(self):
-        username = "scott"
+        username = "john"
         print(f"\n[DEBUG] Starting Maigret test. Real mode: {self.is_real_mode}")
         if self.is_real_mode:
             res = run_maigret(username, self.scan.id)
