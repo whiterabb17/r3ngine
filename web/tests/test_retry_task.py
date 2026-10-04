@@ -230,22 +230,29 @@ class RetryFailedTasksTemporalTests(TestCase):
         scan.refresh_from_db()
         return scan, rows, started, client.start_workflow
 
-    def test_a_nuclei_row_is_retried_through_the_vulnerability_scan_step(self):
-        """Recovery sent the row name, which SingleTaskRetryWorkflow rejects at once."""
+    def test_a_nuclei_row_is_retried_as_nuclei_scan(self):
+        """Nuclei timeline rows dispatch the narrow nuclei_scan retry, not full vuln scan."""
         _, (row,), started, start = self._retry("nuclei_scan")
 
-        self.assertEqual(started, ["vulnerability_scan"])
+        self.assertEqual(started, ["nuclei_scan"])
         ctx, task_name = start.call_args.kwargs["args"]
-        self.assertEqual(task_name, "vulnerability_scan")
-        self.assertEqual(ctx["tasks"], ["vulnerability_scan"])
+        self.assertEqual(task_name, "nuclei_scan")
+        self.assertEqual(ctx["tasks"], ["nuclei_scan"])
         self.assertEqual(ctx["activity_id"], row.id, "the row is closed even if the retry fails early")
         row.refresh_from_db()
         self.assertEqual(row.status, INITIATED_TASK)
 
-    def test_rows_of_one_step_start_a_single_retry(self):
+    def test_nuclei_and_vulnerability_scan_retries_are_independent(self):
         _, _, started, start = self._retry("nuclei_scan", "vulnerability_scan")
 
-        self.assertEqual(started, ["vulnerability_scan"])
+        self.assertEqual(sorted(started), ["nuclei_scan", "vulnerability_scan"])
+        self.assertEqual(start.await_count, 2)
+
+    def test_alias_rows_of_one_step_start_a_single_retry(self):
+        """acunetix_scan aliases to run_acunetix — two such rows must not double-queue."""
+        _, _, started, start = self._retry("acunetix_scan")
+
+        self.assertEqual(started, ["run_acunetix"])
         self.assertEqual(start.await_count, 1)
 
     def test_a_row_that_cannot_be_retried_leaves_the_scan_alone(self):
@@ -325,6 +332,15 @@ class GetScanFinalStatusTests(TestCase):
         result = get_scan_final_status_activity(
             scan.id, False, [], "generate_impact_assessment"
         )
+        self.assertEqual(result, FAILED_TASK)
+        act.refresh_from_db()
+        self.assertEqual(act.status, FAILED_TASK)
+
+    def test_failed_retry_closes_aliased_timeline_row_by_dispatch_name(self):
+        """Without activity_id, close acunetix_scan when dispatch was run_acunetix."""
+        scan = _make_scan()
+        act = _make_activity(scan, name="acunetix_scan", status=INITIATED_TASK)
+        result = get_scan_final_status_activity(scan.id, False, [], "run_acunetix")
         self.assertEqual(result, FAILED_TASK)
         act.refresh_from_db()
         self.assertEqual(act.status, FAILED_TASK)
@@ -418,11 +434,11 @@ class RetryTaskDispatchNameTests(TestCase):
             resp = self.client.post(reverse("api:retry_task", kwargs={"pk": act.pk}), content_type="application/json")
         return resp, temporal.start_workflow, scan, act
 
-    def test_a_nuclei_row_is_retried_through_the_vulnerability_scan_step(self):
+    def test_a_nuclei_row_is_retried_as_nuclei_scan(self):
         resp, start, _scan, _act = self._retry("nuclei_scan")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(start.call_args.kwargs["args"][1], "vulnerability_scan")
-        self.assertTrue(start.call_args.kwargs["id"].startswith("retry-vulnerability_scan-"))
+        self.assertEqual(start.call_args.kwargs["args"][1], "nuclei_scan")
+        self.assertTrue(start.call_args.kwargs["id"].startswith("retry-nuclei_scan-"))
 
     def test_the_acunetix_row_is_retried_through_run_acunetix(self):
         resp, start, _scan, _act = self._retry("acunetix_scan")

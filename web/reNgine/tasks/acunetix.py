@@ -283,13 +283,15 @@ def _start_acunetix_scan_direct(base_url: str, headers: dict, verify, timeout: i
 
 
 def _existing_acunetix_scan(base_url: str, headers: dict, verify, timeout: int, target_id: str, since):
-	"""The target's latest AWVS scan started at or after ``since``, unless it failed.
+	"""The target's latest AWVS scan started at or after ``since``, if reusable.
 
 	A Temporal retry (the previous attempt was killed, e.g. by its time limit) or a
 	manual retry of the step would otherwise start another multi-hour scan of the
-	same target. A scan still running is waited for; one that completed or was
-	aborted by the operator already holds the findings to import. A failed scan is
-	not reused, so retrying after an AWVS-side failure scans again.
+	same target. A scan still running is waited for; one that completed already
+	holds the findings to import. Failed or operator-aborted scans are not reused,
+	so an explicit retry starts a fresh AWVS scan. (When the poll loop itself sees
+	``aborted``, findings are still imported and the step returns success so
+	Temporal does not auto-retry mid-activity.)
 
 	Returns ``{'scan_id': ..., 'status': ...}`` or None.
 	"""
@@ -314,7 +316,7 @@ def _existing_acunetix_scan(base_url: str, headers: dict, verify, timeout: int, 
 	if not candidates:
 		return None
 	_started, scan_id, status = max(candidates)
-	if status == 'failed':
+	if status in ('failed', 'aborted'):
 		return None
 	return {'scan_id': scan_id, 'status': status}
 

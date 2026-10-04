@@ -584,10 +584,20 @@ def get_scan_final_status_activity(
     from reNgine.definitions import (
         SUCCESS_TASK, FAILED_TASK, RUNNING_TASK, INITIATED_TASK, ABORTED_TASK,
     )
+    from reNgine.task_plan import RETRY_TASK_ALIASES
+
+    # Dispatch name plus any timeline row names that alias to it (e.g.
+    # acunetix_scan → run_acunetix). Used when activity_id is missing.
+    close_names = []
+    if failed_task_name:
+        close_names = [failed_task_name] + [
+            timeline for timeline, dispatch in RETRY_TASK_ALIASES.items()
+            if dispatch == failed_task_name
+        ]
 
     pending_names = [n for n in (in_flight_names or []) if n]
-    if failed_task_name:
-        pending_names = [n for n in pending_names if n != failed_task_name]
+    if close_names:
+        pending_names = [n for n in pending_names if n not in close_names]
 
     if activity_id:
         row_qs = ScanActivity.objects.filter(
@@ -603,12 +613,13 @@ def get_scan_final_status_activity(
                 error_message="Retry workflow failed before the task completed",
                 time_ended=_tz.now(),
             )
-    elif not task_succeeded and failed_task_name:
+    elif not task_succeeded and close_names:
         # Only the in-flight retry row (INITIATED, time_started kept) — not
-        # pre-seeded ghost rows with time_started=None.
+        # pre-seeded ghost rows with time_started=None. Match dispatch name and
+        # reverse aliases so acunetix_scan rows close when dispatch is run_acunetix.
         ScanActivity.objects.filter(
             scan_of_id=scan_id,
-            name=failed_task_name,
+            name__in=close_names,
             status=INITIATED_TASK,
             time_started__isnull=False,
         ).update(

@@ -206,6 +206,8 @@ RETRYABLE_TASK_NAMES = frozenset({
     'secret_scanning',
     'vigolium_analysis',
     'vulnerability_scan',
+    # Nuclei-only retry (NucleiPlanner + parse) — not the full vulnerability_scan chain.
+    'nuclei_scan',
     'dalfox_xss_scan',
     'waf_bypass',
     'post_crawl_osint',
@@ -226,10 +228,9 @@ RETRYABLE_TASK_NAMES = frozenset({
 })
 
 #: Timeline rows named after the activity that wrote them rather than the step
-#: ``SingleTaskRetryWorkflow`` dispatches on: Nuclei rows come from the
-#: vulnerability_scan step, the Acunetix row from run_acunetix.
+#: ``SingleTaskRetryWorkflow`` dispatches on. The Acunetix timeline row is
+#: ``acunetix_scan``; the workflow step is ``run_acunetix``.
 RETRY_TASK_ALIASES = {
-    'nuclei_scan': 'vulnerability_scan',
     'acunetix_scan': 'run_acunetix',
 }
 

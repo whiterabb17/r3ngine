@@ -804,8 +804,8 @@ def retry_failed_tasks_temporal(scan, auto=False):
 		return []
 
 	# A timeline row is named after the activity that wrote it, which is not
-	# always the step SingleTaskRetryWorkflow dispatches on (nuclei_scan comes
-	# from vulnerability_scan). Sending the row name made the retry fail at once.
+	# always the step SingleTaskRetryWorkflow dispatches on (acunetix_scan →
+	# run_acunetix). Sending the raw row name made the retry fail at once.
 	dispatch_by_row = {}
 	for name in names:
 		dispatch = retry_dispatch_name(name)

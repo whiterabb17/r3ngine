@@ -94,20 +94,22 @@ class AcunetixScanOutcomeTests(TestCase):
         self.assertEqual(started, [])
         self.assertEqual(self._imported(), ['Reflected XSS'])
 
-    def test_a_scan_the_operator_aborted_is_imported_on_retry(self) -> None:
+    def test_an_aborted_scan_is_not_reused_on_retry(self) -> None:
+        """Operator abort must not make a UI/Temporal retry a no-op import-only success."""
         self.existing_scans = [{
             'scan_id': 'scan-aborted',
             'current_session': {'status': 'aborted', 'start_date': self._session_start(timedelta(hours=4))},
         }]
-        self.status = 'aborted'
+        self.status = 'completed'
         result, started = self._run()
         self.assertTrue(result)
-        self.assertEqual(started, [])
+        self.assertEqual(len(started), 1)
         self.assertEqual(self._imported(), ['Reflected XSS'])
 
     def test_a_failed_scan_or_one_from_before_this_scan_is_not_reused(self) -> None:
         for existing in (
             {'scan_id': 'scan-failed', 'current_session': {'status': 'failed', 'start_date': self._session_start(timedelta(minutes=5))}},
+            {'scan_id': 'scan-aborted', 'current_session': {'status': 'aborted', 'start_date': self._session_start(timedelta(minutes=5))}},
             {'scan_id': 'scan-old', 'current_session': {'status': 'completed', 'start_date': self._session_start(-timedelta(days=1))}},
         ):
             self.existing_scans = [existing]
