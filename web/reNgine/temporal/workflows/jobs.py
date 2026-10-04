@@ -376,6 +376,10 @@ class SingleTaskRetryWorkflow:
                 await workflow.execute_activity("EnrichScanCVEsActivity", ctx, start_to_close_timeout=timedelta(hours=2), heartbeat_timeout=timedelta(minutes=15), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("CalculateRiskScoresActivity", ctx, start_to_close_timeout=timedelta(minutes=30), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
                 await workflow.execute_activity("GenerateImpactAssessmentActivity", ctx, start_to_close_timeout=timedelta(hours=1), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_LLM, task_queue="python-orchestrator-queue")
+            elif task_name == "nuclei_scan":
+                # Narrow retry: re-run Nuclei + parse only — not correlate/enrich/risk/impact.
+                await workflow.execute_child_workflow("NucleiPlannerWorkflow", ctx, id=f"{workflow.info().workflow_id}-nuclei", task_queue="python-orchestrator-queue", execution_timeout=timedelta(days=7), run_timeout=timedelta(days=7), retry_policy=RetryPolicy(maximum_attempts=1))
+                await workflow.execute_activity("ParseAssessmentResultsActivity", ctx, start_to_close_timeout=timedelta(minutes=5), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_INTERNAL, task_queue="python-orchestrator-queue")
             elif task_name == "dalfox_xss_scan":
                 await workflow.execute_activity("RunDalfoxActivity", ctx, start_to_close_timeout=timedelta(hours=2), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
             elif task_name == "waf_bypass":

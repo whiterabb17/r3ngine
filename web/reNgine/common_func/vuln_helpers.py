@@ -110,8 +110,8 @@ def save_vulnerability(vuln_data=None, scan_history=None, target_domain=None, de
 
 		# Centralized Brute-Force Candidate Registration
 		auth_keywords = ['login', 'admin', 'auth', 'portal', 'credentials', 'password']
-		name = vuln_data.get('name', '').lower()
-		description = vuln_data.get('description', '').lower()
+		name = (vuln_data.get('name') or '').lower()
+		description = (vuln_data.get('description') or '').lower()
 		
 		if any(k in name or k in description for k in auth_keywords):
 			try:

@@ -2796,7 +2796,18 @@ export const ScanDetailPage = () => {
         open={retryConfirmOpen}
         onClose={() => { setRetryConfirmOpen(false); setPendingRetryActivity(null); }}
         onConfirm={() => {
-          if (pendingRetryActivity) retryScanTaskMutation.mutate(Number(pendingRetryActivity.id));
+          if (pendingRetryActivity) {
+            const title = pendingRetryActivity.title;
+            retryScanTaskMutation.mutate(Number(pendingRetryActivity.id), {
+              onSuccess: (res: { message?: string }) => setTierRetryNotice({
+                open: true,
+                severity: 'success',
+                message: res?.message || `Retry started for ${title}.`,
+              }),
+              // The server says why it refused, e.g. a step that cannot run on its own.
+              onError: (error: Error) => setTierRetryNotice({ open: true, severity: 'error', message: error.message }),
+            });
+          }
           setRetryConfirmOpen(false);
           setPendingRetryActivity(null);
         }}

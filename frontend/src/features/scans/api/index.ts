@@ -1056,7 +1056,7 @@ export const useRetryScanTask = (projectSlug: string, scanId: number) => {
       queryClient.invalidateQueries({ queryKey: ['scan-summary', projectSlug, scanId] });
     },
     onError: (e: Error) => {
-      // Toast is handled by the caller if needed; log for now
+      // The caller shows it to the user; keep it in the console as well.
       console.error('Retry task failed:', e.message);
     },
   });

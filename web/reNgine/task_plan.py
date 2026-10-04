@@ -180,6 +180,68 @@ def pipeline_task_name(activity_name: str) -> str:
     return name
 
 
+#: Task names ``SingleTaskRetryWorkflow`` knows how to dispatch. Anything else
+#: makes the workflow raise a non-retryable ``ApplicationError``, so the tier
+#: retry endpoint filters those rows out and reports them instead of queueing a
+#: workflow that is guaranteed to fail. Kept in sync with the dispatch chain in
+#: ``reNgine/temporal/workflows/jobs.py`` (see test_tier_retry.py).
+RETRYABLE_TASK_NAMES = frozenset({
+    'subdomain_discovery',
+    'amass_intel_discovery',
+    'firewall_vpn_scan',
+    'dns_security',
+    'osint',
+    'spiderfoot_scan',
+    'http_crawl',
+    'port_scan',
+    'vigolium_harvest',
+    'vigolium_discovery',
+    'vigolium_scan',
+    'fetch_url',
+    'screenshot',
+    'web_api_discovery',
+    'param_discovery',
+    'dir_file_fuzz',
+    'waf_detection',
+    'secret_scanning',
+    'vigolium_analysis',
+    'vulnerability_scan',
+    # Nuclei-only retry (NucleiPlanner + parse) — not the full vulnerability_scan chain.
+    'nuclei_scan',
+    'dalfox_xss_scan',
+    'waf_bypass',
+    'post_crawl_osint',
+    'http_crawl_bridge',
+    'run_acunetix',
+    'acunetix_submit',
+    # Tier 7 post-processing — dispatchable on its own since the upstream merge.
+    'correlate_vulnerabilities',
+    'calculate_risk_scores',
+    'generate_impact_assessment',
+    'sync_graph',
+    'run_apme',
+    'attack_path_modeling',
+    # Mailbox verification, under each of the names the workflow accepts.
+    'check_if_email_exists',
+    'email_security',
+    'mailbox_verification',
+})
+
+#: Timeline rows named after the activity that wrote them rather than the step
+#: ``SingleTaskRetryWorkflow`` dispatches on. The Acunetix timeline row is
+#: ``acunetix_scan``; the workflow step is ``run_acunetix``.
+RETRY_TASK_ALIASES = {
+    'acunetix_scan': 'run_acunetix',
+}
+
+
+def retry_dispatch_name(activity_name: str) -> str | None:
+    """The task name to retry a timeline row with, or None when it cannot be retried on its own."""
+    name = pipeline_task_name(activity_name or '')
+    name = RETRY_TASK_ALIASES.get(name, name)
+    return name if name in RETRYABLE_TASK_NAMES else None
+
+
 def is_singular_activity_name(activity_name: str) -> bool:
     return (activity_name or '').startswith(SINGLE_TOOL_ACTIVITY_PREFIX)
 

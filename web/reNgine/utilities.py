@@ -140,7 +140,7 @@ class SubdomainScopeChecker:
 			Returns:
 				bool: True if the subdomain is out of scope, False otherwise.
 		"""
-		subdomain = subdomain.lower() # though we wont encounter this, but just in case
+		subdomain = subdomain.lower() # though we won't encounter this, but just in case
 		if subdomain in self.plain_patterns:
 			return True
 		return any(pattern.search(subdomain) for pattern in self.regex_patterns)

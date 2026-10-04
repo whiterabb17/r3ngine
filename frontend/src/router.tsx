@@ -1,4 +1,6 @@
 import { createRootRouteWithContext, createRoute, createRouter, Outlet, Link, redirect, lazyRouteComponent, useParams } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { isStaleBuildError, reloadOnceForStaleBuild } from "./utils/staleBuild";
 import { Shell } from "./components/Shell";
 // Lazy loaded components below
 
@@ -741,6 +743,12 @@ function NotFound() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+  const staleBuild = isStaleBuildError(error);
+  useEffect(() => {
+    // The page goes away at once; if the guard refuses, the hint below stays.
+    if (staleBuild) reloadOnceForStaleBuild();
+  }, [staleBuild]);
+
   return (
     <Box
       sx={{
@@ -758,6 +766,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
       <Typography variant="body1" sx={{ color: 'text.secondary', mb: 4, maxWidth: 600 }}>
         An unexpected error occurred in the tactical interface.
         Error: {error.message}
+        {staleBuild && ' This tab is running an older version of the interface; reload the page (Ctrl+F5).'}
       </Typography>
       <Button
         variant="contained"
