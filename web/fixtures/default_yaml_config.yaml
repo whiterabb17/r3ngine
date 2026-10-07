@@ -98,7 +98,8 @@ dir_file_fuzz: {
   'timeout': 5,
   'threads': 30,
   'wordlist_name': 'dicc',
-  'max_repeat_by_signature': 10
+  'max_repeat_by_signature': 10,
+  'batching': {'enabled': true, 'batch_size': 25, 'max_parallel': 2, 'batch_timeout_minutes': 120, 'max_total_hours': 12}
 }
 fetch_url: {
   'uses_tools': ['gospider', 'hakrawler', 'waybackurls', 'katana', 'gau'],
@@ -120,6 +121,9 @@ vulnerability_scan: {
     'submit_live_subdomains': false,
     'resubmit_after_days': 3,
     'start_scan_on_submit': false,
+    'submission_batch_size': 20,
+    'submission_batch_pause': 5,
+    'max_scans_per_run': 20,
   },
   'run_wpscan': true,
   'run_wptaint_scan': true,

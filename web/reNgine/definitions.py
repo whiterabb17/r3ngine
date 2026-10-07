@@ -739,7 +739,7 @@ DEFAULT_DIR_FILE_FUZZ_EXTENSIONS =  [
     '.pdf',
 ]
 
-# Default Excluded Paths during Initate Scan
+# Default Excluded Paths during Initiate Scan
 # Mostly static files and directories
 DEFAULT_EXCLUDED_PATHS = [
     # Static assets (using regex patterns)

@@ -1012,6 +1012,16 @@ def stream_command(
 	color = get_tool_color(cmd)
 	logger.debug("%s%s%s", color, redact_proxy_credentials(cmd), COLOR_RESET)
 
+	# Set by _run_task when the scan is aborted or the activity reaches its time
+	# limit. Read here, in the calling thread, because it is thread-local.
+	from reNgine.temporal.activities.core import _task_cancel_local
+	cancel_event = getattr(_task_cancel_local, 'cancel_event', None)
+	if cancel_event is not None and cancel_event.is_set():
+		# A task looping over hosts would otherwise start, and then kill, one
+		# tool run per remaining host.
+		logger.warning("[stream_command] Task is stopping — not starting: %s", redact_proxy_credentials(cmd))
+		return
+
 	conf_path = None
 	if proxy:
 		proxy_manager = ProxychainsWrapper()
@@ -1045,11 +1055,6 @@ def stream_command(
 		import asyncio
 		import time
 		from temporalio.client import Client
-		from reNgine.temporal.activities.core import _task_cancel_local
-
-		# Read in this thread: _run_task sets it thread-locally, and the polling
-		# coroutine below may run on a pool thread where it would be missing.
-		cancel_event = getattr(_task_cancel_local, 'cancel_event', None)
 
 		async def _execute_remote_command(command_str, scan_history_id, command_rec_id):
 			"""Start GoExecutorTaskWorkflow and wait for result, cancelling it if the scan is aborted.
@@ -1219,25 +1224,33 @@ def stream_command(
 	import threading
 	import time
 
-	def watchdog(proc, limit_sec):
+	def watchdog(proc, limit_sec, stop_event):
 		deadline = time.monotonic() + limit_sec
+		stopped = False
 		while time.monotonic() < deadline:
 			if proc.poll() is not None:
 				return  # Process finished normally before timeout
+			if stop_event is not None and stop_event.is_set():
+				stopped = True
+				break
 			time.sleep(2)
-			
-		# If we reach here, it timed out
+
 		if proc.poll() is None:
-			logger.error("Watchdog: Command timed out after %s seconds. Killing process: %s", limit_sec, cmd)
+			if stopped:
+				logger.warning("Watchdog: task is stopping (abort or time limit). Killing process: %s", redact_proxy_credentials(cmd))
+			else:
+				logger.error("Watchdog: Command timed out after %s seconds. Killing process: %s", limit_sec, cmd)
 			try:
 				os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
 			except (ProcessLookupError, OSError):
 				pass
 			except Exception as ex:
 				logger.error("Watchdog: Failed to kill process: %s", ex)
-			
-			# Force close stdout to break the blocked readline() in the main thread
-			if proc.stdout:
+
+			# Force close stdout to break the blocked readline() in the main thread.
+			# Not on a stop: the killed group closes the pipe, and the reader then
+			# ends normally, so the task keeps and parses what the tool wrote.
+			if proc.stdout and not stopped:
 				try:
 					proc.stdout.close()
 				except OSError:
@@ -1245,7 +1258,7 @@ def stream_command(
 
 	watchdog_thread = threading.Thread(
 		target=watchdog,
-		args=(process, timeout),
+		args=(process, timeout, cancel_event),
 		daemon=True
 	)
 	watchdog_thread.start()

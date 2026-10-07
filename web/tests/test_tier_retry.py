@@ -215,6 +215,22 @@ class TestTierRetrySkipsUndispatchableTasks(TierRetryTestCase):
             'A skipped row must stay FAILED so the timeline keeps telling the truth',
         )
 
+    def test_nuclei_and_acunetix_rows_are_retried_through_their_steps(self):
+        start_workflow = self._mock_temporal()
+        nuclei = self._activity('nuclei_scan', 6, FAILED_TASK)
+        acunetix = self._activity('acunetix_scan', 6, FAILED_TASK)
+
+        response = self.client.post(_tier_url(self.scan.id, 6), format='json')
+
+        body = response.json()
+        self.assertEqual(body['queued_count'], 2)
+        self.assertEqual(body['skipped_count'], 0)
+        dispatched = {
+            call.kwargs['args'][0]['activity_id']: call.kwargs['args'][1]
+            for call in start_workflow.await_args_list
+        }
+        self.assertEqual(dispatched, {nuclei.id: 'nuclei_scan', acunetix.id: 'run_acunetix'})
+
     def test_tier_of_only_undispatchable_tasks_is_a_reported_no_op(self):
         start_workflow = self._mock_temporal()
         self._activity('smugglex_scan', 6, FAILED_TASK)
@@ -359,7 +375,7 @@ class TestRetryableTaskNamesStayInSync(unittest.TestCase):
     branch is added or removed there, this test points at the drift."""
 
     def test_allowlist_matches_workflow_dispatch_branches(self):
-        from api.views.scan import RETRYABLE_TASK_NAMES
+        from reNgine.task_plan import RETRYABLE_TASK_NAMES
 
         with open(WORKFLOWS_FILE, encoding='utf-8-sig') as handle:
             source = handle.read()

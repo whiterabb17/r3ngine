@@ -182,7 +182,7 @@ def osint_discovery(
             results_dir (str): Path to store scan results
 
     Returns:
-            dict: osint metadat and theHarvester and h8mail results.
+            dict: osint metadata and theHarvester and h8mail results.
     """
     scan_history = ScanHistory.objects.get(pk=scan_history_id)
     osint_lookup = config.get(OSINT_DISCOVER, [])

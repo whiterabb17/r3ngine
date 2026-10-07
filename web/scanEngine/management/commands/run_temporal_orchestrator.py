@@ -165,6 +165,11 @@ from reNgine.temporal_activities import (
     # Tier 3/4: Fuzzing
     run_dir_file_fuzz_activity,
     parse_fuzz_results_activity,
+    plan_chunked_task_activity,
+    run_chunked_task_batch_activity,
+    finalize_chunked_task_activity,
+    run_chunked_task_follow_up_activity,
+    run_target_dedup_activity,
     run_gf_on_all_endpoints_activity,
 
     # Tier 5: Analysis
@@ -601,6 +606,11 @@ class Command(BaseCommand):
                 run_param_discovery_activity,
                 run_dir_file_fuzz_activity,
                 parse_fuzz_results_activity,
+                plan_chunked_task_activity,
+                run_chunked_task_batch_activity,
+                finalize_chunked_task_activity,
+                run_chunked_task_follow_up_activity,
+                run_target_dedup_activity,
                 run_gf_on_all_endpoints_activity,
 
                 # Tier 5

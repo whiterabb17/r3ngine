@@ -103,6 +103,12 @@ from reNgine.temporal.activities.discovery import (  # noqa: E402
     run_whoisdomain_activity,
     run_bbot_activity,
 )
+from reNgine.temporal.activities.chunked import (  # noqa: E402
+    plan_chunked_task_activity,
+    run_chunked_task_batch_activity,
+    finalize_chunked_task_activity,
+    run_chunked_task_follow_up_activity,
+)
 from reNgine.temporal.activities.enumeration import (  # noqa: E402
     seed_endpoints_for_crawl_activity,
     run_http_crawl_activity,
@@ -115,6 +121,7 @@ from reNgine.temporal.activities.enumeration import (  # noqa: E402
     parse_enumeration_results_activity,
     run_dir_file_fuzz_activity,
     parse_fuzz_results_activity,
+    run_target_dedup_activity,
     run_web_api_discovery_activity,
     run_waf_detection_activity,
     run_secret_scanning_activity,

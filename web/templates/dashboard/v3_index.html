@@ -29,13 +29,8 @@
     <script type="module" src="{{ VITE_DEV_SERVER_URL }}/src/main.tsx"></script>
   {% else %}
     <!-- Production static files -->
+    <!-- Only the entry has a stable name; it imports its content-hashed chunks itself. -->
     <script type="module" crossorigin src="/staticfiles/assets/index.js"></script>
-    <link rel="modulepreload" crossorigin href="/staticfiles/assets/rolldown-runtime.js">
-    <link rel="modulepreload" crossorigin href="/staticfiles/assets/vendor-react.js">
-    <link rel="modulepreload" crossorigin href="/staticfiles/assets/vendor-mui.js">
-    <link rel="modulepreload" crossorigin href="/staticfiles/assets/vendor-router.js">
-    <link rel="modulepreload" crossorigin href="/staticfiles/assets/vendor-utils.js">
-    <link rel="modulepreload" crossorigin href="/staticfiles/assets/vendor-base.js">
     <link rel="stylesheet" crossorigin href="/staticfiles/assets/vendor-fonts.css">
     <link rel="stylesheet" crossorigin href="/staticfiles/assets/index.css">
   {% endif %}

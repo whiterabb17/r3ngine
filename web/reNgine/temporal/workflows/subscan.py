@@ -11,6 +11,7 @@ from datetime import timedelta
 from typing import Any, Dict, List, Union
 from temporalio import workflow
 from temporalio.common import RetryPolicy
+from temporalio.exceptions import ApplicationError
 
 from reNgine.temporal.workflows._common import (
     _RETRY_INTERNAL,
@@ -202,6 +203,11 @@ _STANDALONE_SUBSCAN_WORKFLOWS: frozenset = frozenset({
 })
 
 
+def is_subscan_task(name: str) -> bool:
+    """True when SubScanWorkflow can run `name` (engine YAML also holds settings-only keys)."""
+    return name in _SUBSCAN_DISPATCH or name in _PERMITTED_GENERIC_TASKS
+
+
 @workflow.defn(name="SubScanWorkflow")
 class SubScanWorkflow:
     """Workflow orchestrating target subdomain subscans.
@@ -323,12 +329,14 @@ class SubScanWorkflow:
                 workflow.logger.warning("TOR circuit rotation failed: %s", exc)
 
         # Validate tasks against the permitted task list before any dispatch
-        known_explicit = set(_SUBSCAN_DISPATCH.keys())
+        # A plain exception here fails the workflow task, which Temporal retries
+        # forever and leaves the subscan RUNNING; a non-retryable error ends it.
         for t in tasks:
-            if t not in known_explicit and t not in _PERMITTED_GENERIC_TASKS:
-                raise ValueError(
+            if not is_subscan_task(t):
+                raise ApplicationError(
                     f"[SubScanWorkflow] '{t}' is not a recognized subscan type. "
-                    f"Add it to _PERMITTED_GENERIC_TASKS in temporal_activities.py to enable dispatch."
+                    f"Add it to _PERMITTED_GENERIC_TASKS in temporal_activities.py to enable dispatch.",
+                    non_retryable=True,
                 )
 
         # -----------------------------------------------------------------------

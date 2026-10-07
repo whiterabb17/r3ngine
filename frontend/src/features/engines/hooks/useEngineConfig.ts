@@ -7,7 +7,11 @@ import type {
 import type { OsintConfig } from '../types/engineConfig';
 import { DEFAULT_ENGINE_CONFIG } from '../types/engineConfig';
 import type { CpanelScannerConfig, DalfoxConfig, NucleiConfig, S3ScannerConfig } from '../types/engineConfig';
-import { CPANEL_DEFAULT_USER_WORDLIST, DEFAULT_DALFOX_CONFIG, S3SCANNER_DEFAULT_PROVIDERS } from '../types/engineConfig';
+import type { BatchingConfig } from '../types/engineConfig';
+import {
+  CPANEL_DEFAULT_USER_WORDLIST, DEFAULT_ACUNETIX_CONFIG, DEFAULT_BATCHING_CONFIG, DEFAULT_DALFOX_CONFIG,
+  S3SCANNER_DEFAULT_PROVIDERS,
+} from '../types/engineConfig';
 
 /**
  * Engine YAML is user-edited, so every value is `unknown` until read: mappings go through
@@ -22,6 +26,23 @@ function isMapping(node: unknown): node is YamlMapping {
 /** A YAML mapping node, or `{}` for a missing/null node or a list. */
 function asMapping(node: unknown): YamlMapping {
   return isMapping(node) ? node : {};
+}
+
+/** A tool's `batching:` block; missing or malformed values take the defaults. */
+function batchingConfig(node: unknown): BatchingConfig {
+  const b = asMapping(node);
+  return {
+    enabled: typeof b.enabled === 'boolean' ? b.enabled : DEFAULT_BATCHING_CONFIG.enabled,
+    batch_size: numberOr(b.batch_size, DEFAULT_BATCHING_CONFIG.batch_size),
+    max_parallel: numberOr(b.max_parallel, DEFAULT_BATCHING_CONFIG.max_parallel),
+    batch_timeout_minutes: numberOr(b.batch_timeout_minutes, DEFAULT_BATCHING_CONFIG.batch_timeout_minutes),
+    max_total_hours: numberOr(b.max_total_hours, DEFAULT_BATCHING_CONFIG.max_total_hours),
+  };
+}
+
+/** A YAML number leaf, or `fallback` when it is missing or not a number. */
+function numberOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
 /** Secret scanning settings from all three spellings, oldest first so the newest wins. */
@@ -112,7 +133,7 @@ export const FORM_OWNED_KEYS: Readonly<Record<SectionKey | keyof GlobalConfig | 
   dir_file_fuzz: owned(
     'run_ffuf', 'run_dirsearch', 'run_feroxbuster', 'auto_calibration', 'enable_http_crawl', 'extensions',
     'wordlist_name', 'rate_limit', 'threads', 'timeout', 'max_time', 'recursive_level',
-    'match_http_status', 'follow_redirect', 'stop_on_error', 'max_repeat_by_signature',
+    'match_http_status', 'follow_redirect', 'stop_on_error', 'max_repeat_by_signature', 'batching',
   ),
   waf_detection: owned('enable_http_crawl', 'use_shodan', 'use_censys'),
   waf_bypass: owned('enabled', 'use_benchmarking', 'use_nuclei'),
@@ -128,7 +149,10 @@ export const FORM_OWNED_KEYS: Readonly<Record<SectionKey | keyof GlobalConfig | 
       'run_semgrep', 'run_post_scan_processing', 'concurrency', 'rate_limit', 'retries', 'intensity', 'fetch_gpt_report',
       'enable_http_crawl', 'wpscan_enumeration', 'wpscan_detection_mode',
     ),
-    acunetix: owned('submit_live_subdomains', 'resubmit_after_days', 'start_scan_on_submit'),
+    acunetix: owned(
+      'submit_live_subdomains', 'resubmit_after_days', 'start_scan_on_submit',
+      'submission_batch_size', 'submission_batch_pause', 'max_scans_per_run',
+    ),
     nuclei: owned(
       'use_nuclei_config', 'auto_update_templates', 'severities', 'tags', 'templates', 'custom_templates',
       'max_templates_per_batch',
@@ -393,6 +417,7 @@ export function serialiseConfigToYaml(config: EngineConfig, leftovers: Leftovers
       max_time: c.max_time, recursive_level: c.recursive_level,
       match_http_status: c.match_http_status, follow_redirect: c.follow_redirect,
       stop_on_error: c.stop_on_error, max_repeat_by_signature: c.max_repeat_by_signature,
+      batching: { ...c.batching },
     });
   }
 
@@ -454,8 +479,11 @@ export function serialiseConfigToYaml(config: EngineConfig, leftovers: Leftovers
     if (c.acunetix) {
       s.acunetix = {
         submit_live_subdomains: !!c.acunetix.submit_live_subdomains,
-        resubmit_after_days: c.acunetix.resubmit_after_days ?? 3,
+        resubmit_after_days: c.acunetix.resubmit_after_days ?? DEFAULT_ACUNETIX_CONFIG.resubmit_after_days,
         start_scan_on_submit: !!c.acunetix.start_scan_on_submit,
+        submission_batch_size: c.acunetix.submission_batch_size ?? DEFAULT_ACUNETIX_CONFIG.submission_batch_size,
+        submission_batch_pause: c.acunetix.submission_batch_pause ?? DEFAULT_ACUNETIX_CONFIG.submission_batch_pause,
+        max_scans_per_run: c.acunetix.max_scans_per_run ?? DEFAULT_ACUNETIX_CONFIG.max_scans_per_run,
       };
     }
     writeSection('vulnerability_scan', s);
@@ -767,6 +795,7 @@ function parseYamlToConfig(yamlStr: string): EngineConfig {
       follow_redirect: (r.follow_redirect as boolean) ?? false,
       stop_on_error: (r.stop_on_error as boolean) ?? false,
       max_repeat_by_signature: (r.max_repeat_by_signature as number) ?? 10,
+      batching: batchingConfig(r.batching),
     }), def.dir_file_fuzz.config) as EngineConfig['dir_file_fuzz'],
 
     // post_crawl_osint runs a tool only when its key is truthy.
@@ -842,8 +871,11 @@ function parseYamlToConfig(yamlStr: string): EngineConfig {
         wpscan_detection_mode: (r.wpscan_detection_mode as 'mixed' | 'passive' | 'aggressive') ?? 'mixed',
         acunetix: {
           submit_live_subdomains: ac.submit_live_subdomains ?? false,
-          resubmit_after_days: typeof ac.resubmit_after_days === 'number' ? ac.resubmit_after_days : 3,
+          resubmit_after_days: numberOr(ac.resubmit_after_days, DEFAULT_ACUNETIX_CONFIG.resubmit_after_days),
           start_scan_on_submit: ac.start_scan_on_submit ?? false,
+          submission_batch_size: numberOr(ac.submission_batch_size, DEFAULT_ACUNETIX_CONFIG.submission_batch_size),
+          submission_batch_pause: numberOr(ac.submission_batch_pause, DEFAULT_ACUNETIX_CONFIG.submission_batch_pause),
+          max_scans_per_run: numberOr(ac.max_scans_per_run, DEFAULT_ACUNETIX_CONFIG.max_scans_per_run),
         },
         nuclei: {
           use_nuclei_config: n.use_nuclei_config ?? false,

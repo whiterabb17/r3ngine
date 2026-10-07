@@ -47,6 +47,7 @@ from reNgine.definitions import (
 from reNgine.tasks import *
 from reNgine.llm import *
 from reNgine.utilities import is_safe_path
+from reNgine.task_plan import RETRY_TASK_ALIASES, RETRYABLE_TASK_NAMES, retry_dispatch_name  # noqa: F401
 from scanEngine.models import *
 from startScan.models import *
 from startScan.models import EndPoint
@@ -225,6 +226,18 @@ class InitiateSubTask(APIView):
 			if single:
 				subdomain_ids = [single]
 		subdomain_ids = list(dict.fromkeys(int(subdomain_id) for subdomain_id in subdomain_ids))
+
+		from reNgine.temporal.workflows.subscan import is_subscan_task
+		scan_types = [scan_types] if isinstance(scan_types, str) else list(scan_types or [])
+		unsupported = [t for t in scan_types if not is_subscan_task(t)]
+		if unsupported or not scan_types:
+			return Response({
+				'status': False,
+				'message': (
+					f"Not runnable as a subscan: {', '.join(unsupported)}" if unsupported
+					else 'Select at least one task'
+				),
+			}, status=status.HTTP_400_BAD_REQUEST)
 
 		def _run_single_subscan(sub_id):
 			"""Run a single subscan launch inside a worker thread, ensuring DB connection cleanup."""
@@ -709,6 +722,15 @@ class ScanActivityRetryAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Refuse before touching anything: the workflow would raise "Unrecognised
+        # task_name" at once, and the row would just turn red again.
+        task_name = retry_dispatch_name(activity_obj.name)
+        if task_name is None:
+            return Response(
+                {"status": False, "message": f"{activity_obj.title or activity_obj.name} cannot be retried on its own."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         original_scan_status = scan.scan_status
 
         with transaction.atomic():
@@ -747,7 +769,9 @@ class ScanActivityRetryAPIView(APIView):
         from reNgine.task_plan import is_singular_activity_name, pipeline_task_name
         from urllib.parse import urlparse
 
-        task_name = pipeline_task_name(activity_obj.name)
+        # The overlay a singular run stored is keyed by the tool's own name (see
+        # api/tool_run.py); the workflow is dispatched on task_name.
+        tool_name = pipeline_task_name(activity_obj.name)
         singular = is_singular_activity_name(activity_obj.name)
 
         ctx = {
@@ -802,7 +826,7 @@ class ScanActivityRetryAPIView(APIView):
                     if overlay:
                         ctx['yaml_configuration'] = merge_yaml_overlay(
                             ctx.get('yaml_configuration') or {},
-                            task_name,
+                            tool_name,
                             overlay,
                         )
                     ctx['singular_tool_args'] = meta.get('sanitized') or {}
@@ -851,51 +875,6 @@ class ScanActivityRetryAPIView(APIView):
         return Response(
             {"status": True, "message": f"Retry started for {activity_obj.title}"}
         )
-
-#: Task names ``SingleTaskRetryWorkflow`` knows how to dispatch. Anything else
-#: makes the workflow raise a non-retryable ``ApplicationError``, so the tier
-#: retry endpoint filters those rows out and reports them instead of queueing a
-#: workflow that is guaranteed to fail. Kept in sync with the dispatch chain in
-#: ``reNgine/temporal/workflows/jobs.py`` (see test_tier_retry.py).
-RETRYABLE_TASK_NAMES = frozenset({
-    'subdomain_discovery',
-    'amass_intel_discovery',
-    'firewall_vpn_scan',
-    'dns_security',
-    'osint',
-    'spiderfoot_scan',
-    'http_crawl',
-    'port_scan',
-    'vigolium_harvest',
-    'vigolium_discovery',
-    'vigolium_scan',
-    'fetch_url',
-    'screenshot',
-    'web_api_discovery',
-    'param_discovery',
-    'dir_file_fuzz',
-    'waf_detection',
-    'secret_scanning',
-    'vigolium_analysis',
-    'vulnerability_scan',
-    'dalfox_xss_scan',
-    'waf_bypass',
-    'post_crawl_osint',
-    'http_crawl_bridge',
-    'run_acunetix',
-    'acunetix_submit',
-    # Tier 7 post-processing — dispatchable on its own since the upstream merge.
-    'correlate_vulnerabilities',
-    'calculate_risk_scores',
-    'generate_impact_assessment',
-    'sync_graph',
-    'run_apme',
-    'attack_path_modeling',
-    # Mailbox verification, under each of the names the workflow accepts.
-    'check_if_email_exists',
-    'email_security',
-    'mailbox_verification',
-})
 
 #: Highest tier the timeline uses (Tier 7 holds finalisation/post-processing).
 MAX_SCAN_TIER = 7
@@ -980,7 +959,7 @@ class ScanTierRetryAPIView(APIView):
                     activity, 'singular_tool',
                     'Singular tool runs are not included in tier retry',
                 ))
-            elif activity.name not in RETRYABLE_TASK_NAMES:
+            elif retry_dispatch_name(activity.name) is None:
                 skipped.append(self._skip(
                     activity, 'unsupported_task',
                     f"Task '{activity.name}' cannot be retried on its own",
@@ -1048,21 +1027,25 @@ class ScanTierRetryAPIView(APIView):
             client = await TemporalClientProvider.get_client()
             outcomes = []
             for activity in retryable:
+                task_name = retry_dispatch_name(activity.name)
                 ctx = {
                     "scan_history_id": scan.id,
                     "engine_id": scan.scan_type.id,
                     "domain_id": scan.domain.id,
                     "results_dir": scan.results_dir,
                     "yaml_configuration": yaml_config,
-                    "tasks": [activity.name],
+                    "tasks": [task_name],
                     "original_scan_status": original_scan_status,
                     "retry_batch_names": batch_names,
+                    # Lets the finaliser close this exact row when the retry fails;
+                    # by name it would look for task_name, which differs for aliases.
+                    "activity_id": activity.id,
                 }
                 workflow_id = tier_retry_workflow_id(scan.id, tier, activity.id)
                 try:
                     await client.start_workflow(
                         "SingleTaskRetryWorkflow",
-                        args=[ctx, activity.name],
+                        args=[ctx, task_name],
                         id=workflow_id,
                         task_queue="python-orchestrator-queue",
                     )

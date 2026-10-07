@@ -94,7 +94,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { useScanSummary, useActivityLogs, useScanLogs, useFetchWhois, useStopScan, useStopSubScan, useRetryScanTask, useRetryScanTier, useResumeScan } from '../api';
 import { isResumableScanStatus } from '../utils/scanStatus';
-import { getFailureCategoryLabel, summariseTier } from '../utils/failureCategories';
+import { getFailureCategoryLabel, isNotRunActivity, summariseTier } from '../utils/failureCategories';
 import { TimelineTierHeader } from './TimelineTierHeader';
 import { ScanHardwareProfileControl } from './ScanHardwareProfileControl';
 import type { Command, SubScan, ScanActivity, Subdomain, ScanSummaryResponse, TodoNote, DiscoveredPort, DiscoveredTechnology, SummaryVulnerability, SummaryVulnerabilityBase, SummaryVulnerabilityHighlight } from '../types';
@@ -985,7 +985,11 @@ const TimelineItem: React.FC<{ activity: ScanActivity, onClick?: () => void, onR
   const { theme, isLight, tokens } = useThemeTokens();
   const config = getActivityStatusConfig(activity.status, tokens, theme.palette.text.primary);
   const durationSeconds = getActivityDurationSeconds(activity);
-  const failureCategoryLabel = getFailureCategoryLabel(activity.failure_category);
+  // The finalizer stamps the scan's own error on rows it never reached; showing
+  // that as the task's failure ("Time limit exceeded") misleads.
+  const notRun = isNotRunActivity(activity);
+  const failureCategoryLabel = notRun ? null : getFailureCategoryLabel(activity.failure_category);
+  const chipColor = notRun ? theme.palette.text.disabled : config.color;
 
   return (
     <Box
@@ -1049,13 +1053,13 @@ const TimelineItem: React.FC<{ activity: ScanActivity, onClick?: () => void, onR
               px: 1,
               py: 0.1,
               borderRadius: 1,
-              bgcolor: `${config.color}20`,
-              border: `1px solid ${config.color}40`,
-              color: config.color,
+              bgcolor: `${chipColor}20`,
+              border: `1px solid ${chipColor}40`,
+              color: chipColor,
               fontSize: '0.6rem',
               fontWeight: 800
             }}>
-              {config.label}
+              {notRun ? 'Did not run' : config.label}
             </Box>
             <Typography sx={{ fontSize: '0.6rem', color: isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.3)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.5 }}>
               • Click to view details <ChevronRight size={10} />
@@ -1122,7 +1126,18 @@ const TimelineItem: React.FC<{ activity: ScanActivity, onClick?: () => void, onR
             {failureCategoryLabel}
           </Box>
         )}
-        {activity.error_message && (
+        {notRun && (
+          <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary', mt: 1 }}>
+            The scan stopped before this task started{activity.error_message ? ` (scan error: ${activity.error_message})` : ''}.
+          </Typography>
+        )}
+        {activity.error_message && activity.status === 'SUCCESS' && (
+          // A completed task's note, e.g. that it stopped at its time limit.
+          <Typography sx={{ fontSize: '0.65rem', color: tokens.accent.warning, mt: 1 }}>
+            {activity.error_message}
+          </Typography>
+        )}
+        {activity.error_message && !notRun && activity.status !== 'SUCCESS' && (
           <Typography sx={{ fontSize: '0.65rem', color: isLight ? tokens.accent.error : '#ff003c', bgcolor: isLight ? `${tokens.accent.error}15` : 'rgba(255,0,60,0.1)', p: 1, borderRadius: 0.5, border: `1px solid ${isLight ? `${tokens.accent.error}33` : 'rgba(255,0,60,0.2)'}`, mt: 1 }}>
             ERROR: {activity.error_message}
           </Typography>
@@ -2796,7 +2811,18 @@ export const ScanDetailPage = () => {
         open={retryConfirmOpen}
         onClose={() => { setRetryConfirmOpen(false); setPendingRetryActivity(null); }}
         onConfirm={() => {
-          if (pendingRetryActivity) retryScanTaskMutation.mutate(Number(pendingRetryActivity.id));
+          if (pendingRetryActivity) {
+            const title = pendingRetryActivity.title;
+            retryScanTaskMutation.mutate(Number(pendingRetryActivity.id), {
+              onSuccess: (res: { message?: string }) => setTierRetryNotice({
+                open: true,
+                severity: 'success',
+                message: res?.message || `Retry started for ${title}.`,
+              }),
+              // The server says why it refused, e.g. a step that cannot run on its own.
+              onError: (error: Error) => setTierRetryNotice({ open: true, severity: 'error', message: error.message }),
+            });
+          }
           setRetryConfirmOpen(false);
           setPendingRetryActivity(null);
         }}
