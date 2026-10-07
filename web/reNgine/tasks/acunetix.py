@@ -870,6 +870,7 @@ def acunetix_submit_live_subdomains(
 	Each host is submitted at most once per `resubmit_after_days` window, and every
 	decision — submitted, skipped, deferred, failed — is written as a Command row on
 	this task's timeline entry, so the scan timeline shows exactly what was added.
+	``www.<host>`` is skipped when ``<host>`` itself is live: both serve the same site.
 
 	Hosts go out in batches of `submission_batch_size` with `submission_batch_pause`
 	seconds between batches. With `start_scan_on_submit`, at most `max_scans_per_run`
@@ -930,10 +931,29 @@ def acunetix_submit_live_subdomains(
 	import os as _os
 	verify = _os.environ.get('ACUNETIX_CA_BUNDLE', False)
 
+	from reNgine.host_dedup import duplicate_hosts, www_twin
+
+	# www_twin lowercases the candidate; live_hosts must match that case.
+	live_hosts = {h.lower() for h in hosts}
+	# Hosts serving the same site as another one (Target Deduplication), plus the
+	# www rule for engines that run without that step: scanning both doubles the
+	# Acunetix work for the same findings.
+	duplicates = duplicate_hosts(scan_history_id)
 	pending = []
 	for subdomain in subdomains:
 		host = subdomain.name
-		if host in recent:
+		same_site_as = www_twin(host, live_hosts)
+		if same_site_as is None and host.lower() in duplicates:
+			target, reason = duplicates[host.lower()]
+			same_site_as = f"{target} ({reason})"
+		if same_site_as:
+			_record_submission(
+				self,
+				f"acunetix submit {host}",
+				f"SKIPPED — same site as {same_site_as}",
+				return_code=0,
+			)
+		elif host in recent:
 			_record_submission(
 				self,
 				f"acunetix submit {host}",

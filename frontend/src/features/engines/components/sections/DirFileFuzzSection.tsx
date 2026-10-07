@@ -5,6 +5,7 @@ import type { DirFileFuzzConfig } from '../../types/engineConfig';
 import { SectionCard } from '../shared/SectionCard';
 import { ChipSelect } from '../shared/ChipSelect';
 import { TagInput } from '../shared/TagInput';
+import { BatchingOptions } from '../shared/BatchingOptions';
 import { getFieldSx } from '../../../../theme/semanticColors';
 import { useThemeTokens } from '../../../../theme/useThemeTokens';
 
@@ -200,6 +201,7 @@ export const DirFileFuzzSection: React.FC<Props> = ({ config, enabled, onToggle,
           />
         </Grid>
       </Grid>
+      <BatchingOptions config={config.batching} onChange={(batching) => onChange({ batching })} />
     </SectionCard>
   );
 };

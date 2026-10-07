@@ -434,6 +434,17 @@ class SubmissionBatchingTests(_SubmissionTestBase):
         )
         self.assertTrue(self._outputs()['a.sub.example'].startswith('TARGET ADDED'))
 
+    def test_www_is_skipped_when_the_bare_host_is_live(self) -> None:
+        self._add_live_subdomains('www.c.sub.example', 'www.only.sub.example')
+
+        self.assertTrue(self._run(self._task()))
+
+        sent = {c.kwargs['target_name'] for c in self.create.call_args_list}
+        self.assertNotIn('www.c.sub.example', sent)
+        self.assertIn('c.sub.example', sent)
+        self.assertIn('www.only.sub.example', sent, 'kept when the bare host is not live')
+        self.assertEqual(self._outputs()['www.c.sub.example'], 'SKIPPED — same site as c.sub.example')
+
     def test_a_scan_that_did_not_start_does_not_use_up_the_limit(self) -> None:
         self.start.side_effect = [None, {'scan_id': 'scan-2'}, {'scan_id': 'scan-3'}]
 

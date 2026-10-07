@@ -11,6 +11,7 @@ Sibling modules import from here; nothing here imports a sibling module.
 
 import os
 import threading
+from datetime import datetime, timedelta, timezone as dt_timezone
 from typing import Optional
 
 from temporalio import activity
@@ -392,6 +393,49 @@ def _start_scan_task_proxy(ctx: dict, task_name: str, description: str):
 # so they can cancel GoExecutorTaskWorkflow instances without signature changes.
 _task_cancel_local = threading.local()
 
+#: Bounds of the time kept between stopping a tool and the attempt's timeout, so
+#: what the tool found can still be parsed and saved.
+_TIME_LIMIT_MARGIN_MIN = timedelta(minutes=1)
+_TIME_LIMIT_MARGIN_MAX = timedelta(minutes=10)
+
+
+def task_is_stopping() -> bool:
+    """True once the running task was told to stop (scan abort or time limit).
+
+    Loops over many targets check this so they neither start the next target nor
+    mark the one that was cut short as done.
+    """
+    event = getattr(_task_cancel_local, 'cancel_event', None)
+    return event is not None and event.is_set()
+
+
+def _attempt_stop_time(info) -> Optional[datetime]:
+    """When this attempt should stop its tool, or None when it has no time limit.
+
+    Temporal times an attempt out on the server but cannot interrupt the thread
+    running it, so a timed-out tool kept running beside the retry Temporal
+    started (two fuzzers on one scan), and the retry began again from scratch.
+    Stopping shortly before the limit ends the attempt with its partial results.
+    """
+    limits = []
+    for start, length in (
+        (getattr(info, 'started_time', None), getattr(info, 'start_to_close_timeout', None)),
+        (getattr(info, 'scheduled_time', None), getattr(info, 'schedule_to_close_timeout', None)),
+    ):
+        if isinstance(start, datetime) and isinstance(length, timedelta) and length:
+            limits.append((start + length, length))
+    if not limits:
+        return None
+    end, length = min(limits, key=lambda limit: limit[0])
+    margin = min(max(length / 20, _TIME_LIMIT_MARGIN_MIN), _TIME_LIMIT_MARGIN_MAX)
+    return end - margin
+
+
+def _time_limit_note(info) -> str:
+    hours = (info.start_to_close_timeout or timedelta()).total_seconds() / 3600
+    limit = f"its {hours:g} h time limit" if hours else "its time limit"
+    return f"Stopped at {limit}; the results found until then were kept."
+
 
 def _run_task(task_func, ctx: dict, task_name: str, description: str = None, db_task_name: str = None, **kwargs):
     """Execute an existing RengineTask-decorated function inside a Temporal activity.
@@ -460,6 +504,12 @@ def _run_task(task_func, ctx: dict, task_name: str, description: str = None, db_
     activity_running = True
     cancel_event = threading.Event()
     _task_cancel_local.cancel_event = cancel_event
+    time_limit_reached = threading.Event()
+    try:
+        _info = activity.info()
+    except RuntimeError:  # called outside an activity (tests, management commands)
+        _info = None
+    stop_at = _attempt_stop_time(_info) if _info else None
 
     # Copy the current contextvars context so the heartbeat thread inherits the
     # Temporal activity context. threading.Thread does NOT copy contextvars by
@@ -472,6 +522,14 @@ def _run_task(task_func, ctx: dict, task_name: str, description: str = None, db_
         def _do_heartbeats():
             from temporalio.exceptions import CancelledError as TemporalCancelledError
             while activity_running:
+                if stop_at is not None and not time_limit_reached.is_set() and datetime.now(dt_timezone.utc) >= stop_at:
+                    logger.log_line(
+                        "[TEMPORAL]", "TIME_LIMIT",
+                        "task=%s scan_id=%s — stopping the tool before the attempt times out; results so far are kept" % (task_name, _scan_id),
+                        level="warning",
+                    )
+                    time_limit_reached.set()
+                    cancel_event.set()  # stream_command kills the tool and starts no new ones
                 try:
                     _hb_detail = f"Activity {task_name} running for {proxy.task_name}"
                     activity.heartbeat(_hb_detail)
@@ -556,6 +614,13 @@ def _run_task(task_func, ctx: dict, task_name: str, description: str = None, db_
                 kwargs['description'] = description
 
         res = raw_func(proxy, **kwargs)
+        if time_limit_reached.is_set():
+            # The tool was cut off, so a False/empty result says nothing about the
+            # target. Finishing here stops Temporal re-running hours of work.
+            note = _time_limit_note(_info)
+            proxy.update_scan_activity(SUCCESS_TASK, error_message=note)
+            logger.log_line("[TEMPORAL]", "COMPLETE", "task=%s scan_id=%s time_limit=1" % (task_name, _scan_id))
+            return True
         if res is False:
             # Task functions report why they gave up via proxy.error; without it the
             # timeline can only show the generic "returned False" message.
@@ -573,10 +638,21 @@ def _run_task(task_func, ctx: dict, task_name: str, description: str = None, db_
         activity.logger.exception("[_run_task] Task %s failed: %s", task_name, exc)
         proxy.update_scan_activity(
             FAILED_TASK,
-            error_message=repr(exc),
+            error_message=(
+                f"{_time_limit_note(_info)} Then: {exc!r}" if time_limit_reached.is_set() else repr(exc)
+            ),
             traceback_text=_traceback.format_exc(),
         )
+        if time_limit_reached.is_set():
+            # A retry would start the same hours-long run from scratch.
+            raise ApplicationError(
+                f"Task {task_name} stopped at its time limit and then failed: {type(exc).__name__}",
+                non_retryable=True,
+            ) from exc
         raise
     finally:
         activity_running = False
         heartbeat_thread.join(timeout=5)
+        # The worker reuses this thread for other activities; a stale set event
+        # would make every later stream_command on it refuse to start.
+        _task_cancel_local.cancel_event = None

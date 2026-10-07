@@ -240,6 +240,15 @@ class Subdomain(models.Model):
 	attack_surface = models.TextField(null=True, blank=True)
 	criticality_level = models.IntegerField(default=1, null=True, blank=True)
 	criticality_reason = models.TextField(null=True, blank=True)
+	# Where an HTTP probe of the host's root ended after redirects; the endpoint
+	# rows are saved under the final host, so this is the only link back.
+	final_url = models.CharField(max_length=2000, null=True, blank=True)
+	# Set by the Target Deduplication step: heavy tools skip a host that serves
+	# the same site as another (see reNgine/host_dedup.py).
+	duplicate_of = models.ForeignKey(
+		'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='duplicates',
+	)
+	dedup_reason = models.CharField(max_length=20, null=True, blank=True)
 
 	class Meta:
 		constraints = [

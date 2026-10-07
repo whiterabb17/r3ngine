@@ -147,3 +147,9 @@ SECURE_SSL_REDIRECT = False
 # Container log paths do not exist on a Windows host.
 LOGGING['handlers']['error_file']['filename'] = str(_LOCAL / 'errors.log')  # noqa: F405
 LOGGING['handlers']['temporal_file']['filename'] = str(_LOCAL / 'temporal.log')  # noqa: F405
+
+# A passing suite printed ~9k lines of INFO/DEBUG from the code under test,
+# burying the failures. Console output is limited to errors; assertLogs attaches
+# its own handler, so tests that check log output are unaffected.
+for _handler in ('console', 'task'):
+    LOGGING['handlers'][_handler]['level'] = os.environ.get('RENGINE_TEST_LOG_LEVEL', 'ERROR')  # noqa: F405

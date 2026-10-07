@@ -1,5 +1,57 @@
 # Changelog
 
+### [v3.7.9] - 2026-10-07
+
+#### Added
+
+- **Large-scan resilience (PR #135)**:
+  - Tier 1–6 tool failures are isolated (`_isolated_tool`): one failed tool no longer aborts `MasterScanWorkflow`; Tier 7 still runs and the tool’s own timeline row keeps the failure.
+  - Tools stop shortly before their Temporal attempt `start_to_close` / `schedule_to_close` limit; partial results are kept; the row shows a clear time-limit message; stop then fail is non-retryable so Temporal does not restart hours of work.
+  - `stream_command` / fuzz loops honor cancel: no new tools after stop; mid-stop fuzz targets are not marked done so Retry can finish them.
+  - Timeline UI: planned rows that never started show **Did not run** instead of the scan’s own timeout/error text.
+
+- **Batched directory fuzzing (PR #135)**:
+  - `dir_file_fuzz` can run through `_run_chunked` (Temporal patch `chunked-dir-file-fuzz`): hosts in batches of 25, two in parallel, 2 h per batch / 12 h budget; plan + ctx under `{results_dir}/batches/` (`0o640`).
+  - Engine editor: `dir_file_fuzz.batching` (`BatchingOptions`); `enabled: false` restores the single activity. Design notes in `documents/large-scan-plan.md`.
+
+- **Duplicate-host skipping (PR #135)**:
+  - `Subdomain.final_url`, `duplicate_of`, `dedup_reason` (`startScan` migration `0070`); httpx records where each host’s root probe ended.
+  - Tier 2 **Target Deduplication** (patch `target-dedup`): marks `www.X` when `X` is live, and hosts whose **root** redirects to another live host’s root (redirects to a path, e.g. shared SSO, do not count).
+  - Batched fuzzer and Acunetix live-subdomain submission skip marked duplicates; settings `target_dedup.enabled` / `group_by` (on by default).
+
+- **Acunetix submission hardening (PR #133 / #135)**:
+  - Live hosts submitted in configurable batches with a per-run scan cap; AWVS target list is paged fully.
+  - `www.X` skipped when `X` is live (also when the dedup step did not run); live-host matching is case-insensitive.
+
+- **Stale SPA chunk recovery (PR #133)**:
+  - Vite content-hashed chunk filenames plus a one-shot `staleBuild` reload on chunk-load errors (30s `sessionStorage` guard).
+  - Hardcoded `modulepreload` tags dropped from `v3_index.html` so deploys cannot pin an old graph.
+
+#### Changed
+
+- **Retry dispatch (PR #133, merge caveats)**:
+  - Timeline `acunetix_scan` retries through `run_acunetix`; `nuclei_scan` retries as a **narrow** Nuclei + parse path (not the full `vulnerability_scan` correlate/enrich/risk/impact chain).
+  - `retry_dispatch_name` / `RETRYABLE_TASK_NAMES` in `task_plan.py`; unknown or non-retryable names return **400** without flipping the scan to RUNNING.
+  - Finaliser closes by `activity_id` when present, and by reverse alias names when not (e.g. `acunetix_scan` when dispatch was `run_acunetix`).
+  - Planned rows with no `time_started` no longer keep a retried scan RUNNING forever.
+
+- **Subscan task allowlisting (PR #133)**:
+  - `is_subscan_task()` is the single gate; settings-only YAML sections (`tier_7`, `email_security`, `wordpress`, …) are refused with a non-retryable workflow error and API **400**; the dialog lists only runnable tasks via `EngineSerializer.subscan_tasks`.
+
+- **Quieter local/CI tests (PR #135)**: console defaults to errors-only (~700 lines vs ~9,600); override with `RENGINE_TEST_LOG_LEVEL`.
+
+#### Fixed
+
+- **Acunetix scan outcomes (PR #133, merge caveats)**:
+  - Import findings when an AWVS scan ends `completed`, `failed`, or `aborted`; `failed` still fails the step (retry starts a new scan).
+  - Reuse an in-progress or completed AWVS scan for the same target during this scan history; **failed and operator-aborted scans are not reused** so an explicit retry starts fresh.
+  - `save_vulnerability` no longer crashes on a `None` description.
+
+#### Notes
+
+- Existing installs: run `make migrate` for `startScan.0070`. Rebuild/restart **web** and the Temporal **python orchestrator** so chunked/dedup activities register.
+- Open follow-ups: `max_batches` is backend-clamped only (not yet in the engine UI); redirect-root dedup can skip in-scope hosts by design when root redirects to another live root.
+
 ### [v3.7.8] - 2026-10-01
 
 #### Added
