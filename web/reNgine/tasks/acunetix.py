@@ -933,7 +933,8 @@ def acunetix_submit_live_subdomains(
 
 	from reNgine.host_dedup import duplicate_hosts, www_twin
 
-	live_hosts = set(hosts)
+	# www_twin lowercases the candidate; live_hosts must match that case.
+	live_hosts = {h.lower() for h in hosts}
 	# Hosts serving the same site as another one (Target Deduplication), plus the
 	# www rule for engines that run without that step: scanning both doubles the
 	# Acunetix work for the same findings.
