@@ -724,12 +724,17 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 				"enable_http_crawl": enable_http_crawl,
 			}
 
+		from reNgine.temporal.activities.core import task_is_stopping
+
 		results = []
 		redis_client = Redis.from_url(os.environ.get('REDIS_URL', 'redis://redis:6379/0'))
 		opsec = get_opsec_manager()
 		scan = ScanHistory.objects.filter(pk=ctx.get('scan_history_id')).first()
 
 		for target_url in urls:
+			if task_is_stopping():
+				logger.warning('Fuzzing stopped (abort or time limit); %s and later targets left for a retry', target_url)
+				break
 			done_marker = _fuzz_target_marker(self.results_dir, target_url)
 			if parse_only is None and os.path.exists(done_marker):
 				logger.info('Skipping already-fuzzed target (marker present): %s', target_url)
@@ -1026,11 +1031,12 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 
 				results.extend(ffuf_results_local)
 
-			if parse_only is None:
+			# A target whose tools were killed mid-run is not done: a retry must fuzz it again.
+			if parse_only is None and not task_is_stopping():
 				with open(done_marker, 'w', encoding='utf-8') as marker:
 					marker.write('ok')
 
-		if enable_http_crawl:
+		if enable_http_crawl and not ctx.get('skip_post_crawl') and not task_is_stopping():
 			ctx['track'] = True
 			http_crawl(self, urls, ctx=ctx)
 

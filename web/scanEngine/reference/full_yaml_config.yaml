@@ -138,6 +138,16 @@ http_crawl: {}
   # threads: 30
   # follow_redirect: true
 
+# After HTTP crawl, hosts that serve the same site as another live host are
+# marked duplicates and skipped by the heavy per-host tools (batched directory
+# fuzzing, Acunetix submission); each one is listed under "Target
+# Deduplication" in the scan timeline. On by default.
+#   redirect: the host's root redirects to another live host's root
+#   www:      www.X when X itself is live
+target_dedup:
+  enabled: true
+  group_by: [redirect, www]
+
 # ---------------------------------------------------------------------------
 # TIER 2 — Port Scan
 #   Network enumeration (SMB/SNMP/LDAP/RDP) runs automatically when
@@ -285,6 +295,14 @@ dir_file_fuzz:
   threads: 30
   wordlist_name: dicc
   use_api_wordlist: false     # Use API-specific wordlist instead of dicc
+  # A large target is fuzzed in batches of hosts, each its own step with its own
+  # time limit, a few at a time. A Retry re-runs only the targets not finished yet.
+  batching:
+    enabled: true
+    batch_size: 25              # hosts per batch
+    max_parallel: 2             # batches at once (the worker runs 10 steps for all scans)
+    batch_timeout_minutes: 120
+    max_total_hours: 12         # batches not started by then are left for a Retry
 
 # ---------------------------------------------------------------------------
 # TIER 5 — Web API & Parameter Discovery

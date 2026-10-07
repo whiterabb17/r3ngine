@@ -350,6 +350,22 @@ def parse_fuzz_results_activity(ctx: dict) -> bool:
     return True
 
 
+@activity.defn(name="RunTargetDedupActivity")
+def run_target_dedup_activity(ctx: dict) -> bool:
+    """Mark live hosts that serve the same site as another host of the scan.
+
+    Runs once HTTP crawl has established liveness; the batched directory fuzzer
+    and the Acunetix submission skip the hosts it marks.
+    """
+    from reNgine.tasks.dedup import target_dedup
+    return _run_task(
+        target_dedup,
+        ctx,
+        task_name='target_dedup',
+        description='Target Deduplication',
+    )
+
+
 # ===========================================================================
 # Tier 5 — Analysis
 # ===========================================================================

@@ -206,7 +206,33 @@ export interface DirFileFuzzConfig {
   follow_redirect: boolean;
   stop_on_error: boolean;
   max_repeat_by_signature: number;
+  batching: BatchingConfig;
 }
+
+/**
+ * `batching:` of a per-host tool section: the hosts are split into batches, each run
+ * as its own step with its own time limit, a few at a time. Bounds match
+ * `web/reNgine/chunking.py`.
+ */
+export interface BatchingConfig {
+  enabled: boolean;
+  /** Hosts per batch. */
+  batch_size: number;
+  /** Batches running at once. */
+  max_parallel: number;
+  /** Time limit of one batch. */
+  batch_timeout_minutes: number;
+  /** Batches not started within this many hours are left for a Retry. */
+  max_total_hours: number;
+}
+
+export const DEFAULT_BATCHING_CONFIG: BatchingConfig = {
+  enabled: true,
+  batch_size: 25,
+  max_parallel: 2,
+  batch_timeout_minutes: 120,
+  max_total_hours: 12,
+};
 
 /** `post_crawl_osint` in engine YAML, run after directory fuzzing (Tier 4a). */
 export interface PostCrawlOsintConfig {
@@ -546,6 +572,7 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
       wordlist_name: 'dicc', rate_limit: 150, threads: 30, timeout: 5,
       max_time: 300, recursive_level: 2, match_http_status: [200, 204],
       follow_redirect: false, stop_on_error: false, max_repeat_by_signature: 10,
+      batching: { ...DEFAULT_BATCHING_CONFIG },
     },
   },
   post_crawl_osint: { enabled: false, config: { metagoofil: true, swaggerspy: true } },

@@ -7,8 +7,10 @@ import type {
 import type { OsintConfig } from '../types/engineConfig';
 import { DEFAULT_ENGINE_CONFIG } from '../types/engineConfig';
 import type { CpanelScannerConfig, DalfoxConfig, NucleiConfig, S3ScannerConfig } from '../types/engineConfig';
+import type { BatchingConfig } from '../types/engineConfig';
 import {
-  CPANEL_DEFAULT_USER_WORDLIST, DEFAULT_ACUNETIX_CONFIG, DEFAULT_DALFOX_CONFIG, S3SCANNER_DEFAULT_PROVIDERS,
+  CPANEL_DEFAULT_USER_WORDLIST, DEFAULT_ACUNETIX_CONFIG, DEFAULT_BATCHING_CONFIG, DEFAULT_DALFOX_CONFIG,
+  S3SCANNER_DEFAULT_PROVIDERS,
 } from '../types/engineConfig';
 
 /**
@@ -24,6 +26,18 @@ function isMapping(node: unknown): node is YamlMapping {
 /** A YAML mapping node, or `{}` for a missing/null node or a list. */
 function asMapping(node: unknown): YamlMapping {
   return isMapping(node) ? node : {};
+}
+
+/** A tool's `batching:` block; missing or malformed values take the defaults. */
+function batchingConfig(node: unknown): BatchingConfig {
+  const b = asMapping(node);
+  return {
+    enabled: typeof b.enabled === 'boolean' ? b.enabled : DEFAULT_BATCHING_CONFIG.enabled,
+    batch_size: numberOr(b.batch_size, DEFAULT_BATCHING_CONFIG.batch_size),
+    max_parallel: numberOr(b.max_parallel, DEFAULT_BATCHING_CONFIG.max_parallel),
+    batch_timeout_minutes: numberOr(b.batch_timeout_minutes, DEFAULT_BATCHING_CONFIG.batch_timeout_minutes),
+    max_total_hours: numberOr(b.max_total_hours, DEFAULT_BATCHING_CONFIG.max_total_hours),
+  };
 }
 
 /** A YAML number leaf, or `fallback` when it is missing or not a number. */
@@ -119,7 +133,7 @@ export const FORM_OWNED_KEYS: Readonly<Record<SectionKey | keyof GlobalConfig | 
   dir_file_fuzz: owned(
     'run_ffuf', 'run_dirsearch', 'run_feroxbuster', 'auto_calibration', 'enable_http_crawl', 'extensions',
     'wordlist_name', 'rate_limit', 'threads', 'timeout', 'max_time', 'recursive_level',
-    'match_http_status', 'follow_redirect', 'stop_on_error', 'max_repeat_by_signature',
+    'match_http_status', 'follow_redirect', 'stop_on_error', 'max_repeat_by_signature', 'batching',
   ),
   waf_detection: owned('enable_http_crawl', 'use_shodan', 'use_censys'),
   waf_bypass: owned('enabled', 'use_benchmarking', 'use_nuclei'),
@@ -403,6 +417,7 @@ export function serialiseConfigToYaml(config: EngineConfig, leftovers: Leftovers
       max_time: c.max_time, recursive_level: c.recursive_level,
       match_http_status: c.match_http_status, follow_redirect: c.follow_redirect,
       stop_on_error: c.stop_on_error, max_repeat_by_signature: c.max_repeat_by_signature,
+      batching: { ...c.batching },
     });
   }
 
@@ -780,6 +795,7 @@ function parseYamlToConfig(yamlStr: string): EngineConfig {
       follow_redirect: (r.follow_redirect as boolean) ?? false,
       stop_on_error: (r.stop_on_error as boolean) ?? false,
       max_repeat_by_signature: (r.max_repeat_by_signature as number) ?? 10,
+      batching: batchingConfig(r.batching),
     }), def.dir_file_fuzz.config) as EngineConfig['dir_file_fuzz'],
 
     // post_crawl_osint runs a tool only when its key is truthy.

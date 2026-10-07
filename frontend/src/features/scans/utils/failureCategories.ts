@@ -70,6 +70,13 @@ export interface TierSummary {
 /** A row the finalizer flipped to FAILED without it ever having started. */
 const neverStarted = (activity: ScanActivity): boolean => !activity.time_started;
 
+/**
+ * A FAILED row that never started: the scan stopped before reaching it, so its
+ * error is the scan's, not the task's own.
+ */
+export const isNotRunActivity = (activity: ScanActivity): boolean =>
+  activity.status === 'FAILED' && neverStarted(activity);
+
 /** Roll a tier group's activities up into one status the header can show. */
 export const summariseTier = (activities: ScanActivity[]): TierSummary => {
   const failureCategories: string[] = [];

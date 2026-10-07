@@ -145,6 +145,8 @@ def process_httpx_response(line, ctx={}, is_ran_from_subdomain_scan=False):
 	endpoint.is_redirect = is_redirect
 	endpoint.save()
 
+	_record_final_url(line.get('url'), http_url, ctx)
+
 	# Sync subdomain status whenever we have real data and the subdomain hasn't
 	# been probed yet, or this is the canonical endpoint.
 	if subdomain and (endpoint.is_default or not subdomain.http_status):
@@ -158,6 +160,23 @@ def process_httpx_response(line, ctx={}, is_ran_from_subdomain_scan=False):
 		subdomain.save()
 
 	return endpoint, created
+
+
+def _record_final_url(input_url, final_url, ctx) -> None:
+	"""Remember where a probe of a host's root ended, on the probed host.
+
+	The endpoint is saved under the final host, so without this a host that
+	redirects elsewhere keeps no trace of where it went. Only root probes count:
+	a deep path redirecting to a login page says nothing about the host.
+	"""
+	scan_id = (ctx or {}).get('scan_history_id')
+	if not (input_url and final_url and scan_id):
+		return
+	if urlparse(input_url if '://' in input_url else f'http://{input_url}').path not in ('', '/'):
+		return
+	Subdomain.objects.filter(
+		scan_history_id=scan_id, name=get_subdomain_from_url(input_url),
+	).update(final_url=str(final_url)[:2000])
 
 
 def extract_httpx_url(line):

@@ -20,6 +20,7 @@ _TASK_TITLES = {
     'http_crawl':                 'HTTP Crawl',
     'port_scan':                  'Port Scan',
     'vigolium_discovery':         'Vigolium Discovery',
+    'target_dedup':               'Target Deduplication',
     'acunetix_submit':            'Acunetix Target Submission',
     'check_if_email_exists':      'Mailbox Verification',
     # Tier 3
@@ -92,6 +93,7 @@ _TASK_TIER = {
     'dalfox_xss_scan':       6,
     's3scanner':             6,
     'acunetix_scan':         6,
+    'target_dedup':          2,
     'acunetix_submit':       2,
     'wpscan_scan':           6,
     'vigolium_scan':         6,
@@ -214,6 +216,7 @@ RETRYABLE_TASK_NAMES = frozenset({
     'http_crawl_bridge',
     'run_acunetix',
     'acunetix_submit',
+    'target_dedup',
     # Tier 7 post-processing — dispatchable on its own since the upstream merge.
     'correlate_vulnerabilities',
     'calculate_risk_scores',
@@ -316,6 +319,11 @@ def build_scan_task_plan(tasks: list, yaml_configuration: dict, is_subscan: bool
 
     # Acunetix target submission rides on http_crawl, which is what establishes
     # liveness — it is independent of whether the Acunetix scanner itself runs.
+    # Same-site hosts are marked once liveness is known; heavy tools skip them.
+    from reNgine.host_dedup import target_dedup_config
+    if 'http_crawl' in tasks and not is_subscan and target_dedup_config(yaml_configuration)[0]:
+        add('target_dedup')
+
     acunetix_cfg = (yaml_configuration.get('vulnerability_scan') or {}).get('acunetix') or {}
     if 'http_crawl' in tasks and acunetix_cfg.get('submit_live_subdomains', False):
         add('acunetix_submit')

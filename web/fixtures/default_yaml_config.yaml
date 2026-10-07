@@ -98,7 +98,8 @@ dir_file_fuzz: {
   'timeout': 5,
   'threads': 30,
   'wordlist_name': 'dicc',
-  'max_repeat_by_signature': 10
+  'max_repeat_by_signature': 10,
+  'batching': {'enabled': true, 'batch_size': 25, 'max_parallel': 2, 'batch_timeout_minutes': 120, 'max_total_hours': 12}
 }
 fetch_url: {
   'uses_tools': ['gospider', 'hakrawler', 'waybackurls', 'katana', 'gau'],
