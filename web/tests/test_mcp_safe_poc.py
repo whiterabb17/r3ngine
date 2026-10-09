@@ -85,6 +85,29 @@ class SafePocCatalogTests(TestCase):
         )
         self.assertEqual(params['expected_marker'], 'canary12345')
 
+    def test_flag_rejects_empty_allowed_paths_bypass(self):
+        """endswith('') is True for every path — blank allowlist entries must not pass."""
+        with self.assertRaises(CatalogError):
+            normalize_params(
+                'flag_canary_read',
+                {
+                    'expected_marker': 'canary12345',
+                    'allowed_paths': ['', '  ', None],
+                    'base_url': 'https://app.example.com/index.html',
+                },
+                vuln_url='https://app.example.com/index.html',
+            )
+        params = normalize_params(
+            'flag_canary_read',
+            {
+                'expected_marker': 'canary12345',
+                'allowed_paths': ['', '/canary.txt'],
+                'base_url': 'https://app.example.com/canary.txt',
+            },
+            vuln_url='https://app.example.com/canary.txt',
+        )
+        self.assertEqual(params['allowed_paths'], ['/canary.txt'])
+
     def test_open_redirect_host_allowlist(self):
         with self.assertRaises(CatalogError):
             normalize_params(

@@ -325,7 +325,16 @@ def normalize_params(template_id: str, params: Any, *, vuln_url: str) -> dict:
         allowed_paths = params.get('allowed_paths') or []
         if allowed_paths is not None and not isinstance(allowed_paths, list):
             raise CatalogError('allowed_paths must be a list')
-        clean_paths = [str(p)[:200] for p in (allowed_paths or [])][:10]
+        # Drop blank/None entries: str.endswith('') is True for every path in Python.
+        clean_paths: list[str] = []
+        for raw in (allowed_paths or []):
+            if raw is None:
+                continue
+            p = str(raw).strip()[:200]
+            if p:
+                clean_paths.append(p)
+            if len(clean_paths) >= 10:
+                break
         base_url = str(params.get('base_url') or vuln_url).strip()
         path = urlparse(base_url).path or '/'
         if not (
