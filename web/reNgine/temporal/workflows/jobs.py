@@ -594,3 +594,30 @@ class FollowupPlanWorkflow:
             task_queue="python-orchestrator-queue",
         )
         return {'plan_id': plan_id, **final}
+
+
+@workflow.defn(name="SafePocWorkflow")
+class SafePocWorkflow:
+    """Execute one SAFE PoC catalog template; honor abort between steps."""
+
+    @workflow.run
+    async def run(self, payload: dict) -> dict:
+        attempt_id = payload.get('attempt_id')
+        aborted = await workflow.execute_activity(
+            "SafePocCheckAbortActivity",
+            args=[attempt_id],
+            start_to_close_timeout=timedelta(seconds=30),
+            retry_policy=_RETRY_INTERNAL,
+            task_queue="python-orchestrator-queue",
+        )
+        if aborted:
+            return {'attempt_id': attempt_id, 'status': 'aborted'}
+
+        result = await workflow.execute_activity(
+            "SafePocExecuteActivity",
+            args=[attempt_id],
+            start_to_close_timeout=timedelta(minutes=2),
+            retry_policy=_RETRY_INTERNAL,
+            task_queue="python-orchestrator-queue",
+        )
+        return {'attempt_id': attempt_id, **(result or {})}

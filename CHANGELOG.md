@@ -4,6 +4,12 @@
 
 #### Added
 
+- **SAFE PoC agent (MCP)**:
+  - Propose → operator approve → Temporal `SafePocWorkflow` for catalog-only probes (`marker_reflect`, `calc_echo`, `authz_status_delta`, `open_redirect_safe`, `flag_canary_read`).
+  - `SafePocAttempt` model + `/api/mcp/safe-poc/` views; results nest under `Vulnerability.agent_enrichment.poc` (never freeform `ValidationResult.payload`).
+  - Sidecar **v1.5.0** tools + `r3ngine-safe-poc` agent / `skills/safe-poc/`; expanded Anthropic skill allowlist (testing/triage/canary) with stronger deny substrings.
+  - Direct run returns **410**; PoC success does not auto-set `verified`.
+
 - **Large-scan resilience (PR #135)**:
   - Tier 1–6 tool failures are isolated (`_isolated_tool`): one failed tool no longer aborts `MasterScanWorkflow`; Tier 7 still runs and the tool’s own timeline row keeps the failure.
   - Tools stop shortly before their Temporal attempt `start_to_close` / `schedule_to_close` limit; partial results are kept; the row shows a clear time-limit message; stop then fail is non-retryable so Temporal does not restart hours of work.

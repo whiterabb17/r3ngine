@@ -12,3 +12,4 @@ temporal-entrypoint.sh
 *-stacktrace-*.dump
 crash-resume-file-*.dump
 *.dump
+*.log
