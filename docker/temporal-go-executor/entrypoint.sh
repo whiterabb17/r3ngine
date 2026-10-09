@@ -3,6 +3,30 @@
 # Handles one-time setup and tool updates then starts the Go executor worker.
 
 # ---------------------------------------------------------------------------
+# Tool updates (nuclei/vigolium/vulnx, template repo pulls) are network-bound
+# and take minutes, so running them on every start made a GitHub or registry
+# outage enough to block the worker from coming up at all. Run them at most
+# once a week, tracked by a sentinel on the persistent tool_config volume.
+# A first-ever start has no sentinel and therefore updates as before.
+# ---------------------------------------------------------------------------
+TOOL_UPDATE_STAMP="/root/.config/r3ngine/go-executor-tool-update.stamp"
+TOOL_UPDATE_MAX_AGE_DAYS=7
+TOOL_UPDATE_RC=0
+
+mkdir -p "$(dirname "$TOOL_UPDATE_STAMP")"
+
+if [ ! -f "$TOOL_UPDATE_STAMP" ]; then
+  RUN_TOOL_UPDATES=1
+  echo "[entrypoint] No tool-update sentinel found - running tool updates."
+elif [ -n "$(find "$TOOL_UPDATE_STAMP" -mtime +"$TOOL_UPDATE_MAX_AGE_DAYS" 2>/dev/null)" ]; then
+  RUN_TOOL_UPDATES=1
+  echo "[entrypoint] Tool updates older than ${TOOL_UPDATE_MAX_AGE_DAYS} days - refreshing."
+else
+  RUN_TOOL_UPDATES=0
+  echo "[entrypoint] Tool updates ran within ${TOOL_UPDATE_MAX_AGE_DAYS} days - skipping."
+fi
+
+# ---------------------------------------------------------------------------
 # Start deferred tool installer in the background so normal setup tasks
 # run in parallel. We wait for it to finish just before the executor starts.
 # ---------------------------------------------------------------------------
@@ -90,79 +114,102 @@ amass -version || true
 nuclei -version || true
 
 # nuclei templates setup
-if [ ! -d "/root/nuclei-templates/geeknik_nuclei_templates" ]; then
+# Every guard below uses "$HOME/..." rather than "~/...": a tilde does not
+# expand inside double quotes, so these tests were all unconditionally true and
+# re-downloaded (or re-cloned) the whole set on every container start.
+GEEKNIK_DIR="$HOME/nuclei-templates/geeknik_nuclei_templates"
+if [ ! -d "$GEEKNIK_DIR/.git" ]; then
   echo "Installing Geeknik Nuclei templates..."
-  git clone https://github.com/geeknik/the-nuclei-templates.git ~/nuclei-templates/geeknik_nuclei_templates
-else
+  rm -rf "$GEEKNIK_DIR"
+  git clone --depth 1 https://github.com/geeknik/the-nuclei-templates.git "$GEEKNIK_DIR"
+elif [ "$RUN_TOOL_UPDATES" = "1" ]; then
   echo "Updating Geeknik Nuclei templates..."
-  rm -rf ~/nuclei-templates/geeknik_nuclei_templates
-  git clone https://github.com/geeknik/the-nuclei-templates.git ~/nuclei-templates/geeknik_nuclei_templates
+  git -C "$GEEKNIK_DIR" pull --ff-only --quiet || TOOL_UPDATE_RC=1
 fi
 
-if [ ! -f "~/nuclei-templates/ssrf_nagli.yaml" ]; then
+if [ ! -f "$HOME/nuclei-templates/ssrf_nagli.yaml" ]; then
   echo "Downloading ssrf_nagli for Nuclei..."
-  wget -q https://raw.githubusercontent.com/NagliNagli/BountyTricks/main/ssrf.yaml -O ~/nuclei-templates/ssrf_nagli.yaml
+  wget -q https://raw.githubusercontent.com/NagliNagli/BountyTricks/main/ssrf.yaml -O "$HOME/nuclei-templates/ssrf_nagli.yaml"
 fi
 
 # AI Map Templates
 echo "Checking for AI Map Templates..."
-if [ ! -f "~/nuclei-templates/langserve-detect.yaml" ]; then
-  wget -q https://raw.githubusercontent.com/BishopFox/aimap/refs/heads/main/templates/langserve-detect.yaml -O ~/nuclei-templates/langserve-detect.yaml
+if [ ! -f "$HOME/nuclei-templates/langserve-detect.yaml" ]; then
+  wget -q https://raw.githubusercontent.com/BishopFox/aimap/refs/heads/main/templates/langserve-detect.yaml -O "$HOME/nuclei-templates/langserve-detect.yaml"
 fi
 
-if [ ! -f "~/nuclei-templates/mcp-server-detect.yaml" ]; then
-  wget -q https://github.com/BishopFox/aimap/raw/refs/heads/main/templates/mcp-server-detect.yaml -O ~/nuclei-templates/mcp-server-detect.yaml
+if [ ! -f "$HOME/nuclei-templates/mcp-server-detect.yaml" ]; then
+  wget -q https://github.com/BishopFox/aimap/raw/refs/heads/main/templates/mcp-server-detect.yaml -O "$HOME/nuclei-templates/mcp-server-detect.yaml"
 fi
 
-if [ ! -f "~/nuclei-templates/mcp-tool-enum.yaml" ]; then
-  wget -q https://github.com/BishopFox/aimap/raw/refs/heads/main/templates/mcp-tool-enum.yaml -O ~/nuclei-templates/mcp-tool-enum.yaml
+if [ ! -f "$HOME/nuclei-templates/mcp-tool-enum.yaml" ]; then
+  wget -q https://github.com/BishopFox/aimap/raw/refs/heads/main/templates/mcp-tool-enum.yaml -O "$HOME/nuclei-templates/mcp-tool-enum.yaml"
 fi
 
-if [ ! -f "~/nuclei-templates/openai-compat-detect.yaml" ]; then
-  wget -q https://github.com/BishopFox/aimap/raw/refs/heads/main/templates/openai-compat-detect.yaml -O ~/nuclei-templates/openai-compat-detect.yaml
+if [ ! -f "$HOME/nuclei-templates/openai-compat-detect.yaml" ]; then
+  wget -q https://github.com/BishopFox/aimap/raw/refs/heads/main/templates/openai-compat-detect.yaml -O "$HOME/nuclei-templates/openai-compat-detect.yaml"
 fi
 
-if [ ! -f "~/nuclei-templates/prompt-leak.yaml" ]; then
-  wget -q https://github.com/BishopFox/aimap/raw/refs/heads/main/templates/prompt-leak.yaml -O ~/nuclei-templates/prompt-leak.yaml
+if [ ! -f "$HOME/nuclei-templates/prompt-leak.yaml" ]; then
+  wget -q https://github.com/BishopFox/aimap/raw/refs/heads/main/templates/prompt-leak.yaml -O "$HOME/nuclei-templates/prompt-leak.yaml"
 fi
 
 # edoardottt/missing-cve-nuclei-templates — ~64k CVEs absent from the official set
 # Covers XSS (22k), SQLi (12k), DoS (15k), RCE (3k), Path Traversal, SSRF, LFI, XXE, SSTI
 echo "Checking for missing-cve nuclei templates"
-if [ ! -d "~/nuclei-templates/missing-cve" ]; then
+if [ ! -d "$HOME/nuclei-templates/missing-cve" ]; then
   echo "Installing missing-cve nuclei templates (~64k additional CVEs)"
   git clone --depth 1 https://github.com/edoardottt/missing-cve-nuclei-templates.git \
-    ~/nuclei-templates/missing-cve
+    "$HOME/nuclei-templates/missing-cve"
 fi
 
 # emadshanab/Nuclei-Templates-Collection — aggregates 400+ community repos
 # Includes Log4Shell, Spring RCE, F5, WAF detection, Kubernetes, SAP, Oracle, WebSphere
 echo "Checking for Nuclei Templates Collection (400+ community repos)"
-if [ ! -d "~/nuclei-templates/community-collection" ]; then
+if [ ! -d "$HOME/nuclei-templates/community-collection" ]; then
   echo "Installing Nuclei Templates Collection (400+ community repos)"
   git clone --depth 1 https://github.com/emadshanab/Nuclei-Templates-Collection.git \
-    ~/nuclei-templates/community-collection
+    "$HOME/nuclei-templates/community-collection"
 fi
 
 # 0xKayala/Custom-Nuclei-Templates — bug-bounty focused custom templates
   echo "Checking for 0xKayala custom nuclei templates"
-if [ ! -d "~/nuclei-templates/kayala-custom" ]; then
+if [ ! -d "$HOME/nuclei-templates/kayala-custom" ]; then
   echo "Installing 0xKayala custom nuclei templates"
   git clone --depth 1 https://github.com/0xKayala/Custom-Nuclei-Templates.git \
-    ~/nuclei-templates/kayala-custom
+    "$HOME/nuclei-templates/kayala-custom"
 fi
 
-vulnx update
+if [ "$RUN_TOOL_UPDATES" = "1" ]; then
+  vulnx update || TOOL_UPDATE_RC=1
+fi
 
-# Configure vigolium to scan all severity levels for known issues
+# Configure vigolium to scan all severity levels for known issues.
+# Local config writes, not network calls, so these stay on every start.
 vigolium config set known_issue_scan.severities "critical,high,medium,low,info" || true
 vigolium config set dynamic-assessment.max_feedback_rounds=3 || true
 vigolium config set known_issue_scan.enrich_targets=true || true
+vigolium config set discovery.enrich_targets=true || true
+vigolium config set spidering.max_duration "20m" || true
+vigolium config set known_issue_scan.templates_dir="/root/nuclei-templates" || true
 
+if [ "$RUN_TOOL_UPDATES" = "1" ]; then
+  vigolium update || TOOL_UPDATE_RC=1
+  vigolium doctor --fix || TOOL_UPDATE_RC=1
+  nuclei -update || TOOL_UPDATE_RC=1
+
+  if [ "$TOOL_UPDATE_RC" = "0" ]; then
+    touch "$TOOL_UPDATE_STAMP"
+    echo "[entrypoint] Tool updates completed; sentinel refreshed."
+  else
+    echo "[entrypoint] Some tool updates failed; sentinel left stale so the next start retries."
+  fi
+fi
 # Split oversized nuclei tags
-echo "[entrypoint] Running Nuclei tag splitter..."
-python3 /usr/src/scripts/nuclei_tag_splitter.py
+# echo "[entrypoint] Running Nuclei tag splitter..."
+# python3 /usr/src/scripts/nuclei_tag_splitter.py
 
 # wait $INTERNAL_TOOLS_PID
 echo "[entrypoint] Starting Temporal Go Executor..."
-exec /usr/local/bin/r3ngine-executor
+# Forward the container command (docker-compose.worker.yml passes --worker-name).
+exec /usr/local/bin/r3ngine-executor "$@"

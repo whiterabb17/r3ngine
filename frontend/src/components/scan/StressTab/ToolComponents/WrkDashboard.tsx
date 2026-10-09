@@ -11,7 +11,7 @@ export interface WrkTelemetryPoint {
   avg_latency?: number;
   throughput_bps?: number;
   latency?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface WrkDashboardProps {

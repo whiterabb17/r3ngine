@@ -1,6 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { operations } from '@/types/api';
-import type { VulnerabilityResponse } from '../types';
+import type {
+  GptVulnerabilityReport,
+  Vulnerability,
+  VulnerabilityCompactResponse,
+  VulnerabilityResponse,
+} from '../types';
 
 
 export interface VulnerabilityFilters {
@@ -10,51 +14,105 @@ export interface VulnerabilityFilters {
   open_status?: string;
   source?: string;
   exclude_source?: string;
+  /** When true, only return vulns with a non-empty exploit_url. */
+  has_exploit?: boolean;
 }
 
-export const useVulnerabilities = (projectSlug: string, page = 1, searchQuery = '', scanId?: number, targetId?: number, filters?: VulnerabilityFilters, pageSize = 10) => {
-  return useQuery<VulnerabilityResponse>({
-    queryKey: ['vulnerabilities', projectSlug, page, searchQuery, scanId, targetId, filters, pageSize],
-    queryFn: async () => {
-      const url = new URL(`${window.location.origin}/api/listVulnerability/`);
-      url.searchParams.append('project', projectSlug);
-      url.searchParams.append('page', page.toString());
-      url.searchParams.append('length', pageSize.toString());
-      
-      if (searchQuery) {
-        url.searchParams.append('search[value]', searchQuery);
-      }
-      
-      if (scanId) {
-        url.searchParams.append('scan_history', scanId.toString());
-      }
+export interface VulnerabilityListParams {
+  projectSlug: string;
+  page?: number;
+  pageSize?: number;
+  searchQuery?: string;
+  scanId?: number;
+  targetId?: number;
+  filters?: VulnerabilityFilters;
+}
 
-      if (targetId) {
-        url.searchParams.append('target_id', targetId.toString());
-      }
-      
-      if (filters) {
-        if (filters.severity) url.searchParams.append('severity', filters.severity);
-        if (filters.exclude_severity) url.searchParams.append('exclude_severity', filters.exclude_severity);
-        if (filters.validation_status) url.searchParams.append('validation_status', filters.validation_status);
-        if (filters.open_status) url.searchParams.append('open_status', filters.open_status);
-        if (filters.source) url.searchParams.append('source', filters.source);
-        if (filters.exclude_source) url.searchParams.append('exclude_source', filters.exclude_source);
-      }
-      
+/**
+ * One page of vulnerability list rows. Requests the compact row format (`compact=1`):
+ * list views only read the row's own fields and a few keys of each relation; the
+ * detail modal loads the full record through `useVulnerability`.
+ */
+export const fetchVulnerabilities = async ({
+  projectSlug,
+  page = 1,
+  pageSize = 10,
+  searchQuery = '',
+  scanId,
+  targetId,
+  filters,
+}: VulnerabilityListParams): Promise<VulnerabilityCompactResponse> => {
+  const url = new URL(`${window.location.origin}/api/listVulnerability/`);
+  url.searchParams.append('project', projectSlug);
+  url.searchParams.append('page', page.toString());
+  url.searchParams.append('length', pageSize.toString());
+
+  if (searchQuery) {
+    url.searchParams.append('search[value]', searchQuery);
+  }
+
+  if (scanId) {
+    url.searchParams.append('scan_history', scanId.toString());
+  }
+
+  if (targetId) {
+    url.searchParams.append('target_id', targetId.toString());
+  }
+
+  if (filters) {
+    if (filters.severity) url.searchParams.append('severity', filters.severity);
+    if (filters.exclude_severity) url.searchParams.append('exclude_severity', filters.exclude_severity);
+    if (filters.validation_status) url.searchParams.append('validation_status', filters.validation_status);
+    if (filters.open_status) url.searchParams.append('open_status', filters.open_status);
+    if (filters.source) url.searchParams.append('source', filters.source);
+    if (filters.exclude_source) url.searchParams.append('exclude_source', filters.exclude_source);
+    if (filters.has_exploit !== undefined) {
+      url.searchParams.append('has_exploit', filters.has_exploit ? 'true' : 'false');
+    }
+  }
+
+  url.searchParams.append('compact', '1');
+  url.searchParams.append('format', 'json');
+
+  const response = await fetch(url.toString(), {
+    credentials: 'include'
+  });
+
+  if (!response.ok) {
+    throw new Error('Network response was not ok');
+  }
+  return await response.json() as VulnerabilityCompactResponse;
+};
+
+export const useVulnerabilities = (projectSlug: string, page = 1, searchQuery = '', scanId?: number, targetId?: number, filters?: VulnerabilityFilters, pageSize = 10) => {
+  return useQuery<VulnerabilityCompactResponse>({
+    queryKey: ['vulnerabilities', projectSlug, page, searchQuery, scanId, targetId, filters, pageSize],
+    queryFn: () => fetchVulnerabilities({ projectSlug, page, pageSize, searchQuery, scanId, targetId, filters }),
+    enabled: !!projectSlug,
+  });
+};
+
+export const useVulnerability = (id: number | null, projectSlug?: string) => {
+  return useQuery<Vulnerability>({
+    queryKey: ['vulnerability', id, projectSlug],
+    queryFn: async () => {
+      if (!id) throw new Error('No vulnerability ID provided');
+      const url = new URL(`${window.location.origin}/api/listVulnerability/${id}/`);
       url.searchParams.append('format', 'json');
+      if (projectSlug) {
+        url.searchParams.append('project', projectSlug);
+      }
 
       const response = await fetch(url.toString(), {
         credentials: 'include'
       });
-      
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      return await response.json() as operations["api_listVulnerability_list"]["responses"]["200"]["content"]["application/json"];
-    },
 
-    enabled: !!projectSlug,
+      if (!response.ok) {
+        throw new Error('Failed to fetch vulnerability details');
+      }
+      return await response.json() as Vulnerability;
+    },
+    enabled: !!id,
   });
 };
 
@@ -84,7 +142,7 @@ export const useDeleteVulnerability = () => {
 
 export const useGptVulnerabilityDetails = () => {
   return useMutation({
-    mutationFn: async ({ id, name }: { id: number; name: string }) => {
+    mutationFn: async ({ id, name }: { id: number; name: string }): Promise<GptVulnerabilityReport> => {
       const response = await fetch(`/api/tools/gpt_vulnerability_report/?id=${id}`, {
         credentials: 'include'
       });
@@ -158,6 +216,7 @@ export const useUpdateVulnerabilityValidationStatus = () => {
 };
 
 export const useGenerateImpact = (projectSlug: string) => {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (vulnId: number) => {
       const response = await fetch(`/${projectSlug}/api/impact/vulnerability/${vulnId}/generate/`, {
@@ -171,6 +230,12 @@ export const useGenerateImpact = (projectSlug: string) => {
         throw new Error('Failed to trigger impact generation');
       }
       return response.json();
+    },
+    onSuccess: (_data, vulnId) => {
+      // Generation runs in a backend thread with no job status endpoint. Resetting the
+      // assessment query zeroes its success and error counters, which re-opens the
+      // bounded polling window in useImpactAssessment for this generation run.
+      queryClient.resetQueries({ queryKey: ['impact-assessment', projectSlug, vulnId] });
     }
   });
 };
@@ -211,6 +276,13 @@ export interface ImpactAssessmentResponse {
   is_ai_generated?: boolean;
 }
 
+const IMPACT_ASSESSMENT_POLL_MS = 5000;
+// 24 polls at 5s = a two-minute window, comfortably above a single LLM generation run.
+const IMPACT_ASSESSMENT_MAX_POLLS = 24;
+// A failing endpoint gets far fewer cycles: each one already includes the client's
+// `retry` attempts, and an outage will not resolve itself inside the polling window.
+const IMPACT_ASSESSMENT_MAX_FAILED_POLLS = 3;
+
 export const useImpactAssessment = (projectSlug: string, vulnId: number | null) => {
   return useQuery<ImpactAssessmentResponse>({
     queryKey: ['impact-assessment', projectSlug, vulnId],
@@ -225,8 +297,19 @@ export const useImpactAssessment = (projectSlug: string, vulnId: number | null) 
     },
     enabled: !!projectSlug && !!vulnId,
     refetchInterval: (query) => {
-      if (!query.state.data || query.state.data.status === false) return 5000;
-      return false;
+      // `status === false` means no assessment row exists yet. That is also the steady
+      // state for a vulnerability nobody asked to assess, so cap the polling window
+      // instead of polling forever. useGenerateImpact resets the query (and both
+      // counters) when a new generation run is started.
+      //
+      // The interval keeps firing on an errored query, and `dataUpdateCount` only moves
+      // on success, so the error path needs its own bound. `errorUpdateCount` advances
+      // once per failed fetch cycle (after retries); `fetchFailureCount` does not fit,
+      // as query-core zeroes it at the start of every fetch.
+      if (query.state.data?.status) return false;
+      if (query.state.errorUpdateCount >= IMPACT_ASSESSMENT_MAX_FAILED_POLLS) return false;
+      if (query.state.dataUpdateCount >= IMPACT_ASSESSMENT_MAX_POLLS) return false;
+      return IMPACT_ASSESSMENT_POLL_MS;
     }
   });
 };
@@ -318,6 +401,64 @@ export const useRejectVulnerability = () => {
       });
       if (!response.ok) {
         throw new Error('Failed to reject vulnerability');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
+    }
+  });
+};
+
+export interface SeverityValidationResponse {
+  status: boolean;
+  current_severity?: string;
+  suggested_severity?: string;
+  suggested_cvss_score?: number | null;
+  confidence?: string;
+  reasoning?: string;
+  key_factors?: string[];
+  vulnerability_id?: number;
+  vulnerability_name?: string;
+  error?: string;
+}
+
+export const useValidateVulnerabilitySeverity = () => {
+  return useMutation({
+    mutationFn: async (id: number): Promise<SeverityValidationResponse> => {
+      const response = await fetch(`/api/listVulnerability/${id}/validate_severity/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${response.status}: Severity validation failed`);
+      }
+      return response.json();
+    }
+  });
+};
+
+export const useUpdateVulnerabilitySeverity = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, severity, cvss_score, reason }: { id: number; severity: string; cvss_score?: number | null; reason?: string }) => {
+      const response = await fetch(`/api/listVulnerability/${id}/update_severity/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ severity, cvss_score, reason }),
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${response.status}: Severity update failed`);
       }
       return response.json();
     },

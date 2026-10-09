@@ -115,7 +115,7 @@ export const ProxyValidationModal: React.FC<ProxyValidationModalProps> = ({
     switch (status) {
       case 'pending':
         return (
-          <Typography sx={{ color: 'rgba(255,255,255,0.3)', fontFamily: 'Orbitron', fontSize: '0.75rem' }}>
+          <Typography sx={{ color: 'text.disabled', fontFamily: 'Orbitron', fontSize: '0.75rem' }}>
             —
           </Typography>
         );
@@ -313,7 +313,7 @@ export const ProxyValidationModal: React.FC<ProxyValidationModalProps> = ({
             onClick={handleClose}
             disabled={isRunning}
             sx={{
-              borderColor: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.5)',
+              borderColor: 'rgba(255,255,255,0.2)', color: 'text.secondary',
               fontFamily: 'Orbitron', fontSize: '0.75rem', fontWeight: 700,
               '&:hover': { borderColor: 'rgba(255,255,255,0.4)', bgcolor: 'rgba(255,255,255,0.03)' },
             }}

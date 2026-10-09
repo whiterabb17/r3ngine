@@ -83,7 +83,7 @@ export const PortScanSection: React.FC<Props> = ({ config, enabled, onToggle, on
       </Grid>
 
       <Box sx={{ mt: 1 }}>
-        {(['passive', 'enable_http_crawl', 'exclude_subdomains'] as const).map((field) => (
+        {(['passive', 'enable_http_crawl', 'exclude_subdomains', 'enable_network_enum'] as const).map((field) => (
           <FormControlLabel
             key={field}
             control={
@@ -99,6 +99,7 @@ export const PortScanSection: React.FC<Props> = ({ config, enabled, onToggle, on
                 {field === 'passive' && 'Passive scan only'}
                 {field === 'enable_http_crawl' && 'Enable HTTP crawl'}
                 {field === 'exclude_subdomains' && 'Exclude subdomains'}
+                {field === 'enable_network_enum' && 'Network enumeration (SMB, SNMP, LDAP, RDP)'}
               </Typography>
             }
             sx={{ mr: 2 }}

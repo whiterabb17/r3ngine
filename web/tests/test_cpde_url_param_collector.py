@@ -5,6 +5,13 @@ import tempfile
 from django.test import TestCase
 
 
+def _api_dir(scan_dir: str) -> str:
+    """web_api_discovery writes its tool output here, under the scan results dir."""
+    path = os.path.join(scan_dir, 'web_api_discovery')
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
 class TestCollectFromUrlFiles(TestCase):
 
     def _write_file(self, dirpath, filename, lines):
@@ -93,7 +100,7 @@ class TestCollectFromUrlFiles(TestCase):
 class TestCollectFromArjunFiles(TestCase):
 
     def _write_arjun(self, dirpath, name, data):
-        path = os.path.join(dirpath, f'arjun_{name}.json')
+        path = os.path.join(_api_dir(dirpath), f'arjun_{name}.json')
         with open(path, 'w') as fh:
             json.dump(data, fh)
 
@@ -137,7 +144,7 @@ class TestCollectFromArjunFiles(TestCase):
     def test_corrupt_json_handled_gracefully(self):
         from reNgine.cpde.url_param_collector import collect_from_arjun_files
         with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, 'arjun_bad.json')
+            path = os.path.join(_api_dir(d), 'arjun_bad.json')
             with open(path, 'w') as fh:
                 fh.write('{not valid json')
             findings = collect_from_arjun_files(d)
@@ -167,7 +174,8 @@ class TestCollectFromParamSpiderFiles(TestCase):
     def test_extracts_query_params(self):
         from reNgine.cpde.url_param_collector import collect_from_paramspider_files
         with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, 'ps_example.com.txt')
+            os.makedirs(os.path.join(_api_dir(d), 'results'))
+            path = os.path.join(_api_dir(d), 'results', 'example.com.txt')
             with open(path, 'w') as fh:
                 fh.write('https://example.com/search?q=FUZZ&page=FUZZ\n')
                 fh.write('https://example.com/api?id=FUZZ&sort=FUZZ\n')
@@ -181,7 +189,8 @@ class TestCollectFromParamSpiderFiles(TestCase):
     def test_confidence_is_55(self):
         from reNgine.cpde.url_param_collector import collect_from_paramspider_files
         with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, 'ps_example.com.txt')
+            os.makedirs(os.path.join(_api_dir(d), 'results'))
+            path = os.path.join(_api_dir(d), 'results', 'example.com.txt')
             with open(path, 'w') as fh:
                 fh.write('https://example.com/?x=FUZZ\n')
             findings = collect_from_paramspider_files(d)
@@ -190,7 +199,8 @@ class TestCollectFromParamSpiderFiles(TestCase):
     def test_non_url_lines_skipped(self):
         from reNgine.cpde.url_param_collector import collect_from_paramspider_files
         with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, 'ps_example.com.txt')
+            os.makedirs(os.path.join(_api_dir(d), 'results'))
+            path = os.path.join(_api_dir(d), 'results', 'example.com.txt')
             with open(path, 'w') as fh:
                 fh.write('[*] Running ParamSpider...\n')
                 fh.write('https://example.com/?real=FUZZ\n')
@@ -205,7 +215,7 @@ class TestCollectFromKiterunnerFiles(TestCase):
     def test_extracts_params_from_path_with_query(self):
         from reNgine.cpde.url_param_collector import collect_from_kiterunner_files
         with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, 'kr_example.com.json')
+            path = os.path.join(_api_dir(d), 'kr_example.com.json')
             with open(path, 'w') as fh:
                 fh.write(json.dumps({'path': '/api/users?include=profile&expand=roles', 'responses': [{'sc': 200}]}) + '\n')
                 fh.write(json.dumps({'path': '/api/items', 'responses': [{'sc': 200}]}) + '\n')
@@ -218,7 +228,7 @@ class TestCollectFromKiterunnerFiles(TestCase):
     def test_paths_without_query_produce_no_findings(self):
         from reNgine.cpde.url_param_collector import collect_from_kiterunner_files
         with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, 'kr_example.com.json')
+            path = os.path.join(_api_dir(d), 'kr_example.com.json')
             with open(path, 'w') as fh:
                 fh.write(json.dumps({'path': '/api/users', 'responses': [{'sc': 200}]}) + '\n')
             findings = collect_from_kiterunner_files(d)
@@ -227,7 +237,7 @@ class TestCollectFromKiterunnerFiles(TestCase):
     def test_confidence_is_65(self):
         from reNgine.cpde.url_param_collector import collect_from_kiterunner_files
         with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, 'kr_example.com.json')
+            path = os.path.join(_api_dir(d), 'kr_example.com.json')
             with open(path, 'w') as fh:
                 fh.write(json.dumps({'path': '/api?x=1', 'responses': [{'sc': 200}]}) + '\n')
             findings = collect_from_kiterunner_files(d)
@@ -239,7 +249,7 @@ class TestCollectFromLinkfinderFiles(TestCase):
     def test_extracts_params_from_urls(self):
         from reNgine.cpde.url_param_collector import collect_from_linkfinder_files
         with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, 'lf_example.com.txt')
+            path = os.path.join(_api_dir(d), 'lf_example.com.txt')
             with open(path, 'w') as fh:
                 fh.write('/api/v1/users?id=FUZZ&role=admin\n')
                 fh.write('https://example.com/search?q=test\n')
@@ -253,7 +263,7 @@ class TestCollectFromLinkfinderFiles(TestCase):
     def test_confidence_is_60(self):
         from reNgine.cpde.url_param_collector import collect_from_linkfinder_files
         with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, 'lf_example.com.txt')
+            path = os.path.join(_api_dir(d), 'lf_example.com.txt')
             with open(path, 'w') as fh:
                 fh.write('/api?x=1\n')
             findings = collect_from_linkfinder_files(d)
@@ -269,16 +279,33 @@ class TestCollectAll(TestCase):
             with open(os.path.join(d, 'urls_katana.txt'), 'w') as fh:
                 fh.write('https://example.com/?url_param=1\n')
             # Arjun
-            with open(os.path.join(d, 'arjun_example.com.json'), 'w') as fh:
+            with open(os.path.join(_api_dir(d), 'arjun_example.com.json'), 'w') as fh:
                 json.dump({'https://example.com/api': {'params': {'GET': ['arjun_param']}}}, fh)
-            # ParamSpider
-            with open(os.path.join(d, 'ps_example.com.txt'), 'w') as fh:
+            # ParamSpider (writes to results/ subdir)
+            os.makedirs(os.path.join(_api_dir(d), 'results'), exist_ok=True)
+            with open(os.path.join(_api_dir(d), 'results', 'example.com.txt'), 'w') as fh:
                 fh.write('https://example.com/?ps_param=FUZZ\n')
+            with open(os.path.join(_api_dir(d), 'kr_example.com.json'), 'w') as fh:
+                fh.write(json.dumps({'path': '/api?kr_param=1'}) + '\n')
+            with open(os.path.join(_api_dir(d), 'lf_example.com.txt'), 'w') as fh:
+                fh.write('/api?lf_param=1\n')
             findings = collect_all(d)
         names = {f['name'] for f in findings}
         self.assertIn('url_param', names)
         self.assertIn('arjun_param', names)
         self.assertIn('ps_param', names)
+        self.assertIn('kr_param', names)
+        self.assertIn('lf_param', names)
+
+    def test_tool_output_in_the_scan_root_is_ignored(self):
+        from reNgine.cpde.url_param_collector import collect_all
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, 'arjun_example.com.json'), 'w') as fh:
+                json.dump({'https://example.com/api': {'params': {'GET': ['stray']}}}, fh)
+            with open(os.path.join(d, 'lf_example.com.txt'), 'w') as fh:
+                fh.write('/api?stray=1\n')
+            findings = collect_all(d)
+        self.assertEqual(findings, [])
 
     def test_empty_dir_returns_empty_list(self):
         from reNgine.cpde.url_param_collector import collect_all

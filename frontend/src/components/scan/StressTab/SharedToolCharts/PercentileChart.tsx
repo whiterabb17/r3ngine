@@ -2,6 +2,7 @@ import { useThemeTokens } from '../../../../theme/useThemeTokens';
 import React, { useMemo } from 'react';
 import { useTheme, alpha } from '@mui/material';
 import ReactECharts from 'echarts-for-react';
+import type { TooltipComponentFormatterCallbackParams } from 'echarts';
 
 export interface Percentiles {
   p50: number;
@@ -124,7 +125,7 @@ export const PercentileChart: React.FC<PercentileChartProps> = ({
         textStyle: { color: 'text.primary', fontSize: 11, fontFamily: 'monospace' },
         borderWidth: 1,
         borderRadius: 4,
-        formatter: (params: any) => {
+        formatter: (params: TooltipComponentFormatterCallbackParams) => {
           if (Array.isArray(params) && params.length > 0) {
             return `${params[0].name}: ${params[0].value} ${unit}`;
           }

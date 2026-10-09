@@ -37,6 +37,7 @@ import {
 import { useNavigate } from '@tanstack/react-router';
 import { useOnboarding } from '../api';
 import type { OnboardingData } from '../api';
+import type { ApiErrorLike } from '../../../types/errors';
 
 const SECTION_TITLE_STYLE = {
   fontFamily: 'Orbitron',
@@ -82,8 +83,9 @@ export const OnboardingPage: React.FC = () => {
         // Assuming the response contains the project slug or we redirect to a default path
         navigate({ to: '/' });
       }
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to complete setup. Please check your inputs.');
+    } catch (caught) {
+      const err = caught as ApiErrorLike;
+      setError(err?.response?.data?.error || 'Failed to complete setup. Please check your inputs.');
     }
   };
 

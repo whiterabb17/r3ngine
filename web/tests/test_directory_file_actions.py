@@ -27,9 +27,9 @@ class TestExtractAuthForURLActivity(TestCase):
 
     @patch('reNgine.tasks.auth_discovery._fetch_with_proxy_retry')
     @patch('reNgine.tasks.auth_discovery._extract_login_forms')
-    @patch('reNgine.temporal.activities.get_proxy_list', return_value=[])
-    @patch('reNgine.temporal.activities.get_random_proxy', return_value=None)
-    @patch('reNgine.temporal.activities._run_task')
+    @patch('reNgine.temporal.activities.plugin_auth.get_proxy_list', return_value=[])
+    @patch('reNgine.temporal.activities.plugin_auth.get_random_proxy', return_value=None)
+    @patch('reNgine.temporal.activities.plugin_auth._run_task')
     def test_extract_auth_saves_candidates(
         self, mock_run_task, mock_rand_proxy, mock_proxy_list, mock_extract_forms, mock_fetch
     ):
@@ -54,9 +54,9 @@ class TestExtractAuthForURLActivity(TestCase):
         self.assertEqual(result['found'], 1)
 
     @patch('reNgine.tasks.auth_discovery._fetch_with_proxy_retry')
-    @patch('reNgine.temporal.activities.get_proxy_list', return_value=[])
-    @patch('reNgine.temporal.activities.get_random_proxy', return_value=None)
-    @patch('reNgine.temporal.activities._run_task')
+    @patch('reNgine.temporal.activities.plugin_auth.get_proxy_list', return_value=[])
+    @patch('reNgine.temporal.activities.plugin_auth.get_random_proxy', return_value=None)
+    @patch('reNgine.temporal.activities.plugin_auth._run_task')
     def test_extract_auth_no_forms_returns_zero(
         self, mock_run_task, mock_rand_proxy, mock_proxy_list, mock_fetch
     ):
@@ -65,7 +65,7 @@ class TestExtractAuthForURLActivity(TestCase):
         mock_fetch.return_value = (mock_response, None)
 
         from reNgine.temporal_activities import extract_auth_for_url_activity
-        with patch('reNgine.temporal.activities._extract_login_forms', return_value=[]):
+        with patch('reNgine.temporal.activities.plugin_auth._extract_login_forms', return_value=[]):
             result = extract_auth_for_url_activity({
                 'url': 'http://example.com/page',
                 'scan_id': self.scan.id,
@@ -75,9 +75,9 @@ class TestExtractAuthForURLActivity(TestCase):
 
     @patch('reNgine.tasks.auth_discovery._fetch_with_proxy_retry',
            side_effect=Exception("connection refused"))
-    @patch('reNgine.temporal.activities.get_proxy_list', return_value=[])
-    @patch('reNgine.temporal.activities.get_random_proxy', return_value=None)
-    @patch('reNgine.temporal.activities._run_task')
+    @patch('reNgine.temporal.activities.plugin_auth.get_proxy_list', return_value=[])
+    @patch('reNgine.temporal.activities.plugin_auth.get_random_proxy', return_value=None)
+    @patch('reNgine.temporal.activities.plugin_auth._run_task')
     def test_extract_auth_fetch_failure_raises(
         self, mock_run_task, mock_rand_proxy, mock_proxy_list, mock_fetch
     ):
@@ -90,9 +90,9 @@ class TestExtractAuthForURLActivity(TestCase):
 
     @patch('reNgine.tasks.auth_discovery._fetch_with_proxy_retry')
     @patch('reNgine.tasks.auth_discovery._extract_login_forms')
-    @patch('reNgine.temporal.activities.get_proxy_list')
-    @patch('reNgine.temporal.activities.get_random_proxy')
-    @patch('reNgine.temporal.activities._run_task')
+    @patch('reNgine.temporal.activities.plugin_auth.get_proxy_list')
+    @patch('reNgine.temporal.activities.plugin_auth.get_random_proxy')
+    @patch('reNgine.temporal.activities.plugin_auth._run_task')
     def test_extract_auth_activity_filters_socks_proxies(
         self, mock_run_task, mock_rand_proxy, mock_proxy_list, mock_extract_forms, mock_fetch
     ):
@@ -116,9 +116,9 @@ class TestExtractAuthForURLActivity(TestCase):
 
     @patch('reNgine.tasks.auth_discovery._fetch_with_proxy_retry')
     @patch('reNgine.tasks.auth_discovery._extract_login_forms')
-    @patch('reNgine.temporal.activities.get_proxy_list')
-    @patch('reNgine.temporal.activities.get_random_proxy')
-    @patch('reNgine.temporal.activities._run_task')
+    @patch('reNgine.temporal.activities.plugin_auth.get_proxy_list')
+    @patch('reNgine.temporal.activities.plugin_auth.get_random_proxy')
+    @patch('reNgine.temporal.activities.plugin_auth._run_task')
     def test_extract_auth_activity_falls_back_to_http_only_random_proxy(
         self, mock_run_task, mock_rand_proxy, mock_proxy_list, mock_extract_forms, mock_fetch
     ):
@@ -142,9 +142,9 @@ class TestExtractAuthForURLActivity(TestCase):
 
     @patch('reNgine.tasks.auth_discovery._fetch_with_proxy_retry')
     @patch('reNgine.tasks.auth_discovery._extract_login_forms')
-    @patch('reNgine.temporal.activities.get_proxy_list', return_value=[])
-    @patch('reNgine.temporal.activities.get_random_proxy', return_value=None)
-    @patch('reNgine.temporal.activities._run_task')
+    @patch('reNgine.temporal.activities.plugin_auth.get_proxy_list', return_value=[])
+    @patch('reNgine.temporal.activities.plugin_auth.get_random_proxy', return_value=None)
+    @patch('reNgine.temporal.activities.plugin_auth._run_task')
     def test_extract_auth_updates_status_and_triggers_crawl_for_status_0(
         self, mock_run_task, mock_rand_proxy, mock_proxy_list, mock_extract_forms, mock_fetch
     ):
@@ -217,8 +217,8 @@ class TestDirectoryFileDispatchView(TestCase):
             start_scan_date=timezone.now(),
         )
 
-    @patch('api.views.run_and_close')
-    @patch('api.views.TemporalClientProvider')
+    @patch('api.views.scan.run_and_close')
+    @patch('api.views.scan.TemporalClientProvider')
     def test_dispatch_scan_vuln_returns_dispatched(self, mock_tc, mock_run):
         mock_run.return_value = 'wf-test-123'
         response = self.client.post('/api/action/directory-file/dispatch/', {
@@ -230,8 +230,8 @@ class TestDirectoryFileDispatchView(TestCase):
         self.assertEqual(response.data['status'], 'dispatched')
         self.assertIn('workflow_id', response.data)
 
-    @patch('api.views.run_and_close')
-    @patch('api.views.TemporalClientProvider')
+    @patch('api.views.scan.run_and_close')
+    @patch('api.views.scan.TemporalClientProvider')
     def test_dispatch_extract_auth_returns_dispatched(self, mock_tc, mock_run):
         mock_run.return_value = 'wf-auth-123'
         response = self.client.post('/api/action/directory-file/dispatch/', {
@@ -265,8 +265,8 @@ class TestDirectoryFileDispatchView(TestCase):
         }, format='json')
         self.assertEqual(response.status_code, 403)
 
-    @patch('api.views.run_and_close')
-    @patch('api.views.TemporalClientProvider')
+    @patch('api.views.scan.run_and_close')
+    @patch('api.views.scan.TemporalClientProvider')
     @unittest.skip("Plugin tests are skipped for now")
     def test_dispatch_brute_test_with_plugin_enabled(self, mock_tc, mock_run):
         from plugins.models import Plugin

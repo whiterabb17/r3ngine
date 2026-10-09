@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from '@tanstack/react-router';
 import { Box, Typography, Grid, Paper, Tabs, Tab, Chip } from '@mui/material';
 import { Activity, Shield, BarChart2 } from 'lucide-react';
 import { useAssessments } from '../api';
@@ -18,7 +18,7 @@ const TABS = [
 ];
 
 export const AssessmentExecutionDashboard: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams({ from: '/$projectSlug/assessments/$id/execution' });
   const [activeTab, setActiveTab] = useState<'execution' | 'evidence' | 'metrics'>('execution');
 
   // Use existing query to get initial status, fallback to finding by ID
@@ -30,7 +30,7 @@ export const AssessmentExecutionDashboard: React.FC = () => {
 
   // The latest state from WebSockets takes precedence, otherwise fallback to DB state
   const latestEvent = events.length > 0 ? events[events.length - 1] : null;
-  const currentStatus = latestEvent?.data?.status || assessment?.status || 'Draft';
+  const currentStatus = latestEvent?.data?.stage || assessment?.status || 'Draft';
   const progress = latestEvent?.data?.progress || 0;
 
   if (isLoading) return <Typography>Loading...</Typography>;
@@ -43,11 +43,11 @@ export const AssessmentExecutionDashboard: React.FC = () => {
         <Box>
           <Typography
             variant="h5"
-            sx={{ fontFamily: 'Orbitron', fontWeight: 700, color: '#fff', letterSpacing: 1 }}
+            sx={{ fontFamily: 'Orbitron', fontWeight: 700, color: 'text.primary', letterSpacing: 1 }}
           >
             {assessment.name}
           </Typography>
-          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
             Assessment ID: {assessment.uuid}
           </Typography>
         </Box>
@@ -84,7 +84,7 @@ export const AssessmentExecutionDashboard: React.FC = () => {
                 </span>
               </Box>
             }
-            sx={{ minHeight: 36, py: 0, color: 'rgba(255,255,255,0.4)', '&.Mui-selected': { color: '#00f3ff' } }}
+            sx={{ minHeight: 36, py: 0, color: 'text.secondary', '&.Mui-selected': { color: '#00f3ff' } }}
           />
         ))}
       </Tabs>

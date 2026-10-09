@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from .models import Plugin
 from .serializers import PluginSerializer
 from .utils import AtomicInstaller, PluginManager, MarketplaceManager
+from reNgine.definitions import INTERNAL_ERROR_MESSAGE
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,9 @@ class PluginViewSet(viewsets.ModelViewSet):
             try:
                 AtomicInstaller.install(path, install_id=iid)
             except Exception:
-                pass  # AtomicInstaller already writes 'failed' state to cache
+                # install() records its own failures; what escapes is a failed
+                # rollback or setup step, and the thread would otherwise die silently.
+                logger.exception("Plugin install %s failed outside the installer's handler", iid)
             finally:
                 if os.path.exists(path):
                     os.remove(path)
@@ -109,18 +112,23 @@ class PluginViewSet(viewsets.ModelViewSet):
             )
             rdb.publish('orchestrator_control', 'restart')
             return Response({'success': True, 'message': 'Restart command sent to orchestrator.'})
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception('Failed to send orchestrator restart')
+            return Response({'error': INTERNAL_ERROR_MESSAGE}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['post'], url_path='restart-server')
     def restart_server(self, request):
         """
         User-triggered restart of the orchestrator and web container after plugin install.
-        The web container restart is delayed 3 s so this HTTP response can reach the client
-        before the connection is severed.
+
+        The orchestrator is told over Redis and exits itself; this process is
+        terminated a few seconds later (so the response reaches the client) and
+        compose's ``restart: always`` starts the web container again. Neither
+        needs the Docker API.
         """
         import redis
         from django.conf import settings
+        from reNgine.utils.process_restart import schedule_service_restart
 
         try:
             rdb = redis.StrictRedis(
@@ -133,19 +141,8 @@ class PluginViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.warning("Could not send orchestrator restart signal: %s", e)
 
-        def _restart_web():
-            import time
-            time.sleep(3)
-            try:
-                import docker
-                client = docker.from_env()
-                web_container = client.containers.get('r3ngine-web-1')
-                logger.info("User-triggered web container restart.")
-                web_container.restart()
-            except Exception as _e:
-                logger.error("Failed to restart web container: %s", _e)
-
-        threading.Thread(target=_restart_web, daemon=True).start()
+        logger.info("User-triggered web service restart.")
+        schedule_service_restart(reason='plugin install')
         return Response({'success': True, 'message': 'Server restart initiated.'})
 
     @action(detail=False, methods=['get'], url_path='registry')
@@ -182,7 +179,7 @@ class PluginViewSet(viewsets.ModelViewSet):
                     with open(os.path.join(docs_dir, file), 'r', encoding='utf-8') as f:
                         docs[file] = f.read()
                 except Exception as e:
-                    logger.error(f"Failed to read doc file {file}: {e}")
+                    logger.error("Failed to read doc file %s: %s", file, e)
 
         if not docs:
             return Response({'error': 'No markdown files found'}, status=status.HTTP_404_NOT_FOUND)

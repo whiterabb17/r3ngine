@@ -29,9 +29,9 @@ class VulnerabilityCorrelationEngine:
 				config = yaml.safe_load(self.scan_history.scan_type.yaml_configuration)
 				if isinstance(config, dict):
 					self.tier7_config = config.get('tier_7', {})
-			except Exception:
-				pass
-				
+			except yaml.YAMLError:
+				logger.warning("Invalid engine YAML; tier_7 correlation settings use defaults", exc_info=True)
+
 		self.weights = {
 			'severity': 0.4,
 			'multi_tool_match': 0.25,
@@ -187,14 +187,14 @@ class VulnerabilityCorrelationEngine:
 						['potential_attack_chain', 'scan_history', 'subdomain']
 					)
 		except Exception as e:
-			logger.error(f"Failed to save correlated findings transaction: {e}")
+			logger.error("Failed to save correlated findings transaction: %s", e)
 
 		# Record vulnerability history tracking
 		if self.scan_history:
 			try:
 				self._update_vulnerability_history(vulns)
 			except Exception as e:
-				logger.error(f"Failed to update vulnerability history: {e}")
+				logger.error("Failed to update vulnerability history: %s", e)
 
 	def _generate_group_key(self, vuln):
 		"""
@@ -425,14 +425,13 @@ class VulnerabilityCorrelationEngine:
 		existing = existing_list[0] if existing_list else None
 		
 		if existing and existing.potential_attack_chain and 'apme_path_id' in existing.potential_attack_chain:
-			logger.info(f"Correlation: Skipping heuristic chain for vuln {vuln.id}, APME path already exists.")
+			logger.info("Correlation: Skipping heuristic chain for vuln %s, APME path already exists.", vuln.id)
 			return
 
 		# Deduplicate
 		if len(existing_list) > 1:
 			logger.warning(
-				f"Correlation: Found {len(existing_list)} ImpactAssessment rows for vuln {vuln.id}. "
-				f"Deduplicating — keeping most recent record."
+				"Correlation: Found %s ImpactAssessment rows for vuln %s. Deduplicating — keeping most recent record.", len(existing_list), vuln.id
 			)
 			assessment_ids_to_delete.extend([x.id for x in existing_list[1:]])
 

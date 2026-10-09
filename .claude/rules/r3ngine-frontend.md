@@ -47,10 +47,38 @@ const subdomains = await getSubdomains(scanId);
 
 ## Build verification
 
-- After any frontend change, run `npm run build` inside the container to confirm no TypeScript errors and no broken imports before marking the task complete:
+The frontend is **not** built inside the running container. `docker/web/Dockerfile` compiles it
+in a separate `frontend-builder` stage and copies only `dist` into the final image, and
+`docker/docker-compose.yml` masks `/usr/src/app/frontend/node_modules` with an anonymous volume —
+so `npm run build` in `r3ngine-web-1` fails with `tsc: not found`.
+
+- Verify locally in `frontend/` before marking a task complete:
   ```bash
-  docker exec -it r3ngine-web-1 bash -c "cd /usr/src/app/frontend && npm run build"
+  npx tsc -b
   ```
+  ```bash
+  npm run lint
+  ```
+- `npm run build` locally is the fuller check (type-check + Vite bundle) when the change touches
+  imports, assets or the bundle itself.
+
+## Deploying a frontend change
+
+Rebuild the web image — Django serves the bundle from the image's `/usr/src/frontend/dist`
+(`web/reNgine/settings.py`), and the container entrypoint runs `collectstatic --clear` on start:
+
+```bash
+make build-web
+```
+```bash
+make up
+```
+
+`make up` recreates `web`, `temporal-python-orchestrator` and `temporal-go-executor`, which share
+that image. There is a mounted-source escape hatch — `settings.py` prefers
+`/usr/src/app/frontend/dist` when it exists — but building into the mounted repo leaves
+root-owned `node_modules/` and `dist/` that then shadow every later image build. Use it only for
+a one-off check, and delete both afterwards.
 
 ## Security cross-reference
 

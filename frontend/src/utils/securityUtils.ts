@@ -41,15 +41,22 @@ export const containsSqlInjection = (input: string): boolean => {
   return sqlKeywords.some(keyword => lowercaseInput.includes(keyword));
 };
 
+// C0 controls and DEL: the URL parser drops tabs/newlines, so "java\tscript:" or "/\t/host" would
+// reach the browser as something other than what was checked.
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\u0000-\u001F\u007F]/;
+
 /**
- * Validates if a URL is safe for redirection or linking.
+ * Validates if a URL is safe for redirection or linking: an absolute http(s) URL, or a
+ * same-origin path. Protocol-relative (`//host`, `/\host`) and every other scheme
+ * (`javascript:`, `data:`, `vbscript:`, `file:`...) are rejected.
  */
 export const isSafeUrl = (url: string): boolean => {
-  if (!url) return false;
-  
-  // Allow relative URLs
-  if (url.startsWith('/') && !url.startsWith('//')) return true;
-  
+  if (!url || CONTROL_CHARS.test(url)) return false;
+
+  // Allow same-origin paths; browsers treat "/\" like "//" (protocol-relative).
+  if (/^\/(?![/\\])/.test(url)) return true;
+
   // Allow only http and https protocols
   try {
     const parsed = new URL(url);
@@ -57,4 +64,28 @@ export const isSafeUrl = (url: string): boolean => {
   } catch {
     return false;
   }
+};
+
+/**
+ * Returns the trimmed URL when {@link isSafeUrl} accepts it, otherwise `undefined`.
+ * Use it for every `href`, `src` or `window.open` target built from API or user data
+ * (security rule 4.2), e.g. `href={getSafeUrl(ref) ?? '#'}`.
+ */
+export const getSafeUrl = (url: string | null | undefined): string | undefined => {
+  if (typeof url !== 'string') return undefined;
+  const trimmed = url.trim();
+  return isSafeUrl(trimmed) ? trimmed : undefined;
+};
+
+/**
+ * `window.open` for a URL from API or user data: opens nothing and returns `null` when
+ * {@link getSafeUrl} rejects it.
+ */
+export const openSafeUrl = (
+  url: string | null | undefined,
+  target = '_blank',
+  features?: string,
+): Window | null => {
+  const safe = getSafeUrl(url);
+  return safe ? window.open(safe, target, features) : null;
 };

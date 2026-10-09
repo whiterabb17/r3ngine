@@ -1,96 +1,77 @@
+"""Reachability of the ``ollama`` compose service.
+
+Ollama is an opt-in compose service (``profiles: ["ollama"]`` in
+``docker/docker-compose.yml``). The application does not start or stop the
+container — that needed a Docker socket — it only reports whether the HTTP API
+answers and how to enable the service when it does not. Model pulls and
+deletes go through the API as before (``api.views.llm.OllamaManager``).
+"""
+from __future__ import annotations
+
 import logging
-import socket
-import docker
-from django.core.cache import cache
+
+import requests
+
+from reNgine.definitions import OLLAMA_INSTANCE
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_CONTAINER_NAME = 'ollama'
-OLLAMA_IMAGE_NAME = 'ollama/ollama:latest'
+PROBE_TIMEOUT_SECONDS = 3.0
+
+OLLAMA_ENABLE_HINT = (
+    "Ollama is not running. It is an optional service: set COMPOSE_PROFILES=ollama in .env "
+    "and run `make up` (or `make up-ollama`). Models can be pulled once it answers."
+)
+OLLAMA_STOP_HINT = (
+    "Ollama runs as a compose service; stop it from the host with `make stop-ollama`."
+)
+
 
 class OllamaUnavailableError(Exception):
-    pass
+    """Ollama is not reachable from this process."""
 
-class OllamaStartError(Exception):
-    pass
 
 class OllamaManager:
+    """Status of the ``ollama`` service as seen from this container."""
 
-    def _get_client(self):
+    def __init__(self, base_url: str = OLLAMA_INSTANCE) -> None:
+        self.base_url = base_url.rstrip('/')
+
+    @staticmethod
+    def enable_hint() -> str:
+        return OLLAMA_ENABLE_HINT
+
+    @staticmethod
+    def stop_hint() -> str:
+        return OLLAMA_STOP_HINT
+
+    def version(self) -> str | None:
+        """Ollama's version string, or None when the API does not answer."""
         try:
-            return docker.from_env()
-        except docker.errors.DockerException as e:
-            raise OllamaUnavailableError(f"Docker socket not available: {e}")
-
-    def _discover_network(self, client):
-        """Find the Docker network this container belongs to."""
+            response = requests.get(f'{self.base_url}/api/version', timeout=PROBE_TIMEOUT_SECONDS)
+        except requests.RequestException as exc:
+            logger.debug('[OllamaManager] %s not reachable: %s', self.base_url, exc)
+            return None
+        if response.status_code != 200:
+            return None
         try:
-            hostname = socket.gethostname()
-            container = client.containers.get(hostname)
-            networks = list(container.attrs['NetworkSettings']['Networks'].keys())
-            # Prefer the r3ngine network
-            return next(
-                (n for n in networks if 'r3ngine' in n.lower()),
-                networks[0] if networks else 'r3ngine_r3ngine_network'
-            )
-        except Exception as e:
-            logger.debug(f"[OllamaManager] Could not discover network, using fallback: {e}")
-            return 'r3ngine_r3ngine_network'
+            return str(response.json().get('version') or '') or 'unknown'
+        except ValueError:
+            return 'unknown'
 
-    def start(self):
-        client = self._get_client()
+    def is_running(self) -> bool:
+        return self.version() is not None
 
-        # Remove any existing ollama container (may be stopped from a previous session)
-        try:
-            existing = client.containers.get(OLLAMA_CONTAINER_NAME)
-            existing.remove(force=True)
-        except docker.errors.NotFound:
-            pass
+    def status(self) -> dict:
+        """Status payload for the UI: whether Ollama answers and how to enable it."""
+        version = self.version()
+        return {
+            'running': version is not None,
+            'url': self.base_url,
+            'version': version,
+            'hint': None if version is not None else OLLAMA_ENABLE_HINT,
+        }
 
-        try:
-            client.images.get(OLLAMA_IMAGE_NAME)
-        except docker.errors.ImageNotFound:
-            logger.info(f"[OllamaManager] Image '{OLLAMA_IMAGE_NAME}' not found locally. Attempting to pull...")
-            try:
-                client.images.pull(OLLAMA_IMAGE_NAME)
-                logger.info(f"[OllamaManager] Image '{OLLAMA_IMAGE_NAME}' pulled successfully.")
-            except docker.errors.APIError as e:
-                raise OllamaStartError(f"Failed to pull Ollama image: {e}")
-
-        network = self._discover_network(client)
-
-        try:
-            client.containers.run(
-                OLLAMA_IMAGE_NAME,
-                detach=True,
-                name=OLLAMA_CONTAINER_NAME,
-                network=network,
-                volumes={'r3ngine_ollama_data': {'bind': '/root/.ollama', 'mode': 'rw'}},
-                ports={'11434/tcp': 11434},
-                labels={
-                    'com.docker.compose.project': 'r3ngine',
-                    'com.docker.compose.service': 'ollama'
-                },
-                restart_policy={'Name': 'no'},
-                mem_limit='4g',
-                mem_reservation='2g'
-            )
-        except docker.errors.APIError as e:
-            raise OllamaStartError(f"Failed to start Ollama container: {e}")
-
-    def stop(self):
-        try:
-            client = self._get_client()
-            container = client.containers.get(OLLAMA_CONTAINER_NAME)
-            if container.status == 'running':
-                container.stop(timeout=10)
-        except (docker.errors.NotFound, OllamaUnavailableError):
-            pass
-
-    def is_running(self):
-        try:
-            client = self._get_client()
-            container = client.containers.get(OLLAMA_CONTAINER_NAME)
-            return container.status == 'running'
-        except (docker.errors.NotFound, OllamaUnavailableError):
-            return False
+    def require_running(self) -> None:
+        if not self.is_running():
+            raise OllamaUnavailableError(OLLAMA_ENABLE_HINT)

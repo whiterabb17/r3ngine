@@ -30,7 +30,7 @@ class TestDorkingExtended(TestCase):
         )
 
     @patch('builtins.open', new_callable=mock_open, read_data='')
-    @patch('reNgine.tasks.osint.run_command')
+    @patch('reNgine.tasks.osint.dorks.run_command')
     def test_dorking_calls_dorks_hunter_when_in_engines(self, mock_run, mock_file):
         from reNgine.tasks.osint import dorking
 
@@ -47,7 +47,7 @@ class TestDorkingExtended(TestCase):
         calls_str = str(mock_run.call_args_list)
         self.assertIn('dorks_hunter', calls_str)
 
-    @patch('reNgine.tasks.osint.run_command')
+    @patch('reNgine.tasks.osint.dorks.run_command')
     def test_dorking_calls_xnldorker_when_in_engines(self, mock_run):
         from reNgine.tasks.osint import dorking
 
@@ -65,7 +65,7 @@ class TestDorkingExtended(TestCase):
         self.assertIn('xnldorker', calls_str)
 
     @patch('builtins.open', new_callable=mock_open, read_data='')
-    @patch('reNgine.tasks.osint.run_command')
+    @patch('reNgine.tasks.osint.dorks.run_command')
     def test_dorking_both_engines_run_additively(self, mock_run, mock_file):
         from reNgine.tasks.osint import dorking
 
@@ -82,7 +82,7 @@ class TestDorkingExtended(TestCase):
         self.assertIn('xnldorker', calls_str)
 
     @patch('builtins.open', new_callable=mock_open, read_data='https://example-test.local/login\nhttps://example-test.local/admin\n')
-    @patch('reNgine.tasks.osint.run_command')
+    @patch('reNgine.tasks.osint.dorks.run_command')
     def test_dorks_hunter_urls_saved_to_dorks(self, mock_run, mock_file):
         from reNgine.tasks.osint import dorking
         from startScan.models import Dork
@@ -99,7 +99,7 @@ class TestDorkingExtended(TestCase):
         self.assertIn('https://example-test.local/login', saved_dork_urls)
         self.assertIn('https://example-test.local/admin', saved_dork_urls)
 
-    @patch('reNgine.tasks.osint.run_command')
+    @patch('reNgine.tasks.osint.dorks.run_command')
     def test_xnldorker_urls_saved_to_dorks(self, mock_run):
         from reNgine.tasks.osint import dorking
         from startScan.models import Dork
@@ -116,7 +116,7 @@ class TestDorkingExtended(TestCase):
         self.assertIn('https://example-test.local/secret', saved_dork_urls)
         self.assertIn('https://example-test.local/api', saved_dork_urls)
 
-    @patch('reNgine.tasks.osint.run_command')
+    @patch('reNgine.tasks.osint.dorks.run_command')
     def test_no_extended_engines_when_config_empty(self, mock_run):
         from reNgine.tasks.osint import dorking
 

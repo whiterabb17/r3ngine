@@ -12,6 +12,7 @@ import {
   CircularProgress,
   Alert,
   useTheme,
+  type Theme,
 } from '@mui/material';
 import { X, FolderPlus } from 'lucide-react';
 import { useCreateProject } from '../api';
@@ -168,7 +169,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({ open, onClose 
   );
 };
 
-const getFieldStyles = (isLight: boolean, theme: any) => ({
+const getFieldStyles = (isLight: boolean, theme: Theme) => ({
   '& .MuiOutlinedInput-root': {
     color: 'text.primary',
     '& fieldset': { borderColor: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.1)' },

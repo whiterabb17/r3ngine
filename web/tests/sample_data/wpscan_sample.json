@@ -1,0 +1,88 @@
+{
+  "target_url": "http://example.com/",
+  "effective_url": "http://example.com/",
+  "interesting_findings": [
+    {
+      "type": "xmlrpc",
+      "to_s": "XML-RPC seems to be enabled: http://example.com/xmlrpc.php",
+      "description": "XML-RPC is reachable and can be abused for pingback and brute-force amplification.",
+      "interesting_entries": [
+        "http://example.com/xmlrpc.php"
+      ],
+      "references": {
+        "url": [
+          "https://example.com/docs/xmlrpc"
+        ],
+        "cve": [
+          "2099-00001"
+        ]
+      }
+    },
+    {
+      "type": "undocumented_probe",
+      "to_s": "Undocumented probe result",
+      "found_by": "Direct Access (Aggressive Detection)",
+      "confidence": 70
+    }
+  ],
+  "version": {
+    "number": "5.8.1",
+    "status": "outdated",
+    "found_by": "Rss Generator (Passive Detection)",
+    "vulnerabilities": [
+      {
+        "title": "WP Core Vuln",
+        "description": "Sample WordPress core vulnerability used by the fixture.",
+        "references": {
+          "url": [
+            "https://example.com/advisories/wp-core-1"
+          ],
+          "cve": [
+            "2099-00002"
+          ]
+        }
+      }
+    ]
+  },
+  "plugins": {
+    "sample-plugin": {
+      "slug": "sample-plugin",
+      "location": "http://example.com/wp-content/plugins/sample-plugin/",
+      "outdated": true,
+      "latest_version": "2.0.0",
+      "version": {
+        "number": "1.0.0"
+      },
+      "vulnerabilities": [
+        {
+          "title": "Sample Plugin Authenticated SQL Injection",
+          "description": "Sample plugin vulnerability used by the fixture.",
+          "references": {
+            "url": [
+              "https://example.com/advisories/sample-plugin-1"
+            ],
+            "cve": [
+              "2099-00003"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "main_theme": {
+    "slug": "sample-theme",
+    "location": "http://example.com/wp-content/themes/sample-theme/",
+    "outdated": false,
+    "latest_version": "3.1.0",
+    "version": {
+      "number": "3.1.0"
+    },
+    "vulnerabilities": []
+  },
+  "users": {
+    "sampleuser": {
+      "id": 1,
+      "found_by": "Rss Generator (Passive Detection)"
+    }
+  }
+}

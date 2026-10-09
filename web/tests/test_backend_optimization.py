@@ -1,4 +1,6 @@
 import os
+import shutil
+import tempfile
 import unittest
 import json
 import base64
@@ -29,8 +31,10 @@ class BackendOptimizationTest(TransactionTestCase):
             start_scan_date=timezone.now(),
             scan_type=self.engine
         )
-        self.results_dir = f"/tmp/rengine_results/{self.scan.id}"
-        os.makedirs(self.results_dir, exist_ok=True)
+        # Fresh per test: scan ids repeat across runs, and dir_file_fuzz skips
+        # targets whose fuzz_done_*.marker a previous run left behind.
+        self.results_dir = tempfile.mkdtemp(prefix=f"rengine_results_{self.scan.id}_")
+        self.addCleanup(shutil.rmtree, self.results_dir, ignore_errors=True)
         self.scan.results_dir = self.results_dir
         self.scan.save()
         
@@ -98,10 +102,10 @@ class BackendOptimizationTest(TransactionTestCase):
         self.assertNotIn('nginx-1-18-0', tags)
         self.assertIn('moment-js', tags)
 
-    @patch('reNgine.tasks.get_http_urls')
-    @patch('reNgine.tasks.Subdomain.objects.filter')
-    @patch('reNgine.tasks.stream_command')
-    @patch('reNgine.tasks.run_command')
+    @patch('reNgine.tasks.vuln.get_http_urls')
+    @patch('reNgine.tasks.vuln.Subdomain.objects.filter')
+    @patch('reNgine.tasks.vuln.stream_command')
+    @patch('reNgine.tasks.vuln.run_command')
     def test_nuclei_tag_injection(self, mock_run_cmd, mock_stream, mock_subdomain_filter, mock_get_urls):
         """Test that nuclei_scan correctly runs without restricting tags based on discovered technologies."""
         mock_sub = MagicMock()
@@ -127,6 +131,8 @@ class BackendOptimizationTest(TransactionTestCase):
         task_instance.results_dir = self.results_dir
         task_instance.starting_point_path = ""
         task_instance.yaml_configuration = self.ctx['yaml_configuration']
+        task_instance.subdomain_id = None
+        task_instance.output_path = os.path.join(self.results_dir, 'nuclei_output.json')
         
         actual_func = getattr(nuclei_scan, 'run', getattr(nuclei_scan, '__wrapped__', nuclei_scan))
         # Signature: (self, urls=[], ctx={}, description=None)
@@ -138,10 +144,10 @@ class BackendOptimizationTest(TransactionTestCase):
         # Verify that discovered technology tags are properly injected
         self.assertIn('wordpress', cmd)
 
-    @patch('reNgine.tasks.get_http_urls')
-    @patch('reNgine.tasks.Subdomain.objects.filter')
-    @patch('reNgine.tasks.stream_command')
-    @patch('reNgine.tasks.run_command')
+    @patch('reNgine.tasks.vuln.get_http_urls')
+    @patch('reNgine.tasks.vuln.Subdomain.objects.filter')
+    @patch('reNgine.tasks.vuln.stream_command')
+    @patch('reNgine.tasks.vuln.run_command')
     def test_nuclei_tag_batch_limit_in_fallback_path(self, mock_run_cmd, mock_stream, mock_subdomain_filter, mock_get_urls):
         """When tags_override is not provided (legacy path) and many tech tags are found,
         the command must never receive more than 3 tags via -tags to prevent overload."""
@@ -169,6 +175,8 @@ class BackendOptimizationTest(TransactionTestCase):
         task_instance.results_dir = self.results_dir
         task_instance.starting_point_path = ""
         task_instance.yaml_configuration = self.ctx['yaml_configuration']
+        task_instance.subdomain_id = None
+        task_instance.output_path = os.path.join(self.results_dir, 'nuclei_output.json')
 
         actual_func = getattr(nuclei_scan, 'run', getattr(nuclei_scan, '__wrapped__', nuclei_scan))
         actual_func(task_instance, [f"http://{self.domain_name}"], self.ctx)
@@ -207,8 +215,8 @@ class BackendOptimizationTest(TransactionTestCase):
         
         dirsearch_results = {
             "results": [
-                {"url": f"http://{self.domain_name}/admin", "status": 200, "content-length": 1234},
-                {"url": f"http://{self.domain_name}/new-page", "status": 200, "content-length": 888}
+                {"url": f"http://{self.domain_name}/admin", "status": 200, "contentLength": 1234},
+                {"url": f"http://{self.domain_name}/new-page", "status": 200, "contentLength": 888}
             ]
         }
         
@@ -221,6 +229,8 @@ class BackendOptimizationTest(TransactionTestCase):
         
         def run_side_effect(cmd, *args, **kwargs):
             if 'dirsearch' in cmd:
+                self.assertIn('--output-formats=json', cmd)
+                self.assertNotIn('--format=', cmd)
                 import re
                 match = re.search(r'-o\s+([^\s]+)', cmd)
                 if match:
@@ -228,6 +238,7 @@ class BackendOptimizationTest(TransactionTestCase):
                     os.makedirs(os.path.dirname(output_file), exist_ok=True)
                     with open(output_file, 'w') as f:
                         json.dump(dirsearch_results, f)
+            return 0, ''
         
         mock_stream.side_effect = stream_side_effect
         mock_run.side_effect = run_side_effect
@@ -243,12 +254,11 @@ class BackendOptimizationTest(TransactionTestCase):
         task_instance.starting_point_path = ""
         task_instance.subscan = None
         task_instance.yaml_configuration = {
-            'fuzzing': {
-                'ffuf': True,
-                'dirsearch': True
+            'dir_file_fuzz': {
+                'run_dirsearch': True,
             }
         }
-        
+
         # Signature: (self, ctx={}, description=None)
         actual_func(task_instance, self.ctx)
         
@@ -256,7 +266,7 @@ class BackendOptimizationTest(TransactionTestCase):
         unique_df_count = DirectoryFile.objects.values('url').distinct().count()
         self.assertEqual(unique_df_count, 3)
 
-    @patch('reNgine.tasks.run_command')
+    @patch('reNgine.tasks.subdomain.run_command')
     def test_amass_intel_discovery(self, mock_run):
         """Test that amass_intel_discovery runs and attempts to save results."""
         output_file = f"{self.results_dir}/amass_intel.txt"

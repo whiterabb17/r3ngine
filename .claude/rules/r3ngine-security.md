@@ -11,7 +11,7 @@ description: Security guidelines for r3ngine — path traversal, log injection, 
   - Resolve the full path with `os.path.realpath()` or `pathlib.Path.resolve()`.
   - Assert the resolved path starts with the expected base directory (`str(resolved).startswith(str(base))`).
   - Reject any path containing `..` segments, leading `/`, or null bytes before resolution.
-- **Rule 1.3**: Do not duplicate safe-path logic. If a helper already validates paths in `common_func.py` or a utility module, reuse it — do not re-implement inline.
+- **Rule 1.3**: Do not duplicate safe-path logic. If a helper already validates paths in `common_func/` or a utility module, reuse it — do not re-implement inline.
 - **Rule 1.4**: Sanitise path-segment input (domain names, scan names used in file paths) by allowing only safe characters (alphanumeric, hyphens, dots) and rejecting everything else.
 
 ## 2. Logs (Log injection)

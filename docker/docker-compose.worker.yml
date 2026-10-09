@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   temporal-python-orchestrator:
-    image: docker.pkg.github.com/whiterabb17/r3ngine/r3ngine:latest
+    # A worker host builds nothing, so the image must come from a registry
+    # that holds a build of this fork.
+    image: ${R3NGINE_IMAGE:?set R3NGINE_IMAGE to a registry image built from this fork}
     restart: always
     init: true
     entrypoint: /usr/src/app/temporal-entrypoint.sh
@@ -26,6 +28,10 @@ services:
       - WORKER_NAME=${WORKER_NAME}
       - WORKER_AUTH_TOKEN=${WORKER_AUTH_TOKEN}
       - MASTER_URL=${MASTER_URL}
+      # The heartbeat verifies the master's TLS certificate. For the self-signed
+      # one install.sh creates, mount its CA and point MASTER_CA_BUNDLE at it.
+      - MASTER_CA_BUNDLE=${MASTER_CA_BUNDLE:-}
+      - MASTER_TLS_VERIFY=${MASTER_TLS_VERIFY:-1}
     volumes:
       - ../web:/usr/src/app
       - github_repos:/usr/src/github
@@ -33,23 +39,36 @@ services:
       - scan_results:/usr/src/scan_results
       - gf_patterns:/root/.gf
       - nuclei_templates:/root/nuclei-templates
-      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - r3ngine_network
 
   temporal-go-executor:
-    image: docker.pkg.github.com/whiterabb17/r3ngine/r3ngine-go-executor:latest
+    # Same app image as the orchestrator: the executor binary is built into it
+    # (docker/web/Dockerfile, executor-builder stage); there is no separate Go image.
+    image: ${R3NGINE_IMAGE:?set R3NGINE_IMAGE to a registry image built from this fork}
     restart: always
     init: true
+    entrypoint: /usr/src/app/executor-entrypoint.sh
+    # The executor polls go-executor-queue-${WORKER_NAME}, the queue the Python
+    # orchestrator above routes this host's tool runs to (WORKER_NAME alone is
+    # enough; the flag takes precedence when both are given).
     command: ["--worker-name", "${WORKER_NAME}"]
     environment:
       - TEMPORAL_HOST=${TEMPORAL_HOST:-temporal:7233}
+      - TEMPORAL_NAMESPACE=default
+      - REDIS_URL=${REDIS_URL:-redis://:${REDIS_PASSWORD}@redis:6379/0}
       - WORKER_NAME=${WORKER_NAME}
-      # The Go worker can optionally take an auth token and master URL if we implement heartbeat there too
     volumes:
-      - scan_results:/app/scan_results
-      - github_repos:/app/github
-      - wordlist:/app/wordlist
+      # Tool output paths are handed over by the Python orchestrator, so the
+      # shared volumes must be mounted at the same paths as in that service.
+      - ../web:/usr/src/app
+      - github_repos:/usr/src/github
+      - wordlist:/usr/src/wordlist
+      - scan_results:/usr/src/scan_results
+      - gf_patterns:/root/.gf
+      - nuclei_templates:/root/nuclei-templates
+      - tool_config:/root/.config
+      - ./temporal-go-executor/entrypoint.sh:/usr/src/app/executor-entrypoint.sh:ro
     networks:
       - r3ngine_network
 
@@ -59,6 +78,7 @@ volumes:
   wordlist:
   gf_patterns:
   nuclei_templates:
+  tool_config:
 
 networks:
   r3ngine_network:

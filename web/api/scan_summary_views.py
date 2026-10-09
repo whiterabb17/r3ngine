@@ -1,10 +1,11 @@
-from django.db.models import Count, Q, F
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q, F
 from django.http import FileResponse
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rolepermissions.checkers import has_role
 
 from dashboard.models import Project
 from targetApp.models import Domain
@@ -12,14 +13,15 @@ from startScan.models import (
     Subdomain, EndPoint, Vulnerability, 
     VulnerabilityTags, IpAddress, Port, Technology, 
     MonitoringDiscovery, CountryISO, CveId, CweId,
-    Email, Employee, ScanHistory, SubScan, ScanActivity, SecretLeak, Command,
-    Dork, MetaFinderDocument, S3Bucket, OsintStaging
+    Email, Employee, ScanHistory, SubScan, ScanActivity, SecretLeak,
+    Dork, MetaFinderDocument, OsintStaging
 )
-from recon_note.models import TodoNote
 from reNgine.utilities import get_screenshot_path
-from reNgine.definitions import RUNNING_TASK, INITIATED_TASK
+from reNgine.definitions import RUNNING_TASK, INITIATED_TASK, FAILED_TASK, ABORTED_TASK
+from reNgine.failure_reasons import classify_failure
 from reNgine.exporters.ai_bundle import AiExportOptions, FORMAT_VERSION, build_ai_export_zip
 from api.scan_task_counts import get_task_counts
+from api.summary_domain_info import build_domain_info_summary, domain_info_select_related
 
 from api.target_summary_serializers import TargetSummarySerializer, TacticalScanHistorySerializer
 from api.serializers import (
@@ -27,6 +29,9 @@ from api.serializers import (
     SecretLeakSerializer, EmailSerializer, EmployeeSerializer, 
     DorkSerializer, MetafinderDocumentSerializer, S3BucketSerializer, OsintStagingSerializer
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ScanSummaryAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -44,10 +49,27 @@ class ScanSummaryAPIView(APIView):
         """
         try:
             project = Project.objects.get(slug=slug)
-            scan = ScanHistory.objects.get(id=id, domain__project=project)
+            # Three consumers below need the activity list — the timeline, the task
+            # counts (also reached through scan.get_progress()) and the spiderfoot
+            # check. Prefetch it once, already annotated and ordered, so they all read
+            # the same cached rows instead of issuing a query each. `command_count`
+            # replaces a per-activity Command query: the timeline only needs to know
+            # whether commands exist, and Command.output is unbounded tool stdout.
+            activity_qs = (
+                ScanActivity.objects
+                .annotate(command_count=Count('command'))
+                .order_by('tier', 'time_started', 'time')
+            )
+            scan = ScanHistory.objects.select_related(
+                *domain_info_select_related('domain__domain_info')
+            ).prefetch_related(
+                Prefetch('scanactivity_set', queryset=activity_qs)
+            ).get(id=id, domain__project=project)
             target = scan.domain
         except (Project.DoesNotExist, ScanHistory.DoesNotExist):
             return Response({'error': 'Scan not found'}, status=404)
+
+        scan_activities = list(scan.scanactivity_set.all())
 
         # Scans related to this target (for timeline/recent scans)
         all_scans = ScanHistory.objects.filter(domain=target).order_by('-start_scan_date')
@@ -69,27 +91,56 @@ class ScanSummaryAPIView(APIView):
         vulnerabilities = Vulnerability.objects.filter(target_domain=target)
         # Auto-mark RESOLVED vulnerabilities if this scan included vuln scan and is finished
         if scan.scan_status == 2 and scan.tasks and 'vulnerability_scan' in scan.tasks:
-            current_vulns = vulnerabilities.filter(scan_history=scan)
-            current_vuln_keys = set((v.name, v.http_url) for v in current_vulns)
-            
-            # Find open vulns from previous scans that were NOT found in this scan
-            previous_open_vulns = vulnerabilities.filter(
+            # An open vulnerability from an earlier scan is resolved when this scan
+            # found nothing carrying the same (name, http_url) pair. The membership
+            # test is split in two because SQL and Python disagree on NULL: the Python
+            # tuple key treated two missing URLs as equal, while `http_url = NULL` is
+            # never true, so rows without a URL get their own comparison and keep the
+            # exact behaviour of the loop this replaces.
+            current_same_url = Vulnerability.objects.filter(
+                target_domain=target,
+                scan_history=scan,
+                name=OuterRef('name'),
+                http_url=OuterRef('http_url'),
+            )
+            current_without_url = Vulnerability.objects.filter(
+                target_domain=target,
+                scan_history=scan,
+                name=OuterRef('name'),
+                http_url__isnull=True,
+            )
+            # One UPDATE rather than a save() per row. This is a read endpoint the
+            # frontend polls every 5 seconds for the whole duration of a scan, and a
+            # finished-but-still-running scan re-entered this branch on every poll:
+            # per-row writes turned a GET into a write storm against the same table
+            # the scan is inserting into, for a result that is idempotent anyway.
+            vulnerabilities.filter(
                 open_status=True,
-                is_suppressed=False
-            ).exclude(scan_history=scan)
-            
-            for v in previous_open_vulns:
-                if (v.name, v.http_url) not in current_vuln_keys:
-                    v.open_status = False
-                    v.save()
+                is_suppressed=False,
+            ).exclude(scan_history=scan).filter(
+                (Q(http_url__isnull=False) & ~Exists(current_same_url))
+                | (Q(http_url__isnull=True) & ~Exists(current_without_url))
+            ).update(open_status=False)
 
-        critical_count = vulnerabilities.filter(severity=4).count()
-        high_count = vulnerabilities.filter(severity=3).count()
-        medium_count = vulnerabilities.filter(severity=2).count()
-        low_count = vulnerabilities.filter(severity=1).count()
-        info_count = vulnerabilities.filter(severity=0).count()
-        unknown_count = vulnerabilities.filter(severity=-1).count()
-        
+        # One pass over the table for every severity bucket plus the total, instead of
+        # seven separate COUNT queries over the same rows.
+        severity_counts = vulnerabilities.aggregate(
+            critical=Count('id', filter=Q(severity=4)),
+            high=Count('id', filter=Q(severity=3)),
+            medium=Count('id', filter=Q(severity=2)),
+            low=Count('id', filter=Q(severity=1)),
+            info=Count('id', filter=Q(severity=0)),
+            unknown=Count('id', filter=Q(severity=-1)),
+            total=Count('id'),
+        )
+        critical_count = severity_counts['critical']
+        high_count = severity_counts['high']
+        medium_count = severity_counts['medium']
+        low_count = severity_counts['low']
+        info_count = severity_counts['info']
+        unknown_count = severity_counts['unknown']
+        vulnerability_count = severity_counts['total']
+
         # Aggregations
         most_common_vulnerability = vulnerabilities.exclude(severity=0).values("name", "severity").annotate(count=Count('name')).order_by("-count")[:10]
         most_common_tags = VulnerabilityTags.objects.filter(vuln_tags__in=vulnerabilities).annotate(nused=Count('vuln_tags')).order_by('-nused').values('name', 'nused')[:7]
@@ -126,27 +177,11 @@ class ScanSummaryAPIView(APIView):
         subdomain_techs = Technology.objects.filter(technologies__target_domain=target)
         discovered_technologies = (endpoint_techs | subdomain_techs).distinct().values('name').annotate(count=Count('name')).order_by('-count')[:20]
 
-        # Domain Information
-        domain_info_data = None
-        if hasattr(target, 'domain_info') and target.domain_info:
-            di = target.domain_info
-            domain_info_data = {
-                'dnssec': di.dnssec,
-                'geolocation_iso': di.geolocation_iso,
-                'created': di.created,
-                'updated': di.updated,
-                'expires': di.expires,
-                'whois_server': di.whois_server,
-                'registrar': {
-                    'name': di.registrar.name if di.registrar else None,
-                    'phone': di.registrar.phone if di.registrar else None,
-                    'email': di.registrar.email if di.registrar else None,
-                },
-                'dns_records': list(di.dns_records.all().values('type', 'name'))[:20],
-                'name_servers': list(di.name_servers.all().values('name'))[:10],
-                'nameservers': [ns.name for ns in di.name_servers.all()][:10],
-                'historical_ips': list(di.historical_ips.all().values('ip', 'location', 'owner', 'last_seen'))[:10],
-            }
+        domain_info_data = build_domain_info_summary(target.domain_info)
+
+        # S3Scanner links each bucket to the scan that found it (`vuln.s3scanner`),
+        # so the BUCKETS tab, its gate and the scan report all read the same rows.
+        buckets = list(scan.buckets.order_by('name', 'id'))
 
         # Related
         related_domains = []
@@ -178,9 +213,10 @@ class ScanSummaryAPIView(APIView):
         # Timeline/Activities — ordered by tier then time_started, PENDING rows last within tier.
         # Exclude ghost INITIATED rows (time_started=None) left over from a previous failed
         # workflow run that were never claimed; a successful re-run creates fresh records.
-        activities = ScanActivity.objects.filter(scan_of=scan).exclude(
-            status=INITIATED_TASK, time_started__isnull=True
-        ).order_by('tier', 'time_started', 'time')
+        activities = [
+            activity for activity in scan_activities
+            if not (activity.status == INITIATED_TASK and activity.time_started is None)
+        ]
         timeline_data = []
         _STATUS_MAP = {
             2: 'SUCCESS',
@@ -189,7 +225,21 @@ class ScanSummaryAPIView(APIView):
             3: 'ABORTED',
             -1: 'PENDING',
         }
+        # Tracebacks are operator-facing debug output (security rule 8.1): expose them
+        # only to the roles that can already run scans, never to plain viewers.
+        can_see_traceback = bool(
+            request.user.is_superuser
+            or has_role(request.user, ['sys_admin', 'penetration_tester'])
+        )
         for activity in activities:
+            # Why the task failed, not just that it did. The hint is a fixed
+            # phrase per category (reNgine/failure_reasons.py) so it stays safe
+            # for the roles that never see the traceback below.
+            failure = (
+                classify_failure(activity.error_message, activity.traceback)
+                if activity.status in (FAILED_TASK, ABORTED_TASK)
+                else None
+            )
             timeline_data.append({
                 'id': activity.id,
                 'task_uid': str(activity.task_uid) if activity.task_uid else None,
@@ -200,15 +250,26 @@ class ScanSummaryAPIView(APIView):
                 'tier': activity.tier,
                 'status': _STATUS_MAP.get(activity.status, 'UNKNOWN'),
                 'name': activity.name,
+                'target_host': activity.target_host or '',
                 'error_message': activity.error_message,
-                'commands': list(Command.objects.filter(activity=activity).values('command', 'output', 'return_code'))
+                'failure_category': failure['category'] if failure else None,
+                'failure_hint': failure['hint'] if failure else None,
+                'traceback': (activity.traceback or '') if can_see_traceback else '',
+                'execution_id': activity.execution_id or '',
+                # Only a flag: the command rows themselves (including the unbounded
+                # `output` TextField) are fetched on demand by /api/listActivityLogs/
+                # when the operator opens a task, not shipped on every 5s poll.
+                'has_commands': bool(activity.command_count),
             })
 
         # OSINT - Cumulative for target
         osint_staging = OsintStaging.objects.filter(scan_history=scan).order_by('-confidence', '-discovered_date')
         emails = Email.objects.filter(emails__domain=target).annotate(breach_count=Count('emailbreach')).distinct()
         exposed_count = emails.exclude(password__isnull=True).count()
-        secret_leaks = SecretLeak.objects.filter(scan_history__domain=target)
+        # Scan-scoped: domain-wide filtering previously attributed sibling-scan
+        # false positives (e.g. postleaksNg traceback rows) to every scan for
+        # the same target on the LEAKS tab.
+        secret_leaks = SecretLeak.objects.filter(scan_history=scan)
         secret_leaks_count = secret_leaks.count()
         exploitable_count = vulnerabilities.exclude(exploit_url__isnull=True).exclude(exploit_url__exact='').count()
         matched_gf_count = []
@@ -219,7 +280,17 @@ class ScanSummaryAPIView(APIView):
                     'count': endpoint_qs.filter(matched_gf_patterns__icontains=gf).count()
                 })
 
+        # Reads the prefetched activities — no query. scan.get_progress() below goes
+        # through the same helper on the same instance, so it costs nothing either.
         _tc = get_task_counts(scan)
+        is_spiderfoot_running = any(
+            activity.status == RUNNING_TASK
+            and (
+                activity.name == 'spiderfoot_scan'
+                or 'spiderfoot' in (activity.title or '').lower()
+            )
+            for activity in scan_activities
+        )
         data = {
             'subdomain_count': subdomain_count,
             'alive_count': alive_count,
@@ -232,7 +303,7 @@ class ScanSummaryAPIView(APIView):
             'info_count': info_count,
             'unknown_count': unknown_count,
             'total_vul_ignore_info_count': sum([low_count, medium_count, high_count, critical_count]),
-            'vulnerability_count': vulnerabilities.count(),
+            'vulnerability_count': vulnerability_count,
             'most_common_vulnerability': list(most_common_vulnerability),
             'most_common_tags': list(most_common_tags),
             'most_common_cve': list(most_common_cve),
@@ -243,15 +314,13 @@ class ScanSummaryAPIView(APIView):
             'secret_leaks_count': secret_leaks_count,
             'exploitable_count': exploitable_count,
             'matched_gf_count': matched_gf_count,
-            'buckets_count': S3Bucket.objects.filter(buckets__domain=target).distinct().count(),
             'email_count': emails.count(),
             'employees_count': Employee.objects.filter(employees__domain=target).distinct().count(),
             'emails': EmailSerializer(emails, many=True).data,
             'employees': EmployeeSerializer(Employee.objects.filter(employees__domain=target).distinct(), many=True).data,
             'dorks': DorkSerializer(Dork.objects.filter(dorks__domain=target).distinct(), many=True).data,
             'documents': MetafinderDocumentSerializer(MetaFinderDocument.objects.filter(target_domain=target), many=True).data,
-            'buckets': S3BucketSerializer(S3Bucket.objects.filter(buckets__domain=target).distinct(), many=True).data,
-            'todo_notes': list(TodoNote.objects.filter(scan_history=scan).values('id', 'title', 'description', 'is_done', 'is_important')),
+            'buckets': S3BucketSerializer(buckets, many=True).data,
             'monitoring_discoveries_list': MonitoringDiscoverySerializer(monitoring_discoveries, many=True).data,
             'subscans': SubScanSerializer(subscans, many=True).data,
             'recent_scans': recent_scans_data,
@@ -304,6 +373,7 @@ class ScanSummaryAPIView(APIView):
                 'id': scan.id,
                 'scan_status': scan.scan_status,
                 'engine_name': scan.scan_type.engine_name if scan.scan_type else "Standard",
+                'hardware_profile_id': scan.hardware_profile_id,
                 'start_scan_date': scan.start_scan_date,
                 'stop_scan_date': scan.stop_scan_date,
                 'duration': int((scan.stop_scan_date - scan.start_scan_date).total_seconds()) if scan.stop_scan_date and scan.start_scan_date else int((timezone.now() - scan.start_scan_date).total_seconds()) if scan.start_scan_date else 0,
@@ -314,10 +384,7 @@ class ScanSummaryAPIView(APIView):
                 'cfg_excluded_paths': scan.cfg_excluded_paths or [],
                 'tasks': scan.tasks or [],
                 'used_gf_patterns': scan.used_gf_patterns.split(',') if scan.used_gf_patterns else [],
-                'is_spiderfoot_running': scan.scanactivity_set.filter(
-                    Q(name='spiderfoot_scan') | Q(title__icontains='spiderfoot'),
-                    status=RUNNING_TASK
-                ).exists(),
+                'is_spiderfoot_running': is_spiderfoot_running,
                 'successful_task_count': _tc[0],
                 'failed_task_count': _tc[1],
                 'total_task_count': _tc[2],
@@ -326,7 +393,7 @@ class ScanSummaryAPIView(APIView):
             'secret_leaks_count': secret_leaks_count,
             'exploitable_count': exploitable_count,
             'matched_gf_count': matched_gf_count,
-            'buckets_count': scan.buckets.count(),
+            'buckets_count': len(buckets),
             'timeline': timeline_data
         }
 
@@ -359,8 +426,9 @@ class ScanAiExportAPIView(APIView):
 
         try:
             zip_buffer, filename = build_ai_export_zip(scan=scan, options=options)
-        except Exception as exc:
-            return Response({"error": f"Failed to build AI export: {exc}"}, status=500)
+        except Exception:
+            logger.exception("Failed to build AI export for scan %s", scan.id)
+            return Response({"error": "Failed to build AI export; see server logs."}, status=500)
 
         return FileResponse(
             zip_buffer,

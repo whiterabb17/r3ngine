@@ -27,7 +27,7 @@ export const useTargetsWithoutOrganization = () => {
 export const useCreateOrganization = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: CreateOrganizationDTO & { slug: string }) => {
+    mutationFn: async (data: CreateOrganizationDTO) => {
       const response = await axios.post(`${API_BASE}/createOrganization/`, data);
       return response.data;
     },

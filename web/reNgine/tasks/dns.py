@@ -6,6 +6,7 @@ Checks for: zone transfer (AXFR), dangling CNAMEs, DNSSEC configuration,
 DNS amplification risk, and optionally subdomain brute-force via fierce.
 """
 import json
+import shlex
 import logging
 import os
 import subprocess
@@ -68,8 +69,8 @@ def dns_security(self, host=None, ctx={}, description=None):
 
 def _check_axfr(self, ctx, target, results_dir):
     output_json = f'{results_dir}/dnsrecon_axfr_{target.replace(".", "_")}.json'
-    cmd = f'dnsrecon -d {target} -t axfr --json {output_json} 2>/dev/null'
-    logger.warning(f'Running dnsrecon AXFR check for {target}')
+    cmd = f'dnsrecon -d {shlex.quote(target)} -t axfr --json {shlex.quote(output_json)} 2>/dev/null'
+    logger.warning("Running dnsrecon AXFR check for %s", target)
     run_command(
         cmd,
         shell=True,
@@ -85,7 +86,7 @@ def _check_axfr(self, ctx, target, results_dir):
         with open(output_json, 'r') as f:
             records = json.load(f)
     except Exception as e:
-        logger.error(f'dnsrecon AXFR parse error for {target}: {e}')
+        logger.error("dnsrecon AXFR parse error for %s: %s", target, e)
         return
 
     if not isinstance(records, list):
@@ -144,7 +145,7 @@ def _check_axfr(self, ctx, target, results_dir):
                 if subdomain_name and subdomain_name.endswith(target):
                     save_subdomain(subdomain_name, ctx=ctx)
         except Exception as e:
-            logger.error(f'CNAME resolution check failed for {cname_target}: {e}')
+            logger.error("CNAME resolution check failed for %s: %s", cname_target, e)
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +153,7 @@ def _check_axfr(self, ctx, target, results_dir):
 # ---------------------------------------------------------------------------
 
 def _check_amplification(self, ctx, target, amp_threshold):
-    logger.warning(f'Running DNS amplification check for {target}')
+    logger.warning("Running DNS amplification check for %s", target)
     try:
         result = subprocess.run(
             ['dig', '+short', 'ANY', target, '@8.8.8.8'],
@@ -179,7 +180,7 @@ def _check_amplification(self, ctx, target, amp_threshold):
                 dedup_fields=['name', 'http_url', 'scan_history'],
             )
     except Exception as e:
-        logger.error(f'DNS amplification check failed for {target}: {e}')
+        logger.error("DNS amplification check failed for %s: %s", target, e)
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +188,7 @@ def _check_amplification(self, ctx, target, amp_threshold):
 # ---------------------------------------------------------------------------
 
 def _check_dnssec(self, ctx, target):
-    logger.warning(f'Checking DNSSEC configuration for {target}')
+    logger.warning("Checking DNSSEC configuration for %s", target)
     try:
         result = subprocess.run(
             ['dig', '+dnssec', '+short', 'DS', target, '@8.8.8.8'],
@@ -211,7 +212,7 @@ def _check_dnssec(self, ctx, target):
                 dedup_fields=['name', 'http_url', 'scan_history'],
             )
     except Exception as e:
-        logger.error(f'DNSSEC check failed for {target}: {e}')
+        logger.error("DNSSEC check failed for %s: %s", target, e)
 
 
 # ---------------------------------------------------------------------------
@@ -221,15 +222,15 @@ def _check_dnssec(self, ctx, target):
 def _brute_subdomains(self, ctx, target, results_dir):
     wordlist = '/usr/src/wordlist/default_wordlist/deepmagic.com-prefixes-top50000.txt'
     if not os.path.isfile(wordlist):
-        logger.warning(f'fierce wordlist not found at {wordlist}; skipping brute-force.')
+        logger.warning("fierce wordlist not found at %s; skipping brute-force.", wordlist)
         return
 
     output_file = f'{results_dir}/fierce_{target.replace(".", "_")}.txt'
     cmd = (
-        f'fierce --domain {target} --dns-servers 8.8.8.8 '
+        f'fierce --domain {shlex.quote(target)} --dns-servers 8.8.8.8 '
         f'--subdomains {wordlist} 2>&1 | tee {output_file}'
     )
-    logger.warning(f'Running fierce brute-force for {target}')
+    logger.warning("Running fierce brute-force for %s", target)
     run_command(
         cmd,
         shell=True,
@@ -245,7 +246,7 @@ def _brute_subdomains(self, ctx, target, results_dir):
         with open(output_file, 'r') as f:
             lines = f.readlines()
     except Exception as e:
-        logger.error(f'fierce output read error for {target}: {e}')
+        logger.error("fierce output read error for %s: %s", target, e)
         return
 
     for line in lines:
@@ -276,4 +277,4 @@ def _brute_subdomains(self, ctx, target, results_dir):
                         activity_id=getattr(self, 'activity_id', None),
                     )
                 except Exception as e:
-                    logger.error(f'save_ip_address failed for {ip}: {e}')
+                    logger.error("save_ip_address failed for %s: %s", ip, e)

@@ -65,7 +65,9 @@ import {
 } from 'lucide-react';
 import { useTargetSummary } from '../api';
 import { StartScanModal } from '../../scans/components/StartScanModal';
-import { useStopScan } from '../../scans/api';
+import { useFetchWhois, useStopScan } from '../../scans/api';
+import { WhoisPanel } from '../../scans/components/WhoisPanel';
+import { formatYesNo } from '../../../utils/displayFormat';
 import Chart from 'react-apexcharts';
 import { GeoMap } from '../../dashboard/components/GeoMap';
 import { KpiCard } from '../../../components/KpiCard';
@@ -81,6 +83,7 @@ import { AttackSurfaceTab } from '../../scans/components/AttackSurfaceTab';
 import PluginCardSlot from '../../plugins/components/PluginCardSlot';
 import { AiExportModal } from '../../scans/components/AiExportModal';
 import { ExposureList } from '../../exposures/components/ExposureList';
+import { TargetReportModal } from './TargetReportModal';
 
 
 const SeverityBadge: React.FC<{ severity: number }> = ({ severity }) => {
@@ -100,7 +103,7 @@ const SeverityBadge: React.FC<{ severity: number }> = ({ severity }) => {
     }
   };
 
-  const configs: any = {
+  const configs: Record<number, { label: string; color: string }> = {
     4: { label: 'CRITICAL', color: getThemeColor('#ff003c') },
     3: { label: 'HIGH', color: getThemeColor('#ff9f00') },
     2: { label: 'MEDIUM', color: getThemeColor('#fffc00') },
@@ -134,8 +137,10 @@ export const TargetSummary = () => {
   const [subdomainInitialAlive, setSubdomainInitialAlive] = useState(false);
   const [endpointsInitialAlive, setEndpointsInitialAlive] = useState(false);
   const [aiExportModalOpen, setAiExportModalOpen] = useState(false);
+  const [targetReportModalOpen, setTargetReportModalOpen] = useState(false);
   const [startScanTargets, setStartScanTargets] = useState<{ ids: number[]; names: string[] } | null>(null);
   const stopScanMutation = useStopScan(projectSlug || 'default');
+  const fetchWhois = useFetchWhois(['target-summary', projectSlug || 'default', parseInt(targetId || '0')]);
   const theme = useTheme();
   const isLight = theme.palette.mode === 'light';
 
@@ -210,7 +215,7 @@ export const TargetSummary = () => {
                     if (status === 1 || status === -1) return cPrimary;
                     return cRed;
                   };
-                  return data.recent_scans?.map((scan: any) => (
+                  return data.recent_scans?.map((scan) => (
                     <Box key={scan.id} sx={{ mb: 2, pl: 2, borderLeft: `2px solid ${alpha(cPrimary, 0.2)}`, position: 'relative' }}>
                       <Box sx={{ position: 'absolute', left: -5, top: 0, width: 8, height: 8, borderRadius: '50%', bgcolor: cPrimary }} />
                       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
@@ -261,7 +266,7 @@ export const TargetSummary = () => {
           >
             <Box sx={{ p: 1 }}>
               <Stack spacing={2}>
-                {data.subscans?.slice(0, 8).map((scan: any) => (
+                {data.subscans?.slice(0, 8).map((scan) => (
                   <Box
                     key={scan.id}
                     sx={{
@@ -397,7 +402,7 @@ export const TargetSummary = () => {
                     gap: 3
                   }}>
                     <Box><Typography sx={{ fontSize: '0.6rem', color: theme.palette.text.secondary, opacity: 0.7, mb: 0.5 }}>Domain</Typography><Typography sx={{ fontSize: '0.8rem', fontWeight: 700, color: cRed }}>{data.target_info.name}</Typography></Box>
-                    <Box><Typography sx={{ fontSize: '0.6rem', color: theme.palette.text.secondary, opacity: 0.7, mb: 0.5 }}>Dnssec</Typography><Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>{data.domain_info?.dnssec || 'N/A'}</Typography></Box>
+                    <Box><Typography sx={{ fontSize: '0.6rem', color: theme.palette.text.secondary, opacity: 0.7, mb: 0.5 }}>Dnssec</Typography><Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>{formatYesNo(data.domain_info?.dnssec)}</Typography></Box>
                     <Box><Typography sx={{ fontSize: '0.6rem', color: theme.palette.text.secondary, opacity: 0.7, mb: 0.5 }}>Geolocation</Typography><Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>{data.domain_info?.geolocation_iso || 'N/A'}</Typography></Box>
                     <Box><Typography sx={{ fontSize: '0.6rem', color: theme.palette.text.secondary, opacity: 0.7, mb: 0.5 }}>Created</Typography><Typography sx={{ fontSize: '0.7rem' }}>{data.domain_info?.created || 'N/A'}</Typography></Box>
                     <Box><Typography sx={{ fontSize: '0.6rem', color: theme.palette.text.secondary, opacity: 0.7, mb: 0.5 }}>Updated</Typography><Typography sx={{ fontSize: '0.7rem' }}>{data.domain_info?.updated || 'N/A'}</Typography></Box>
@@ -405,10 +410,16 @@ export const TargetSummary = () => {
                     <Box sx={{ gridColumn: 'span 3' }}><Typography sx={{ fontSize: '0.6rem', color: theme.palette.text.secondary, opacity: 0.7, mb: 0.5 }}>Registrar</Typography><Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: cPrimary }}>{data.domain_info?.registrar?.name || 'N/A'}</Typography></Box>
                   </Box>
                 )}
-                {infoTab === 1 && <Typography sx={{ p: 2, fontSize: '0.7rem', color: theme.palette.text.secondary, opacity: 0.7 }}>Loading WHOIS Data...</Typography>}
+                {infoTab === 1 && (
+                  <WhoisPanel
+                    domainInfo={data.domain_info}
+                    onFetch={() => fetchWhois.mutate(data.target_info.name)}
+                    isFetching={fetchWhois.isPending}
+                  />
+                )}
                 {infoTab === 2 && (
                   <Stack spacing={1}>
-                    {data.domain_info?.dns_records?.map((r: any, idx: number) => (
+                    {data.domain_info?.dns_records?.map((r, idx: number) => (
                       <Stack key={idx} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                         <Chip label={r.type.toUpperCase()} size="small" sx={{ height: 16, fontSize: '0.55rem', fontWeight: 900, bgcolor: alpha(cPrimary, 0.1), color: cPrimary }} />
                         <Typography sx={{ fontSize: '0.7rem', color: theme.palette.text.primary }}>{r.name}</Typography>
@@ -440,7 +451,7 @@ export const TargetSummary = () => {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {data.domain_info?.historical_ips?.map((ip: any, idx: number) => (
+                        {data.domain_info?.historical_ips?.map((ip, idx: number) => (
                           <TableRow key={idx}>
                             <TableCell sx={{ color: theme.palette.text.primary, fontSize: '0.7rem', borderBottom: `1px solid ${theme.palette.divider}` }}>{ip.ip}</TableCell>
                             <TableCell sx={{ color: theme.palette.text.primary, fontSize: '0.7rem', borderBottom: `1px solid ${theme.palette.divider}` }}>{ip.location}</TableCell>
@@ -463,13 +474,13 @@ export const TargetSummary = () => {
                 <Chart
                   options={{
                     chart: { type: 'donut', background: 'transparent' },
-                    theme: { mode: theme.palette.mode as any },
+                    theme: { mode: theme.palette.mode },
                     stroke: { show: false },
                     dataLabels: { enabled: false },
                     legend: { position: 'bottom', fontSize: '10px', labels: { colors: theme.palette.text.secondary } },
                     colors: ['#00ff62', '#ff003c', '#00f3ff', '#7000ff', '#fffc00']
                   }}
-                  series={data.http_status_breakdown.map((s: any) => s.count)}
+                  series={data.http_status_breakdown.map((s) => s.count)}
                   type="donut"
                   height="100%"
                 />
@@ -487,7 +498,7 @@ export const TargetSummary = () => {
                 <Chart
                   options={{
                     chart: { type: 'pie', background: 'transparent' },
-                    theme: { mode: theme.palette.mode as any },
+                    theme: { mode: theme.palette.mode },
                     labels: ['Critical', 'High', 'Medium', 'Low', 'Info'],
                     colors: ['#ff003c', '#ff8c00', '#fffc00', '#00f3ff', theme.palette.mode === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)'],
                     legend: { position: 'bottom', labels: { colors: theme.palette.text.secondary } }
@@ -509,7 +520,7 @@ export const TargetSummary = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {data.vulnerability_highlights?.map((v: any, idx: number) => (
+                    {data.vulnerability_highlights?.map((v, idx: number) => (
                       <TableRow key={idx}>
                         <TableCell sx={{ fontSize: '0.7rem', color: theme.palette.text.primary, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.name}</TableCell>
                         <TableCell><SeverityBadge severity={v.severity} /></TableCell>
@@ -531,10 +542,10 @@ export const TargetSummary = () => {
                     options={{
                       chart: { type: 'bar', toolbar: { show: false } },
                       plotOptions: { bar: { horizontal: true, borderRadius: 2 } },
-                      xaxis: { categories: data.most_common_cve?.map((c: any) => c.name) },
+                      xaxis: { categories: data.most_common_cve?.map((c) => c.name) },
                       colors: ['#ff003c']
                     }}
-                    series={[{ data: data.most_common_cve?.map((c: any) => c.count || c.nused) }]}
+                    series={[{ data: data.most_common_cve?.map((c) => c.nused) }]}
                     type="bar"
                     height="100%"
                   />
@@ -554,10 +565,10 @@ export const TargetSummary = () => {
                     options={{
                       chart: { type: 'bar', toolbar: { show: false } },
                       plotOptions: { bar: { horizontal: true, borderRadius: 2 } },
-                      xaxis: { categories: data.most_common_cwe?.map((c: any) => c.name) },
+                      xaxis: { categories: data.most_common_cwe?.map((c) => c.name) },
                       colors: ['#ff9f00']
                     }}
-                    series={[{ data: data.most_common_cwe?.map((c: any) => c.count || c.nused) }]}
+                    series={[{ data: data.most_common_cwe?.map((c) => c.nused) }]}
                     type="bar"
                     height="100%"
                   />
@@ -577,10 +588,10 @@ export const TargetSummary = () => {
                     options={{
                       chart: { type: 'bar', toolbar: { show: false } },
                       plotOptions: { bar: { horizontal: true, borderRadius: 2 } },
-                      xaxis: { categories: data.most_common_tags?.map((c: any) => c.name) },
+                      xaxis: { categories: data.most_common_tags?.map((c) => c.name) },
                       colors: ['#00ff62']
                     }}
-                    series={[{ data: data.most_common_tags?.map((c: any) => c.count || c.nused) }]}
+                    series={[{ data: data.most_common_tags?.map((c) => c.nused) }]}
                     type="bar"
                     height="100%"
                   />
@@ -616,7 +627,7 @@ export const TargetSummary = () => {
                   HISTORICAL RESOLVED IPS
                 </Typography>
                 <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                  {data.domain_info?.historical_ips?.map((ip: any) => (
+                  {data.domain_info?.historical_ips?.map((ip) => (
                     <Chip key={ip.ip} label={ip.ip} size="small" sx={{ mb: 1, bgcolor: alpha(theme.palette.text.primary, 0.05), color: theme.palette.text.secondary, border: `1px solid ${theme.palette.divider}` }} />
                   ))}
                   {(!data.domain_info?.historical_ips || data.domain_info.historical_ips.length === 0) && (
@@ -628,7 +639,7 @@ export const TargetSummary = () => {
             <TacticalPanel title="Discovered Ports" icon={<Server size={14} />} sx={{ height: 300 }}>
               <Box sx={{ p: 2 }}>
                 <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                  {data.discovered_ports?.map((p: any) => (
+                  {data.discovered_ports?.map((p) => (
                     <Chip key={p.number} label={`${p.number}/${p.service_name}`} size="small" sx={{ mb: 1, bgcolor: alpha(cPurple, 0.1), color: cPurple, border: `1px solid ${alpha(cPurple, 0.2)}` }} />
                   ))}
                 </Stack>
@@ -637,7 +648,7 @@ export const TargetSummary = () => {
             <TacticalPanel title="Technologies" icon={<Cpu size={14} />} sx={{ height: 300 }}>
               <Box sx={{ p: 2 }}>
                 <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                  {data.discovered_technologies?.map((t: any) => (
+                  {data.discovered_technologies?.map((t) => (
                     <Chip key={t.name} label={t.name} size="small" sx={{ mb: 1, bgcolor: alpha(cYellow, 0.1), color: cYellow, border: `1px solid ${alpha(cYellow, 0.2)}` }} />
                   ))}
                 </Stack>
@@ -661,7 +672,7 @@ export const TargetSummary = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {(data.monitoring_discoveries || []).map((m: any, idx: number) => (
+            {(data.monitoring_discoveries_list || []).map((m, idx: number) => (
               <TableRow key={idx} sx={{ '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.05) } }}>
                 <TableCell sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
                   <Chip
@@ -684,7 +695,7 @@ export const TargetSummary = () => {
                 </TableCell>
               </TableRow>
             ))}
-            {(!data.monitoring_discoveries || data.monitoring_discoveries.length === 0) && (
+            {(!data.monitoring_discoveries_list || data.monitoring_discoveries_list.length === 0) && (
               <TableRow>
                 <TableCell colSpan={3} align="center" sx={{ py: 4, color: theme.palette.text.secondary, opacity: 0.5 }}>NO MONITORING DISCOVERIES FOUND</TableCell>
               </TableRow>
@@ -731,13 +742,13 @@ export const TargetSummary = () => {
             </Button>
 
             {/* Stop Scan Button */}
-            {data.recent_scans?.find((scan: any) => [1, -1, 4, 5].includes(scan.scan_status)) && (
+            {data.recent_scans?.find((scan) => [1, -1, 4, 5].includes(scan.scan_status)) && (
               <Button
                 variant="outlined"
                 size="small"
                 startIcon={stopScanMutation.isPending ? <CircularProgress size={12} color="inherit" /> : <Square size={14} />}
                 onClick={() => {
-                  const running = data.recent_scans?.find((scan: any) => [1, -1, 4, 5].includes(scan.scan_status));
+                  const running = data.recent_scans?.find((scan) => [1, -1, 4, 5].includes(scan.scan_status));
                   if (running) stopScanMutation.mutate(running.id);
                 }}
                 disabled={stopScanMutation.isPending}
@@ -821,7 +832,25 @@ export const TargetSummary = () => {
         {tabs[activeTab]?.label === 'PARAMETERS' && <ParametersTab targetId={parseInt(targetId || '0')} scanId={latestScanId} />}
         {tabs[activeTab]?.label === 'VULNERABILITIES' && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+              <Button
+                variant="contained"
+                startIcon={<FileText size={16} />}
+                onClick={() => setTargetReportModalOpen(true)}
+                sx={{
+                  bgcolor: alpha(cGreen, 0.12),
+                  color: cGreen,
+                  border: `1px solid ${alpha(cGreen, 0.4)}`,
+                  fontFamily: 'var(--r3-heading-font)',
+                  fontSize: '0.68rem',
+                  fontWeight: 900,
+                  letterSpacing: 1,
+                  px: 2,
+                  '&:hover': { bgcolor: alpha(cGreen, 0.22) },
+                }}
+              >
+                TARGET REPORT
+              </Button>
               <Button
                 variant="contained"
                 startIcon={<BarChartIcon size={16} />}
@@ -862,6 +891,12 @@ export const TargetSummary = () => {
                 targetName={data?.target_info?.name ?? ''}
               />
             )}
+            <TargetReportModal
+              open={targetReportModalOpen}
+              onClose={() => setTargetReportModalOpen(false)}
+              domainId={parseInt(targetId || '0')}
+              domainName={data?.target_info?.name ?? ''}
+            />
           </Box>
         )}
         {tabs[activeTab]?.label === 'EXPOSURES' && (

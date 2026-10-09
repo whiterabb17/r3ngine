@@ -38,40 +38,45 @@ import {
   Database,
   Wifi,
   XCircle,
+  Power,
+  Link2,
 } from 'lucide-react';
 import { useParams } from '@tanstack/react-router';
 import {
   useLlmToolkit,
   useLlmModels,
   useUpdateLlmSettings,
+  useToggleLlmEnabled,
   useOllamaPullStatus,
   useTestLlmConnection,
   useOllamaServiceStatus,
-  useStartOllamaService,
-  useStopOllamaService,
 } from '../api';
+import { OPENAI_COMPATIBLE_PROVIDER } from '../api';
 import type { LLMConfig, LLMModel, TestLlmConnectionResult } from '../api';
+import { OpenAiCompatibleFields } from './OpenAiCompatibleFields';
 
 import { TacticalPanel } from '../../../components/TacticalPanel';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import type { ApiErrorLike } from '../../../types/errors';
 
 export const LlmToolkitPage: React.FC = () => {
   const { tokens } = useThemeTokens();
-  const { projectSlug = 'default' } = useParams({ strict: false }) as any;
+  const { projectSlug = 'default' } = useParams({ strict: false });
   const { data: toolkit, isLoading: isToolkitLoading } = useLlmToolkit(projectSlug);
   const updateSettings = useUpdateLlmSettings(projectSlug);
+  const toggleLlmEnabled = useToggleLlmEnabled(projectSlug);
   const testConnection = useTestLlmConnection(projectSlug);
   const { data: ollamaStatus } = useOllamaServiceStatus(projectSlug);
-  const startOllama = useStartOllamaService(projectSlug);
-  const stopOllama = useStopOllamaService(projectSlug);
 
   const [selectedProvider, setSelectedProvider] = useState<string>('ollama');
   const [showKey, setShowKey] = useState(false);
   const [form, setForm] = useState({
     api_key: '',
+    base_url: '',
     selected_model: '',
     is_active: false
   });
+  const [llmEnabled, setLlmEnabled] = useState(false);
   const [testResult, setTestResult] = useState<TestLlmConnectionResult | null>(null);
   const [pullingModel, setPullingModel] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState<{
@@ -86,8 +91,9 @@ export const LlmToolkitPage: React.FC = () => {
   
   const { data: models, isLoading: isModelsLoading } = useLlmModels(
     projectSlug, 
-    selectedProvider, 
-    form.api_key
+    selectedProvider,
+    form.api_key,
+    form.base_url
   );
   
   const { data: pullStatus } = useOllamaPullStatus(projectSlug, pullingModel);
@@ -100,18 +106,26 @@ export const LlmToolkitPage: React.FC = () => {
       if (config) {
         setForm({
           api_key: config.api_key || '',
+          base_url: config.base_url || '',
           selected_model: config.selected_model || '',
           is_active: config.is_active
         });
       } else {
         setForm({
           api_key: selectedProvider === 'ollama' ? 'http://ollama:11434' : '',
+          base_url: '',
           selected_model: '',
           is_active: false
         });
       }
     }
   }, [toolkit, selectedProvider]);
+
+  useEffect(() => {
+    if (typeof toolkit?.llm_enabled === 'boolean') {
+      setLlmEnabled(toolkit.llm_enabled);
+    }
+  }, [toolkit?.llm_enabled]);
 
   // Set default provider on first load
   useEffect(() => {
@@ -153,7 +167,30 @@ export const LlmToolkitPage: React.FC = () => {
   // Clear test result when the user changes provider, model, or key
   useEffect(() => {
     setTestResult(null);
-  }, [selectedProvider, form.api_key, form.selected_model]);
+  }, [selectedProvider, form.api_key, form.base_url, form.selected_model]);
+
+  const handleMasterToggle = (enabled: boolean) => {
+    setLlmEnabled(enabled);
+    toggleLlmEnabled.mutate(enabled, {
+      onSuccess: (data) => {
+        setLlmEnabled(Boolean(data.llm_enabled));
+        setSnackbar({
+          open: true,
+          message: data.message || (enabled ? 'LLM features enabled.' : 'LLM features disabled.'),
+          severity: 'success',
+        });
+      },
+      onError: (caught) => {
+        const error = caught as ApiErrorLike;
+        setLlmEnabled(!enabled);
+        setSnackbar({
+          open: true,
+          message: `Failed to update LLM switch: ${error?.response?.data?.message || error?.message || 'Unknown error'}`,
+          severity: 'error',
+        });
+      },
+    });
+  };
 
   const handleProviderChange = (provider: string) => {
     setSelectedProvider(provider);
@@ -162,7 +199,7 @@ export const LlmToolkitPage: React.FC = () => {
 
   const handleTest = () => {
     testConnection.mutate(
-      { provider: selectedProvider, api_key: form.api_key, model: form.selected_model },
+      { provider: selectedProvider, api_key: form.api_key, model: form.selected_model, base_url: form.base_url },
       { onSuccess: (data) => setTestResult(data) }
     );
   };
@@ -171,6 +208,7 @@ export const LlmToolkitPage: React.FC = () => {
     updateSettings.mutate({
       provider: selectedProvider,
       api_key: form.api_key,
+      base_url: form.base_url,
       selected_model: form.selected_model,
       is_active: form.is_active,
       action
@@ -191,51 +229,14 @@ export const LlmToolkitPage: React.FC = () => {
           });
         }
       },
-      onError: (error: any) => {
+      onError: (caught) => {
+        const error = caught as ApiErrorLike;
         setSnackbar({
           open: true,
-          message: `Failed to update LLM settings: ${error?.response?.data?.message || error.message || 'Unknown error'}`,
+          message: `Failed to update LLM settings: ${error?.response?.data?.message || error?.message || 'Unknown error'}`,
           severity: 'error',
         });
       },
-    });
-  };
-
-  const handleStartOllama = () => {
-    startOllama.mutate(undefined, {
-      onSuccess: (data) => {
-        setSnackbar({
-          open: true,
-          message: data.message || 'Ollama service starting...',
-          severity: 'success',
-        });
-      },
-      onError: (error: any) => {
-        setSnackbar({
-          open: true,
-          message: `Failed to start Ollama: ${error?.response?.data?.message || error.message || 'Unknown error'}`,
-          severity: 'error',
-        });
-      }
-    });
-  };
-
-  const handleStopOllama = () => {
-    stopOllama.mutate(undefined, {
-      onSuccess: (data) => {
-        setSnackbar({
-          open: true,
-          message: data.message || 'Ollama service stopped.',
-          severity: 'info',
-        });
-      },
-      onError: (error: any) => {
-        setSnackbar({
-          open: true,
-          message: `Failed to stop Ollama: ${error?.response?.data?.message || error.message || 'Unknown error'}`,
-          severity: 'error',
-        });
-      }
     });
   };
 
@@ -243,6 +244,7 @@ export const LlmToolkitPage: React.FC = () => {
   const providers = [
     { id: 'ollama', name: 'Ollama (Local)', icon: <Database size={18} /> },
     { id: 'openai', name: 'OpenAI', icon: <Zap size={18} /> },
+    { id: OPENAI_COMPATIBLE_PROVIDER, name: 'OpenAI-compatible', icon: <Link2 size={18} /> },
     { id: 'anthropic', name: 'Anthropic', icon: <Shield size={18} /> },
     { id: 'gemini', name: 'Google Gemini', icon: <Globe size={18} /> },
   ];
@@ -271,6 +273,47 @@ export const LlmToolkitPage: React.FC = () => {
           CENTRALIZED LLM ORCHESTRATION & CONFIGURATION
         </Typography>
       </Box>
+
+      <TacticalPanel title="GLOBAL CONTROL" icon={<Power size={18} />} sx={{ mb: 3 }}>
+        <Box sx={{ p: 1 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={llmEnabled}
+                disabled={toggleLlmEnabled.isPending}
+                onChange={(e) => handleMasterToggle(e.target.checked)}
+                sx={{
+                  '& .MuiSwitch-switchBase.Mui-checked': { color: tokens.accent.primary },
+                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: tokens.accent.primary }
+                }}
+              />
+            }
+            label={
+              <Typography sx={{ color: 'text.primary', fontFamily: 'Orbitron', fontSize: '0.9rem', fontWeight: 700 }}>
+                ENABLE LLM FEATURES
+              </Typography>
+            }
+          />
+          <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mt: 1 }}>
+            Master switch for AI impact assessment, GPT vulnerability reports, and other LLM calls during scans.
+            Configure a provider below, then turn this on.
+          </Typography>
+        </Box>
+        {!llmEnabled && (
+          <Alert
+            severity="warning"
+            sx={{
+              mt: 1,
+              bgcolor: `${tokens.accent.warning}14`,
+              color: 'text.primary',
+              border: `1px solid ${tokens.accent.warning}4D`,
+              '& .MuiAlert-icon': { color: tokens.accent.warning }
+            }}
+          >
+            LLM is off. Scans will skip AI impact assessment instead of calling a provider.
+          </Alert>
+        )}
+      </TacticalPanel>
 
       <Grid container spacing={3}>
         {/* Provider Sidebar */}
@@ -367,51 +410,23 @@ export const LlmToolkitPage: React.FC = () => {
                       ) : (
                         <AlertCircle size={16} color="#ff3131" />
                       )}
-                      <Typography sx={{ 
-                        fontSize: '0.85rem', 
+                      <Typography sx={{
+                        fontSize: '0.85rem',
                         fontWeight: 600,
-                        color: ollamaStatus?.running ? tokens.accent.primary : '#ff3131' 
+                        color: ollamaStatus?.running ? tokens.accent.primary : '#ff3131'
                       }}>
-                        {ollamaStatus?.running ? 'RUNNING' : 'STOPPED'}
+                        {ollamaStatus?.running
+                          ? `RUNNING${ollamaStatus.version ? ` (v${ollamaStatus.version})` : ''}`
+                          : 'STOPPED'}
                       </Typography>
                     </Box>
                   </Box>
-                  <Box sx={{ display: 'flex', gap: 2 }}>
-                    {!ollamaStatus?.running ? (
-                      <Button
-                        variant="contained"
-                        onClick={handleStartOllama}
-                        disabled={startOllama.isPending}
-                        startIcon={startOllama.isPending ? <CircularProgress size={14} color="inherit" /> : <Database size={16} />}
-                        sx={{
-                          bgcolor: `${tokens.accent.primary}1A`,
-                          color: tokens.accent.primary,
-                          border: `1px solid ${tokens.accent.primary}4D`,
-                          fontFamily: 'Orbitron',
-                          fontSize: '0.75rem',
-                          '&:hover': { bgcolor: `${tokens.accent.primary}33` }
-                        }}
-                      >
-                        {startOllama.isPending ? 'STARTING...' : 'START LOCAL SERVICE'}
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outlined"
-                        onClick={handleStopOllama}
-                        disabled={stopOllama.isPending}
-                        startIcon={stopOllama.isPending ? <CircularProgress size={14} color="inherit" /> : <XCircle size={16} />}
-                        sx={{
-                          borderColor: 'rgba(255, 49, 49, 0.3)',
-                          color: '#ff3131',
-                          fontFamily: 'Orbitron',
-                          fontSize: '0.75rem',
-                          '&:hover': { borderColor: '#ff3131', bgcolor: 'rgba(255, 49, 49, 0.05)' }
-                        }}
-                      >
-                        {stopOllama.isPending ? 'STOPPING...' : 'STOP LOCAL SERVICE'}
-                      </Button>
-                    )}
-                  </Box>
+                  {/* The service is started from the host (compose profile), not from here. */}
+                  <Typography sx={{ color: 'text.secondary', fontSize: '0.8rem', flexBasis: '100%' }}>
+                    {ollamaStatus?.running
+                      ? `Compose service reachable at ${ollamaStatus.url ?? 'http://ollama:11434'}.`
+                      : (ollamaStatus?.hint ?? 'Ollama is an optional compose service; enable the "ollama" profile and run make up.')}
+                  </Typography>
                 </Box>
               )}
 
@@ -456,13 +471,25 @@ export const LlmToolkitPage: React.FC = () => {
                   }}
                 />
                 <Typography variant="caption" sx={{ color: 'text.disabled', mt: 1, display: 'block' }}>
-                  {selectedProvider === 'ollama' 
-                    ? 'Internal URL for Ollama service. Default is http://ollama:11434' 
-                    : `Enter your ${selectedProvider} API key to fetch available models.`}
+                  {selectedProvider === 'ollama'
+                    ? 'Internal URL for Ollama service. Default is http://ollama:11434'
+                    : selectedProvider === OPENAI_COMPATIBLE_PROVIDER
+                      ? 'The key the gateway issued you. For a local server without auth, any value works.'
+                      : `Enter your ${selectedProvider} API key to fetch available models.`}
                 </Typography>
               </Box>
 
-              {/* Model Selection */}
+              {selectedProvider === OPENAI_COMPATIBLE_PROVIDER ? (
+                <OpenAiCompatibleFields
+                  baseUrl={form.base_url}
+                  model={form.selected_model}
+                  models={models}
+                  isModelsLoading={isModelsLoading}
+                  onBaseUrlChange={(base_url) => setForm((f) => ({ ...f, base_url }))}
+                  onModelChange={(selected_model) => setForm((f) => ({ ...f, selected_model }))}
+                />
+              ) : (
+              /* Model Selection */
               <Box>
                 <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem', mb: 1, fontFamily: 'Orbitron' }}>
                   SELECT MODEL
@@ -506,6 +533,7 @@ export const LlmToolkitPage: React.FC = () => {
                   )}
                 </TextField>
               </Box>
+              )}
 
               {/* Default Toggle */}
               <FormControlLabel

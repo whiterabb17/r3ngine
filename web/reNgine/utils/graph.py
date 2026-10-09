@@ -38,8 +38,8 @@ def _graph_heartbeat(message, *details):
             activity.heartbeat(message, *details)
         else:
             activity.heartbeat(message)
-    except Exception:
-        pass
+    except RuntimeError:
+        pass  # not running inside a Temporal activity
 
 
 def _last_graph_sync_scan_id():
@@ -49,8 +49,10 @@ def _last_graph_sync_scan_id():
         details = activity.info().heartbeat_details
         if details:
             return int(details[0])
-    except Exception:
-        pass
+    except RuntimeError:
+        pass  # not running inside a Temporal activity
+    except (TypeError, ValueError):
+        logger.warning("Ignoring unreadable graph sync checkpoint", exc_info=True)
     return 0
 
 
@@ -102,7 +104,7 @@ class Neo4jManager:
                 max_transaction_retry_time=30,   # don't retry failed txns for >30s
             )
         except Exception as e:
-            logger.error(f"Failed to connect to Neo4j: {e}")
+            logger.error("Failed to connect to Neo4j: %s", e)
 
     def close(self):
         if self.driver:
@@ -174,7 +176,7 @@ class Neo4jManager:
                 scan.start_scan_date.isoformat() if scan.start_scan_date else None
             )
         except Exception as e:
-            logger.error(f"Failed to fetch scan details for sync: {e}")
+            logger.error("Failed to fetch scan details for sync: %s", e)
             return
 
         subdomain_count = 0
@@ -586,11 +588,7 @@ class Neo4jManager:
 
         heartbeat(f"neo4j scan_id={scan_history_id} complete")
         logger.info(
-            f"[Neo4j] sync_scan_results scan_id={scan_history_id}: "
-            f"{subdomain_count} subdomains, {endpoint_count} endpoints, "
-            f"{param_count} params, {tech_count} techs, "
-            f"{vuln_count} vulns, {cve_count} CVEs, {cert_count} certs, "
-            f"{identity_count} identity_infra, {evidence_count} evidence synced."
+            "[Neo4j] sync_scan_results scan_id=%s: %s subdomains, %s endpoints, %s params, %s techs, %s vulns, %s CVEs, %s certs, %s identity_infra, %s evidence synced.", scan_history_id, subdomain_count, endpoint_count, param_count, tech_count, vuln_count, cve_count, cert_count, identity_count, evidence_count
         )
 
     @staticmethod
@@ -1226,7 +1224,7 @@ class Neo4jManager:
                         }
                     )
         except Exception as e:
-            logger.error(f"Failed to fetch stress telemetry: {e}")
+            logger.error("Failed to fetch stress telemetry: %s", e)
         return data
 
     def sync_all_scans(self, heartbeat_callback=None, resume_from_scan_id=None):

@@ -1,8 +1,16 @@
 import axios from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { components } from '@/types/api';
+import type { WithRequired } from '@/types/apiRows';
+
+/** `InAppNotificationSerializer` row; the list is unpaginated. */
+export type InAppNotification = WithRequired<
+  components["schemas"]["InAppNotification"],
+  'id' | 'created_at' | 'is_read' | 'notification_type' | 'status'
+>;
 
 export const useNotifications = (projectSlug?: string) => {
-  return useQuery({
+  return useQuery<InAppNotification[]>({
     queryKey: ['notifications', projectSlug],
     queryFn: async () => {
       const response = await axios.get('/api/notifications/', {

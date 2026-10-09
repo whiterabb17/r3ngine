@@ -63,7 +63,7 @@ def take_screenshot_and_save(subdomain_id, scan_id, results_dir=None, activity_i
                             base_url = f"{parsed.scheme}://{parsed.netloc}"
                             urls_to_capture.add(base_url)
                     except Exception as parse_err:
-                        logger.debug(f"Failed to parse endpoint URL {ep.http_url}: {parse_err}")
+                        logger.debug("Failed to parse endpoint URL %s: %s", ep.http_url, parse_err)
 
             # 3. Add subdomain's main http_url if present
             if subdomain.http_url:
@@ -86,8 +86,7 @@ def take_screenshot_and_save(subdomain_id, scan_id, results_dir=None, activity_i
             target_urls = sorted(list(urls_to_capture))[:max_screenshots]
 
         logger.info(
-            f"Processing {len(target_urls)} screenshot(s) for subdomain "
-            f"{subdomain.name} (ID: {subdomain_id})"
+            "Processing %s screenshot(s) for subdomain %s (ID: %s)", len(target_urls), subdomain.name, subdomain_id
         )
         
         success_count = 0
@@ -95,7 +94,7 @@ def take_screenshot_and_save(subdomain_id, scan_id, results_dir=None, activity_i
 
         for url in target_urls:
             try:
-                logger.info(f"Capturing screenshot for {url} (Subdomain ID: {subdomain_id})")
+                logger.info("Capturing screenshot for %s (Subdomain ID: %s)", url, subdomain_id)
                 # Record command for timeline
                 Command.objects.create(
                     command=f"Playwright: screenshot {url}",
@@ -122,11 +121,11 @@ def take_screenshot_and_save(subdomain_id, scan_id, results_dir=None, activity_i
                     success_count += 1
                     if not first_successful_path:
                         first_successful_path = capture_result["screenshot_path"]
-                    logger.info(f"Successfully saved screenshot for {url}")
+                    logger.info("Successfully saved screenshot for %s", url)
                 else:
-                    logger.warning(f"No screenshot captured for {url}")
+                    logger.warning("No screenshot captured for %s", url)
             except Exception as capture_err:
-                logger.error(f"Error capturing screenshot for {url}: {str(capture_err)}")
+                logger.error("Error capturing screenshot for %s: %s", url, str(capture_err))
 
         if first_successful_path:
             # Update the subdomain's legacy path field with the first success
@@ -135,10 +134,10 @@ def take_screenshot_and_save(subdomain_id, scan_id, results_dir=None, activity_i
             return True
             
     except Subdomain.DoesNotExist:
-        logger.error(f"Subdomain with ID {subdomain_id} does not exist.")
+        logger.error("Subdomain with ID %s does not exist.", subdomain_id)
     except ScanHistory.DoesNotExist:
-        logger.error(f"ScanHistory with ID {scan_id} does not exist.")
+        logger.error("ScanHistory with ID %s does not exist.", scan_id)
     except Exception as e:
-        logger.error(f"Error in take_screenshot_and_save: {str(e)}")
+        logger.error("Error in take_screenshot_and_save: %s", str(e))
         
     return False

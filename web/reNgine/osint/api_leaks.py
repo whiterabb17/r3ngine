@@ -41,6 +41,37 @@ _AUTH_TYPE_ONLY = re.compile(
     re.IGNORECASE,
 )
 
+# postleaksNg status / noise lines — never secrets
+_POSTLEAKS_SKIP_PREFIXES = (
+    '[*]',
+    '[+]',
+    '[-]',
+    'Traceback',
+    'File "',
+    'During handling of',
+    'The above exception',
+    '~~~~',
+    '...',
+)
+
+# Substrings that indicate Python/HTTP client failure output rather than a leak
+_POSTLEAKS_SKIP_SUBSTRINGS = (
+    'site-packages',
+    'connection refused',
+    'newconnectionerror',
+    'maxretryerror',
+    'connectionerror',
+    'urllib3',
+    'requests.exceptions',
+    'failed to establish a new connection',
+    'errno 111',
+    'create_connection',
+    'raise ',
+)
+
+# Python call/assignment fragments copied from traceback frames (e.g. sock = foo()
+_POSTLEAKS_CODE_FRAGMENT = re.compile(r'^[A-Za-z_][\w.]*\s*=\s*[\w.]+\(')
+
 _SWAGGER_PATHS = [
     '/swagger.json',
     '/swagger.yaml',
@@ -128,10 +159,38 @@ def run_porch_pirate(self, host: str, scan_history, results_dir: str) -> None:
     logger.info("porch-pirate finished for %s — exit_code=%s, saved=%d", host, return_code, saved)
 
 
+def _postleaks_is_secret_line(line: str) -> bool:
+    """Return True if a (ANSI-stripped) postleaksNg output line may contain a secret.
+
+    Rejects status banners, Python tracebacks, and connection/HTTP client noise that
+    previously got persisted as false-positive SecretLeak rows (one line per frame).
+    """
+    if not line:
+        return False
+    if any(line.startswith(p) for p in _POSTLEAKS_SKIP_PREFIXES):
+        return False
+    lower = line.lower()
+    if any(tok in lower for tok in _POSTLEAKS_SKIP_SUBSTRINGS):
+        return False
+    if _POSTLEAKS_CODE_FRAGMENT.match(line) or line.endswith('('):
+        return False
+    # Require a key/value separator so stack frames and caret markers are dropped.
+    if '=' not in line and ':' not in line:
+        return False
+    for sep in ('=', ':'):
+        idx = line.find(sep)
+        if idx != -1 and _TEMPLATE_VALUE.match(line[idx + 1:].strip()):
+            return False
+    return True
+
+
 def run_postleaks(self, host: str, scan_history, results_dir: str) -> None:
     """Search public Postman workspaces for credential leaks using postleaksNg.
 
     Binary is postleaksNg (capital N and G) — confirmed 2026-07-01.
+
+    Failed runs (non-zero exit) and non-secret output lines are discarded so
+    connection errors / tracebacks are never stored as findings.
     """
     proxy = _get_proxy()
     # Binary installed as 'postleaksNg' (capital N and G), not 'postleakng'
@@ -141,10 +200,27 @@ def run_postleaks(self, host: str, scan_history, results_dir: str) -> None:
 
     logger.info("postleaksNg starting for %s", host)
     return_code, output = run_command(cmd, cwd=results_dir)
+    for attempt in range(1, 3):
+        if return_code == 0:
+            break
+        logger.warning(
+            "postleaksNg exited with code %s for %s — retry %d/2",
+            return_code, host, attempt,
+        )
+        return_code, output = run_command(cmd, cwd=results_dir)
 
-    for line in output.splitlines():
+    if return_code != 0:
+        logger.error(
+            "postleaksNg failed after 3 attempts for %s (exit_code=%s) — no findings saved",
+            host, return_code,
+        )
+        return
+
+    clean = _ANSI_ESCAPE.sub('', output)
+    saved = 0
+    for line in clean.splitlines():
         line = line.strip()
-        if line:
+        if line and _postleaks_is_secret_line(line):
             save_secret_leak(
                 scan_history=scan_history,
                 tool_name='postleaksNg',
@@ -152,8 +228,12 @@ def run_postleaks(self, host: str, scan_history, results_dir: str) -> None:
                 source_url='postman://%s' % host,
                 match_content=line,
             )
+            saved += 1
 
-    logger.info("postleaksNg finished for %s — exit_code=%s", host, return_code)
+    logger.info(
+        "postleaksNg finished for %s — exit_code=%s, saved=%d",
+        host, return_code, saved,
+    )
 
 
 def run_swaggerspy_internet(self, host: str, scan_history, results_dir: str) -> None:

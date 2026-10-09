@@ -5,6 +5,7 @@ Adds jwt_tool (JWT algorithm confusion / forging) and graphql-cop
 (GraphQL security audit) to the per-URL scan loop.
 """
 import json
+import shlex
 import logging
 import os
 
@@ -29,9 +30,9 @@ def run_jwt_scan(self, ctx, url, subdomain, results_dir):
     subdomain_name = subdomain.name.replace('.', '_')
     output_file = f'{results_dir}/jwt_{subdomain_name}.txt'
     cmd = (
-        f'python3 {_JWT_TOOL_PATH} -t {url} -M at -np 2>&1 | tee {output_file}'
+        f'python3 {_JWT_TOOL_PATH} -t {shlex.quote(url)} -M at -np 2>&1 | tee {shlex.quote(output_file)}'
     )
-    logger.warning(f'Running jwt_tool on {url}')
+    logger.warning("Running jwt_tool on %s", url)
     run_command(
         cmd,
         shell=True,
@@ -47,7 +48,7 @@ def run_jwt_scan(self, ctx, url, subdomain, results_dir):
         with open(output_file, 'r') as f:
             lines = f.readlines()
     except Exception as e:
-        logger.error(f'jwt_tool output read error for {url}: {e}')
+        logger.error("jwt_tool output read error for %s: %s", url, e)
         return
 
     for line in lines:
@@ -74,9 +75,16 @@ def run_graphql_cop(self, ctx, url, subdomain):
     """Run graphql-cop against all /graphql endpoints and save findings."""
     from startScan.models import EndPoint
 
+    from reNgine.common_func import GRAPHQL_ENDPOINT_URL_REGEX
+
     candidate_urls = set()
-    # Collect existing /graphql endpoints
-    for ep in EndPoint.objects.filter(scan_history=self.scan, http_url__icontains='/graphql'):
+    # Endpoints that ARE a GraphQL endpoint, not ones that merely mention it:
+    # a shipped node_modules tree puts "/graphql" in the path of every file of
+    # the graphql package, and each one used to be probed as if it served the API.
+    for ep in EndPoint.objects.filter(
+        scan_history=self.scan,
+        http_url__iregex=GRAPHQL_ENDPOINT_URL_REGEX,
+    ):
         candidate_urls.add(ep.http_url)
     # Always try appending /graphql to the base URL
     base = url.rstrip('/')
@@ -86,8 +94,8 @@ def run_graphql_cop(self, ctx, url, subdomain):
         output_file = (
             f'{self.results_dir}/graphqlcop_{graphql_url.replace("://", "_").replace("/", "_")[:80]}.json'
         )
-        cmd = f'python3 /usr/src/github/graphql-cop/graphql-cop.py -t {graphql_url} -o json 2>/dev/null | tee {output_file}'
-        logger.warning(f'Running graphql-cop on {graphql_url}')
+        cmd = f'python3 /usr/src/github/graphql-cop/graphql-cop.py -t {shlex.quote(graphql_url)} -o json 2>/dev/null | tee {shlex.quote(output_file)}'
+        logger.warning("Running graphql-cop on %s", graphql_url)
         run_command(
             cmd,
             shell=True,
@@ -103,7 +111,7 @@ def run_graphql_cop(self, ctx, url, subdomain):
             with open(output_file, 'r') as f:
                 findings = json.load(f)
         except Exception as e:
-            logger.error(f'graphql-cop JSON parse error for {graphql_url}: {e}')
+            logger.error("graphql-cop JSON parse error for %s: %s", graphql_url, e)
             continue
 
         if not isinstance(findings, list):
@@ -134,7 +142,6 @@ def resolve_wordlist_path(config, default_path):
     if os.path.isfile(FFUF_DEFAULT_API_WORDLIST_PATH):
         return FFUF_DEFAULT_API_WORDLIST_PATH
     logger.warning(
-        f'API wordlist not found at {FFUF_DEFAULT_API_WORDLIST_PATH}; '
-        'falling back to default wordlist.'
+        "API wordlist not found at %s; falling back to default wordlist.", FFUF_DEFAULT_API_WORDLIST_PATH
     )
     return default_path

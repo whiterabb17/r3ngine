@@ -26,7 +26,7 @@ class DomainSerializerGetRecentScanTest(TestCase):
         mock_scan = self._make_scan()
 
         serializer = DomainSerializer()
-        with patch('api.serializers.apps') as mock_apps:
+        with patch('api.serializers.domains.apps') as mock_apps:
             mock_qs = MagicMock()
             mock_qs.filter.return_value.order_by.return_value.first.return_value = mock_scan
             mock_apps.get_model.return_value.objects = mock_qs
@@ -40,7 +40,7 @@ class DomainSerializerGetRecentScanTest(TestCase):
         domain = self._make_domain(start_scan_date=None)
 
         serializer = DomainSerializer()
-        with patch('api.serializers.apps') as mock_apps:
+        with patch('api.serializers.domains.apps') as mock_apps:
             mock_qs = MagicMock()
             mock_qs.filter.return_value.order_by.return_value.first.return_value = None
             mock_apps.get_model.return_value.objects = mock_qs
@@ -100,7 +100,7 @@ class DomainSerializerSortOrderTest(TestCase):
         expected_scan.id = 99
 
         serializer = DomainSerializer()
-        with patch('api.serializers.apps') as mock_apps:
+        with patch('api.serializers.domains.apps') as mock_apps:
             mock_qs = MagicMock()
             mock_qs.filter.return_value.order_by.return_value.first.return_value = expected_scan
             mock_apps.get_model.return_value.objects = mock_qs

@@ -21,16 +21,22 @@ from reNgine.definitions import (
 )
 from reNgine.common_func import (
     get_subdomain_from_url,
+    redact_proxy_credentials,
     remove_ansi_escape_sequences,
     sanitize_url,
 )
 from reNgine.utilities import SubdomainScopeChecker, replace_nulls
+from reNgine.utils.task_queues import go_executor_queue, python_orchestrator_queue
 from reNgine.settings import RENGINE_RESULTS
 
 logger = logging.getLogger(__name__)
 
 FETCH_URL_PERSIST_BATCH_SIZE = 2000
 _COMMAND_OUTPUT_MAX_CHARS = 512_000
+# Minimum wall-clock gap between two persists of a running command's output.
+# Streaming tools emit tens of thousands of lines; persisting per line count
+# rewrites a TOASTed text column thousands of times for a single command.
+_COMMAND_OUTPUT_FLUSH_INTERVAL = 5.0
 PRECRAWL_MAX_URLS = 500
 
 ROUTED_TOOLS = {
@@ -69,11 +75,18 @@ def _execute_go_workflow(cmd, scan_id, command_obj_id, tool):
     async def _start():
         from reNgine.temporal_client import TemporalClientProvider
         client = await TemporalClientProvider.get_client()
+        # Both queues belong to this host: the executor that runs the tool must
+        # share this process's scan_results volume.
         await client.start_workflow(
             "GoExecutorTaskWorkflow",
-            {"command": [cmd], "scan_id": scan_id or 0, "command_id": command_obj_id or 0},
+            {
+                "command": [cmd],
+                "scan_id": scan_id or 0,
+                "command_id": command_obj_id or 0,
+                "executor_task_queue": go_executor_queue(),
+            },
             id=wf_id,
-            task_queue="python-orchestrator-queue",
+            task_queue=python_orchestrator_queue(),
         )
 
     async def _fetch_result():
@@ -105,13 +118,13 @@ def _execute_go_workflow(cmd, scan_id, command_obj_id, tool):
                 from reNgine.definitions import ABORTED_TASK
                 status = ScanHistory.objects.filter(pk=scan_id).values_list('scan_status', flat=True).first()
                 if status == ABORTED_TASK:
-                    logger.warning(f"[_execute_go_workflow] Scan {scan_id} aborted — cancelling {wf_id}")
+                    logger.warning("[_execute_go_workflow] Scan %s aborted — cancelling %s", scan_id, wf_id)
                     from reNgine.temporal_client import TemporalClientProvider
                     TemporalClientProvider.cancel_workflow(wf_id)
                     cancelled = True
                     break
             except Exception as poll_err:
-                logger.debug(f"[_execute_go_workflow] Abort poll error: {poll_err}")
+                logger.debug("[_execute_go_workflow] Abort poll error: %s", poll_err)
 
     # Allow the result thread time to react to the cancellation before returning.
     done.wait(timeout=15.0)
@@ -141,14 +154,14 @@ def _subprocess_abort_watchdog(proc, scan_id):
             from reNgine.definitions import ABORTED_TASK
             status = ScanHistory.objects.filter(pk=scan_id).values_list('scan_status', flat=True).first()
             if status == ABORTED_TASK:
-                logger.warning(f"[_subprocess_abort_watchdog] Scan {scan_id} aborted — killing subprocess")
+                logger.warning("[_subprocess_abort_watchdog] Scan %s aborted — killing subprocess", scan_id)
                 try:
                     os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
                 except (ProcessLookupError, OSError):
                     pass
                 return
         except Exception as e:
-            logger.debug(f"[_subprocess_abort_watchdog] Poll error: {e}")
+            logger.debug("[_subprocess_abort_watchdog] Poll error: %s", e)
 
 
 def get_tool_color(cmd):
@@ -167,7 +180,8 @@ def get_tool_color(cmd):
 def sanitize_command_for_db(cmd):
     """
     Strips 'export HTTP_PROXY=... &&' and 'proxychains4 -f ...' from command
-    to ensure the UI displays the actual tool name and clean command.
+    to ensure the UI displays the actual tool name and clean command, and masks
+    proxy passwords so credentials are never persisted or shown.
     Accepts both str and list commands.
     """
     if not cmd:
@@ -180,7 +194,9 @@ def sanitize_command_for_db(cmd):
     cmd = re.sub(r'^export\s+.*?\s+&&\s+', '', cmd)
     # Strip proxychains4 wrapper with its config file
     cmd = re.sub(r'^(?:[/\w]*/)?proxychains4\s+-f\s+\S+\s+', '', cmd)
-    return cmd
+    # Strip leading cat <file> | pipes
+    cmd = re.sub(r'^cat\s+[^\s|]+\s*\|\s*', '', cmd)
+    return redact_proxy_credentials(cmd)
 
 
 def _publish_to_redis_log(redis_client, soc_config, scan_id, command_id, line):
@@ -207,7 +223,7 @@ def _publish_to_redis_log(redis_client, soc_config, scan_id, command_id, line):
         redis_client.xadd(stream_key, log_payload)
         redis_client.xtrim(stream_key, maxlen=soc_config.log_retention_count, approximate=True)
     except Exception as e:
-        logger.error(f"Failed to publish log to Redis: {e}")
+        logger.error("Failed to publish log to Redis: %s", e)
 
 
 def _init_redis_logging(scan_id):
@@ -232,7 +248,7 @@ def _init_redis_logging(scan_id):
             )
             return r, soc_config
     except Exception as e:
-        logger.error(f"Failed to initialize Redis logging configuration: {e}")
+        logger.error("Failed to initialize Redis logging configuration: %s", e)
     return None, None
 
 
@@ -245,7 +261,7 @@ def run_command(
         activity_id=None,
         remove_ansi_sequence=False,
         proxy=None,
-        timeout=7200,
+        timeout=43200,
         env=None
     ):
     """Run a given command using subprocess module.
@@ -262,7 +278,7 @@ def run_command(
         tuple: Tuple with return_code, output.
     """
     color = get_tool_color(cmd)
-    logger.debug(f"{color}{cmd}{COLOR_RESET}")
+    logger.debug("%s%s%s", color, redact_proxy_credentials(cmd), COLOR_RESET)
 
     conf_path = None
     if proxy:
@@ -279,7 +295,7 @@ def run_command(
             scan_history_id=scan_id,
             activity_id=activity_id)
     except IntegrityError as e:
-        logger.warning(f"Could not create Command object in DB (scan or activity may have been deleted/rolled back): {e}")
+        logger.warning("Could not create Command object in DB (scan or activity may have been deleted/rolled back): %s", e)
         command_obj = None
 
     redis_client, soc_config = _init_redis_logging(scan_id)
@@ -299,7 +315,7 @@ def run_command(
 
     if should_route:
         # Route execution transparently to the temporal-go-executor worker
-        logger.info(f"Routing {tool} command execution to Go executor: {cmd}")
+        logger.info("Routing %s command execution to Go executor: %s", tool, cmd)
         import asyncio
         import time
         from temporalio.client import Client
@@ -318,8 +334,9 @@ def run_command(
             from reNgine.temporal_client import TemporalClientProvider
             # Connect to the Temporal cluster
             client = await TemporalClientProvider.get_client()
-            # Execute GoExecutorTaskWorkflow on the python-orchestrator task queue which routes
-            # the subprocess activity to the go-executor-queue
+            # GoExecutorTaskWorkflow runs on this host's Python queue and hands the
+            # subprocess to this host's Go executor queue, so the tool output
+            # lands in the scan_results volume this process reads.
             result = await client.execute_workflow(
                 "GoExecutorTaskWorkflow",
                 {
@@ -327,9 +344,11 @@ def run_command(
                     "scan_id": scan_history_id or 0,
                     "command_id": command_rec_id or 0,
                     "working_dir": cwd or "",
+                    "timeout_seconds": timeout,
+                    "executor_task_queue": go_executor_queue(),
                 },
                 id=f"go-exec-{tool}-{command_rec_id or int(time.time())}",
-                task_queue="python-orchestrator-queue"
+                task_queue=python_orchestrator_queue()
             )
             return result
 
@@ -359,7 +378,7 @@ def run_command(
                 for line in stderr.splitlines():
                     _publish_to_redis_log(redis_client, soc_config, scan_id, command_obj_id, line)
         except Exception as e:
-            logger.error(f"Error executing remote command: {e}")
+            logger.error("Error executing remote command: %s", e)
             output = f"Error executing remote command: {e}"
             return_code = 127
     else:
@@ -376,44 +395,39 @@ def run_command(
                 universal_newlines=True,
                 errors='replace',
                 preexec_fn=os.setsid)
+            import time as _time
             output = ''
             _run_cmd_line_count = 0
             _run_cmd_aborted = False
+            # Heartbeat and abort polling run on a timer rather than every Nth
+            # line, so a chatty tool does not issue one SELECT per 10 lines.
+            _last_poll = _time.monotonic()
             for stdout_line in iter(popen.stdout.readline, ""):
                 item = stdout_line.strip()
                 output += '\n' + item
-                logger.info(f"{COLOR_WHITE}{item}{COLOR_RESET}")
+                logger.info("%s%s%s", COLOR_WHITE, item, COLOR_RESET)
                 if redis_client and soc_config:
                     _publish_to_redis_log(redis_client, soc_config, scan_id, command_obj_id, item)
                 _run_cmd_line_count += 1
-                if _run_cmd_line_count % 10 == 0:
+                _now = _time.monotonic()
+                if _now - _last_poll < _COMMAND_OUTPUT_FLUSH_INTERVAL:
+                    continue
+                _last_poll = _now
+                activity_heartbeat_safe(f"Command executing... line {_run_cmd_line_count}")
+                if is_scan_aborted(scan_id):
+                    logger.warning("[run_command] Scan %s aborted — killing subprocess.", scan_id)
                     try:
-                        from reNgine.utils.task import activity_heartbeat_safe
-                        activity_heartbeat_safe(f"Command executing... line {_run_cmd_line_count}")
-                    except Exception:
+                        os.killpg(os.getpgid(popen.pid), signal.SIGKILL)
+                    except (ProcessLookupError, OSError):
                         pass
-                if _run_cmd_line_count % 10 == 0 and scan_id:
-                    try:
-                        from startScan.models import ScanHistory as _SH
-                        from reNgine.definitions import ABORTED_TASK as _ABORTED
-                        _s = _SH.objects.filter(pk=scan_id).values_list('scan_status', flat=True).first()
-                        if _s == _ABORTED:
-                            logger.warning(f"[run_command] Scan {scan_id} aborted — killing subprocess.")
-                            try:
-                                os.killpg(os.getpgid(popen.pid), signal.SIGKILL)
-                            except (ProcessLookupError, OSError):
-                                pass
-                            _run_cmd_aborted = True
-                            break
-                    except Exception:
-                        pass
+                    _run_cmd_aborted = True
+                    break
             popen.stdout.close()
             if _run_cmd_aborted:
                 return_code = -1
             else:
                 # Replace bare 7200 s wait with a polling loop so abort is
                 # detected even if the process is slow to produce output.
-                import time as _time
                 _deadline = _time.monotonic() + timeout
                 _timed_out = False
                 while True:
@@ -421,21 +435,14 @@ def run_command(
                         popen.wait(timeout=10)
                         break
                     except subprocess.TimeoutExpired:
-                        if scan_id:
+                        if is_scan_aborted(scan_id):
+                            logger.warning("[run_command] Scan %s aborted during wait — killing.", scan_id)
                             try:
-                                from startScan.models import ScanHistory as _SH
-                                from reNgine.definitions import ABORTED_TASK as _ABORTED
-                                _s = _SH.objects.filter(pk=scan_id).values_list('scan_status', flat=True).first()
-                                if _s == _ABORTED:
-                                    logger.warning(f"[run_command] Scan {scan_id} aborted during wait — killing.")
-                                    try:
-                                        os.killpg(os.getpgid(popen.pid), signal.SIGKILL)
-                                    except (ProcessLookupError, OSError):
-                                        pass
-                                    _run_cmd_aborted = True
-                                    break
-                            except Exception:
+                                os.killpg(os.getpgid(popen.pid), signal.SIGKILL)
+                            except (ProcessLookupError, OSError):
                                 pass
+                            _run_cmd_aborted = True
+                            break
                         if _time.monotonic() > _deadline:
                             _timed_out = True
                             break
@@ -451,11 +458,11 @@ def run_command(
                 else:
                     return_code = popen.returncode
         except Exception as e:
-            logger.error(f"Error executing command {cmd}: {str(e)}")
+            logger.error("Error executing command %s: %s", cmd, str(e))
             output = f"Error executing command: {str(e)}"
             return_code = 127 # Command not found / error
         except BaseException as e:
-            logger.error(f"BaseException raised during command execution: {str(e)}")
+            logger.error("BaseException raised during command execution: %s", str(e))
             if popen:
                 try:
                     os.killpg(os.getpgid(popen.pid), signal.SIGKILL)
@@ -467,8 +474,8 @@ def run_command(
                 try:
                     if popen.stdout:
                         popen.stdout.close()
-                except Exception:
-                    pass
+                except OSError:
+                    pass  # stream already broken; the process is reaped below
                 try:
                     if popen.poll() is None:
                         try:
@@ -485,17 +492,19 @@ def run_command(
                     else:
                         popen.wait()
                 except Exception as ex:
-                    logger.error(f"Error reaping process in run_command: {ex}")
+                    logger.error("Error reaping process in run_command: %s", ex)
             if conf_path and os.path.exists(conf_path):
                 os.remove(conf_path)
 
     if command_obj:
-        logger.warning(f"Command {command_obj.id} finished with return code {return_code}")
-        command_obj.output = output.replace('\x00', '')
-        command_obj.return_code = return_code
-        command_obj.save()
+        logger.warning("Command %s finished with return code %s", command_obj.id, return_code)
+        # run_command has no output cap: unlike stream_command it returns the
+        # output to the caller and has never truncated what it stores.
+        persist_command_output(
+            command_obj, output, max_output_chars=None, return_code=return_code
+        )
     else:
-        logger.warning(f"Command finished with return code {return_code} (no database record saved)")
+        logger.warning("Command finished with return code %s (no database record saved)", return_code)
 
     if history_file:
         mode = 'a'
@@ -527,12 +536,12 @@ def run_command_with_retry(cmd, results_file, max_retries=3, **kwargs):
         if results_file and os.path.exists(results_file) and os.path.getsize(results_file) > 0:
             break
         logger.warning(
-            f'{tool_name}: results file "{results_file}" is empty after attempt {attempt - 1}/{max_retries}. Retrying...'
+            '%s: results file "%s" is empty after attempt %s/%s. Retrying...', tool_name, results_file, attempt - 1, max_retries
         )
         return_code, output = run_command(cmd, **kwargs)
 
     if not results_file or not os.path.exists(results_file) or os.path.getsize(results_file) == 0:
-        logger.warning(f'{tool_name}: results file "{results_file}" still empty after {max_retries} attempts. Moving on.')
+        logger.warning('%s: results file "%s" still empty after %s attempts. Moving on.', tool_name, results_file, max_retries)
 
     return return_code, output
 
@@ -597,17 +606,17 @@ def save_subdomain(subdomain_name, ctx={}):
         validators.ipv6(subdomain_name)
     )
     if not valid_domain:
-        logger.error(f'{subdomain_name} is not a valid domain. Skipping.')
+        logger.error("%s is not a valid domain. Skipping.", subdomain_name)
         return None, False
 
     if subdomain_checker.is_out_of_scope(subdomain_name):
-        logger.error(f'{subdomain_name} is out-of-scope. Skipping.')
+        logger.error("%s is out-of-scope. Skipping.", subdomain_name)
         return None, False
 
     if ctx.get('domain_id'):
         domain = Domain.objects.filter(id=ctx.get('domain_id')).first()
         if domain and domain.name not in subdomain_name:
-            logger.error(f"{subdomain_name} is not a subdomain of domain {domain.name}. Skipping.")
+            logger.error("%s is not a subdomain of domain %s. Skipping.", subdomain_name, domain.name)
             return None, False
 
     scan = ScanHistory.objects.filter(pk=scan_id).first()
@@ -667,7 +676,11 @@ def save_endpoint(
         **endpoint_data):
     """Get or create EndPoint object."""
     endpoint_data = replace_nulls(endpoint_data)
-    scheme = urlparse(http_url).scheme
+    try:
+        scheme = urlparse(http_url).scheme
+    except ValueError:
+        logger.warning("%s is not a valid URL. Skipping.", http_url)
+        return None, False
     endpoint = None
     created = False
     
@@ -677,9 +690,12 @@ def save_endpoint(
         if domain is None or isinstance(domain, int):
             domain = Domain.objects.filter(id=ctx.get('domain_id')).first()
             ctx['_domain_obj'] = domain
-        if domain and domain.name not in http_url:
-            logger.error(f"{http_url} is not a URL of domain {domain.name}. Skipping.")
-            return None, False
+        if domain:
+            host = _url_host(http_url)
+            domain_name = domain.name.lower().rstrip('.')
+            if host != domain_name and not host.endswith('.' + domain_name):
+                logger.error("%s is not a URL of domain %s. Skipping.", http_url, domain.name)
+                return None, False
 
     if crawl:
         # Avoid circular import by importing here
@@ -759,7 +775,7 @@ def save_endpoint(
                     tech_hint=f"Discovered URL: {http_url}"
                 )
             except Exception as e:
-                logger.error(f"Error registering AuthCandidate from endpoint {http_url}: {e}")
+                logger.error("Error registering AuthCandidate from endpoint %s: %s", http_url, e)
 
         subscan_id = ctx.get('subscan_id')
         if subscan_id:
@@ -898,6 +914,71 @@ def save_parameter(
 
 	return param, created
 
+
+def persist_command_output(
+		command_obj,
+		output: str,
+		max_output_chars=_COMMAND_OUTPUT_MAX_CHARS,
+		return_code=None,
+	) -> None:
+	"""Persist a command's captured output, writing only the changed columns.
+
+	`update_fields` keeps the UPDATE off the columns that never change, so a
+	half-megabyte text column is not rewritten together with the whole row.
+
+	Args:
+		command_obj: Command instance to update (may be None).
+		output: Full accumulated output; only the last `max_output_chars` are stored.
+		max_output_chars: Storage cap, or a falsy value to store the output untrimmed.
+		return_code: When not None, also persist the process return code.
+	"""
+	if not command_obj:
+		return
+
+	stored_output = output.replace('\x00', '')
+	if max_output_chars and len(stored_output) > max_output_chars:
+		stored_output = stored_output[-max_output_chars:]
+
+	command_obj.output = stored_output
+	update_fields = ['output']
+	if return_code is not None:
+		command_obj.return_code = return_code
+		update_fields.append('return_code')
+
+	try:
+		command_obj.save(update_fields=update_fields)
+	except Exception as e:
+		# The Command row is an audit artifact; the tool's results have already
+		# been yielded to the caller. Losing the log is not worth failing the
+		# scan over, and this is also called from a finally block where raising
+		# would mask the original exception. Note save(update_fields=...) raises
+		# when the row is gone (scan deleted mid-run) where a bare save() would
+		# silently re-insert it.
+		logger.warning("Could not persist output for command %s: %s", command_obj.pk, e)
+
+
+def is_scan_aborted(scan_id) -> bool:
+	"""Return True when the scan has been marked as aborted.
+
+	Reads a single column so the poll does not pull the whole ScanHistory row.
+	"""
+	if not scan_id:
+		return False
+	try:
+		from reNgine.definitions import ABORTED_TASK
+		status = (
+			ScanHistory.objects
+			.filter(pk=scan_id)
+			.values_list('scan_status', flat=True)
+			.first()
+		)
+		return status == ABORTED_TASK
+	except Exception as e:
+		# Fail open: a failing status poll must never kill a healthy tool run.
+		logger.debug("Abort status check failed for scan %s: %s", scan_id, e)
+		return False
+
+
 def stream_command(
 		cmd, 
 		cwd=None, 
@@ -908,7 +989,7 @@ def stream_command(
 		activity_id=None, 
 		trunc_char=None,
 		proxy=None,
-		timeout=3600,
+		timeout=43200,
 		route_to_executor=True,
 		max_output_chars=_COMMAND_OUTPUT_MAX_CHARS,
 	):
@@ -929,7 +1010,17 @@ def stream_command(
 		str/dict: Output line.
 	"""
 	color = get_tool_color(cmd)
-	logger.debug(f"{color}{cmd}{COLOR_RESET}")
+	logger.debug("%s%s%s", color, redact_proxy_credentials(cmd), COLOR_RESET)
+
+	# Set by _run_task when the scan is aborted or the activity reaches its time
+	# limit. Read here, in the calling thread, because it is thread-local.
+	from reNgine.temporal.activities.core import _task_cancel_local
+	cancel_event = getattr(_task_cancel_local, 'cancel_event', None)
+	if cancel_event is not None and cancel_event.is_set():
+		# A task looping over hosts would otherwise start, and then kill, one
+		# tool run per remaining host.
+		logger.warning("[stream_command] Task is stopping — not starting: %s", redact_proxy_credentials(cmd))
+		return
 
 	conf_path = None
 	if proxy:
@@ -960,7 +1051,7 @@ def stream_command(
 			should_route = True
 
 	if route_to_executor and should_route:
-		logger.info(f"Routing {tool} command execution to Go executor: {cmd}")
+		logger.info("Routing %s command execution to Go executor: %s", tool, cmd)
 		import asyncio
 		import time
 		from temporalio.client import Client
@@ -978,6 +1069,8 @@ def stream_command(
 			client = await TemporalClientProvider.get_client()
 			workflow_id = f"go-exec-{tool}-{command_rec_id or int(time.time())}"
 
+			# Same host for both queues: the executor that runs the tool must
+			# share this process's scan_results volume.
 			handle = await client.start_workflow(
 				"GoExecutorTaskWorkflow",
 				{
@@ -985,9 +1078,11 @@ def stream_command(
 					"scan_id": scan_history_id or 0,
 					"command_id": command_rec_id or 0,
 					"working_dir": cwd or "",
+					"timeout_seconds": timeout,
+					"executor_task_queue": go_executor_queue(),
 				},
 				id=workflow_id,
-				task_queue="python-orchestrator-queue"
+				task_queue=python_orchestrator_queue()
 			)
 			# Create a single task to await the workflow result.
 			# This avoids creating multiple handle.result() coroutines on every iteration,
@@ -998,21 +1093,16 @@ def stream_command(
 				# Poll until result_task is complete.
 				while not result_task.done():
 					# 1) Check the cancel_event set by _run_task's heartbeat thread.
-					try:
-						from reNgine.temporal_activities import _task_cancel_local
-						ce = getattr(_task_cancel_local, 'cancel_event', None)
-						if ce and ce.is_set():
-							logger.warning(
-								f"[stream_command] cancel_event set — cancelling GoExecutorTaskWorkflow {workflow_id}"
-							)
-							try:
-								await handle.cancel()
-							except Exception as cancel_err:
-								logger.error(f"[stream_command] Failed to cancel workflow {workflow_id}: {cancel_err}")
-							result_task.cancel()
-							return {"exit_code": -1, "stdout": "", "stderr": "Scan aborted"}
-					except Exception as e:
-						logger.debug(f"[stream_command] Local cancel_event check failed: {e}")
+					if cancel_event is not None and cancel_event.is_set():
+						logger.warning(
+							"[stream_command] cancel_event set — cancelling GoExecutorTaskWorkflow %s", workflow_id
+						)
+						try:
+							await handle.cancel()
+						except Exception as cancel_err:
+							logger.error("[stream_command] Failed to cancel workflow %s: %s", workflow_id, cancel_err)
+						result_task.cancel()
+						return {"exit_code": -1, "stdout": "", "stderr": "Scan aborted"}
 
 					# 2) Fallback: direct DB check.
 					if scan_history_id:
@@ -1028,16 +1118,16 @@ def stream_command(
 							)
 							if status == ABORTED_TASK:
 								logger.warning(
-									f"[stream_command] DB ABORTED_TASK — cancelling GoExecutorTaskWorkflow {workflow_id}"
+									"[stream_command] DB ABORTED_TASK — cancelling GoExecutorTaskWorkflow %s", workflow_id
 								)
 								try:
 									await handle.cancel()
 								except Exception as cancel_err:
-									logger.error(f"[stream_command] Failed to cancel workflow {workflow_id}: {cancel_err}")
+									logger.error("[stream_command] Failed to cancel workflow %s: %s", workflow_id, cancel_err)
 								result_task.cancel()
 								return {"exit_code": -1, "stdout": "", "stderr": "Scan aborted"}
 						except Exception as e:
-							logger.debug(f"[stream_command] DB abort status check failed: {e}")
+							logger.debug("[stream_command] DB abort status check failed: %s", e)
 
 					# Wait for up to 10 seconds or until the workflow finishes.
 					# This yields control to the event loop, letting result_task run,
@@ -1047,7 +1137,7 @@ def stream_command(
 				# Once result_task is done, return its result.
 				return await result_task
 			except Exception as e:
-				logger.error(f"[stream_command] Error waiting for GoExecutorTaskWorkflow: {e}")
+				logger.error("[stream_command] Error waiting for GoExecutorTaskWorkflow: %s", e)
 				raise
 			finally:
 				# Ensure result_task is cancelled if we exit early (e.g. on abort or error).
@@ -1080,16 +1170,15 @@ def stream_command(
 				for line in stderr.splitlines():
 					_publish_to_redis_log(redis_client, soc_config, scan_id, command_obj_id, line)
 		except Exception as e:
-			logger.error(f"Error executing remote command: {e}")
+			logger.error("Error executing remote command: %s", e)
 			output = f"Error executing remote command: {e}"
 			return_code = 127
 			stdout = ""
 			stderr = output
 
-		if command_obj:
-			command_obj.output = output.replace('\x00', '')
-			command_obj.return_code = return_code
-			command_obj.save()
+		persist_command_output(
+			command_obj, output, max_output_chars, return_code=return_code
+		)
 
 		if history_file:
 			mode = 'a'
@@ -1098,17 +1187,20 @@ def stream_command(
 			with open(history_file, mode) as f:
 				f.write(f'\n{cmd}\n{return_code}\n{output}\n------------------\n')
 
-		# Yield stdout line by line
-		for line in stdout.splitlines():
-			line = line.replace('\x00', '').strip()
-			if not line:
-				continue
-			item = line
-			try:
-				item = json.loads(line)
-			except json.JSONDecodeError:
-				pass
-			yield item
+		# Yield stdout then stderr line by line. Fatal markers such as nuclei's
+		# "all proxies are dead" land on stderr when routed through the Go
+		# executor; skipping stderr would make that failure invisible to callers.
+		for stream_text in (stdout, stderr):
+			for line in stream_text.splitlines():
+				line = line.replace('\x00', '').strip()
+				if not line:
+					continue
+				item = line
+				try:
+					item = json.loads(line)
+				except json.JSONDecodeError:
+					pass
+				yield item
 
 		if conf_path and os.path.exists(conf_path):
 			os.remove(conf_path)
@@ -1132,33 +1224,41 @@ def stream_command(
 	import threading
 	import time
 
-	def watchdog(proc, limit_sec):
+	def watchdog(proc, limit_sec, stop_event):
 		deadline = time.monotonic() + limit_sec
+		stopped = False
 		while time.monotonic() < deadline:
 			if proc.poll() is not None:
 				return  # Process finished normally before timeout
+			if stop_event is not None and stop_event.is_set():
+				stopped = True
+				break
 			time.sleep(2)
-			
-		# If we reach here, it timed out
+
 		if proc.poll() is None:
-			logger.error(f"Watchdog: Command timed out after {limit_sec} seconds. Killing process: {cmd}")
+			if stopped:
+				logger.warning("Watchdog: task is stopping (abort or time limit). Killing process: %s", redact_proxy_credentials(cmd))
+			else:
+				logger.error("Watchdog: Command timed out after %s seconds. Killing process: %s", limit_sec, cmd)
 			try:
 				os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
 			except (ProcessLookupError, OSError):
 				pass
 			except Exception as ex:
-				logger.error(f"Watchdog: Failed to kill process: {ex}")
-			
-			# Force close stdout to break the blocked readline() in the main thread
-			if proc.stdout:
+				logger.error("Watchdog: Failed to kill process: %s", ex)
+
+			# Force close stdout to break the blocked readline() in the main thread.
+			# Not on a stop: the killed group closes the pipe, and the reader then
+			# ends normally, so the task keeps and parses what the tool wrote.
+			if proc.stdout and not stopped:
 				try:
 					proc.stdout.close()
-				except Exception:
-					pass
+				except OSError:
+					pass  # stream already broken; the process was killed above
 
 	watchdog_thread = threading.Thread(
 		target=watchdog,
-		args=(process, timeout),
+		args=(process, timeout, cancel_event),
 		daemon=True
 	)
 	watchdog_thread.start()
@@ -1166,8 +1266,11 @@ def stream_command(
 	# Log the output in real-time to the database
 	output = ""
 
-	# Process the output
-	line_count = 0
+	# Persist on a timer, not per line: a tool emitting 100k lines would
+	# otherwise trigger ~10k full-row UPDATEs of the output column.
+	last_flush = time.monotonic()
+	pending_flush = False
+
 	try:
 		for line in iter(lambda: process.stdout.readline(), ''):
 			if not line:
@@ -1189,9 +1292,9 @@ def stream_command(
 
 			# Log to console for visibility
 			if isinstance(item, str):
-				logger.debug(f"{COLOR_WHITE}{item}{COLOR_RESET}")
+				logger.debug("%s%s%s", COLOR_WHITE, item, COLOR_RESET)
 			else:
-				logger.debug(f"{COLOR_WHITE}{json.dumps(item)}{COLOR_RESET}")
+				logger.debug("%s%s%s", COLOR_WHITE, json.dumps(item), COLOR_RESET)
 
 			# Yield the line
 			yield item
@@ -1202,40 +1305,35 @@ def stream_command(
 
 			# Update output
 			output += '\n' + line
-			line_count += 1
-			if line_count % 10 == 0:
-				stored_output = output.replace('\x00', '')
-				if max_output_chars and len(stored_output) > max_output_chars:
-					stored_output = stored_output[-max_output_chars:]
-				command_obj.output = stored_output
-				command_obj.save()
+			pending_flush = True
 
-				# Kill switch: abort the subprocess if the scan was stopped
-				if scan_id:
+			now = time.monotonic()
+			if now - last_flush >= _COMMAND_OUTPUT_FLUSH_INTERVAL:
+				last_flush = now
+				persist_command_output(command_obj, output, max_output_chars)
+				pending_flush = False
+
+				# Kill switch: abort the subprocess if the scan was stopped.
+				# Polled on the same timer as the flush, not per N lines.
+				if is_scan_aborted(scan_id):
+					logger.warning(
+						"[stream_command] Scan %s aborted — killing subprocess.", scan_id
+					)
 					try:
-						from startScan.models import ScanHistory
-						from reNgine.definitions import ABORTED_TASK
-						_scan = ScanHistory.objects.filter(pk=scan_id).only('scan_status').first()
-						if _scan and _scan.scan_status == ABORTED_TASK:
-							logger.warning(
-								f"[stream_command] Scan {scan_id} aborted — killing subprocess."
-							)
-							try:
-								os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-							except (ProcessLookupError, OSError):
-								pass
-							break
-					except Exception:
+						os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+					except (ProcessLookupError, OSError):
 						pass
+					break
 
 		process.wait()
-		command_obj.output = output.replace('\x00', '')
-		command_obj.return_code = process.returncode
-		command_obj.save()
+		persist_command_output(
+			command_obj, output, max_output_chars, return_code=process.returncode
+		)
+		pending_flush = False
 
 	except BaseException as e:
 		if not isinstance(e, GeneratorExit):
-			logger.error(f"Error in stream_command: {str(e)}")
+			logger.error("Error in stream_command: %s", str(e))
 		if process:
 			try:
 				os.killpg(os.getpgid(process.pid), signal.SIGKILL)
@@ -1243,12 +1341,16 @@ def stream_command(
 				pass
 		raise
 	finally:
+		# Lines produced since the last timed flush would otherwise be lost when
+		# the consumer stops iterating early or the command fails.
+		if pending_flush:
+			persist_command_output(command_obj, output, max_output_chars)
 		if process:
 			if process.stdout:
 				try:
 					process.stdout.close()
-				except Exception:
-					pass
+				except OSError:
+					pass  # stream already broken; the process is reaped below
 			try:
 				if process.poll() is None:
 					try:
@@ -1265,7 +1367,7 @@ def stream_command(
 				else:
 					process.wait()
 			except Exception as ex:
-				logger.error(f"Error reaping process in stream_command: {ex}")
+				logger.error("Error reaping process in stream_command: %s", ex)
 		if conf_path and os.path.exists(conf_path):
 			os.remove(conf_path)
 
@@ -1275,8 +1377,8 @@ def activity_heartbeat_safe(message: str) -> None:
 	try:
 		from temporalio import activity
 		activity.heartbeat(message)
-	except Exception:
-		pass
+	except RuntimeError:
+		pass  # not running inside a Temporal activity
 
 
 def _link_endpoints_subscan(http_urls, scan, subscan_id):
@@ -1559,20 +1661,20 @@ def ensure_endpoints_crawled_and_execute(task_proxy, task_function, ctx, descrip
 	from copy import deepcopy
 	from reNgine.common_func import get_http_urls
 
-	logger.info(f'Ensuring endpoints are crawled for {task_function.__name__}')
+	logger.info("Ensuring endpoints are crawled for %s", task_function.__name__)
 
 	if alive_endpoints := get_http_urls(is_alive=True, ctx=ctx):
-		logger.info(f'Found {len(alive_endpoints)} alive endpoints, executing {task_function.__name__}')
+		logger.info("Found %s alive endpoints, executing %s", len(alive_endpoints), task_function.__name__)
 		return task_function(ctx=ctx, description=description)
 
 	# No alive endpoints found, check if we have uncrawled endpoints
 	uncrawled_endpoints = get_http_urls(is_uncrawled=True, ctx=ctx)
 
 	if not uncrawled_endpoints:
-		logger.warning(f'No endpoints found for {task_function.__name__}, skipping task')
+		logger.warning("No endpoints found for %s, skipping task", task_function.__name__)
 		return None
 
-	logger.info(f'Found {len(uncrawled_endpoints)} uncrawled endpoints, launching HTTP crawl first')
+	logger.info("Found %s uncrawled endpoints, launching HTTP crawl first", len(uncrawled_endpoints))
 
 	from reNgine.tasks import http_crawl
 	custom_ctx = deepcopy(ctx)
@@ -1583,10 +1685,10 @@ def ensure_endpoints_crawled_and_execute(task_proxy, task_function, ctx, descrip
 	http_crawl(task_proxy, urls=uncrawled_endpoints[:precrawl_limit], ctx=custom_ctx)
 
 	if alive_endpoints := get_http_urls(is_alive=True, ctx=ctx):
-		logger.info(f'Found {len(alive_endpoints)} alive endpoints after crawl, executing {task_function.__name__}')
+		logger.info("Found %s alive endpoints after crawl, executing %s", len(alive_endpoints), task_function.__name__)
 		return task_function(ctx=ctx, description=description)
 	else:
-		logger.warning(f'No alive endpoints found after crawl, skipping {task_function.__name__}')
+		logger.warning("No alive endpoints found after crawl, skipping %s", task_function.__name__)
 		return None
 
 
@@ -1671,7 +1773,7 @@ def save_subdomain_metadata(subdomain, endpoint, extra_datas=None):
 	if extra_datas is None:
 		extra_datas = {}
 	if endpoint and endpoint.is_alive:
-		logger.info(f'Saving HTTP metadatas from {endpoint.http_url}')
+		logger.info("Saving HTTP metadatas from %s", endpoint.http_url)
 		subdomain.http_url = endpoint.http_url
 		subdomain.http_status = endpoint.http_status
 		subdomain.response_time = endpoint.response_time
@@ -1705,6 +1807,13 @@ def save_subdomain_metadata(subdomain, endpoint, extra_datas=None):
 		subdomain.http_url = http_url
 		subdomain.save()
 	else:
-		logger.debug(f'No HTTP URL found for {subdomain.name} yet. Skipping metadata extraction.')
+		logger.debug("No HTTP URL found for %s yet. Skipping metadata extraction.", subdomain.name)
 
 
+def _url_host(http_url: str) -> str:
+    """Lower-case host of a URL, or of a bare 'host[:port][/path]' as callers pass for a subdomain."""
+    target = http_url if '://' in http_url else f'//{http_url}'
+    try:
+        return (urlparse(target).hostname or '').rstrip('.')
+    except ValueError:
+        return ''

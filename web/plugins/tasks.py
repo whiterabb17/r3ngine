@@ -20,12 +20,12 @@ def install_plugin_tools(plugin_slug):
     try:
         plugin = Plugin.objects.get(slug=plugin_slug)
     except Plugin.DoesNotExist:
-        logger.error(f"Plugin {plugin_slug} not found for tool installation.")
+        logger.error("Plugin %s not found for tool installation.", plugin_slug)
         return
 
     tools_config = plugin.tools_config
     if not tools_config or 'tools' not in tools_config:
-        logger.info(f"No tools to install for plugin {plugin_slug}.")
+        logger.info("No tools to install for plugin %s.", plugin_slug)
         return
 
     plugin_dir = os.path.join('/usr/src/app/plugins_data', plugin_slug)
@@ -35,7 +35,7 @@ def install_plugin_tools(plugin_slug):
         cache_key = f"plugin_{plugin_slug}_tool_{name}_verified"
 
         if cache.get(cache_key):
-            logger.info(f"Tool {name} for plugin {plugin_slug} already verified (cached), skipping.")
+            logger.info("Tool %s for plugin %s already verified (cached), skipping.", name, plugin_slug)
             continue
 
         install_command = tool.get('install_command')
@@ -51,16 +51,16 @@ def install_plugin_tools(plugin_slug):
                 text=True
             )
             if res.returncode == 0:
-                logger.info(f"Tool {name} for plugin {plugin_slug} already installed, skipping install.")
+                logger.info("Tool %s for plugin %s already installed, skipping install.", name, plugin_slug)
                 cache.set(cache_key, True, timeout=_TOOL_VERIFIED_CACHE_TIMEOUT)
                 already_installed = True
 
         if not already_installed:
             if not install_command:
-                logger.warning(f"No install command for tool {name} in plugin {plugin_slug}")
+                logger.warning("No install command for tool %s in plugin %s", name, plugin_slug)
                 continue
 
-            logger.info(f"Installing tool {name} for plugin {plugin_slug}...")
+            logger.info("Installing tool %s for plugin %s...", name, plugin_slug)
             try:
                 subprocess.run(
                     install_command,
@@ -70,7 +70,7 @@ def install_plugin_tools(plugin_slug):
                     capture_output=True,
                     text=True
                 )
-                logger.info(f"Successfully installed tool {name}.")
+                logger.info("Successfully installed tool %s.", name)
 
                 if validation_command:
                     res = subprocess.run(
@@ -81,17 +81,17 @@ def install_plugin_tools(plugin_slug):
                         text=True
                     )
                     if res.returncode == 0:
-                        logger.info(f"Tool {name} verified successfully.")
+                        logger.info("Tool %s verified successfully.", name)
                         cache.set(cache_key, True, timeout=_TOOL_VERIFIED_CACHE_TIMEOUT)
                     else:
-                        logger.error(f"Tool {name} verification failed: {res.stderr}")
+                        logger.error("Tool %s verification failed: %s", name, res.stderr)
                 else:
                     cache.set(cache_key, True, timeout=_TOOL_VERIFIED_CACHE_TIMEOUT)
 
             except subprocess.CalledProcessError as e:
-                logger.error(f"Failed to install tool {name}: {e.stderr}")
+                logger.error("Failed to install tool %s: %s", name, e.stderr)
             except Exception as e:
-                logger.error(f"Unexpected error installing tool {name}: {str(e)}")
+                logger.error("Unexpected error installing tool %s: %s", name, str(e))
 
 def verify_all_plugin_tools():
     """

@@ -76,13 +76,17 @@ A backward-compatibility stub that exists solely to preserve the event history p
 
 ## Scan Recovery via `resume_scan_temporal`
 
-When a scan is recovered manually (e.g., after a crash where Temporal didn't auto-resume), the `resume_scan_temporal` function in `tasks.py`:
+When a scan is recovered after a crash (workflow missing or terminated), `resume_scan_temporal`:
 
-1. Queries `ScanActivity` records to find which tasks have already completed.
-2. Starts a new `MasterScanWorkflow` but passes the completed tasks in `ctx` so the workflow knows to skip them.
-3. This allows resuming from a specific tier without re-running earlier tiers.
+1. Queries `ScanActivity` records to find which **pipeline** tasks have already completed.
+2. Drops YAML resource keys (`threads`, `timeout`, `rate_limit`, ...) that sometimes leak into `ScanHistory.tasks`.
+3. Starts a new `MasterScanWorkflow` with only the remaining pipeline tasks.
 
-> **Note:** This manual recovery path is a fallback. In normal operation, Temporal handles recovery automatically by replaying the workflow's event history.
+If the master workflow **already completed** but the scan is FAILED (a late task such as AI Impact Assessment failed), startup recovery must **not** start another `MasterScanWorkflow`. `recover_stuck_scans` retries only unsuccessful `ScanActivity` rows via `SingleTaskRetryWorkflow`.
+
+> **Note:** In normal operation, Temporal handles in-flight recovery by replaying the workflow's event history. `recover_stuck_scans` is the fallback when that history is gone or the scan finished failed.
+
+On every orchestrator start, `recover_stuck_scans` first runs `cleanup_orphan_workflows_for_completed_scans`: it lists Running Temporal workflows, maps scan-scoped ids (`go-exec-*`, `master-scan-*`, `scan-*`, `subscan-*`, …) back to `ScanHistory`, and cancels any whose scan is already `SUCCESS` or `ABORTED` (also arming Redis `scan_stop_{id}` so Go executor subprocesses die). This stops tool workflows that outlived a finalized scan after heartbeat retries or missed parent cancellation.
 
 ---
 

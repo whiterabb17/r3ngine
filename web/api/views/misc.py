@@ -56,6 +56,7 @@ from api.permissions import *
 from api.serializers import *
 from reNgine.utils.graph import Neo4jManager
 from reNgine.temporal_client import TemporalClientProvider, run_and_close
+from reNgine.definitions import INTERNAL_ERROR_MESSAGE
 
 logger = logging.getLogger(__name__)
 
@@ -101,10 +102,11 @@ class CreateProjectApi(APIView):
 				'project_name': project_name
 			}
 			return Response(response)
-		except Exception as e:
+		except Exception:
+			logger.exception('Failed to resolve project')
 			response = {
 				'status': False,
-				'error': str(e)
+				'error': INTERNAL_ERROR_MESSAGE
 			}
 			return Response(response, status=HTTP_400_BAD_REQUEST)
 
@@ -165,8 +167,9 @@ class ToggleMonitoringAPIView(APIView):
 				'is_monitored': domain.is_monitored,
 				'message': f'Monitoring {"enabled" if domain.is_monitored else "disabled"} for {domain.name}'
 			})
-		except Exception as e:
-			return Response({'status': False, 'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+		except Exception:
+			logger.exception('Failed to toggle monitoring')
+			return Response({'status': False, 'message': INTERNAL_ERROR_MESSAGE}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class MobileMediaServeView(APIView):

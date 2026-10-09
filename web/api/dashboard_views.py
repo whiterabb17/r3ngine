@@ -24,6 +24,7 @@ from api.dashboard_serializers import DashboardDataSerializer
 from api.serializers import VulnerabilitySerializer, ScanHistorySerializer, ScanActivitySerializer
 
 from django.conf import settings
+from reNgine.definitions import INTERNAL_ERROR_MESSAGE
 
 class DashboardAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -160,6 +161,6 @@ class CWEInfoAPIView(APIView):
 
         except json.JSONDecodeError:
             return Response({'status': False, 'error': 'LLM returned non-JSON response', 'raw': raw}, status=502)
-        except Exception as e:
-            logger.error(f"CWEInfoAPIView error: {e}")
-            return Response({'status': False, 'error': str(e)}, status=500)
+        except Exception:
+            logger.exception("CWEInfoAPIView error")
+            return Response({'status': False, 'error': INTERNAL_ERROR_MESSAGE}, status=500)

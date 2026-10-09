@@ -36,6 +36,7 @@ from .serializers import (
     EvidenceUploadSerializer, EvidenceAnnotationSerializer,
 )
 from .services import EvidenceService
+from reNgine.definitions import INTERNAL_ERROR_MESSAGE
 
 logger = logging.getLogger(__name__)
 
@@ -92,9 +93,11 @@ class EvidenceCollectionViewSet(RetrieveModelMixin, ListModelMixin, CreateModelM
         try:
             EvidenceService.archive_collection(collection, actor=request.user)
             return Response({'status': 'Collection archived', 'uuid': str(collection.uuid)})
-        except Exception as e:
-            logger.error(f"[EVIDENCE] Archive collection {uuid} failed: {e}")
+        except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception("[EVIDENCE] Archive collection %s failed", uuid)
+            return Response({'error': INTERNAL_ERROR_MESSAGE}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class EvidenceViewSet(RetrieveModelMixin, ListModelMixin, GenericViewSet):
@@ -143,8 +146,9 @@ class EvidenceViewSet(RetrieveModelMixin, ListModelMixin, GenericViewSet):
 
         try:
             url = EvidenceService.get_download_url(evidence)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception("[EVIDENCE] Download URL for %s failed", evidence.pk)
+            return Response({'error': INTERNAL_ERROR_MESSAGE}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         if request.query_params.get('redirect') == '1':
             return HttpResponseRedirect(url)
@@ -269,7 +273,7 @@ class EvidenceUploadView(APIView):
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error(f"[EVIDENCE] Upload failed: {e}", exc_info=True)
+            logger.error("[EVIDENCE] Upload failed: %s", e, exc_info=True)
             return Response({'error': 'Upload failed. See server logs.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response(EvidenceSerializer(evidence).data, status=status.HTTP_201_CREATED)

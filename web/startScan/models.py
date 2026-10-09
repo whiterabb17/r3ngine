@@ -240,6 +240,15 @@ class Subdomain(models.Model):
 	attack_surface = models.TextField(null=True, blank=True)
 	criticality_level = models.IntegerField(default=1, null=True, blank=True)
 	criticality_reason = models.TextField(null=True, blank=True)
+	# Where an HTTP probe of the host's root ended after redirects; the endpoint
+	# rows are saved under the final host, so this is the only link back.
+	final_url = models.CharField(max_length=2000, null=True, blank=True)
+	# Set by the Target Deduplication step: heavy tools skip a host that serves
+	# the same site as another (see reNgine/host_dedup.py).
+	duplicate_of = models.ForeignKey(
+		'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='duplicates',
+	)
+	dedup_reason = models.CharField(max_length=20, null=True, blank=True)
 
 	class Meta:
 		constraints = [
@@ -521,7 +530,7 @@ class Parameter(models.Model):
 
 class VulnerabilityTags(models.Model):
 	id = models.AutoField(primary_key=True)
-	name = models.CharField(max_length=100)
+	name = models.CharField(max_length=100, db_index=True)
 
 	def __str__(self):
 		return self.name
@@ -556,6 +565,9 @@ class CveId(models.Model):
 	epss_percentile = models.FloatField(null=True, blank=True)  # 0-100
 	published_date = models.DateTimeField(null=True, blank=True)
 	last_modified_date = models.DateTimeField(null=True, blank=True)
+	# When we last ran local enrichment (NVD/EPSS/etc). Distinct from NVD's
+	# lastModified — using that for the 7-day skip caused perpetual re-enrichment.
+	last_enriched_at = models.DateTimeField(null=True, blank=True, db_index=True)
 	vulnerability_type = models.CharField(max_length=50, null=True, blank=True)  # SCA, DAST, SAST, Config
 	is_poc = models.BooleanField(default=False)
 	is_template = models.BooleanField(default=False)
@@ -594,7 +606,7 @@ class EpssFeedData(models.Model):
 
 class CweId(models.Model):
 	id = models.AutoField(primary_key=True)
-	name = models.CharField(max_length=100)
+	name = models.CharField(max_length=100, db_index=True)
 
 	def __str__(self):
 		return self.name
@@ -864,6 +876,27 @@ class Vulnerability(models.Model):
 	is_suppressed = models.BooleanField(default=False)
 	group_key = models.CharField(max_length=500, null=True, blank=True, db_index=True)
 	validation_reason = models.TextField(blank=True, null=True, help_text="Reason/justification for status change")
+	agent_enrichment = models.JSONField(
+		default=dict,
+		blank=True,
+		help_text=(
+			"SAFE agent enrichment: impact_classes, validation_verdict, confidence, "
+			"rationale, cve_signals, attck_techniques — never exploit payloads."
+		),
+	)
+
+	class Meta:
+		indexes = [
+			# Scan detail vuln list and the "max severity of this scan" lookup.
+			models.Index(fields=['scan_history', '-severity'], name='vuln_scan_sev_idx'),
+			# Per-target severity counts and the severity/date-ordered highlights.
+			models.Index(
+				fields=['target_domain', '-severity', '-discovered_date'],
+				name='vuln_target_sev_date_idx',
+			),
+			# Per-subdomain severity buckets in the visualisation tree.
+			models.Index(fields=['subdomain', 'severity'], name='vuln_subdomain_sev_idx'),
+		]
 
 	def get_path(self):
 		if self.http_url:
@@ -1013,11 +1046,24 @@ class ScanActivity(models.Model):
 	)
 	title = models.CharField(max_length=1000)
 	name = models.CharField(max_length=1000)
+	# Host, host:port or URL this task ran against. Empty for whole-scan tasks
+	# (correlation, notifications) that have no single target.
+	target_host = models.CharField(max_length=500, blank=True, null=True)
 	time = models.DateTimeField()
 	status = models.IntegerField()
 	error_message = models.CharField(max_length=300, blank=True, null=True)
 	traceback = models.TextField(blank=True, null=True)
 	execution_id = models.CharField(max_length=100, blank=True, null=True)
+
+	class Meta:
+		indexes = [
+			# Row claim executed at the start of every single task.
+			models.Index(fields=['scan_of', 'name'], name='sa_scan_name_idx'),
+			# Timeline ordering on the scan detail page.
+			models.Index(fields=['scan_of', 'tier', 'time_started'], name='sa_scan_tier_started_idx'),
+			# Abort, orphan reconciliation and zombie sweeps.
+			models.Index(fields=['scan_of', 'status', 'time_started'], name='sa_scan_status_started_idx'),
+		]
 
 	def __str__(self):
 		return str(self.title)
@@ -1158,6 +1204,7 @@ class Email(models.Model):
 	SOURCE_PHONEBOOK = 'phonebook'
 	SOURCE_PATTERN   = 'pattern'
 	SOURCE_CRAWLED   = 'crawled'
+	SOURCE_MAILBOX_VERIFY = 'mailbox_verify'
 	SOURCE_CHOICES = [
 		(SOURCE_MANUAL,    'Manual'),
 		(SOURCE_HUNTER,    'Hunter.io'),
@@ -1165,6 +1212,7 @@ class Email(models.Model):
 		(SOURCE_PHONEBOOK, 'Phonebook.cz'),
 		(SOURCE_PATTERN,   'Pattern Inference'),
 		(SOURCE_CRAWLED,   'Crawled URLs'),
+		(SOURCE_MAILBOX_VERIFY, 'Mailbox Verified'),
 	]
 
 	id       = models.AutoField(primary_key=True)
@@ -1444,6 +1492,37 @@ class ScanReport(models.Model):
 		return f"Report for {self.scan_history.domain.name} ({self.report_type})"
 
 
+class TargetReport(models.Model):
+	STATUS_CHOICES = ((0, 'Failed'), (1, 'Running'), (2, 'Complete'))
+
+	domain = models.ForeignKey(
+		'targetApp.Domain', on_delete=models.CASCADE,
+		related_name='target_reports',
+	)
+	selected_scan_ids = ArrayField(
+		models.IntegerField(),
+		help_text='Ordered list of ScanHistory IDs included in this report',
+	)
+	included_sections = ArrayField(
+		models.CharField(max_length=100),
+		default=list,
+		help_text='Section keys included in this report',
+	)
+	status = models.IntegerField(choices=STATUS_CHOICES, default=1)
+	report_type = models.CharField(max_length=50, default='full', help_text='Reserved for future report variants (e.g. vulnerability-only).')
+	report_file = models.FileField(upload_to='target_reports/', null=True, blank=True)
+	error_message = models.TextField(null=True, blank=True)
+	comments = models.TextField(null=True, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	completed_at = models.DateTimeField(null=True, blank=True)
+
+	class Meta:
+		verbose_name_plural = 'Target Reports'
+
+	def __str__(self) -> str:
+		return f'Target Report for {self.domain.name} ({self.report_type})'
+
+
 class DnsRecord(models.Model):
 	scan_history = models.ForeignKey(
 		ScanHistory, on_delete=models.CASCADE, related_name='dns_records'
@@ -1482,6 +1561,16 @@ class OsintStaging(models.Model):
 		('ignored', 'Ignored'),
 	), default='pending')
 	discovered_date = models.DateTimeField(auto_now_add=True)
+	# Agent triage: None = not reviewed, True = keep, False = false positive / noise
+	agent_verified = models.BooleanField(null=True, blank=True, default=None)
+	agent_verified_at = models.DateTimeField(null=True, blank=True)
+	agent_verified_by = models.ForeignKey(
+		User,
+		null=True,
+		blank=True,
+		on_delete=models.SET_NULL,
+		related_name='osint_staging_verifications',
+	)
 
 	class Meta:
 		verbose_name_plural = "OSINT Staging"

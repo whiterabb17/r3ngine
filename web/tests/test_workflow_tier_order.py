@@ -12,14 +12,15 @@ class TestSubScanWorkflowTierOrder(TestCase):
         fail intentionally if the production list is reverted without updating here.
         """
         return [
-            # Tier 1: Discovery + vigolium harvest/discovery
+            # Tier 1: Discovery + vigolium harvest
             [t for t in active_tasks if t in {
                 "subdomain_discovery", "amass_intel_discovery", "firewall_vpn_scan",
                 "dns_security", "osint", "spiderfoot_scan", "baddns",
-                "vigolium_harvest", "vigolium_discovery",
+                "vigolium_harvest",
             }],
-            # Tier 2: HTTP Crawl & Port Scan
-            [t for t in active_tasks if t in {"http_crawl", "port_scan"}],
+            # Tier 2: HTTP Crawl & Port Scan + vigolium discovery, which runs here
+            # (not Tier 1) so it targets all enumerated subdomains.
+            [t for t in active_tasks if t in {"http_crawl", "port_scan", "vigolium_discovery"}],
             # Tier 3: URL Fetching + Screenshot
             [t for t in active_tasks if t in {"fetch_url", "screenshot"}],
             [t for t in active_tasks if t == "http_crawl_bridge"],
@@ -38,15 +39,31 @@ class TestSubScanWorkflowTierOrder(TestCase):
         self.assertLess(web_api_tier, param_tier,
                         "web_api_discovery must run before param_discovery (CPDE)")
 
-    def test_vigolium_harvest_and_discovery_in_tier_1(self):
+    def test_vigolium_harvest_in_tier_1_and_discovery_in_tier_2(self):
         active = {"subdomain_discovery", "vigolium_harvest", "vigolium_discovery", "http_crawl"}
         tiers = self._build_tiers(active)
         t1 = tiers[0]
         t2 = tiers[1]
         self.assertIn("vigolium_harvest", t1, "vigolium_harvest must be in Tier 1")
-        self.assertIn("vigolium_discovery", t1, "vigolium_discovery must be in Tier 1")
         self.assertNotIn("vigolium_harvest", t2)
-        self.assertNotIn("vigolium_discovery", t2)
+        # Discovery needs the full subdomain list, so it waits for Tier 1 to finish.
+        self.assertIn("vigolium_discovery", t2, "vigolium_discovery must be in Tier 2")
+        self.assertNotIn("vigolium_discovery", t1)
+
+    def test_vigolium_discovery_timeline_tier_matches_the_tier_that_runs_it(self):
+        """The timeline label and the execution tier must not drift apart.
+
+        `_TASK_TIER` is what groups rows in the UI and what the tier retry
+        endpoint filters on; this pins it to the tier index used above.
+        """
+        from reNgine.task_plan import get_task_tier
+
+        active = {"vigolium_discovery", "http_crawl"}
+        tiers = self._build_tiers(active)
+        executed_tier = next(
+            i for i, t in enumerate(tiers, start=1) if "vigolium_discovery" in t
+        )
+        self.assertEqual(get_task_tier('vigolium_discovery'), executed_tier)
 
     def test_vigolium_harvest_precedes_http_crawl(self):
         active = {"vigolium_harvest", "vigolium_discovery", "http_crawl"}
@@ -76,7 +93,7 @@ class TestSubScanWorkflowTierOrder(TestCase):
         They are stripped from active_tasks before tier construction and executed
         as a concurrent flat gather after the tier pipeline.
         """
-        from reNgine.temporal_workflows import _STANDALONE_SUBSCAN_WORKFLOWS
+        from reNgine.temporal.workflows import _STANDALONE_SUBSCAN_WORKFLOWS
         # Pass all standalone types as if they were active tasks
         tiers = self._build_tiers(list(_STANDALONE_SUBSCAN_WORKFLOWS))
         all_tiered = set()

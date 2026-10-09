@@ -15,6 +15,7 @@ import { TacticalPanel } from '../../../../components/TacticalPanel';
 import { useEmployees } from '../../api';
 import { useEmployeeIntelStore } from '../../../../store/employeeIntelStore';
 import { EmployeeIntelModal } from './EmployeeIntelModal';
+import { getSafeUrl } from '../../../../utils/securityUtils';
 
 interface EmployeeSectionProps {
   scanId: number;
@@ -101,7 +102,7 @@ export const EmployeeSection: React.FC<EmployeeSectionProps> = ({ scanId }) => {
                         </Typography>
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                           {employee.metadata.maigret.map((profile, idx) => {
-                            const safeSrc = /^https?:\/\//i.test(profile.url) ? profile.url : '#';
+                            const safeSrc = getSafeUrl(profile.url) ?? '#';
                             return (
                               <Box
                                 key={idx}

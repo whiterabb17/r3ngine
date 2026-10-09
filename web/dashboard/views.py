@@ -45,8 +45,8 @@ def index(request, slug, *args, **kwargs):
         user_preferences = UserPreferences.objects.get(user=request.user)
         if user_preferences.ui_version == 'v3':
             return render(request, 'dashboard/v3_index.html', {'project': project})
-    except Exception as e:
-        # Fallback to legacy dashboard
+    except UserPreferences.DoesNotExist:
+        # No stored preference: fall back to the legacy dashboard.
         pass
 
 
@@ -273,9 +273,9 @@ def admin_interface_update(request, slug):
                     user.set_password(change_password)
                     user.save()
                 messageData = {'status': True}
-            except Exception as e:
-                logger.error(e)
-                messageData = {'status': False, 'error': str(e)}
+            except Exception:
+                logger.exception('User admin action failed')
+                messageData = {'status': False, 'error': INTERNAL_ERROR_MESSAGE}
         elif mode == 'create':
             try:
                 response = json.loads(request.body)
@@ -289,9 +289,9 @@ def admin_interface_update(request, slug):
                 )
                 assign_role(user, response.get('role'))
                 messageData = {'status': True}
-            except Exception as e:
-                logger.error(e)
-                messageData = {'status': False, 'error': str(e)}
+            except Exception:
+                logger.exception('User admin action failed')
+                messageData = {'status': False, 'error': INTERNAL_ERROR_MESSAGE}
         return JsonResponse(messageData)
     return HttpResponseRedirect(reverse('admin_interface', kwargs={'slug': slug}))
 
@@ -333,7 +333,7 @@ def four_oh_four(request):
     try:
         return render(request, 'dashboard/v3_index.html') # Or a specific 404 page if SPA handles it
     except Exception as e:
-        logger.error(f"Error in 404 handler: {str(e)}")
+        logger.error("Error in 404 handler: %s", str(e))
         import traceback
         logger.error(traceback.format_exc())
         from django.http import HttpResponse
@@ -669,10 +669,11 @@ def login_v3(request):
                     'status': False,
                     'message': 'Invalid username or password.'
                 })
-        except Exception as e:
+        except Exception:
+            logger.exception('Login failed')
             return JsonResponse({
                 'status': False,
-                'message': str(e)
+                'message': INTERNAL_ERROR_MESSAGE
             })
             
     if request.user.is_authenticated:

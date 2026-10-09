@@ -16,6 +16,7 @@ Tools compiled into the Docker image and invoked via Temporal activities (Python
 | **Sublist3r** | Subdomain enumeration via search engines | [aboul3la/Sublist3r](https://github.com/aboul3la/Sublist3r) |
 | **OneForAll** | Comprehensive subdomain collection | [shmilylty/OneForAll](https://github.com/shmilylty/OneForAll) |
 | **chaos** | Passive DNS from Chaos dataset | [projectdiscovery/chaos-client](https://github.com/projectdiscovery/chaos-client) |
+| **securitytrails** | Subdomains from the SecurityTrails API (key in the API Vault) | built in (`reNgine/osint/securitytrails.py`) |
 | **dnsrecon** | DNS enumeration and zone transfer | [darkoperator/dnsrecon](https://github.com/darkoperator/dnsrecon) (pipx) |
 | **baddns** | Subdomain takeover detection | [blacklanternsecurity/baddns](https://github.com/blacklanternsecurity/baddns) (pipx) |
 | **dnsx** | Multi-purpose DNS toolkit | [projectdiscovery/dnsx](https://github.com/projectdiscovery/dnsx) |
@@ -113,7 +114,6 @@ Tools compiled into the Docker image and invoked via Temporal activities (Python
 | **nikto** | Web server scanner | system (see `internal_tools.sh`) |
 | **sploitscan** | Exploit search and scoring | pipx |
 | **fierce** | DNS reconnaissance / zone walk | pip |
-| **searchsploit** | Offline Exploit-DB search CLI | [exploit-database/exploitdb](https://gitlab.com/exploit-database/exploitdb) |
 | **CMSeeK** | CMS detection and exploitation | [Tuhinshubhra/CMSeeK](https://github.com/Tuhinshubhra/CMSeeK) |
 | **bypass-url-parser** | URL WAF bypass testing | pipx |
 

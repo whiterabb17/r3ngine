@@ -35,7 +35,8 @@ Project context and technology stack for the r3ngine v3 web reconnaissance and v
 - **Temporal UI**: `http://localhost:8080` — workflow history, signals, replay, cancellation.
 - **Logging**: `get_module_logger(__name__)` from `reNgine.utils.logger`; use `log_line(prefix, action, msg)` for structured output; `format_exception_for_log(exc)` for safe exception text; `%`-style formatting for user-controlled data in plain log calls.
 - **Container name**: `r3ngine-web-1` (use `python3` not `python` inside the container).
-- **Frontend build**: Run `npm run build` locally in `frontend/` (NOT inside the container).
+- **Frontend build**: Run `npx tsc -b` / `npm run build` locally in `frontend/` — NOT inside the container, where `node_modules` is masked by an anonymous volume (`tsc: not found`). Deploying a frontend change needs an image rebuild: `make build-web && make up`.
+- **Compose**: the compose files live in `docker/`, so use the Makefile targets (`make up`, `make build-web`, `make restart-apps`, `make migrate`, `make logs`) — a bare `docker compose` from the repo root finds no file. `web/` is mounted, so Python edits need only a service restart.
 
 ## Scan Pipeline (7-Tier Architecture)
 
@@ -67,15 +68,17 @@ Import: `from reNgine.tasks import initiate_scan_temporal` (shim) or `from reNgi
 - Private methods at the bottom of the file.
 - No path constructed from user input without validation (resolve + bounds-check).
 - No raw exception messages returned to the client.
-- `temporal/workflows/__init__.py` must stay deterministic — no DB calls, no I/O, no `datetime.now()`.
-- All scanning logic belongs in `temporal/activities/__init__.py` or the Go executor.
+- Every module in `temporal/workflows/` must stay deterministic — no DB calls, no I/O, no `datetime.now()`.
+- All scanning logic belongs in the `temporal/activities/` modules or the Go executor.
+- Every `execute_activity` call needs an explicit `retry_policy` — Temporal's default is unlimited attempts, and each retry adds a row to the scan timeline. Use the `_RETRY_*` presets; see `r3ngine-temporal.md`.
+- A task function that returns `False` should set `self.error` first, so the timeline shows why it failed rather than "returned False/failed".
 - When mocking extracted modules, patch at the **new module path** (e.g. `reNgine.tasks.vuln.stream_command`), not the shim.
 - Run tests inside Docker: `docker exec r3ngine-web-1 bash -c "cd /usr/src/app && python3 manage.py test --keepdb --verbosity=2 2>&1 | tail -20"`
 
 ## Temporal Quick Reference
 
-- Workflows (deterministic): `web/reNgine/temporal/workflows/__init__.py`
-- Activities (side-effecting): `web/reNgine/temporal/activities/__init__.py`
+- Workflows (deterministic): `web/reNgine/temporal/workflows/` (`_common`, `master_scan`, `subscan`, `stress`, `jobs`, `recon`, `assessment_workflow`; `__init__.py` re-exports)
+- Activities (side-effecting): `web/reNgine/temporal/activities/` (`core.py` + domain modules)
 - Shims (backward-compatible): `temporal_workflows.py`, `temporal_activities.py` — re-export from packages above
 - Client (start/cancel from Django): `web/reNgine/temporal_client.py`
 - Go executor (subprocess tools): `web/executor/main.go` on `go-executor-queue`

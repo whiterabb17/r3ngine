@@ -9,7 +9,7 @@ import { useThemeTokens } from '../../../../theme/useThemeTokens';
 
 const SUBDOMAIN_TOOLS = [
   'subfinder', 'chaos', 'ctfr', 'sublist3r', 'tlsx',
-  'oneforall', 'netlas', 'baddns', 'amass-passive', 'amass-active',
+  'oneforall', 'netlas', 'securitytrails', 'baddns', 'amass-passive', 'amass-active',
 ];
 
 interface Props {
@@ -75,7 +75,7 @@ export const SubdomainDiscoverySection: React.FC<Props> = ({ config, enabled, on
           )}
         </Grid>
         <Grid size={{ xs: 12 }}>
-          {(['enable_http_crawl', 'bbot', 'use_subfinder_config', 'use_amass_config'] as const).map((field) => (
+          {(['enable_http_crawl', 'use_subfinder_config', 'use_amass_config'] as const).map((field) => (
             <FormControlLabel
               key={field}
               control={
@@ -89,14 +89,8 @@ export const SubdomainDiscoverySection: React.FC<Props> = ({ config, enabled, on
               label={
                 <Typography variant="body2">
                   {field === 'enable_http_crawl' && 'Enable HTTP crawl'}
-                  {field === 'bbot' && 'Enable bbot'}
                   {field === 'use_subfinder_config' && 'Use subfinder config'}
                   {field === 'use_amass_config' && 'Use amass config'}
-                  {field === 'bbot' && (
-                    <Typography component="span" variant="caption" sx={{ color: 'text.secondary', ml: 1 }}>
-                      (slow but thorough passive OSINT)
-                    </Typography>
-                  )}
                 </Typography>
               }
               sx={{ mr: 2 }}

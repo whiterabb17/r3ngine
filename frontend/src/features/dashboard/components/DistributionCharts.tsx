@@ -27,17 +27,16 @@ import {
   Tooltip,
 } from '@mui/material';
 import Chart from 'react-apexcharts';
-import type { DashboardData } from '../api';
+import type { ApexOptions } from 'apexcharts';
+import type { CWEInfo, CveDetails, DashboardData } from '../api';
+import { fetchCveDetails, fetchCweInfo, generateCveDescription } from '../api';
 import ReactMarkdown from 'react-markdown';
+import { getSafeUrl } from '../../../utils/securityUtils';
 
-interface CWEInfo {
-  name: string;
-  description: string;
-  impact: string;
-  remediation: string;
-  examples: string[];
-  severity: string;
-}
+type ApexFormatterOpts = NonNullable<Parameters<NonNullable<NonNullable<ApexOptions['dataLabels']>['formatter']>>[1]>;
+
+/** Treemap data labels also receive the cell's `value`, which apexcharts' typings leave out. */
+type TreemapLabelOpts = ApexFormatterOpts & { value: number };
 
 const ChartCard: React.FC<{ title: React.ReactNode; children: React.ReactNode; height?: number | string }> = ({ title, children, height }) => {
   const { isLight, tokens } = useThemeTokens();
@@ -138,7 +137,7 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
   // CVE dialog state
   const [cveDialogOpen, setCveDialogOpen] = useState(false);
   const [selectedCve, setSelectedCve] = useState<string | null>(null);
-  const [cveInfo, setCveInfo] = useState<any | null>(null);
+  const [cveInfo, setCveInfo] = useState<CveDetails | null>(null);
   const [cveLoading, setCveLoading] = useState(false);
   const [cveError, setCveError] = useState<string | null>(null);
   const [descGenerating, setDescGenerating] = useState(false);
@@ -152,12 +151,9 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
     setCweDialogOpen(true);
 
     try {
-      const response = await fetch(`/api/cwe-info/?name=${encodeURIComponent(cweName)}`, {
-        credentials: 'include',
-      });
-      const json = await response.json();
+      const json = await fetchCweInfo(cweName);
       if (json.status) {
-        setCweInfo(json as CWEInfo);
+        setCweInfo(json);
       } else {
         setCweError(json.error || 'Failed to load CWE information.');
       }
@@ -176,10 +172,7 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
     setCveDialogOpen(true);
 
     try {
-      const response = await fetch(`/api/tools/cve_details/?cve_id=${encodeURIComponent(cveName)}`, {
-        credentials: 'include',
-      });
-      const json = await response.json();
+      const json = await fetchCveDetails(cveName);
       if (json.status) {
         setCveInfo(json.result);
       } else {
@@ -196,19 +189,12 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
     if (!selectedCve) return;
     setDescGenerating(true);
     setDescGenError(null);
-    const csrfToken = document.cookie.split('; ').find(r => r.startsWith('csrftoken='))?.split('=')[1] || '';
     try {
-      const response = await fetch('/api/tools/cve_description_generate/', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-        body: JSON.stringify({ cve_id: selectedCve }),
-      });
-      const json = await response.json();
+      const json = await generateCveDescription(selectedCve);
       if (json.status) {
-        setCveInfo((prev: any) => ({
+        setCveInfo((prev) => prev && ({
           ...prev,
-          summary: json.description || prev?.summary,
+          summary: json.description || prev.summary,
           ai_risk_assessment: json.ai_risk_assessment,
         }));
       } else {
@@ -221,9 +207,9 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
     }
   };
 
-  const donutOptions: any = {
-    chart: { type: 'donut' as any, background: 'transparent' },
-    theme: { mode: isLight ? 'light' : 'dark' as any },
+  const donutOptions: ApexOptions = {
+    chart: { type: 'donut', background: 'transparent' },
+    theme: { mode: isLight ? 'light' : 'dark' },
     stroke: { show: true, width: 2, colors: [tokens.surface.secondary] },
     dataLabels: { enabled: false },
     legend: { position: 'bottom', labels: { colors: theme.palette.text.secondary }, fontSize: '10px' },
@@ -251,8 +237,8 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
     ]
   };
 
-  const getBarOptions = (categories: string[], color = tokens.accent.primary) => ({
-    chart: { type: 'bar' as any, toolbar: { show: false }, background: 'transparent' },
+  const getBarOptions = (categories: string[], color = tokens.accent.primary): ApexOptions => ({
+    chart: { type: 'bar', toolbar: { show: false }, background: 'transparent' },
     plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '60%' } },
     dataLabels: { enabled: false },
     xaxis: {
@@ -262,7 +248,7 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
     yaxis: { labels: { style: { colors: theme.palette.text.secondary, fontSize: '9px' } } },
     colors: [color],
     grid: { borderColor: theme.palette.divider, strokeDashArray: 4 },
-    theme: { mode: isLight ? 'light' : 'dark' as any }
+    theme: { mode: isLight ? 'light' : 'dark' }
   });
 
   return (
@@ -464,11 +450,12 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
                   <Chart
                     options={{
                       chart: {
-                        type: 'treemap' as any,
+                        type: 'treemap',
                         toolbar: { show: false },
                         background: 'transparent',
                         events: {
-                          dataPointSelection: (_e: any, _ctx: any, config: any) => {
+                          dataPointSelection: (_e: MouseEvent, _ctx: unknown, config?: { dataPointIndex: number }) => {
+                            if (!config) return;
                             const idx = config.dataPointIndex;
                             const cweItem = data.most_common_cwe.slice(0, 8)[idx];
                             if (cweItem) handleCweClick(cweItem.name);
@@ -478,7 +465,7 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
                       dataLabels: {
                         enabled: true,
                         style: { fontSize: '10px', fontFamily: 'Inter, sans-serif' },
-                        formatter: (text: string, op: any) => [text, `×${op.value}`],
+                        formatter: (text: string, op: TreemapLabelOpts) => [text, `×${op.value}`],
                       },
                       plotOptions: {
                         treemap: {
@@ -498,7 +485,7 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
                         y: { formatter: (v: number) => `${v} occurrence${v !== 1 ? 's' : ''}` },
                       },
                       legend: { show: false },
-                      theme: { mode: isLight ? 'light' : 'dark' as any },
+                      theme: { mode: isLight ? 'light' : 'dark' },
                     }}
                     series={[{
                       data: data.most_common_cwe.slice(0, 8).map((c, i) => ({
@@ -551,11 +538,12 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
                   <Chart
                     options={{
                       chart: {
-                        type: 'treemap' as any,
+                        type: 'treemap',
                         toolbar: { show: false },
                         background: 'transparent',
                         events: {
-                          dataPointSelection: (_e: any, _ctx: any, config: any) => {
+                          dataPointSelection: (_e: MouseEvent, _ctx: unknown, config?: { dataPointIndex: number }) => {
+                            if (!config) return;
                             const idx = config.dataPointIndex;
                             const cveItem = data.most_common_cve.slice(0, 8)[idx];
                             if (cveItem) handleCveClick(cveItem.name);
@@ -565,7 +553,7 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
                       dataLabels: {
                         enabled: true,
                         style: { fontSize: '10px', fontFamily: 'Inter, sans-serif' },
-                        formatter: (text: string, op: any) => [text, `×${op.value}`],
+                        formatter: (text: string, op: TreemapLabelOpts) => [text, `×${op.value}`],
                       },
                       plotOptions: {
                         treemap: {
@@ -585,7 +573,7 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
                         y: { formatter: (v: number) => `${v} occurrence${v !== 1 ? 's' : ''}` },
                       },
                       legend: { show: false },
-                      theme: { mode: isLight ? 'light' : 'dark' as any },
+                      theme: { mode: isLight ? 'light' : 'dark' },
                     }}
                     series={[{
                       data: data.most_common_cve.slice(0, 8).map((c, i) => ({
@@ -968,7 +956,7 @@ export const DistributionCharts: React.FC<{ data: DashboardData }> = ({ data }) 
                         <Box sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: tokens.severity.high, mt: 0.8, flexShrink: 0 }} />
                         <Typography
                           component="a"
-                          href={ref}
+                          href={getSafeUrl(ref) ?? '#'}
                           target="_blank"
                           rel="noopener noreferrer"
                           variant="body2"

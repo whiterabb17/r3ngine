@@ -66,7 +66,7 @@ class OriginDiscoveryManager:
                     for match in data.get('matches', []):
                         ips.append(match.get('ip_str'))
         except Exception as e:
-            logger.error(f"Shodan query failed for {self.domain}: {str(e)}")
+            logger.error("Shodan query failed for %s: %s", self.domain, str(e))
         return ips
 
     def _query_censys(self):
@@ -131,7 +131,7 @@ class OriginDiscoveryManager:
                     cert = x509.load_der_x509_certificate(cert_der, default_backend())
                     return cert.serial_number
         except Exception as e:
-            logger.debug(f"SSL serial retrieval failed for {self.domain}: {str(e)}")
+            logger.debug("SSL serial retrieval failed for %s: %s", self.domain, str(e))
             return None
 
 class WafBypassOrchestrator:
@@ -205,7 +205,7 @@ class WafBypassOrchestrator:
                     )
                     findings.append(finding)
             except Exception as e:
-                logger.error(f"Header bypass test failed for {header}: {str(e)}")
+                logger.error("Header bypass test failed for %s: %s", header, str(e))
                 
         return findings
 

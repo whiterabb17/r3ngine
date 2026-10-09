@@ -31,6 +31,7 @@ import { useEndpoints } from './api';
 import { TacticalPanel } from '../../components/TacticalPanel';
 import { copyToClipboard } from './utils/copy';
 import { useThemeTokens } from '../../theme/useThemeTokens';
+import { getSafeUrl } from '../../utils/securityUtils';
 
 export const EndpointsPage: React.FC = () => {
   const { tokens, theme } = useThemeTokens();
@@ -184,7 +185,7 @@ export const EndpointsPage: React.FC = () => {
                           wordBreak: 'break-all',
                           maxWidth: '400px',
                           '&:hover': { textDecoration: 'underline' }
-                        }} component="a" href={endpoint.http_url} target="_blank">
+                        }} component="a" href={getSafeUrl(endpoint.http_url) ?? '#'} target="_blank">
                           {endpoint.http_url}
                         </Typography>
                       </Box>

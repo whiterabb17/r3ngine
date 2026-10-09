@@ -12,6 +12,7 @@ import { useScanProfiles } from '../api';
 import type { ScanProfile } from '../types';
 
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import type { ResolvedThemeTokens } from '../../../theme/tokens';
 
 interface ProfileSelectorProps {
   value: string | null;
@@ -37,7 +38,7 @@ const CATEGORY_ORDER: ScanProfile['category'][] = [
   'hardware',
 ];
 
-const fieldStyles = (tokens: any) => ({
+const fieldStyles = (tokens: ResolvedThemeTokens) => ({
   '& .MuiOutlinedInput-root': {
     color: 'text.primary',
     '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },

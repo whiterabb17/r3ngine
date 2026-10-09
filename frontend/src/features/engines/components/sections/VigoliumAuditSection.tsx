@@ -19,7 +19,7 @@ export const VigoliumAuditSection: React.FC<Props> = ({ config, enabled, onToggl
   return (
     <SectionCard
       title="Vigolium Audit"
-      description="Deep AI-assisted security audit run after all scan tiers complete (Tier 7)."
+      description="Deep AI-assisted audit run by the Code Scan workflow (Tools → Code Scan), not by regular scans. Switch off to skip the audit in Code Scan."
       enabled={enabled}
       onToggle={onToggle}
     >

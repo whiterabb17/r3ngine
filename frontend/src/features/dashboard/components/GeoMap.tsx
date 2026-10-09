@@ -20,7 +20,7 @@ import { Globe, Plus } from 'lucide-react';
 import { MapContainer, TileLayer, GeoJSON, Marker, Tooltip as LeafletTooltip } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { scaleLinear } from 'd3-scale';
+import { scaleLinear } from 'd3';
 import { countryCentroids } from '../types/countryCentroids';
 
 // Pulsing Dot is now handled via global CSS .map-marker-pulse in index.css
@@ -31,16 +31,14 @@ interface CountryData {
     count: number;
 }
 
-interface GeoJSONFeature {
-    type: 'Feature';
-    properties: Record<string, any>;
-    geometry: any;
+/** Properties of a country in the world GeoJSON; only `name` is read. */
+interface CountryProperties {
+    name?: string;
+    [key: string]: unknown;
 }
 
-interface GeoJSONFeatureCollection {
-    type: 'FeatureCollection';
-    features: GeoJSONFeature[];
-}
+type GeoJSONFeature = GeoJSON.Feature<GeoJSON.Geometry, CountryProperties>;
+type GeoJSONFeatureCollection = GeoJSON.FeatureCollection<GeoJSON.Geometry, CountryProperties>;
 
 export const GeoMap: React.FC<{ data: CountryData[]; disableCard?: boolean }> = ({ data, disableCard = false }) => {
     const { theme, isLight, tokens } = useThemeTokens();
@@ -52,8 +50,8 @@ export const GeoMap: React.FC<{ data: CountryData[]; disableCard?: boolean }> = 
         .domain([0, maxCount])
         .range(["rgba(0, 243, 255, 0.05)", "rgba(0, 243, 255, 0.4)"]);
 
-    const findCountry = (properties: any) => {
-        const geoName = (properties.name || "").toUpperCase();
+    const findCountry = (properties: CountryProperties | null) => {
+        const geoName = (properties?.name || "").toUpperCase();
         return data.find(d =>
             d.iso.toUpperCase() === geoName ||
             d.name.toUpperCase() === geoName ||
@@ -177,14 +175,21 @@ export const GeoMap: React.FC<{ data: CountryData[]; disableCard?: boolean }> = 
                         <GeoJSON data={geoJsonData} onEachFeature={onEachFeature} />
                     )}
 
-                    {/* Markers for Countries with Assets */}
-                    {data.map((country) => {
+                    {/* Markers for Countries with Assets — pulse only top 5 by count */}
+                    {(() => {
+                        const topIso = new Set(
+                            [...data].sort((a, b) => b.count - a.count).slice(0, 5).map((c) => c.iso)
+                        );
+                        return data.map((country) => {
                         const coords = countryCentroids[country.iso.toUpperCase()];
                         if (!coords) return null;
 
+                        const shouldPulse = topIso.has(country.iso);
                         const customIcon = L.divIcon({
                             className: 'custom-pulsing-marker',
-                            html: '<div class="map-marker-pulse"></div>',
+                            html: shouldPulse
+                                ? '<div class="map-marker-pulse"></div>'
+                                : '<div class="map-marker-pulse map-marker-static"></div>',
                             iconSize: [12, 12],
                             iconAnchor: [6, 6],
                         });
@@ -212,7 +217,8 @@ export const GeoMap: React.FC<{ data: CountryData[]; disableCard?: boolean }> = 
                                 </LeafletTooltip>
                             </Marker>
                         );
-                    })}
+                        });
+                    })()}
                 </MapContainer>
             </Box>
 
@@ -254,7 +260,7 @@ export const GeoMap: React.FC<{ data: CountryData[]; disableCard?: boolean }> = 
                                                         boxShadow: '0 0 5px rgba(0,0,0,0.5)'
                                                     }}
                                                 />
-                                                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem', color: 'rgba(255,255,255,0.9)' }}>
+                                                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem', color: 'text.primary' }}>
                                                     {country.name}
                                                 </Typography>
                                             </Box>

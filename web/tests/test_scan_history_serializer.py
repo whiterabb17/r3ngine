@@ -1,7 +1,8 @@
 """
-Tests for ScanHistorySerializer.get_tier_info — specifically the active_tier
-calculation that was fixed to use max() instead of min() to avoid showing a
-lower tier when a higher tier is actively running.
+Tests for ScanHistorySerializer.get_tier_info — active_tier must follow
+currently RUNNING work (including post-restart resume), not leftover FAILED
+rows on higher tiers, while still preferring a live higher tier over stuck
+INITIATED rows on a lower tier.
 """
 from django.test import TestCase
 from django.utils import timezone
@@ -104,6 +105,53 @@ class TestScanHistorySerializerTierInfo(TestCase):
         info = self._tier_info(scan)
         self.assertEqual(info['current_tier'], 6)
         self.assertEqual(info['current_tier_progress'], 50.0)
+
+    def test_resume_running_lower_tier_beats_leftover_failed_higher_tiers(self):
+        """
+        After crash recovery the workflow restarts earlier in the pipeline while
+        higher tiers still have FAILED / INITIATED leftovers.  current_tier must
+        follow the actually RUNNING tier, not max(uncompleted leftover).
+        """
+        scan = _make_scan()
+        _act(scan, 'subdomain_discovery', 1, SUCCESS_TASK)
+        _act(scan, 'http_crawl', 2, SUCCESS_TASK)
+        _act(scan, 'fetch_url', 3, SUCCESS_TASK)
+        _act(scan, 'dir_file_fuzz', 4, RUNNING_TASK)
+        _act(scan, 'waf_detection', 5, INITIATED_TASK)
+        _act(scan, 's3scanner', 6, FAILED_TASK)
+        _act(scan, 'dalfox_xss_scan', 6, FAILED_TASK)
+        _act(scan, 'vulnerability_scan', 6, INITIATED_TASK)
+        _act(scan, 'correlate_vulnerabilities', 7, FAILED_TASK)
+        _act(scan, 'run_apme', 7, INITIATED_TASK)
+
+        info = self._tier_info(scan)
+        self.assertEqual(info['current_tier'], 4, 'Must resync to the running post-restart tier')
+        self.assertEqual(info['total_tiers'], 7)
+        self.assertEqual(info['current_tier_progress'], 0.0)
+
+    def test_tier_progress_uses_latest_row_per_task_name(self):
+        """Retry duplicates: an older FAILED must not inflate tier progress."""
+        scan = _make_scan()
+        _act(scan, 'dir_file_fuzz', 4, FAILED_TASK)
+        _act(scan, 'dir_file_fuzz', 4, RUNNING_TASK)
+
+        info = self._tier_info(scan)
+        self.assertEqual(info['current_tier'], 4)
+        self.assertEqual(info['current_tier_progress'], 0.0)
+
+    def test_stale_running_row_does_not_pin_finished_tier(self):
+        """Orphaned RUNNING must lose to a later terminal row for the same name."""
+        scan = _make_scan()
+        stale = _act(scan, 'nuclei_scan', 6, RUNNING_TASK)
+        from datetime import timedelta
+        stale.time = timezone.now() - timedelta(hours=2)
+        stale.save(update_fields=['time'])
+        _act(scan, 'nuclei_scan', 6, SUCCESS_TASK)
+        _act(scan, 'dir_file_fuzz', 4, RUNNING_TASK)
+
+        info = self._tier_info(scan)
+        self.assertEqual(info['current_tier'], 4)
+        self.assertEqual(info['current_tier_progress'], 0.0)
 
     def test_only_tier_zero_activities_returns_zeros(self):
         """Tier 0 (target_profiling) is excluded; should return 0/0/0 with no other tiers."""

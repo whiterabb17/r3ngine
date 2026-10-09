@@ -31,6 +31,21 @@ def parse_s3scanner_result(line):
 	}
 
 
+def is_nuclei_finding(line):
+	"""Return True for nuclei match JSON; False for -stats / other noise.
+
+	Nuclei is invoked with ``-j -stats`` (and often ``-hang-monitor``). Stats
+	lines are valid JSON objects without an ``info`` block, e.g.
+	``{"duration":"...","percent":"37",...}``. Treating those as findings
+	raises ``KeyError('info')`` and fails the whole RunNucleiActivity after the
+	go-executor returns buffered stdout.
+	"""
+	if not isinstance(line, dict):
+		return False
+	info = line.get('info')
+	return isinstance(info, dict)
+
+
 def parse_nuclei_result(line):
 	"""Parse results from nuclei JSON output.
 
@@ -38,27 +53,32 @@ def parse_nuclei_result(line):
 		line (dict): Nuclei JSON line output.
 
 	Returns:
-		dict: Vulnerability data.
+		dict | None: Vulnerability data, or None when ``line`` is not a finding
+		(e.g. a ``-stats`` progress object from the go-executor stream).
 	"""
+	if not is_nuclei_finding(line):
+		return None
+	info = line['info']
+	classification = info.get('classification') or {}
 	return {
-		'name': line['info'].get('name', ''),
-		'type': line['type'],
-		'severity': NUCLEI_SEVERITY_MAP[line['info'].get('severity', 'unknown')],
-		'template': line['template'],
+		'name': info.get('name', ''),
+		'type': line.get('type', ''),
+		'severity': NUCLEI_SEVERITY_MAP[info.get('severity', 'unknown')],
+		'template': line.get('template', ''),
 		'template_url': line.get('template-url', []),
-		'template_id': line['template-id'],
-		'description': line['info'].get('description', ''),
+		'template_id': line.get('template-id', ''),
+		'description': info.get('description', ''),
 		'matcher_name': line.get('matcher-name', ''),
 		'curl_command': line.get('curl-command'),
 		'request': line.get('request'),
 		'response': line.get('response'),
 		'extracted_results': line.get('extracted-results', []),
-		'cvss_metrics': line['info'].get('classification', {}).get('cvss-metrics', ''),
-		'cvss_score': line['info'].get('classification', {}).get('cvss-score'),
-		'cve_ids': line['info'].get('classification', {}).get('cve-id', []) or line['info'].get('classification', {}).get('cve_id', []) or [],
-		'cwe_ids': line['info'].get('classification', {}).get('cwe-id', []) or line['info'].get('classification', {}).get('cwe_id', []) or [],
-		'references': line['info'].get('reference', []) or [],
-		'tags': line['info'].get('tags', []) or [],
+		'cvss_metrics': classification.get('cvss-metrics', ''),
+		'cvss_score': classification.get('cvss-score'),
+		'cve_ids': classification.get('cve-id', []) or classification.get('cve_id', []) or [],
+		'cwe_ids': classification.get('cwe-id', []) or classification.get('cwe_id', []) or [],
+		'references': info.get('reference', []) or [],
+		'tags': info.get('tags', []) or [],
 		'source': NUCLEI,
 	}
 

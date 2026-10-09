@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { Engine, Wordlist, HardwareProfile } from '../types';
+import type { Engine, Configuration, Wordlist, HardwareProfile } from '../types';
 
 export const useEngines = () => {
   return useQuery<Engine[]>({
@@ -18,7 +18,7 @@ export const useEngines = () => {
 };
 
 export const useConfigurations = () => {
-  return useQuery<any[]>({
+  return useQuery<Configuration[]>({
     queryKey: ['configurations'],
     queryFn: async () => {
       const response = await fetch('/api/listConfigurations/', {

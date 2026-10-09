@@ -4,7 +4,6 @@ pg_dump
 plugins_data
 scan_results
 frontend
-tests/sample_data
 web/static/plugins
 entrypoint.sh
 executor-entrypoint.sh
@@ -13,3 +12,4 @@ temporal-entrypoint.sh
 *-stacktrace-*.dump
 crash-resume-file-*.dump
 *.dump
+*.log

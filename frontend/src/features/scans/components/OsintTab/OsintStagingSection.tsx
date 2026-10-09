@@ -22,7 +22,8 @@ import {
   Pagination,
   Select,
   MenuItem,
-  FormControl
+  FormControl,
+  Chip,
 } from '@mui/material';
 import { 
   Search, 
@@ -42,7 +43,10 @@ import { TacticalPanel } from '../../../../components/TacticalPanel';
 import { 
   useOsintStaging, 
   useBulkDiscardOsint, 
-  useBulkPromoteOsint
+  useBulkPromoteOsint,
+  useClearAllOsintStaging,
+  useAddVerifiedOsintStaging,
+  useClearFalsePositiveOsintStaging,
 } from '../../api';
 import type { OsintStaging } from '../../types';
 import { useThemeTokens } from '../../../../theme/useThemeTokens';
@@ -76,6 +80,18 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
 
   const discardMutation = useBulkDiscardOsint();
   const promoteMutation = useBulkPromoteOsint();
+  const clearAllMutation = useClearAllOsintStaging();
+  const addVerifiedMutation = useAddVerifiedOsintStaging();
+  const clearFpMutation = useClearFalsePositiveOsintStaging();
+
+  const verifiedCount = useMemo(
+    () => (data?.results || []).filter((r: OsintStaging) => r.agent_verified === true).length,
+    [data?.results],
+  );
+  const fpCount = useMemo(
+    () => (data?.results || []).filter((r: OsintStaging) => r.agent_verified === false).length,
+    [data?.results],
+  );
 
   const paginatedData = useMemo(() => {
     if (!data?.results) return [];
@@ -141,6 +157,30 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
     refetch();
   };
 
+  const handleClearAll = async () => {
+    if (window.confirm('Clear ALL pending OSINT staging items for this scan?')) {
+      await clearAllMutation.mutateAsync(scanId);
+      setSelected([]);
+      refetch();
+    }
+  };
+
+  const handleAddVerified = async () => {
+    if (window.confirm(`Promote ${verifiedCount} agent-verified item(s) to primary tables?`)) {
+      await addVerifiedMutation.mutateAsync(scanId);
+      setSelected([]);
+      refetch();
+    }
+  };
+
+  const handleClearFalsePositives = async () => {
+    if (window.confirm(`Discard ${fpCount} agent-marked false positive(s)?`)) {
+      await clearFpMutation.mutateAsync(scanId);
+      setSelected([]);
+      refetch();
+    }
+  };
+
   const getConfidenceColor = (confidence: number) => {
     if (confidence >= 80) return '#00ff62';
     if (confidence >= 60) return tokens.accent.primary;
@@ -204,6 +244,41 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
               ))}
             </Select>
           </FormControl>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+            <Button
+              size="small"
+              variant="outlined"
+              color="error"
+              startIcon={<Trash2 size={14} />}
+              onClick={handleClearAll}
+              disabled={clearAllMutation.isPending || !(data?.count)}
+              sx={{ fontFamily: 'Orbitron', fontSize: '0.65rem', fontWeight: 900 }}
+            >
+              CLEAR ALL
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              color="success"
+              startIcon={<ShieldCheck size={14} />}
+              onClick={handleAddVerified}
+              disabled={addVerifiedMutation.isPending || verifiedCount === 0}
+              sx={{ fontFamily: 'Orbitron', fontSize: '0.65rem', fontWeight: 900 }}
+            >
+              ADD VERIFIED ({verifiedCount})
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              color="warning"
+              startIcon={<AlertCircle size={14} />}
+              onClick={handleClearFalsePositives}
+              disabled={clearFpMutation.isPending || fpCount === 0}
+              sx={{ fontFamily: 'Orbitron', fontSize: '0.65rem', fontWeight: 900 }}
+            >
+              CLEAR FALSE POSITIVE ({fpCount})
+            </Button>
+          </Stack>
           {selected.length > 0 && (
             <Stack direction="row" spacing={1}>
               <Button
@@ -267,6 +342,7 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
                   <TableCell sx={{ color: 'text.secondary', fontWeight: 'bold', fontSize: '0.65rem' }}>TYPE</TableCell>
                   <TableCell sx={{ color: 'text.secondary', fontWeight: 'bold', fontSize: '0.65rem' }}>CONTENT</TableCell>
                   <TableCell sx={{ color: 'text.secondary', fontWeight: 'bold', fontSize: '0.65rem' }}>SOURCE</TableCell>
+                  <TableCell sx={{ color: 'text.secondary', fontWeight: 'bold', fontSize: '0.65rem' }}>AGENT</TableCell>
                   <TableCell sx={{ color: 'text.secondary', fontWeight: 'bold', fontSize: '0.65rem' }}>CONFIDENCE</TableCell>
                   <TableCell align="right" sx={{ color: 'text.secondary', fontWeight: 'bold', fontSize: '0.65rem' }}>ACTIONS</TableCell>
                 </TableRow>
@@ -301,6 +377,27 @@ export const OsintStagingSection: React.FC<OsintStagingSectionProps> = ({ scanId
                         <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
                           {item.source}
                         </Typography>
+                      </TableCell>
+                      <TableCell>
+                        {item.agent_verified === true && (
+                          <Chip
+                            size="small"
+                            label="Agent Verified"
+                            color="success"
+                            sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700 }}
+                          />
+                        )}
+                        {item.agent_verified === false && (
+                          <Chip
+                            size="small"
+                            label="Agent FP"
+                            color="warning"
+                            sx={{ height: 20, fontSize: '0.65rem', fontWeight: 700 }}
+                          />
+                        )}
+                        {item.agent_verified == null && (
+                          <Typography variant="caption" sx={{ color: 'text.disabled' }}>—</Typography>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

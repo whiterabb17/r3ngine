@@ -239,7 +239,7 @@ export const AddMonitoringTargetModal: React.FC<AddMonitoringTargetModalProps> =
                 }
               }}
             >
-              {engines?.map((engine: any) => (
+              {engines?.map((engine) => (
                 <MenuItem key={engine.id} value={engine.id}>
                   {engine.engine_name}
                 </MenuItem>

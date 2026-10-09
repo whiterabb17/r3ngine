@@ -55,10 +55,13 @@ import { useParams } from '@tanstack/react-router';
 import { useBountyPrograms, useProgramDetails, useImportPrograms } from '../api';
 import { useAddTarget } from '../../targets/api';
 import { formatDistanceToNow, subMonths } from 'date-fns';
-//import { HackerOneProgram } from '../types';
+import type { StructuredScope } from '../types';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import { getSafeUrl } from '../../../utils/securityUtils';
+import type { ApiErrorLike } from '../../../types/errors';
+import type { ResolvedThemeTokens } from '../../../theme/tokens';
 
-const getProgramCardStyle = (tokens: any) => ({
+const getProgramCardStyle = (tokens: ResolvedThemeTokens) => ({
   bgcolor: 'action.hover',
   border: 1, borderColor: 'divider',
   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -109,7 +112,7 @@ export const BountyHubPage: React.FC = () => {
 
   const groupedAssets = useMemo(() => {
     if (!details) return {};
-    const grouped: Record<string, any[]> = {};
+    const grouped: Record<string, StructuredScope[]> = {};
     details.relationships.structured_scopes.data.forEach(scope => {
       if (scope.attributes.eligible_for_submission) {
         const type = scope.attributes.asset_type;
@@ -153,10 +156,11 @@ export const BountyHubPage: React.FC = () => {
         message: `Import process started for ${selectedHandles.length} programs.`,
         severity: 'success'
       });
-    } catch (err: any) {
+    } catch (caught) {
+      const err = caught as ApiErrorLike;
       setSnackbar({
         open: true,
-        message: err.message || 'Import initiation failed.',
+        message: err?.message || 'Import initiation failed.',
         severity: 'error'
       });
     }
@@ -174,10 +178,11 @@ export const BountyHubPage: React.FC = () => {
         message: `Added target: ${asset}`,
         severity: 'success'
       });
-    } catch (err: any) {
+    } catch (caught) {
+      const err = caught as ApiErrorLike;
       setSnackbar({
         open: true,
-        message: err.message || 'Failed to add target.',
+        message: err?.message || 'Failed to add target.',
         severity: 'error'
       });
     }
@@ -289,7 +294,7 @@ export const BountyHubPage: React.FC = () => {
                 <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                   <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
                     <Avatar
-                      src={p.attributes.profile_picture}
+                      src={getSafeUrl(p.attributes.profile_picture)}
                       variant="rounded"
                       sx={{ width: 48, height: 48, border: '1px solid rgba(255,255,255,0.1)' }}
                     />
@@ -444,7 +449,7 @@ export const BountyHubPage: React.FC = () => {
           <>
             <DialogTitle sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
               <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
-                <Avatar src={details.attributes.profile_picture} sx={{ width: 40, height: 40 }} />
+                <Avatar src={getSafeUrl(details.attributes.profile_picture)} sx={{ width: 40, height: 40 }} />
                 <Box>
                   <Typography variant="h6" sx={{ color: 'text.primary', fontFamily: 'Orbitron' }}>{details.attributes.name}</Typography>
                   <Typography variant="caption" sx={{ color: tokens.accent.primary }}>@{details.attributes.handle}</Typography>
@@ -475,7 +480,7 @@ export const BountyHubPage: React.FC = () => {
                           </AccordionSummary>
                           <AccordionDetails sx={{ pt: 0 }}>
                             <Stack spacing={1}>
-                              {assets.map((scope: any) => (
+                              {assets.map((scope) => (
                                 <Box key={scope.id} sx={{
                                   p: 1.5,
                                   bgcolor: 'action.hover',

@@ -17,7 +17,7 @@ function createCyberComponents(tokens: ThemeTokenSet) {
       styleOverrides: {
         root: {
           background: `linear-gradient(135deg, ${alpha(tokens.surface.secondary, 0.7)} 0%, ${alpha(tokens.surface.primary, 0.9)} 100%)`,
-          backdropFilter: 'blur(25px) saturate(180%)',
+          backdropFilter: 'blur(12px)',
           border: `1px solid ${alpha('#fff', 0.06)}`,
           boxShadow: `inset 0 1px 1px ${alpha('#fff', 0.15)}, 0 15px 35px rgba(0, 0, 0, 0.8)`,
           borderRadius: tokens.effects.radius,
@@ -57,7 +57,7 @@ function createLightCyberComponents(tokens: ThemeTokenSet) {
       styleOverrides: {
         root: {
           background: `linear-gradient(135deg, ${alpha(tokens.surface.secondary, 0.9)} 0%, ${alpha(tokens.surface.primary, 0.95)} 100%)`,
-          backdropFilter: 'blur(20px)',
+          backdropFilter: 'blur(12px)',
           border: `1px solid ${tokens.border.subtle}`,
           boxShadow: '0 4px 20px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6)',
           borderRadius: tokens.effects.radius,
@@ -146,7 +146,7 @@ export function createAppTheme(tokens: ThemeTokenSet, variant: 'cyber' | 'light-
         background-image: linear-gradient(rgba(5, 5, 10, 0.5), rgba(5, 5, 10, 0.75)), url("/staticfiles/img/neon_city.png");
         background-size: cover;
         background-position: center;
-        background-attachment: fixed;
+        background-attachment: scroll;
         background-repeat: no-repeat;
       `
       : `background-color: ${bodyBg};`;

@@ -156,7 +156,7 @@ export const ImpactExplorer: React.FC<ImpactExplorerProps> = ({ projectSlug, vul
         name: 'breadthfirst',
         directed: true,
         padding: 50,
-        animate: true,
+        animate: false,
       }
     });
 
@@ -167,7 +167,16 @@ export const ImpactExplorer: React.FC<ImpactExplorerProps> = ({ projectSlug, vul
     if (graphData && containerRef.current) {
       initGraph(graphData);
     }
+
+    const onVisibility = () => {
+      if (document.hidden && cyRef.current) {
+        cyRef.current.stop();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
     return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
       if (cyRef.current) {
         cyRef.current.destroy();
         cyRef.current = null;

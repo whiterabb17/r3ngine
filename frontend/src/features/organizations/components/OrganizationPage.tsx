@@ -10,7 +10,7 @@ import { TacticalPanel } from '../../../components/TacticalPanel';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 
 export const OrganizationPage: React.FC = () => {
-  const { projectSlug } = useParams({ strict: false }) as any;
+  const { projectSlug } = useParams({ from: '/$projectSlug/org' });
   const { data: organizations, isLoading } = useOrganizations();
   const deleteMutation = useDeleteOrganizations();
 
@@ -106,7 +106,7 @@ export const OrganizationPage: React.FC = () => {
                   ),
                   sx: { 
                     backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                    color: '#fff',
+                    color: 'text.primary',
                     '& .MuiOutlinedInput-notchedOutline': { borderColor: '#1a1a2e' },
                     '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#00f3ff' },
                     '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#00f3ff' }

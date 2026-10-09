@@ -23,6 +23,38 @@ The workflow receives a `ctx` dict populated by `TargetProfilingActivity`:
 | `results_dir` | `str` | Container path for scan results |
 | `tasks` | `list[str]` | Task names enabled for this engine |
 | `yaml_configuration` | `dict` | Parsed engine YAML configuration |
+| `hardware_profile` | `dict \| None` | Hardware profile resolved at scan start — only a fallback, see below |
+
+---
+
+## Hardware Profile (live per activity)
+
+A `HardwareProfile` (`threads`, `rate_limit`, `delay`, `retries`) sets how hard a scan
+works the host. Per resource limit: a value set in the tool's engine section wins, then the
+profile, then the engine's global value (`apply_hardware_profile` in
+`temporal/activities/core.py`). The engine editor always writes the global limits, so they
+act as the fallback for engines scanned without a profile, not as an override of the one
+picked for the scan. Timeouts stay with the engine.
+
+The profile is **not** frozen for the life of the scan. Every activity builds a
+`TemporalTaskProxy`, which loads the `ScanHistory` (with `hardware_profile` joined into the
+same query) and calls `hardware_profile_context(scan)` (`tasks/scan_init.py`): the scan's own
+profile, else the active default, else any active profile. Subscans resolve the profile of
+their parent `ScanHistory`. `ctx['hardware_profile']` is used only when the scan row cannot be
+loaded or no profile resolves any more; both cases log a warning. Workflows are untouched and
+stay DB-free.
+
+Consequences:
+
+- Switching the profile of a pending, running or paused scan — or editing the values of the
+  profile it uses — applies to every step that **starts** afterwards. Tools already running
+  keep the settings they were launched with.
+- Endpoint: `POST /api/action/scan/<scan_id>/hardware-profile/` with
+  `{"hardware_profile_id": <id>}` (`SetScanHardwareProfile` in `api/views/scan.py`, same
+  `HasPermission` + `PERM_INITATE_SCANS_SUBSCANS` as stop/pause). The profile must exist and be
+  active (400 otherwise); an unknown scan returns 404.
+- UI: the scan detail page shows a hardware profile selector next to STOP while the scan is
+  pending, running or paused (`ScanHardwareProfileControl.tsx`).
 
 ---
 
@@ -70,6 +102,12 @@ Runs HTTP crawl, port scan, and Vigolium concurrently.
 
 > **SeedEndpointsForCrawlActivity** pre-seeds the endpoint DB with known URLs before the crawl runs, ensuring initial coverage even if httpx hasn't seen them yet.
 
+**Post–Tier 2: Email security** (`RunEmailSecurityActivity`, if `port_scan` is enabled)
+
+SPF/DMARC/DKIM plus SMTP relay/STARTTLS/cert checks on discovered mail ports. Mailbox confirmation then runs against the domain MX via `check-if-email-exists` (see [Mailbox Verification](email-verification.md)). Catch-all MX aborts enumeration. This step does not use `smtp-user-enum`.
+
+The scan detail timeline includes a **Mailbox Verification** item (`check_if_email_exists`, tier 2) so operators can see the Reacher CLI running. It is omitted when `email_security.mailbox_verification.enabled` is `false`.
+
 ---
 
 ### Tier 3: URL Fetching (Sequential)
@@ -92,7 +130,14 @@ Runs after Tier 3 (needs Tier 3 URLs).
 |---|---|---|
 | `dir_file_fuzz` | `RunDirFileFuzzActivity` → `ParseFuzzResultsActivity` | Up to 4 hours |
 
-Tools: `dirsearch`, `ffuf`.
+Tools: `ffuf` (`run_ffuf`, on by default) fuzzes every target. `dirsearch` (`run_dirsearch`, off by
+default) and `feroxbuster` (`run_feroxbuster`, off by default) are optional extra passes over the same
+targets and wordlist, so enabling them repeats those requests. With all three off the step logs a
+warning and does nothing. A singular `dir_file_fuzz` tool run always runs ffuf (its CLI arguments are
+ffuf's), whatever `run_ffuf` says. When the wordlist contains dirsearch-style
+`%EXT%` placeholders (the default `dicc`), ffuf and feroxbuster get an expanded copy in the scan
+results dir (each `%EXT%` word once per extension, other words as-is) instead of `-e`/`--extensions`;
+dirsearch keeps the original list and expands `%EXT%` itself.
 
 Consolidation: `ParseEnumerationResultsActivity` logs total endpoint count.
 

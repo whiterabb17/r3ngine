@@ -1,3 +1,4 @@
+import base64
 import os
 from unittest.mock import patch, MagicMock
 from django.test import TestCase, TransactionTestCase
@@ -6,6 +7,15 @@ from django.utils import timezone
 from reNgine.tasks.report import generate_report_task
 from startScan.models import Domain, ScanHistory, ScanReport, StressTestResult, SecretLeak
 from scanEngine.models import EngineType, VulnerabilityReportSetting, OpSec, Proxy
+from tests.chart_stubs import MINIMAL_PNG, patch_chart_render
+
+
+def _stub_chart_render(test_case):
+    """Charts the tests do not mock individually render through a stub, not kaleido."""
+    patcher = patch_chart_render()
+    mock_to_image = patcher.start()
+    test_case.addCleanup(patcher.stop)
+    return mock_to_image
 
 class ReportGenerationTest(TransactionTestCase):
     """
@@ -19,6 +29,8 @@ class ReportGenerationTest(TransactionTestCase):
         Set up the test fixtures, including domain, scan history, engine type,
         reports settings, and sample stress results.
         """
+        self.mock_to_image = _stub_chart_render(self)
+
         # Create dependencies
         self.domain = Domain.objects.create(name="defijn.io")
         self.engine = EngineType.objects.create(engine_name="Test Engine")
@@ -127,6 +139,16 @@ class ReportGenerationTest(TransactionTestCase):
         self.assertIn("k6", rendered_html)
         self.assertIn("15.0ms", rendered_html)
         self.assertIn("12.5ms", rendered_html)
+
+        # Per-result latency distribution charts are rendered and embedded.
+        self.assertIn(
+            'data:image/png;base64,' + base64.b64encode(MINIMAL_PNG).decode(),
+            rendered_html,
+        )
+        rendered_titles = [
+            call.args[0].layout.title.text for call in self.mock_to_image.call_args_list
+        ]
+        self.assertEqual(rendered_titles.count('Latency Distribution (ms)'), 2)
 
     @patch('reNgine.tasks.report.HTML')
     @patch('reNgine.charts.generate_subdomain_chart_by_http_status')
@@ -310,6 +332,7 @@ class SecretLeaksReportContextTest(TransactionTestCase):
 
     def setUp(self):
         from scanEngine.models import EngineType, OpSec, Proxy
+        _stub_chart_render(self)
         OpSec.objects.get_or_create(id=1)
         Proxy.objects.get_or_create(id=1)
         from targetApp.models import Domain as TargetDomain

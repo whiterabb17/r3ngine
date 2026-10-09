@@ -55,6 +55,7 @@ class LLMNarrator:
         - Highlight high-risk capabilities like pivoting or RCE.
         - Keep it concise but descriptive (2-4 paragraphs).
         - Use a 'Findings' and 'Scenario' structure.
+        - CRITICAL: Do NOT include any conversational follow-up questions or offers of assistance (such as "Would you like to include a longer brief?"). Output ONLY the attack story.
         """
         
         user_message = (
@@ -69,7 +70,7 @@ class LLMNarrator:
                 return self._fallback_narration(path, node_index)
             return narrative
         except Exception as e:
-            logger.error(f"APME Narration Error: {str(e)}")
+            logger.error("APME Narration Error: %s", str(e))
             return self._fallback_narration(path, node_index)
 
     def _fallback_narration(self, path: AttackPath, node_index: Dict[str, Any]) -> str:

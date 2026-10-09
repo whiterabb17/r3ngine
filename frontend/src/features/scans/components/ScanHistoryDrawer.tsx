@@ -19,7 +19,6 @@ import {
   Clock,
   Play,
   CheckCircle2,
-  AlertTriangle,
   Trash2,
   StopCircle,
   RefreshCw,
@@ -29,8 +28,10 @@ import {
   Shield,
   Bug
 } from 'lucide-react';
-import { useScanStatus, useStopScanAction, useDeleteScanAction } from '../api';
+import { useScanStatus, useStopScanAction, useStopSubScan, useDeleteScanAction } from '../api';
+import type { ScanHistory, SubScan } from '../types';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import type { ResolvedThemeTokens } from '../../../theme/tokens';
 
 interface ScanHistoryDrawerProps {
   open: boolean;
@@ -38,7 +39,7 @@ interface ScanHistoryDrawerProps {
   projectSlug: string;
 }
 
-const getStatusColor = (status: number, tokens: any) => {
+const getStatusColor = (status: number, tokens: ResolvedThemeTokens) => {
   switch (status) {
     case 0: return tokens.accent.info;      // Completed
     case 1: return tokens.accent.warning;   // Scanning
@@ -58,7 +59,7 @@ const getStatusText = (status: number) => {
   }
 };
 
-const ScanItem = ({ scan, onStop, onDelete }: { scan: any, onStop: (id: number) => void, onDelete: (id: number) => void }) => {
+const ScanItem = ({ scan, onStop, onDelete }: { scan: ScanHistory, onStop: (id: number) => void, onDelete: (id: number) => void }) => {
   const { tokens, isLight } = useThemeTokens();
   const statusColor = getStatusColor(scan.scan_status, tokens);
   return (
@@ -146,7 +147,7 @@ const ScanItem = ({ scan, onStop, onDelete }: { scan: any, onStop: (id: number) 
   );
 };
 
-const TaskItem = ({ task, onStop }: { task: any, onStop?: (id: number) => void }) => {
+const TaskItem = ({ task, onStop, isStopping }: { task: SubScan, onStop?: (id: number) => void, isStopping?: boolean }) => {
   const { tokens, isLight } = useThemeTokens();
   return (
     <Paper sx={{
@@ -172,7 +173,7 @@ const TaskItem = ({ task, onStop }: { task: any, onStop?: (id: number) => void }
             color: tokens.accent.secondary,
             letterSpacing: 0.5
           }}>
-            {task.subdomain_name || 'UNKNOWN'} USING ENGINE {task.engine_name || task.engine?.engine_name || 'DEFAULT'}
+            {task.subdomain_name || 'UNKNOWN'} USING ENGINE {task.engine || 'DEFAULT'}
           </Typography>
           <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary', mt: 0.5 }}>
             Running Since {task.elapsed_time || 'just now'}
@@ -198,7 +199,9 @@ const TaskItem = ({ task, onStop }: { task: any, onStop?: (id: number) => void }
           <Button
             size="small"
             variant="outlined"
-            startIcon={<AlertTriangle size={12} />}
+            disabled={isStopping}
+            startIcon={isStopping ? <CircularProgress size={12} color="inherit" /> : <StopCircle size={12} />}
+            onClick={() => onStop(task.id)}
             sx={{
               fontSize: '0.6rem',
               color: tokens.accent.error,
@@ -241,8 +244,14 @@ const SectionHeader = ({ title, count }: { title: string, count?: number }) => {
 export const ScanHistoryDrawer: React.FC<ScanHistoryDrawerProps> = ({ open, onClose, projectSlug }) => {
   const { tokens, isLight, isCyber } = useThemeTokens();
   const [activeTab, setActiveTab] = useState(0);
-  const { data: status, isLoading, refetch } = useScanStatus(projectSlug);
+  // The drawer is mounted on every page; only poll while it is actually visible.
+  const { data: status, isLoading, refetch } = useScanStatus(projectSlug, { enabled: open });
+  const scanningScans = status?.scans?.scanning ?? [];
+  const completedScans = status?.scans?.completed ?? [];
+  const runningTasks = status?.tasks?.running ?? [];
+  const completedTasks = status?.tasks?.completed ?? [];
   const stopScan = useStopScanAction(projectSlug);
+  const stopSubScan = useStopSubScan(projectSlug);
   const deleteScan = useDeleteScanAction(projectSlug);
 
   return (
@@ -255,7 +264,7 @@ export const ScanHistoryDrawer: React.FC<ScanHistoryDrawerProps> = ({ open, onCl
           sx: {
             width: 450,
             bgcolor: isLight ? 'rgba(255, 255, 255, 0.98)' : 'rgba(5, 5, 10, 0.98)',
-            backdropFilter: 'blur(25px)',
+            backdropFilter: 'blur(12px)',
             borderLeft: `1px solid ${isLight ? 'rgba(0, 0, 0, 0.08)' : `${tokens.accent.primary}33`}`,
             color: 'text.primary',
             boxShadow: isLight ? '0 4px 20px rgba(0, 0, 0, 0.05)' : '-10px 0 40px rgba(0,0,0,0.9)'
@@ -338,18 +347,18 @@ export const ScanHistoryDrawer: React.FC<ScanHistoryDrawerProps> = ({ open, onCl
           </Box>
         ) : activeTab === 0 ? (
           <Box>
-            {status?.scans?.scanning?.length > 0 && (
+            {scanningScans.length > 0 && (
               <>
-                <SectionHeader title="CURRENTLY SCANNING" count={status.scans.scanning.length} />
-                {status.scans.scanning.map((scan: any) => (
+                <SectionHeader title="CURRENTLY SCANNING" count={scanningScans.length} />
+                {scanningScans.map((scan) => (
                   <ScanItem key={scan.id} scan={scan} onStop={stopScan.mutate} onDelete={deleteScan.mutate} />
                 ))}
               </>
             )}
 
             <SectionHeader title="RECENTLY COMPLETED" />
-            {status?.scans?.completed?.length > 0 ? (
-              status.scans.completed.map((scan: any) => (
+            {completedScans.length > 0 ? (
+              completedScans.map((scan) => (
                 <ScanItem key={scan.id} scan={scan} onStop={stopScan.mutate} onDelete={deleteScan.mutate} />
               ))
             ) : (
@@ -367,7 +376,7 @@ export const ScanHistoryDrawer: React.FC<ScanHistoryDrawerProps> = ({ open, onCl
           </Box>
         ) : (
           <Box>
-            {status?.tasks?.running?.length > 0 ? (
+            {runningTasks.length > 0 ? (
               <>
                 <Box sx={{
                   mb: 3,
@@ -378,12 +387,21 @@ export const ScanHistoryDrawer: React.FC<ScanHistoryDrawerProps> = ({ open, onCl
                   textAlign: 'center'
                 }}>
                   <Typography sx={{ fontFamily: 'Orbitron', fontSize: '0.65rem', fontWeight: 900, color: tokens.accent.primary, letterSpacing: 1 }}>
-                    {status.tasks.running.length} TASKS ARE CURRENTLY RUNNING
+                    {runningTasks.length} TASKS ARE CURRENTLY RUNNING
                   </Typography>
                 </Box>
                 <SectionHeader title="CURRENTLY RUNNING" />
-                {status.tasks.running.map((task: any) => (
-                  <TaskItem key={task.id} task={task} onStop={() => { }} />
+                {runningTasks.map((task) => (
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    onStop={(id) => {
+                      if (window.confirm('Stop this in-progress subscan?')) {
+                        stopSubScan.mutate(id);
+                      }
+                    }}
+                    isStopping={stopSubScan.isPending && stopSubScan.variables === task.id}
+                  />
                 ))}
               </>
             ) : (
@@ -399,10 +417,10 @@ export const ScanHistoryDrawer: React.FC<ScanHistoryDrawerProps> = ({ open, onCl
               </Box>
             )}
 
-            {status?.tasks?.completed?.length > 0 && (
+            {completedTasks.length > 0 && (
               <>
                 <SectionHeader title="RECENTLY COMPLETED" />
-                {status.tasks.completed.map((task: any) => (
+                {completedTasks.map((task) => (
                   <TaskItem key={task.id} task={task} />
                 ))}
               </>

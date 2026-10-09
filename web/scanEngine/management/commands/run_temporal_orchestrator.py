@@ -51,6 +51,8 @@ class DjangoAwareThreadPoolExecutor(ThreadPoolExecutor):
                 connections.close_all()
         return super().submit(wrapped_fn)
 
+from reNgine.temporal_schedule_utils import delete_schedule_if_exists
+
 # Workflows
 from reNgine.temporal_workflows import (
     MasterScanWorkflow,
@@ -69,7 +71,10 @@ from reNgine.temporal_workflows import (
     HackerOneImportWorkflow,
     HackerOneSyncBookmarkedWorkflow,
     ProxyFetchWorkflow,
+    ToolProbeWorkflow,
     SingleTaskRetryWorkflow,
+    FollowupPlanWorkflow,
+    SafePocWorkflow,
     # Phase 2 — rengine-ng standalone workflows
     UserHuntWorkflow,
     URLBypassWorkflow,
@@ -114,6 +119,18 @@ from reNgine.temporal.activities.evidence_activities import (
     enforce_evidence_retention_activity,
     verify_evidence_integrity_activity,
 )
+from reNgine.temporal.activities.followups import (
+    followup_load_plan_activity,
+    followup_update_step_activity,
+    followup_finalize_plan_activity,
+    followup_check_abort_activity,
+    followup_dispatch_step_activity,
+    followup_wait_workflow_activity,
+)
+from reNgine.temporal.activities.safe_poc import (
+    safe_poc_check_abort_activity,
+    safe_poc_execute_activity,
+)
 
 # Activities (all Python-side activities are registered here)
 from reNgine.temporal_activities import (
@@ -153,6 +170,11 @@ from reNgine.temporal_activities import (
     # Tier 3/4: Fuzzing
     run_dir_file_fuzz_activity,
     parse_fuzz_results_activity,
+    plan_chunked_task_activity,
+    run_chunked_task_batch_activity,
+    finalize_chunked_task_activity,
+    run_chunked_task_follow_up_activity,
+    run_target_dedup_activity,
     run_gf_on_all_endpoints_activity,
 
     # Tier 5: Analysis
@@ -168,6 +190,7 @@ from reNgine.temporal_activities import (
     run_dalfox_activity,
     run_s3scanner_activity,
     run_acunetix_activity,
+    submit_live_subdomains_to_acunetix_activity,
     run_cpanel_scan_activity,
     run_react2shell_activity,
     run_wpscan_activity,
@@ -198,6 +221,8 @@ from reNgine.temporal_activities import (
 
     # Startup sync
     run_startup_sync_activity,
+    # Tool inventory probes requested by the web container
+    tool_probe_activity,
 
     # Scheduled scan setup
     setup_scheduled_scan_activity,
@@ -215,6 +240,8 @@ from reNgine.temporal_activities import (
     fetch_proxies_activity,
     create_proxy_list_activity,
     cleanup_proxy_list_activity,
+    check_target_blocking_activity,
+    get_proxy_policy_activity,
 
     # Phase 1 — rengine-ng workflow tool activities
     get_discovered_services_activity,
@@ -302,12 +329,8 @@ async def _register_startup_schedule(
     run_key = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S") if always_run else today
     workflow_id = f"{schedule_id}-{run_key}"
 
-    # Remove stale schedule from the previous run (idempotent — ignore if absent)
-    try:
-        handle = client.get_schedule_handle(schedule_id)
-        await handle.delete()
-    except Exception:
-        pass
+    # Remove stale schedule from the previous run
+    await delete_schedule_if_exists(client, schedule_id)
 
     await client.create_schedule(
         schedule_id,
@@ -329,7 +352,7 @@ async def _register_startup_schedule(
             ),
         ),
     )
-    logger.info(f"[Startup] Registered one-shot schedule '{schedule_id}' → workflow '{workflow_id}' (fires in ~{interval_seconds}s)")
+    logger.info("[Startup] Registered one-shot schedule '%s' → workflow '%s' (fires in ~%ss)", schedule_id, workflow_id, interval_seconds)
 
 
 async def _register_daily_cron_schedule(
@@ -339,12 +362,8 @@ async def _register_daily_cron_schedule(
     from temporalio.client import ScheduleCalendarSpec, ScheduleRange
     schedule_id = f"daily-cron-{task_name.replace('_', '-')}"
     
-    # Try to delete if exists to allow recreating/updating
-    try:
-        handle = client.get_schedule_handle(schedule_id)
-        await handle.delete()
-    except Exception:
-        pass
+    # Delete the existing one so a changed hour or minute takes effect
+    await delete_schedule_if_exists(client, schedule_id)
 
     await client.create_schedule(
         schedule_id,
@@ -365,7 +384,21 @@ async def _register_daily_cron_schedule(
             state=ScheduleState(note=f"Daily cron sync: {task_name}"),
         ),
     )
-    logger.info(f"[Startup] Registered daily cron schedule '{schedule_id}' for {hour:02d}:{minute:02d}")
+    logger.info("[Startup] Registered daily cron schedule '%s' for %02d:%02d", schedule_id, hour, minute)
+
+
+def master_tls_verify():
+    """``requests`` verify= value for calls from a remote worker to the master.
+
+    The heartbeat carries the worker's bearer token, so the master's certificate
+    is verified by default. For the self-signed certificate that install.sh
+    generates, point MASTER_CA_BUNDLE at its CA file; MASTER_TLS_VERIFY=0 turns
+    verification off at your own risk.
+    """
+    ca_bundle = os.environ.get('MASTER_CA_BUNDLE')
+    if ca_bundle:
+        return ca_bundle
+    return os.environ.get('MASTER_TLS_VERIFY', '1').strip().lower() not in ('0', 'false', 'no')
 
 
 class Command(BaseCommand):
@@ -377,10 +410,27 @@ class Command(BaseCommand):
         parser.add_argument('--r3ngine-url', type=str, help='URL of the central r3ngine instance')
 
     def handle(self, *args, **options):
-        worker_name = options.get('worker_name')
+        from django.core.management.base import CommandError
+        from reNgine.utils.task_queues import configure_worker_name, go_executor_queue, python_orchestrator_queue
+
+        # --worker-name wins over WORKER_NAME and is exported to it, so the
+        # tool-routing helpers (reNgine.utils.task_queues) used by activities in
+        # this process target this host's Go executor, not the master's.
+        try:
+            worker_name = configure_worker_name(options.get('worker_name'))
+        except ValueError as name_err:
+            raise CommandError(str(name_err))
         worker_token = options.get('worker_token')
         r3ngine_url = options.get('r3ngine_url')
-        task_queue = worker_name if worker_name else "python-orchestrator-queue"
+        task_queue = python_orchestrator_queue(worker_name)
+        logger.info(
+            "Worker name %r: Python queue %s, routed tools go to %s",
+            worker_name, task_queue, go_executor_queue(worker_name),
+        )
+        # This container hosts the scan tools: inventory probes (reNgine.tool_workers)
+        # run locally here instead of being sent to the orchestrator queue.
+        from reNgine.tool_workers import WORKER_ROLE_ENV
+        os.environ.setdefault(WORKER_ROLE_ENV, 'python')
         # Install plugin tools in THIS container before starting the worker.
         # Tools must be present in the orchestrator — not the web container — because
         # activities (swaks, smtp-user-enum, etc.) run here. This is the only place
@@ -392,7 +442,18 @@ class Command(BaseCommand):
             t.start()
             t.join(timeout=120)  # wait up to 2 min for apt installs before starting worker
         except Exception as tool_err:
-            logger.error(f"Plugin tool installation failed at startup: {tool_err}")
+            logger.error("Plugin tool installation failed at startup: %s", tool_err)
+
+        # Reconcile InstalledExternalTool presence/version for singular-tool arg cache.
+        try:
+            from reNgine.tool_inventory import sync_installed_tools
+            sync_result = sync_installed_tools(probe_versions=True)
+            self.stdout.write(self.style.SUCCESS(
+                f"Installed tools sync: present={sync_result.get('present')} "
+                f"missing={sync_result.get('missing')}"
+            ))
+        except Exception as sync_err:
+            logger.error("Installed tools sync failed at startup: %s", sync_err)
 
         # Clear needs_restart flags synchronously before entering the async event loop.
         try:
@@ -402,20 +463,22 @@ class Command(BaseCommand):
                 cache.set(f"plugin_{plugin.slug}_needs_restart", False, timeout=None)
             self.stdout.write(self.style.SUCCESS("Cleared needs_restart flags for all plugins."))
         except Exception as cache_err:
-            logger.error(f"Failed to clear needs_restart flags: {cache_err}")
+            logger.error("Failed to clear needs_restart flags: %s", cache_err)
 
         async def heartbeat_loop():
             if not worker_name or not worker_token or not r3ngine_url:
                 return
             import requests
-            import urllib3
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-            
+
+            tls_verify = master_tls_verify()
+            if tls_verify is False:
+                logger.warning("MASTER_TLS_VERIFY is off: the worker token is sent without verifying the master's certificate.")
+
             def send_heartbeat():
                 return requests.post(
-                    f"{r3ngine_url.rstrip('/')}/api/settings/workers/heartbeat/", 
+                    f"{r3ngine_url.rstrip('/')}/api/settings/workers/heartbeat/",
                     json={"worker_name": worker_name, "token": worker_token},
-                    verify=False,
+                    verify=tls_verify,
                     timeout=10
                 )
             
@@ -427,7 +490,7 @@ class Command(BaseCommand):
                         os.kill(os.getpid(), signal.SIGTERM)
                         break
                 except Exception as e:
-                    logger.error(f"Failed to send heartbeat: {e}")
+                    logger.error("Failed to send heartbeat: %s", e)
                 await asyncio.sleep(60)
 
         async def main():
@@ -492,12 +555,12 @@ class Command(BaseCommand):
                     await _register_startup_schedule(client, task_name, today, interval_secs, always_run)
                 except Exception as sched_err:
                     # Non-fatal: log and continue — don't block worker startup
-                    logger.error(f"[Startup] Failed to register schedule for '{task_name}': {sched_err}")
+                    logger.error("[Startup] Failed to register schedule for '%s': %s", task_name, sched_err)
                     
             try:
                 await _register_daily_cron_schedule(client, "sync_epss_data", hour=8, minute=0)
             except Exception as sched_err:
-                logger.error(f"[Startup] Failed to register daily cron schedule for 'sync_epss_data': {sched_err}")
+                logger.error("[Startup] Failed to register daily cron schedule for 'sync_epss_data': %s", sched_err)
 
             # -------------------------------------------------------------------
             # Collect all registered activities
@@ -548,6 +611,11 @@ class Command(BaseCommand):
                 run_param_discovery_activity,
                 run_dir_file_fuzz_activity,
                 parse_fuzz_results_activity,
+                plan_chunked_task_activity,
+                run_chunked_task_batch_activity,
+                finalize_chunked_task_activity,
+                run_chunked_task_follow_up_activity,
+                run_target_dedup_activity,
                 run_gf_on_all_endpoints_activity,
 
                 # Tier 5
@@ -563,6 +631,7 @@ class Command(BaseCommand):
                 run_dalfox_activity,
                 run_s3scanner_activity,
                 run_acunetix_activity,
+                submit_live_subdomains_to_acunetix_activity,
                 run_cpanel_scan_activity,
                 run_react2shell_activity,
                 run_wpscan_activity,
@@ -597,6 +666,7 @@ class Command(BaseCommand):
 
                 # Startup sync
                 run_startup_sync_activity,
+                tool_probe_activity,
 
                 # Scheduled scan setup (Phase 4C)
                 setup_scheduled_scan_activity,
@@ -618,6 +688,8 @@ class Command(BaseCommand):
                 fetch_proxies_activity,
                 create_proxy_list_activity,
                 cleanup_proxy_list_activity,
+                check_target_blocking_activity,
+                get_proxy_policy_activity,
 
                 # Phase 1 — rengine-ng workflow tool activities
                 get_discovered_services_activity,
@@ -659,6 +731,14 @@ class Command(BaseCommand):
                 collect_http_evidence_activity,
                 collect_command_output_evidence_activity,
                 enforce_evidence_retention_activity,
+                followup_load_plan_activity,
+                followup_update_step_activity,
+                followup_finalize_plan_activity,
+                followup_check_abort_activity,
+                followup_dispatch_step_activity,
+                followup_wait_workflow_activity,
+                safe_poc_check_abort_activity,
+                safe_poc_execute_activity,
                 verify_evidence_integrity_activity,
                 
                 # Plugin lifecycle
@@ -679,11 +759,13 @@ class Command(BaseCommand):
             # -------------------------------------------------------------------
             # Load dynamic plugins from the Temporal Registry
             # -------------------------------------------------------------------
-            from asgiref.sync import sync_to_async
+            # Same connection-aware wrapper as async activities: plugin registry
+            # hits Plugin.objects, and plain sync_to_async can cache a dead conn.
+            from channels.db import database_sync_to_async
             from plugins.temporal_registry import PluginTemporalRegistry
             try:
-                plugin_workflows = await sync_to_async(PluginTemporalRegistry.get_all_plugin_workflows)()
-                plugin_activities = await sync_to_async(PluginTemporalRegistry.get_all_plugin_activities)()
+                plugin_workflows = await database_sync_to_async(PluginTemporalRegistry.get_all_plugin_workflows)()
+                plugin_activities = await database_sync_to_async(PluginTemporalRegistry.get_all_plugin_activities)()
                 
                 # Append to existing
                 _p2_workflows = [UserHuntWorkflow, URLBypassWorkflow, WordPressWorkflow,
@@ -693,10 +775,10 @@ class Command(BaseCommand):
                                  URLVulnWorkflow, URLAuthExtractWorkflow, AssessmentWorkflow,
                                  DiscoveryWorkflow, EnumerationWorkflow, AnalysisWorkflow,
                                  ValidationWorkflow, ReportingWorkflow]
-                all_workflows = [MasterScanWorkflow, NucleiPlannerWorkflow, SubScanWorkflow, StressTestWorkflow, StartupSyncWorkflow, ScheduledScanWorkflow, MonitoringWorkflow, GoExecutorTaskWorkflow, ApmeTaskWorkflow, RecalculateApmeWorkflow, CertificateResyncWorkflow, IdentityEnrichmentWorkflow, GeoLocalizeWorkflow, HackerOneImportWorkflow, HackerOneSyncBookmarkedWorkflow, ProxyFetchWorkflow, SingleTaskRetryWorkflow] + _p2_workflows + plugin_workflows
+                all_workflows = [MasterScanWorkflow, NucleiPlannerWorkflow, SubScanWorkflow, StressTestWorkflow, StartupSyncWorkflow, ScheduledScanWorkflow, MonitoringWorkflow, GoExecutorTaskWorkflow, ApmeTaskWorkflow, RecalculateApmeWorkflow, CertificateResyncWorkflow, IdentityEnrichmentWorkflow, GeoLocalizeWorkflow, HackerOneImportWorkflow, HackerOneSyncBookmarkedWorkflow, ProxyFetchWorkflow, ToolProbeWorkflow, SingleTaskRetryWorkflow, FollowupPlanWorkflow, SafePocWorkflow] + _p2_workflows + plugin_workflows
                 all_activities.extend(plugin_activities)
             except Exception as e:
-                logger.error(f"Failed to load dynamic plugin temporal exports: {e}")
+                logger.error("Failed to load dynamic plugin temporal exports: %s", e)
                 _p2_workflows = [UserHuntWorkflow, URLBypassWorkflow, WordPressWorkflow,
                                  HostReconWorkflow, CIDRReconWorkflow, CodeScanWorkflow,
                                  DomainReconWorkflow, SubdomainReconWorkflow, URLCrawlWorkflow,
@@ -704,7 +786,7 @@ class Command(BaseCommand):
                                  URLVulnWorkflow, URLAuthExtractWorkflow, AssessmentWorkflow,
                                  DiscoveryWorkflow, EnumerationWorkflow, AnalysisWorkflow,
                                  ValidationWorkflow, ReportingWorkflow]
-                all_workflows = [MasterScanWorkflow, NucleiPlannerWorkflow, SubScanWorkflow, StressTestWorkflow, StartupSyncWorkflow, ScheduledScanWorkflow, MonitoringWorkflow, GoExecutorTaskWorkflow, ApmeTaskWorkflow, RecalculateApmeWorkflow, CertificateResyncWorkflow, IdentityEnrichmentWorkflow, GeoLocalizeWorkflow, HackerOneImportWorkflow, HackerOneSyncBookmarkedWorkflow, ProxyFetchWorkflow, SingleTaskRetryWorkflow] + _p2_workflows
+                all_workflows = [MasterScanWorkflow, NucleiPlannerWorkflow, SubScanWorkflow, StressTestWorkflow, StartupSyncWorkflow, ScheduledScanWorkflow, MonitoringWorkflow, GoExecutorTaskWorkflow, ApmeTaskWorkflow, RecalculateApmeWorkflow, CertificateResyncWorkflow, IdentityEnrichmentWorkflow, GeoLocalizeWorkflow, HackerOneImportWorkflow, HackerOneSyncBookmarkedWorkflow, ProxyFetchWorkflow, ToolProbeWorkflow, SingleTaskRetryWorkflow, FollowupPlanWorkflow, SafePocWorkflow] + _p2_workflows
 
             # -------------------------------------------------------------------
             # Start the Temporal Worker
@@ -780,7 +862,7 @@ class Command(BaseCommand):
                                     time.sleep(2)
                                     os._exit(0)
                     except Exception as e:
-                        logger.error(f"[Control] Redis listener error: {e}. Retrying in 5 seconds...")
+                        logger.error("[Control] Redis listener error: %s. Retrying in 5 seconds...", e)
                         time.sleep(5)
 
             import threading

@@ -19,7 +19,7 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material';
-import { Trash2, Server, Key, Activity, Clock, Plus } from 'lucide-react';
+import { Trash2, Server, Activity, Clock, Plus, Copy } from 'lucide-react';
 import {
   useRemoteWorkers,
   useCreateRemoteWorker,
@@ -28,6 +28,7 @@ import {
 import { TacticalPanel } from '../../../components/TacticalPanel';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 import { formatDistanceToNow } from 'date-fns';
+import type { ApiErrorLike } from '../../../types/errors';
 
 export const RemoteWorkersPage: React.FC = () => {
   const { tokens, theme } = useThemeTokens();
@@ -36,7 +37,8 @@ export const RemoteWorkersPage: React.FC = () => {
   const deleteWorker = useDeleteRemoteWorker();
 
   const [newWorkerName, setNewWorkerName] = useState('');
-  const [newWorkerToken, setNewWorkerToken] = useState('');
+  // The token is only ever returned by the create call; it is stored hashed.
+  const [issuedToken, setIssuedToken] = useState<{ name: string; token: string } | null>(null);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -52,22 +54,33 @@ export const RemoteWorkersPage: React.FC = () => {
   };
 
   const handleCreateWorker = async () => {
-    if (!newWorkerName.trim() || !newWorkerToken.trim()) return;
+    if (!newWorkerName.trim()) return;
     try {
-      await createWorker.mutateAsync({ name: newWorkerName.trim(), auth_token: newWorkerToken.trim() });
+      const created = await createWorker.mutateAsync({ name: newWorkerName.trim() });
+      setIssuedToken({ name: created.name, token: created.auth_token });
       setNewWorkerName('');
-      setNewWorkerToken('');
       setSnackbar({
         open: true,
         message: 'Worker created successfully',
         severity: 'success',
       });
-    } catch (err: any) {
+    } catch (caught) {
+      const err = caught as ApiErrorLike;
       setSnackbar({
         open: true,
-        message: err.response?.data?.message || 'Failed to create worker',
+        message: err?.response?.data?.message || 'Failed to create worker',
         severity: 'error',
       });
+    }
+  };
+
+  const handleCopyToken = async () => {
+    if (!issuedToken) return;
+    try {
+      await navigator.clipboard.writeText(issuedToken.token);
+      setSnackbar({ open: true, message: 'Token copied', severity: 'success' });
+    } catch {
+      setSnackbar({ open: true, message: 'Copy failed; select the token manually', severity: 'warning' });
     }
   };
 
@@ -80,10 +93,11 @@ export const RemoteWorkersPage: React.FC = () => {
           message: 'Worker deleted successfully',
           severity: 'success',
         });
-      } catch (err: any) {
+      } catch (caught) {
+        const err = caught as ApiErrorLike;
         setSnackbar({
           open: true,
-          message: err.response?.data?.message || 'Failed to delete worker',
+          message: err?.response?.data?.message || 'Failed to delete worker',
           severity: 'error',
         });
       }
@@ -134,31 +148,12 @@ export const RemoteWorkersPage: React.FC = () => {
               }}
             />
           </Box>
-          <Box sx={{ flexGrow: 1, width: '100%' }}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Auth Token"
-              value={newWorkerToken}
-              onChange={(e) => setNewWorkerToken(e.target.value)}
-              placeholder="e.g., secret-token-123"
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  color: theme.palette.text.primary,
-                  '& fieldset': { borderColor: tokens.border.subtle },
-                  '&:hover fieldset': { borderColor: tokens.border.strong },
-                  '&.Mui-focused fieldset': { borderColor: tokens.accent.primary },
-                },
-                '& .MuiInputLabel-root': { color: theme.palette.text.secondary },
-              }}
-            />
-          </Box>
           <Box sx={{ width: { xs: '100%', md: 'auto' }, minWidth: 150 }}>
             <Button
               variant="contained"
               fullWidth
               onClick={handleCreateWorker}
-              disabled={!newWorkerName.trim() || !newWorkerToken.trim() || createWorker.isPending}
+              disabled={!newWorkerName.trim() || createWorker.isPending}
               sx={{
                 bgcolor: tokens.accent.primary,
                 color: theme.palette.background.paper,
@@ -169,6 +164,25 @@ export const RemoteWorkersPage: React.FC = () => {
             </Button>
           </Box>
         </Stack>
+        {issuedToken && (
+          <Alert severity="warning" onClose={() => setIssuedToken(null)} sx={{ mt: 2 }}>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              Token for <strong>{issuedToken.name}</strong>. Copy it now: it is stored hashed and
+              cannot be shown again. Start the worker with <code>--worker-token</code>.
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              <Typography
+                variant="body2"
+                sx={{ fontFamily: 'monospace', wordBreak: 'break-all', bgcolor: theme.palette.background.default, px: 1, py: 0.5, borderRadius: 1 }}
+              >
+                {issuedToken.token}
+              </Typography>
+              <Button size="small" startIcon={<Copy size={14} />} onClick={handleCopyToken}>
+                Copy
+              </Button>
+            </Box>
+          </Alert>
+        )}
       </TacticalPanel>
 
       <Box sx={{ mt: 3 }}>
@@ -182,7 +196,7 @@ export const RemoteWorkersPage: React.FC = () => {
                 <TableHead>
                   <TableRow>
                     <TableCell sx={{ color: theme.palette.text.secondary, borderBottom: `1px solid ${tokens.border.subtle}` }}>Name</TableCell>
-                    <TableCell sx={{ color: theme.palette.text.secondary, borderBottom: `1px solid ${tokens.border.subtle}` }}>Token (Keep Secret)</TableCell>
+                    <TableCell sx={{ color: theme.palette.text.secondary, borderBottom: `1px solid ${tokens.border.subtle}` }}>Task Queue</TableCell>
                     <TableCell sx={{ color: theme.palette.text.secondary, borderBottom: `1px solid ${tokens.border.subtle}` }}>Last IP</TableCell>
                     <TableCell sx={{ color: theme.palette.text.secondary, borderBottom: `1px solid ${tokens.border.subtle}` }}>Last Heartbeat</TableCell>
                     <TableCell sx={{ color: theme.palette.text.secondary, borderBottom: `1px solid ${tokens.border.subtle}`, width: 60 }}>Actions</TableCell>
@@ -195,12 +209,9 @@ export const RemoteWorkersPage: React.FC = () => {
                         <Typography variant="body2" sx={{ fontWeight: 500 }}>{worker.name}</Typography>
                       </TableCell>
                       <TableCell sx={{ color: theme.palette.text.primary, borderBottom: `1px solid ${tokens.border.subtle}` }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Key size={14} color={theme.palette.text.secondary} />
-                          <Typography variant="body2" sx={{ fontFamily: 'monospace', bgcolor: theme.palette.background.default, px: 1, py: 0.5, borderRadius: 1 }}>
-                            {worker.auth_token}
-                          </Typography>
-                        </Box>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                          {worker.task_queue}
+                        </Typography>
                       </TableCell>
                       <TableCell sx={{ color: theme.palette.text.primary, borderBottom: `1px solid ${tokens.border.subtle}` }}>
                         {worker.ip_address || 'N/A'}

@@ -1,181 +1,107 @@
-import io
-import os
-import secrets
-import socket
-import tarfile
-import time
-import logging
+"""Reachability and circuit control for the ``tor`` compose service.
 
-import docker
-from django.core.cache import cache
+Tor is an opt-in compose service (``profiles: ["tor"]`` in
+``docker/docker-compose.yml``); the application no longer creates or stops
+the container and needs no Docker socket. This module only answers "is the
+SOCKS port up", explains how to enable the service when it is not, and asks
+the control port for a new circuit.
+
+The control-port password is ``TOR_CONTROL_PASSWORD`` from ``.env``: compose
+passes the same value to the ``tor`` service (which hashes it into its torrc)
+and to the containers that call :meth:`TorManager.new_circuit`.
+"""
+from __future__ import annotations
+
+import logging
+import os
+import socket
+import time
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-TOR_CONTAINER_NAME = 'tor'
-TOR_IMAGE_NAME = 'r3ngine-tor:latest'
 TOR_SOCKS_HOST = 'tor'
 TOR_SOCKS_PORT = 9050
 TOR_CONTROL_HOST = 'tor'
 TOR_CONTROL_PORT = 9051
-CACHE_KEY_PASSWORD = 'tor:control_password'
+TOR_CONTROL_PASSWORD_ENV = 'TOR_CONTROL_PASSWORD'
+
+PROBE_TIMEOUT_SECONDS = 2.0
+
+TOR_ENABLE_HINT = (
+    "Tor is not running. It is an optional service: set COMPOSE_PROFILES=tor and "
+    "TOR_CONTROL_PASSWORD in .env and run `make up` (or `make up-tor`), then enable TOR Mode again."
+)
+TOR_PASSWORD_HINT = (
+    f"{TOR_CONTROL_PASSWORD_ENV} is not set for this container, so Tor circuits cannot be "
+    "rotated. Set it in .env (the tor service uses the same value) and recreate the stack."
+)
 
 
 class TorUnavailableError(Exception):
-    pass
-
-
-class TorStartError(Exception):
-    pass
+    """Tor is not reachable, or cannot be controlled, from this process."""
 
 
 class TorManager:
+    """Status of the ``tor`` service as seen from this container."""
 
-    def _get_client(self):
+    def __init__(
+        self,
+        socks_host: str = TOR_SOCKS_HOST,
+        socks_port: int = TOR_SOCKS_PORT,
+        control_host: str = TOR_CONTROL_HOST,
+        control_port: int = TOR_CONTROL_PORT,
+    ) -> None:
+        self.socks_host = socks_host
+        self.socks_port = socks_port
+        self.control_host = control_host
+        self.control_port = control_port
+
+    @staticmethod
+    def enable_hint() -> str:
+        return TOR_ENABLE_HINT
+
+    def is_running(self) -> bool:
+        """True when the SOCKS port accepts a TCP connection."""
         try:
-            return docker.from_env()
-        except docker.errors.DockerException as e:
-            raise TorUnavailableError(f"Docker socket not available: {e}")
-
-    def _discover_network(self, client):
-        """Find the Docker network this container belongs to."""
-        try:
-            hostname = socket.gethostname()
-            container = client.containers.get(hostname)
-            networks = list(container.attrs['NetworkSettings']['Networks'].keys())
-            # Prefer the r3ngine network
-            return next(
-                (n for n in networks if 'r3ngine' in n.lower()),
-                networks[0] if networks else 'r3ngine_r3ngine_network'
-            )
-        except Exception as e:
-            logger.debug(f"[TorManager] Could not discover network, using fallback: {e}")
-            return 'r3ngine_r3ngine_network'
-
-    def _build_image(self, client):
-        """Build the Tor image from the local build context (web/tor/)."""
-        build_context_dir = os.path.realpath(
-            os.path.join(os.path.dirname(__file__), '..', 'tor')
-        )
-        if not os.path.isdir(build_context_dir):
-            raise TorStartError(
-                f"Tor build context not found at '{build_context_dir}'. "
-                "Run: docker compose build tor"
-            )
-        logger.info("[TorManager] Building '%s' from %s — this may take a minute...", TOR_IMAGE_NAME, build_context_dir)
-        tar_stream = io.BytesIO()
-        with tarfile.open(fileobj=tar_stream, mode='w') as tar:
-            tar.add(build_context_dir, arcname='.')
-        tar_stream.seek(0)
-        try:
-            client.images.build(
-                fileobj=tar_stream,
-                custom_context=True,
-                tag=TOR_IMAGE_NAME,
-                rm=True,
-            )
-            logger.info("[TorManager] Image '%s' built successfully.", TOR_IMAGE_NAME)
-        except docker.errors.BuildError as e:
-            raise TorStartError(f"Failed to build TOR image: {e}")
-        except docker.errors.APIError as e:
-            raise TorStartError(f"Docker API error during TOR image build: {e}")
-
-    def start(self):
-        client = self._get_client()
-
-        # Remove any existing tor container (may be stopped from a previous session)
-        try:
-            existing = client.containers.get(TOR_CONTAINER_NAME)
-            existing.remove(force=True)
-        except docker.errors.NotFound:
-            pass
-
-        # Build the image on first use if it doesn't exist yet
-        try:
-            client.images.get(TOR_IMAGE_NAME)
-        except docker.errors.ImageNotFound:
-            logger.info(f"[TorManager] Image '{TOR_IMAGE_NAME}' not found locally. Attempting to pull...")
-            try:
-                client.images.pull(TOR_IMAGE_NAME)
-                logger.info(f"[TorManager] Image '{TOR_IMAGE_NAME}' pulled successfully.")
-            except docker.errors.APIError:
-                logger.info(f"[TorManager] Pull failed or image is local-only. Building from source...")
-                self._build_image(client)
-
-        # Generate a fresh random control password for this session
-        password = secrets.token_hex(32)
-        cache.set(CACHE_KEY_PASSWORD, password, timeout=None)
-
-        network = self._discover_network(client)
-
-        try:
-            client.containers.run(
-                TOR_IMAGE_NAME,
-                detach=True,
-                name=TOR_CONTAINER_NAME,
-                environment={'TOR_CONTROL_PASSWORD': password},
-                network=network,
-                labels={
-                    'com.docker.compose.project': 'r3ngine',
-                    'com.docker.compose.service': 'tor'
-                },
-                restart_policy={'Name': 'no'},
-                mem_limit='256m',
-            )
-        except docker.errors.APIError as e:
-            cache.delete(CACHE_KEY_PASSWORD)
-            raise TorStartError(f"Failed to start TOR container: {e}")
-
-        try:
-            self._wait_for_ready()
-        except TorStartError:
-            cache.delete(CACHE_KEY_PASSWORD)
-            raise
-
-    def stop(self):
-        cache.delete(CACHE_KEY_PASSWORD)
-        try:
-            client = self._get_client()
-            container = client.containers.get(TOR_CONTAINER_NAME)
-            if container.status == 'running':
-                container.stop(timeout=10)
-        except (docker.errors.NotFound, TorUnavailableError):
-            pass
-
-    def is_running(self):
-        try:
-            client = self._get_client()
-            container = client.containers.get(TOR_CONTAINER_NAME)
-            return container.status == 'running'
-        except (docker.errors.NotFound, TorUnavailableError):
+            with socket.create_connection((self.socks_host, self.socks_port), timeout=PROBE_TIMEOUT_SECONDS):
+                return True
+        except OSError as exc:
+            logger.debug('[TorManager] %s:%s not reachable: %s', self.socks_host, self.socks_port, exc)
             return False
 
-    def _wait_for_ready(self, timeout=30):
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            try:
-                sock = socket.create_connection((TOR_SOCKS_HOST, TOR_SOCKS_PORT), timeout=2)
-                sock.close()
-                return
-            except OSError:
-                time.sleep(1)
-        raise TorStartError(
-            f"TOR SOCKS5 on {TOR_SOCKS_HOST}:{TOR_SOCKS_PORT} "
-            f"did not become ready within {timeout}s"
-        )
+    def status(self) -> dict:
+        """Status payload for the UI: whether Tor answers and how to enable it."""
+        running = self.is_running()
+        return {
+            'running': running,
+            'host': self.socks_host,
+            'port': self.socks_port,
+            'hint': None if running else TOR_ENABLE_HINT,
+        }
 
-    def new_circuit(self):
-        password = cache.get(CACHE_KEY_PASSWORD)
+    def require_running(self) -> None:
+        """Raise ``TorUnavailableError`` (with the enable hint) unless Tor answers."""
+        if not self.is_running():
+            raise TorUnavailableError(TOR_ENABLE_HINT)
+
+    def control_password(self) -> Optional[str]:
+        return os.environ.get(TOR_CONTROL_PASSWORD_ENV) or None
+
+    def new_circuit(self, settle_seconds: float = 2.0) -> None:
+        """Ask Tor for a new circuit (NEWNYM) over the control port."""
+        password = self.control_password()
         if not password:
-            raise TorUnavailableError("TOR is not running (no control password in cache)")
+            raise TorUnavailableError(TOR_PASSWORD_HINT)
+        self.require_running()
         try:
             from stem import Signal
             from stem.control import Controller
-            with Controller.from_port(
-                address=TOR_CONTROL_HOST, port=TOR_CONTROL_PORT
-            ) as ctrl:
+            with Controller.from_port(address=self.control_host, port=self.control_port) as ctrl:
                 ctrl.authenticate(password=password)
                 ctrl.signal(Signal.NEWNYM)
-                time.sleep(2)
+                if settle_seconds > 0:
+                    time.sleep(settle_seconds)
         except Exception as e:
-            logger.warning(f"[TorManager] Failed to rotate circuit: {e}")
+            logger.warning("[TorManager] Failed to rotate circuit: %s", e)
             raise

@@ -27,7 +27,7 @@ from django.utils import timezone
 from rest_framework import mixins, viewsets, serializers, status
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, SAFE_METHODS
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_204_NO_CONTENT, HTTP_202_ACCEPTED
@@ -53,6 +53,8 @@ from startScan.models import EndPoint
 from targetApp.models import *
 from api.shared_api_tasks import import_hackerone_programs_task, sync_bookmarked_programs_task
 from api.permissions import *
+from reNgine.utils.request import client_ip
+from reNgine.utils.secret_tokens import token_matches
 from api.serializers import *
 from reNgine.utils.graph import Neo4jManager
 from reNgine.temporal_client import TemporalClientProvider, run_and_close
@@ -60,9 +62,14 @@ from reNgine.temporal_client import TemporalClientProvider, run_and_close
 logger = logging.getLogger(__name__)
 
 class ScanWorkerViewSet(viewsets.ModelViewSet):
-	permission_classes = [IsAuditor]
+	"""Remote workers: anyone with a role may list them, only sys admins change them."""
 	serializer_class = ScanWorkerSerializer
 	queryset = ScanWorker.objects.all()
+
+	def get_permissions(self):
+		if self.request.method in SAFE_METHODS:
+			return [IsAuditor()]
+		return [IsSysAdmin()]
 
 	def get_queryset(self):
 		return ScanWorker.objects.all().order_by('-id')
@@ -72,22 +79,16 @@ class WorkerHeartbeatAPIView(APIView):
 	def post(self, request):
 		token = request.data.get('token')
 		worker_name = request.data.get('worker_name')
-		if not token or not worker_name:
+		if not isinstance(token, str) or not isinstance(worker_name, str) or not token or not worker_name:
 			return Response({'status': False, 'message': 'Missing token or worker_name'}, status=status.HTTP_400_BAD_REQUEST)
-		from django.utils.crypto import constant_time_compare
 		worker = ScanWorker.objects.filter(name=worker_name).first()
-		if not worker or not constant_time_compare(worker.auth_token, token):
+		if not worker or not token_matches(token, worker.auth_token_hash):
 			return Response({'status': False, 'message': 'Invalid token or worker not found'}, status=status.HTTP_403_FORBIDDEN)
-		
-		# simple ip extraction
-		x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-		if x_forwarded_for:
-			ip = x_forwarded_for.split(',')[0]
-		else:
-			ip = request.META.get('REMOTE_ADDR')
+		if not worker.is_active:
+			return Response({'status': False, 'message': 'Worker is inactive'}, status=status.HTTP_403_FORBIDDEN)
 
 		worker.last_heartbeat = timezone.now()
-		worker.ip_address = ip
-		worker.save()
+		worker.ip_address = client_ip(request)
+		worker.save(update_fields=['last_heartbeat', 'ip_address'])
 		return Response({'status': True, 'message': 'Heartbeat received'})
 

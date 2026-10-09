@@ -97,7 +97,8 @@
           - xnldorker
       dir_file_fuzz:
         auto_calibration: true
-        run_dirsearch: true
+        run_ffuf: true
+        run_dirsearch: false
         run_feroxbuster: false
         enable_http_crawl: true
         rate_limit: 150
@@ -118,7 +119,6 @@
           - asp
           - aspx
           - txt
-          - conf
           - sql
           - json
           - yml
@@ -152,18 +152,38 @@
           - page_title
         enable_http_crawl: true
         gf_patterns:
+          - api-keys
+          - command-injection
+          - cors
+          - crlf
           - debug_logic
+          - email-injection
+          - graphql
+          - http-smuggling
           - idor
+          - img-traversal
           - interestingEXT
           - interestingparams
           - interestingsubs
+          - jsvar
+          - jwt
           - lfi
+          - mass-assignment
+          - nosqli
+          - oauth
+          - open-redirect
+          - path-traversal
+          - prototype-pollution
           - rce
           - redirect
           - sqli
           - ssrf
+          - s3-bucket
           - ssti
+          - upload
+          - websocket
           - xss
+          - xxe
         ignore_file_extensions:
           - png
           - jpg
@@ -224,9 +244,13 @@
           concurrency: 30
           rate_limit: 100
           timeout: 600s
+          run_phase_a: true
+          run_phase_b: true
+          scope_origin: balanced
+          skip_spidering: false
         cpanel_scanner:
           run_cpanel2shell: true
-          cpanel_user_wordlist: /usr/src/app/wordlist/cpanel_users.txt
+          cpanel_user_wordlist: /usr/src/wordlist/cpanel_users.txt
           proxy_type: rotating
       vigolium_discovery:
         run_vigolium_discovery: true

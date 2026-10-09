@@ -64,6 +64,87 @@ export const useInitiateSubscan = () => {
   });
 };
 
+export interface CapabilityTool {
+  kind: string;
+  name: string;
+  title: string;
+  asset_kinds: string[];
+  risk: string;
+}
+
+export interface ToolArgField {
+  name: string;
+  long_flag?: string;
+  short_flag?: string | null;
+  type: 'bool' | 'int' | 'float' | 'string' | 'enum' | string;
+  takes_value?: boolean;
+  description?: string;
+  dangerous?: boolean;
+  default?: unknown;
+}
+
+export interface ToolArgsPayload {
+  pipeline_tool: string;
+  retry_task_name?: string;
+  binaries?: string[];
+  binary_name?: string;
+  binary_path?: string;
+  version?: string | null;
+  is_present?: boolean;
+  cached?: boolean;
+  source?: string;
+  fetched_at?: string | null;
+  schema: ToolArgField[];
+}
+
+export const useCapabilities = () => {
+  return useQuery<{ pipeline_tasks: CapabilityTool[] }>({
+    queryKey: ['capabilities'],
+    queryFn: async () => {
+      const response = await axios.get('/api/action/capabilities/');
+      return response.data;
+    },
+    staleTime: 60_000,
+  });
+};
+
+export const useToolArgs = (tool: string | null) => {
+  return useQuery<ToolArgsPayload>({
+    queryKey: ['tool-args', tool],
+    queryFn: async () => {
+      const response = await axios.get(`/api/action/tool/${encodeURIComponent(tool!)}/args/`);
+      return response.data;
+    },
+    enabled: !!tool,
+    staleTime: 30_000,
+  });
+};
+
+export const useRunTool = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      tool: string;
+      asset_type: 'subdomain' | 'endpoint' | 'url' | 'host';
+      asset_id: number;
+      scan_history_id: number;
+      tool_args?: Record<string, unknown>;
+    }) => {
+      const response = await axios.post('/api/action/tool/run/', params, {
+        headers: { 'X-CSRFToken': getCsrfToken() },
+      });
+      if (response.data?.status === false) {
+        throw new Error(response.data.message || 'Tool run failed');
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scan-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['subdomains'] });
+    },
+  });
+};
+
 export const useGPTAttackSurface = () => {
   return useMutation({
     mutationFn: async (subdomainId: number) => {
@@ -162,3 +243,37 @@ export const useAddManualSubdomain = (projectSlug: string) => {
 };
 
 
+
+/** Re-parses the installed binary's help (bypassing the server cache) for the argument schema. */
+export const refreshToolArgs = async (tool: string): Promise<ToolArgsPayload> => {
+  const response = await axios.get<ToolArgsPayload>(`/api/action/tool/${encodeURIComponent(tool)}/args/`, {
+    params: { refresh: 1 },
+  });
+  return response.data;
+};
+
+/** Body of a successful `POST /api/action/ad-assessment/from-subdomain/` (HTTP 201). */
+export interface AdAssessmentFromSubdomainResponse {
+  assessment_id: number;
+  assessment_name: string;
+  target_domain: string;
+  status: 'created';
+}
+
+/**
+ * Creates a PENDING AD Intelligence assessment for the subdomain's root domain.
+ * Rejects with the backend's `error` message (or `HTTP <status>`) on failure.
+ */
+export const createAdAssessmentFromSubdomain = async (
+  subdomainId: number,
+): Promise<AdAssessmentFromSubdomainResponse> => {
+  const res = await fetch('/api/action/ad-assessment/from-subdomain/', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() ?? '' },
+    body: JSON.stringify({ subdomain_id: subdomainId }),
+  });
+  const json = (await res.json()) as Partial<AdAssessmentFromSubdomainResponse> & { error?: string };
+  if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+  return json as AdAssessmentFromSubdomainResponse;
+};

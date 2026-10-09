@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useStressStore } from '../../../store/stressStore';
+import type { EndpointStressMetrics } from '../../../types/stressTesting';
 
 interface DrilldownPanelProps {
-  data: any[];
+  data: Pick<EndpointStressMetrics, 'endpoint' | 'timestamp' | 'avg_latency' | 'error_rate'>[];
 }
 
 export const DrilldownPanel: React.FC<DrilldownPanelProps> = ({ data }) => {

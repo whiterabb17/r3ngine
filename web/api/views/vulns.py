@@ -43,6 +43,7 @@ from reNgine.definitions import (
     PERM_MODIFY_TARGETS, PERM_MODIFY_SCAN_CONFIGURATIONS,
     PERM_MODIFY_WORDLISTS, PERM_INITATE_SCANS_SUBSCANS,
     PERM_MODIFY_SCAN_REPORT, PERM_MODIFY_SCAN_RESULTS,
+    INTERNAL_ERROR_MESSAGE,
 )
 from reNgine.tasks import *
 from reNgine.llm import *
@@ -70,6 +71,20 @@ class VulnerabilityViewSet(viewsets.ModelViewSet):
 	permission_classes = [IsPenetrationTester]
 	serializer_class = VulnerabilitySerializer
 	queryset = Vulnerability.objects.none()
+
+	COMPACT_TRUE_VALUES = ('1', 'true')
+
+	def is_compact(self) -> bool:
+		"""`?compact=1` (or `true`) opts the list action into VulnerabilityCompactSerializer."""
+		request = getattr(self, 'request', None)
+		if request is None or self.action != 'list':
+			return False
+		return request.query_params.get('compact', '').strip().lower() in self.COMPACT_TRUE_VALUES
+
+	def get_serializer_class(self):
+		if self.is_compact():
+			return VulnerabilityCompactSerializer
+		return super().get_serializer_class()
 
 	@staticmethod
 	def _normalize_severity_filter(severity_value):
@@ -136,6 +151,7 @@ class VulnerabilityViewSet(viewsets.ModelViewSet):
 		subdomain_id = req.query_params.get('subdomain_id')
 		subdomain_name = req.query_params.get('subdomain')
 		vulnerability_name = req.query_params.get('vulnerability_name')
+		has_exploit = req.query_params.get('has_exploit')
 		slug = self.request.GET.get('project', None)
 
 		if slug:
@@ -202,10 +218,22 @@ class VulnerabilityViewSet(viewsets.ModelViewSet):
 				qs = qs.exclude(exclude_source_query)
 		if subdomain_id:
 			qs = qs.filter(subdomain__id=subdomain_id)
+		if has_exploit is not None:
+			# Same definition as scan-summary exploitable_count: non-empty exploit_url.
+			if has_exploit.lower() in ('true', '1', 't', 'y', 'yes'):
+				qs = qs.exclude(exploit_url__isnull=True).exclude(exploit_url__exact='')
+			elif has_exploit.lower() in ('false', '0', 'f', 'n', 'no'):
+				qs = qs.filter(Q(exploit_url__isnull=True) | Q(exploit_url__exact=''))
 		self.queryset = qs
 		return self.queryset
 
 	def filter_queryset(self, qs):
+		qs = self._search_and_order()
+		if self.is_compact():
+			qs = VulnerabilityCompactSerializer.optimize_queryset(qs)
+		return qs
+
+	def _search_and_order(self):
 		qs = self.queryset.filter()
 		search_value = self.request.GET.get(u'search[value]', '')
 		_order_col = self.request.GET.get(u'order[0][column]', None)
@@ -492,6 +520,93 @@ class VulnerabilityViewSet(viewsets.ModelViewSet):
 			'reason': reason
 		}, status=status.HTTP_200_OK)
 
+	@action(detail=True, methods=['post'])
+	def validate_severity(self, request, pk=None):
+		"""Validate vulnerability severity using LLM."""
+		from reNgine.llm import LLMSeverityValidator
+		from reNgine.definitions import NUCLEI_REVERSE_SEVERITY_MAP
+		from dashboard.models import LLMConfig
+
+		if not LLMConfig.objects.filter(is_active=True).exists():
+			return Response({
+				'status': False,
+				'error': 'No active LLM configuration found. Please configure an LLM in Settings.'
+			}, status=status.HTTP_400_BAD_REQUEST)
+
+		vuln = self.get_object()
+		
+		# Format context string for LLM input
+		cve_list = [cve.name for cve in vuln.cve_ids.all()]
+		cwe_list = [cwe.name for cwe in vuln.cwe_ids.all()]
+		curr_severity_str = NUCLEI_REVERSE_SEVERITY_MAP.get(vuln.severity, 'info')
+
+		vuln_context = f"""
+Vulnerability Title: {vuln.name}
+Current Assigned Severity: {curr_severity_str} (Numeric: {vuln.severity})
+Source Tool: {vuln.source or 'Unknown'}
+URL / Target: {vuln.http_url or 'N/A'}
+Template ID: {vuln.template_id or 'N/A'}
+Description: {vuln.description or 'N/A'}
+Impact: {vuln.impact or 'N/A'}
+Remediation: {vuln.remediation or 'N/A'}
+CVSS Score: {vuln.cvss_score if vuln.cvss_score is not None else 'N/A'}
+CVSS Metrics: {vuln.cvss_metrics or 'N/A'}
+Associated CVEs: {', '.join(cve_list) if cve_list else 'None'}
+Associated CWEs: {', '.join(cwe_list) if cwe_list else 'None'}
+Extracted Results: {', '.join(vuln.extracted_results) if vuln.extracted_results else 'None'}
+"""
+		vuln_context = re.sub(r'\t', '', vuln_context)
+		validator = LLMSeverityValidator(logger=logger)
+		res = validator.validate_severity(vuln_context)
+		
+		if not res.get('status'):
+			return Response({
+				'status': False,
+				'error': res.get('error', 'LLM evaluation failed')
+			}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+		res['current_severity'] = curr_severity_str
+		res['vulnerability_id'] = vuln.id
+		res['vulnerability_name'] = vuln.name
+		return Response(res, status=status.HTTP_200_OK)
+
+	@action(detail=True, methods=['post'])
+	def update_severity(self, request, pk=None):
+		"""Update vulnerability severity based on accepted AI recommendation or manual input."""
+		from reNgine.definitions import NUCLEI_REVERSE_SEVERITY_MAP
+
+		vuln = self.get_object()
+		new_severity = request.data.get('severity')
+		cvss_score = request.data.get('cvss_score')
+		reason = request.data.get('reason', 'Updated via AI Severity Validation')
+
+		if new_severity is None:
+			return Response({'error': 'Severity field is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+		# Normalize severity input
+		numeric_severity = self._normalize_severity_filter(new_severity)
+		if numeric_severity is None or numeric_severity < 0:
+			return Response({'error': f'Invalid severity value: {new_severity}'}, status=status.HTTP_400_BAD_REQUEST)
+
+		vuln.severity = numeric_severity
+		if cvss_score is not None and str(cvss_score).replace('.', '', 1).isdigit():
+			try:
+				vuln.cvss_score = float(cvss_score)
+			except ValueError:
+				pass
+
+		vuln.validation_reason = reason
+		vuln.save()
+
+		return Response({
+			'status': True,
+			'message': 'Vulnerability severity updated successfully.',
+			'id': vuln.id,
+			'severity': NUCLEI_REVERSE_SEVERITY_MAP.get(vuln.severity, 'info'),
+			'severity_code': vuln.severity,
+			'cvss_score': vuln.cvss_score,
+		}, status=status.HTTP_200_OK)
+
 class ExposurePagination(PageNumberPagination):
 	page_size = 10
 	page_size_query_param = 'length'
@@ -626,11 +741,11 @@ class CVEDetails(APIView):
 					})
 
 				logger.info("Successfully enriched %s", formatted_cve_id)
-			except Exception as e:
-				logger.error("Enrichment failed for %s: %s", formatted_cve_id, e)
+			except Exception:
+				logger.exception("Enrichment failed for %s", formatted_cve_id)
 				return Response({
 					'status': False,
-					'message': f'Failed to enrich CVE data: {str(e)}'
+					'message': 'Failed to enrich CVE data; see server logs.'
 				})
 
 		# 3. Fetch additional context and references from CIRCL.LU API
@@ -949,3 +1064,10 @@ class DeleteVulnerability(APIView):
 		Vulnerability.objects.filter(id__in=ids).delete()
 		return Response({'status': True})
 
+
+class VulnerabilityReport(APIView):
+	permission_classes = [IsPenetrationTester]
+	def get(self, request):
+		req = self.request
+		vulnerability_id = req.query_params.get('vulnerability_id')
+		return Response({"status": send_hackerone_report(vulnerability_id)})

@@ -1,5 +1,13 @@
-import React, { useState } from 'react';
-import { Box, Grid, Typography, CircularProgress, Chip, Stack } from '@mui/material';
+import React, { useMemo, useState } from 'react';
+import {
+  Box,
+  Grid,
+  Typography,
+  CircularProgress,
+  Chip,
+  Stack,
+  TablePagination,
+} from '@mui/material';
 import { useExposures } from '../api/useExposures';
 import { ExposureCard } from './ExposureCard';
 import type { Exposure } from '../types';
@@ -75,14 +83,52 @@ interface ExposureListProps {
 export const ExposureList: React.FC<ExposureListProps> = ({ scan_id, target_id }) => {
   const [selectedExposure, setSelectedExposure] = useState<Exposure | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(12);
   const { tokens } = useThemeTokens();
 
-  const { data, isLoading, error } = useExposures({
+  // Server page is 1-indexed; status filter is applied server-side when not "all"
+  const { data, isLoading, isFetching, error } = useExposures({
     scan_history: scan_id,
     target_id,
+    page: page + 1,
+    length: rowsPerPage,
+    ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
   });
 
-  if (isLoading) {
+  // Unfiltered sample for stats bar (API max page_size is 200)
+  const { data: statsData } = useExposures({
+    scan_history: scan_id,
+    target_id,
+    page: 1,
+    length: 200,
+  });
+
+  const exposures = data?.results || [];
+  const totalCount = data?.count ?? 0;
+  const statsExposures = statsData?.results || [];
+
+  React.useEffect(() => {
+    if (totalCount === 0) {
+      if (page !== 0) setPage(0);
+      return;
+    }
+    const maxPage = Math.max(0, Math.ceil(totalCount / rowsPerPage) - 1);
+    if (page > maxPage) setPage(maxPage);
+  }, [totalCount, rowsPerPage, page]);
+
+  const filterChipCounts = useMemo(() => {
+    const all = statsData?.count ?? 0;
+    return {
+      all,
+      open: statsExposures.filter((e) => e.status === 'open').length,
+      verified: statsExposures.filter((e) => e.status === 'verified').length,
+      remediated: statsExposures.filter((e) => e.status === 'remediated').length,
+      false_positive: statsExposures.filter((e) => e.status === 'false_positive').length,
+    };
+  }, [statsData?.count, statsExposures]);
+
+  if (isLoading && !data) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
         <CircularProgress />
@@ -98,23 +144,21 @@ export const ExposureList: React.FC<ExposureListProps> = ({ scan_id, target_id }
     );
   }
 
-  const exposures = data?.results || [];
-  const filteredExposures = statusFilter === 'all'
-    ? exposures
-    : exposures.filter((e) => e.status === statusFilter);
-
   return (
     <Box>
-      {exposures.length > 0 && <ExposureStatsBar exposures={exposures} />}
+      {statsExposures.length > 0 && <ExposureStatsBar exposures={statsExposures} />}
 
-      {exposures.length > 0 && (
+      {(statsData?.count ?? 0) > 0 && (
         <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}>
           {(['all', 'open', 'verified', 'remediated', 'false_positive'] as const).map((s) => (
             <Chip
               key={s}
-              label={s === 'all' ? `ALL (${exposures.length})` : STATUS_LABELS[s]}
+              label={s === 'all' ? `ALL (${filterChipCounts.all})` : STATUS_LABELS[s]}
               size="small"
-              onClick={() => setStatusFilter(s)}
+              onClick={() => {
+                setStatusFilter(s);
+                setPage(0);
+              }}
               variant={statusFilter === s ? 'filled' : 'outlined'}
               sx={{
                 height: 22,
@@ -132,20 +176,47 @@ export const ExposureList: React.FC<ExposureListProps> = ({ scan_id, target_id }
         </Stack>
       )}
 
-      {exposures.length === 0 ? (
+      {totalCount === 0 && statusFilter === 'all' ? (
         <Box sx={{ p: 4, textAlign: 'center' }}>
           <Typography variant="body1" sx={{ color: 'text.secondary' }}>
             No exposures detected for this target/scan.
           </Typography>
         </Box>
+      ) : totalCount === 0 ? (
+        <Box sx={{ p: 4, textAlign: 'center' }}>
+          <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+            No exposures match this status filter.
+          </Typography>
+        </Box>
       ) : (
-        <Grid container spacing={3}>
-          {filteredExposures.map((exposure) => (
-            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={exposure.id}>
-              <ExposureCard exposure={exposure} onClick={(exp) => setSelectedExposure(exp)} />
+        <>
+          <Box sx={{ position: 'relative', opacity: isFetching && data ? 0.7 : 1, transition: 'opacity 0.15s' }}>
+            <Grid container spacing={3}>
+              {exposures.map((exposure) => (
+                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={exposure.id}>
+                  <ExposureCard exposure={exposure} onClick={(exp) => setSelectedExposure(exp)} />
+                </Grid>
+              ))}
             </Grid>
-          ))}
-        </Grid>
+          </Box>
+          <TablePagination
+            component="div"
+            count={totalCount}
+            page={page}
+            onPageChange={(_e, next) => setPage(next)}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={(e) => {
+              setRowsPerPage(parseInt(e.target.value, 10));
+              setPage(0);
+            }}
+            rowsPerPageOptions={[6, 12, 24, 48]}
+            sx={{
+              mt: 1,
+              color: 'text.secondary',
+              '.MuiTablePagination-selectIcon': { color: 'text.secondary' },
+            }}
+          />
+        </>
       )}
 
       {selectedExposure && (

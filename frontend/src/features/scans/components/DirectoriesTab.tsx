@@ -49,11 +49,35 @@ import {
 import { useDirectories } from '../api';
 import { TacticalPanel } from '../../../components/TacticalPanel';
 import type { DirectoryFile } from '../../subdomains/types';
+import type { DirectorySubdomainSummary } from '../types';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { usePlugins } from '../../plugins/api/pluginsApi';
 import { useDirectoryFileDispatch, useDirectoryFileDelete } from '../api';
 import { BruteConfigDialog } from './BruteConfigDialog';
 import { getMenuPaperSx } from '../../../theme/semanticColors';
+import { getSafeUrl, openSafeUrl } from '../../../utils/securityUtils';
+import type { ApiErrorLike } from '../../../types/errors';
+
+type DirectoryRow = DirectoryFile | DirectorySubdomainSummary;
+
+const isSubdomainSummary = (row: DirectoryRow): row is DirectorySubdomainSummary => 'directory_count' in row;
+const isDirectoryFile = (row: DirectoryRow): row is DirectoryFile => !isSubdomainSummary(row);
+
+type DispatchParams = Parameters<ReturnType<typeof useDirectoryFileDispatch>['mutateAsync']>[0];
+
+/** A host built by grouping one subdomain's directory files by URL hostname. */
+interface DirectoryHostGroup {
+  id: string;
+  name: string;
+  http_url: string;
+  http_status: number;
+  page_title: string;
+  /** Never known for a group built from file URLs. */
+  screenshot_path?: string | null;
+  /** Never known for a group built from file URLs. */
+  is_interesting?: boolean;
+  directories: { id: string; scanned_date: string; directory_files: DirectoryFile[] }[];
+}
 
 interface DirectoriesTabProps {
   projectSlug: string;
@@ -117,7 +141,11 @@ export const DirectoriesTab: React.FC<DirectoriesTabProps> = ({ projectSlug, sca
 
   const handleActionClose = () => setAnchorEl(null);
 
-  const handleDispatchAction = async (action: string, label: string, extraParams?: any) => {
+  const handleDispatchAction = async (
+    action: string,
+    label: string,
+    extraParams?: Omit<DispatchParams, 'url' | 'action' | 'scan_id'>
+  ) => {
     if (!selectedFile || !scanId) return;
     handleActionClose();
     setPendingActionId({ id: selectedFile.id, action });
@@ -132,8 +160,9 @@ export const DirectoriesTab: React.FC<DirectoriesTabProps> = ({ projectSlug, sca
       if (action === 'brute_test') {
         setBruteModalOpen(false);
       }
-    } catch (error: any) {
-      showNotification(error.message || `Failed to dispatch ${label.toLowerCase()} — check Temporal logs`, 'error');
+    } catch (caught) {
+      const error = caught as ApiErrorLike;
+      showNotification(error?.message || `Failed to dispatch ${label.toLowerCase()} — check Temporal logs`, 'error');
     } finally {
       setPendingActionId(null);
     }
@@ -148,7 +177,7 @@ export const DirectoriesTab: React.FC<DirectoriesTabProps> = ({ projectSlug, sca
   };
 
   const handleOpenInBrowser = () => {
-    if (selectedFile) window.open(selectedFile.url, '_blank', 'noopener,noreferrer');
+    if (selectedFile) openSafeUrl(selectedFile.url, '_blank', 'noopener,noreferrer');
     handleActionClose();
   };
 
@@ -177,11 +206,11 @@ export const DirectoriesTab: React.FC<DirectoriesTabProps> = ({ projectSlug, sca
     page: page
   });
 
-  const groupedSubdomains = React.useMemo(() => {
+  const groupedSubdomains = React.useMemo((): DirectoryHostGroup[] => {
     if (!data?.results) return [];
     
-    const groups: Record<string, any[]> = {};
-    data.results.forEach((file: any) => {
+    const groups: Record<string, DirectoryFile[]> = {};
+    data.results.filter(isDirectoryFile).forEach((file) => {
       let hostname = 'Unknown Target';
       try {
         if (file.url) {
@@ -386,7 +415,7 @@ export const DirectoriesTab: React.FC<DirectoriesTabProps> = ({ projectSlug, sca
                   </td>
                 </tr>
               ) : isSummaryMode ? (
-                (data?.results || []).map((sd: any) => (
+                (data?.results || []).filter(isSubdomainSummary).map((sd) => (
                   <React.Fragment key={sd.id}>
                     <tr style={{
                       borderBottom: '1px solid', borderColor: theme.palette.divider,
@@ -442,7 +471,7 @@ export const DirectoriesTab: React.FC<DirectoriesTabProps> = ({ projectSlug, sca
                   </React.Fragment>
                 ))
               ) : (
-                groupedSubdomains.map((sub: any) => (
+                groupedSubdomains.map((sub) => (
                   <tr key={sub.id} style={{
                     borderBottom: '1px solid', borderColor: theme.palette.divider,
                     backgroundColor: 'transparent'
@@ -475,7 +504,7 @@ export const DirectoriesTab: React.FC<DirectoriesTabProps> = ({ projectSlug, sca
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Typography sx={{ fontSize: '13px', fontWeight: 700, color: 'text.primary' }}>{sub.name}</Typography>
                           {sub.http_url && (
-                            <IconButton size="small" component="a" href={sub.http_url} target="_blank" sx={{ p: 0.2, color: tokens.accent.primary }}>
+                            <IconButton size="small" component="a" href={getSafeUrl(sub.http_url) ?? '#'} target="_blank" sx={{ p: 0.2, color: tokens.accent.primary }}>
                               <ExternalLink size={12} />
                             </IconButton>
                           )}
@@ -556,7 +585,7 @@ export const DirectoriesTab: React.FC<DirectoriesTabProps> = ({ projectSlug, sca
                                 <Collapse in={expandedScans[`${sub.id}-${scan.id}`]}>
                                   <Box sx={{ ml: 4, mt: 1, borderLeft: '1px dashed', borderLeftColor: 'divider', pl: 2 }}>
                                     <Stack spacing={1}>
-                                      {scan.directory_files.map((file: any, fIdx: number) => (
+                                      {scan.directory_files.map((file, fIdx) => (
                                         <Box
                                           key={`${scan.id}-${fIdx}`}
                                           sx={{
@@ -576,7 +605,7 @@ export const DirectoriesTab: React.FC<DirectoriesTabProps> = ({ projectSlug, sca
                                               color: 'text.primary',
                                               textDecoration: 'none',
                                               '&:hover': { color: tokens.accent.primary }
-                                            }} component="a" href={file.url} target="_blank">
+                                            }} component="a" href={getSafeUrl(file.url) ?? '#'} target="_blank">
                                               {decodeBase64(file.name)}
                                             </Typography>
                                             <Box sx={{
@@ -605,12 +634,12 @@ export const DirectoriesTab: React.FC<DirectoriesTabProps> = ({ projectSlug, sca
                                                 {file.lines} L
                                               </Typography>
                                             )}
-                                            <IconButton size="small" component="a" href={file.url} target="_blank" sx={{ color: 'text.disabled', p: 0.5 }}>
+                                            <IconButton size="small" component="a" href={getSafeUrl(file.url) ?? '#'} target="_blank" sx={{ color: 'text.disabled', p: 0.5 }}>
                                               <ExternalLink size={12} />
                                             </IconButton>
                                             <IconButton
                                               size="small"
-                                              onClick={(e) => handleActionClick(e, file as DirectoryFile)}
+                                              onClick={(e) => handleActionClick(e, file)}
                                               sx={{
                                                 color: 'text.secondary',
                                                 p: 0.5,
@@ -978,7 +1007,7 @@ const SubdomainFilesContent: React.FC<{ scanId: number; subdomainId: number }> =
 
   return (
     <Stack spacing={1.5}>
-      {data.results.map((file: any, idx: number) => (
+      {data.results.filter(isDirectoryFile).map((file, idx) => (
         <Box
           key={idx}
           sx={{
@@ -1005,7 +1034,7 @@ const SubdomainFilesContent: React.FC<{ scanId: number; subdomainId: number }> =
                 color: 'text.primary',
                 textDecoration: 'none',
                 '&:hover': { color: tokens.accent.primary }
-              }} component="a" href={file.url} target="_blank">
+              }} component="a" href={getSafeUrl(file.url) ?? '#'} target="_blank">
                 {decodeBase64(file.name)}
               </Typography>
               <Typography sx={{ fontSize: '10px', color: 'text.disabled', fontFamily: 'monospace' }}>
@@ -1049,7 +1078,7 @@ const SubdomainFilesContent: React.FC<{ scanId: number; subdomainId: number }> =
                 </Box>
               )}
             </Stack>
-            <IconButton size="small" component="a" href={file.url} target="_blank" sx={{ color: tokens.accent.primary, bgcolor: `${tokens.accent.primary}0D`, p: 1 }}>
+            <IconButton size="small" component="a" href={getSafeUrl(file.url) ?? '#'} target="_blank" sx={{ color: tokens.accent.primary, bgcolor: `${tokens.accent.primary}0D`, p: 1 }}>
               <ExternalLink size={14} />
             </IconButton>
           </Box>

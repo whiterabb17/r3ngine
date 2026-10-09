@@ -6,9 +6,11 @@ import { DorkSection } from './DorkSection';
 import { DocumentSection } from './DocumentSection';
 import { OsintStagingSection } from './OsintStagingSection';
 import { useEmails } from '../../api';
+import type { ScanSummaryResponse } from '../../types';
 
 interface OsintTabProps {
-  data: any; // eslint-disable-line @typescript-eslint/no-explicit-any -- full scan data from parent
+  /** The scan summary; only its OSINT collections are read here. */
+  data: Pick<ScanSummaryResponse, 'dorks' | 'documents'>;
   scanId: number;
 }
 

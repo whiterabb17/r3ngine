@@ -62,8 +62,23 @@ class TestTier7Caching(TestCase):
         self.assertEqual(self.vuln.description, "Cached Description")
         self.assertEqual(self.vuln.impact, "Cached Impact")
 
+    @patch('reNgine.llm.llm_env_enabled', return_value=False)
+    def test_generate_impact_assessment_skips_when_llm_disabled(self, _mock_llm_enabled):
+        """Disabled LLM must skip without returning False (Temporal treats False as failure)."""
+        mock_self = MagicMock()
+        mock_self.subscan = None
+
+        result = generate_impact_assessment(
+            mock_self,
+            scan_history_id=self.scan_history.id,
+        )
+
+        self.assertIsNone(result)
+        self.assertFalse(ImpactAssessment.objects.filter(vulnerability=self.vuln).exists())
+
+    @patch('reNgine.llm.llm_env_enabled', return_value=True)
     @patch('reNgine.tasks.LLMImpactGenerator')
-    def test_generate_impact_assessment_uses_cache(self, mock_generator_class):
+    def test_generate_impact_assessment_uses_cache(self, mock_generator_class, _mock_llm_enabled):
         # Create an existing AI generated assessment for this vulnerability type
         # We need a dummy vulnerability to link to
         other_vuln = Vulnerability.objects.create(

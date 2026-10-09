@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from '../../../api/axiosConfig';
 import { getCsrfToken } from '../../../api/axiosConfig';
-import type { EndpointResponse } from '../types';
+import type { Endpoint, EndpointResponse } from '../types';
 
 export const useDeleteEndpoints = (projectSlug: string) => {
   const queryClient = useQueryClient();
@@ -65,4 +65,20 @@ export const useEndpoints = (projectSlug: string, page = 1, searchQuery = '', sc
     },
     enabled: !!projectSlug,
   });
+};
+
+/** Endpoints of one scan via axios; accepts both a paginated body and a bare list. */
+export const fetchScanEndpoints = async (
+  projectSlug: string,
+  scanId: number | string,
+): Promise<Endpoint[]> => {
+  const response = await axios.get<EndpointResponse | Endpoint[]>('/api/listEndpoints/', {
+    params: {
+      project: projectSlug,
+      scan_history: scanId,
+    },
+  });
+  const { data } = response;
+  if (Array.isArray(data)) return data;
+  return data?.results || [];
 };

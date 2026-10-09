@@ -12,7 +12,7 @@ export interface TelemetryPoint {
   type?: 'command' | 'log' | 'metric';
   command?: string;
   line?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface StressState {

@@ -386,6 +386,14 @@ class ProxyForm(forms.ModelForm):
                 "id": "use_tor",
             }))
 
+    proxy_only_after_ban = forms.BooleanField(
+        required=False,
+        widget=forms.CheckboxInput(
+            attrs={
+                "class": "form-check-input",
+                "id": "proxy_only_after_ban",
+            }))
+
     proxies = forms.CharField(
         required=False,
         widget=forms.Textarea(
@@ -395,6 +403,25 @@ class ProxyForm(forms.ModelForm):
                 "rows": "10",
                 "spellcheck": "false",
                 "placeholder": "http://username:password@proxyip.com:port",
+            }))
+
+    priority_proxies = forms.CharField(
+        required=False,
+        widget=forms.Textarea(
+            attrs={
+                "class": "form-control",
+                "id": "priority_proxies",
+                "rows": "5",
+                "spellcheck": "false",
+                "placeholder": "socks5h://username:password@proxy.example.com:1080",
+            }))
+
+    use_priority_proxies = forms.BooleanField(
+        required=False,
+        widget=forms.CheckboxInput(
+            attrs={
+                "class": "form-check-input",
+                "id": "use_priority_proxies",
             }))
 
     proxies_verified_at = forms.DateTimeField(required=False)
@@ -421,6 +448,9 @@ class ProxyForm(forms.ModelForm):
         self.initial['use_tor'] = key.use_tor
         self.initial['proxies_verified_at'] = key.proxies_verified_at
         self.initial['proxy_ttl_minutes'] = key.proxy_ttl_minutes
+        self.initial['proxy_only_after_ban'] = key.proxy_only_after_ban
+        self.initial['priority_proxies'] = key.priority_proxies
+        self.initial['use_priority_proxies'] = key.use_priority_proxies
 
         if not key.use_proxy:
             self.fields['proxies'].widget.attrs['readonly'] = True
@@ -429,6 +459,8 @@ class ProxyForm(forms.ModelForm):
         self.initial['use_proxy'] = False
         self.initial['use_proxychains'] = False
         self.initial['use_tor'] = False
+        self.initial['proxy_only_after_ban'] = False
+        self.initial['use_priority_proxies'] = True
         self.initial['proxy_ttl_minutes'] = 120
         self.fields['proxies'].widget.attrs['readonly'] = True
 

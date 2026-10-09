@@ -28,6 +28,8 @@ import { useThemeTokens } from '../../../theme/useThemeTokens';
 import { BreachDetailsModal } from './BreachDetailsModal';
 import { formatSecretType, getSecretCategory } from '../utils/secretTypeUtils';
 import type { SecretLeak } from '../types';
+import { getSafeUrl } from '../../../utils/securityUtils';
+import type { EmailBreach } from '../types';
 
 interface SecretLeaksTabProps {
   projectSlug: string;
@@ -78,7 +80,7 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
 
   const [manualEmail, setManualEmail] = React.useState('');
   const [checkingEmails, setCheckingEmails] = React.useState<Record<string, boolean>>({});
-  const [selectedBreaches, setSelectedBreaches] = React.useState<any[] | null>(null);
+  const [selectedBreaches, setSelectedBreaches] = React.useState<EmailBreach[] | null>(null);
   const [leaksPage, setLeaksPage] = React.useState(0);
   const [leaksRowsPerPage, setLeaksRowsPerPage] = React.useState(10);
   const [expandedKeys, setExpandedKeys] = React.useState<Set<string>>(new Set());
@@ -123,7 +125,7 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
       case 'verified': return '#00ff62';
       case 'unverified': return '#ff9f00';
       case 'false_positive': return '#ff003c';
-      default: return '#fff';
+      default: return tokens.text.primary;
     }
   };
 
@@ -210,7 +212,7 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
                           <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {group.source_url}
                           </Typography>
-                          <IconButton size="small" component="a" href={/^https?:\/\//i.test(group.source_url) ? group.source_url : '#'} target="_blank" sx={{ color: tokens.accent.primary, p: 0.5 }} onClick={e => e.stopPropagation()}>
+                          <IconButton size="small" component="a" href={getSafeUrl(group.source_url) ?? '#'} target="_blank" sx={{ color: tokens.accent.primary, p: 0.5 }} onClick={e => e.stopPropagation()}>
                             <ExternalLink size={12} />
                           </IconButton>
                         </Stack>
@@ -315,9 +317,10 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {emails?.map((email: any) => {
-                      const matchedBreaches = emailBreaches?.filter((b: any) => b.email_address === email.address) || [];
-                      const isChecking = checkingEmails[email.address];
+                    {emails?.map((email) => {
+                      const matchedBreaches = emailBreaches?.filter((b) => b.email_address === email.address) || [];
+                      const address = email.address;
+                      const isChecking = address !== null && Boolean(checkingEmails[address]);
                       return (
                         <TableRow key={email.id} sx={{ '& td': { py: 1 } }}>
                           <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 700 }}>{email.address}</TableCell>
@@ -348,7 +351,7 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
                           </TableCell>
                           <TableCell align="right">
                             <Tooltip title="Run HIBP Audit">
-                              <IconButton size="small" disabled={isChecking} onClick={() => handleManualCheck(email.address)} sx={{ color: tokens.accent.primary }}>
+                              <IconButton size="small" disabled={isChecking || address === null} onClick={() => address !== null && handleManualCheck(address)} sx={{ color: tokens.accent.primary }}>
                                 <Fingerprint size={12} />
                               </IconButton>
                             </Tooltip>
@@ -380,7 +383,7 @@ export const SecretLeaksTab: React.FC<SecretLeaksTabProps> = ({ projectSlug, sca
             <Typography sx={{ fontSize: '10px', color: 'text.secondary' }}>SOURCE: HAVEIBEENPWNED DATABASE AUDIT</Typography>
           </Box>
           <Grid container spacing={2}>
-            {emailBreaches.map((breach: any) => (
+            {emailBreaches.map((breach) => (
               <Grid size={{ xs: 12, sm: 6 }} key={breach.id}>
                 <Card sx={{ bgcolor: 'background.paper', border: `1px solid ${tokens.border.subtle}`, borderRadius: 1, '&:hover': { borderColor: tokens.border.strong, boxShadow: 2 } }}>
                   <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>

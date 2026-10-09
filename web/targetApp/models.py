@@ -5,8 +5,8 @@ from django.db import models
 from dashboard.models import Project
 
 
-def normalize_manual_subdomains(value):
-	"""Normalize manual subdomains into a de-duplicated lowercase list."""
+def split_manual_subdomains(value):
+	"""Split manual subdomain input into lowercase names, keeping repeats."""
 	if not value:
 		return []
 
@@ -15,15 +15,13 @@ def normalize_manual_subdomains(value):
 	else:
 		candidates = value
 
-	normalized = []
-	seen = set()
-	for item in candidates:
-		name = str(item or '').strip().lower()
-		if not name or name in seen:
-			continue
-		seen.add(name)
-		normalized.append(name)
-	return normalized
+	names = (str(item or '').strip().lower() for item in candidates)
+	return [name for name in names if name]
+
+
+def normalize_manual_subdomains(value):
+	"""Normalize manual subdomains into a de-duplicated lowercase list."""
+	return list(dict.fromkeys(split_manual_subdomains(value)))
 
 
 class HistoricalIP(models.Model):
@@ -142,7 +140,7 @@ class DomainInfo(models.Model):
 	# whois server
 	whois_server = models.CharField(max_length=150, null=True, blank=True)
 	whois_raw = models.JSONField(null=True, blank=True)
-	# associated/similer domains
+	# associated/similar domains
 	related_domains = models.ManyToManyField(RelatedDomain, blank=True, related_name='associated_domains')
 	related_tlds = models.ManyToManyField(RelatedDomain, blank=True, related_name='related_tlds')
 	similar_domains = models.ManyToManyField(RelatedDomain, blank=True, related_name='similar_domains')

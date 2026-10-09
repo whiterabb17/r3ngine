@@ -9,7 +9,7 @@ import { useThemeTokens } from '../../../../theme/useThemeTokens';
 const API_TOOLS = [
   'kiterunner', 'arjun', 'linkfinder', 'paramspider', 'aquatone',
   'semgrep', 'retire', 'jwt_tool', 'graphql-cop', 'favirecon',
-  'sourcemapper', 'grpcurl', 'julius', 'gqlspection',
+  'sourcemapper', 'grpcurl', 'julius', 'gqlspection', 'inql',
 ];
 
 const RUN_FLAGS = [

@@ -70,7 +70,22 @@ import {
   LocustDashboard,
   StressorDashboard,
 } from '../components/scan/StressTab/ToolComponents';
-import axios from 'axios';
+import type {
+  AggregatedStressMetrics,
+  StressRunConfig,
+  StressStartPayload,
+  StressToolConfig,
+  StressToolConfigs,
+} from '../types/stressTesting';
+import type { Endpoint } from '../features/endpoints/types';
+import { fetchScanEndpoints } from '../features/endpoints/api';
+import {
+  createStressReport,
+  fetchStressReportStatus,
+  startStressTest,
+  stopStressTest,
+} from '../features/scans/api/stress';
+import { openSafeUrl } from '../utils/securityUtils';
 
 export const StressTestingPage: React.FC = () => {
   const theme = useTheme();
@@ -88,7 +103,7 @@ export const StressTestingPage: React.FC = () => {
   const [isStopping, setIsStopping] = useState(false);
   const [openSettings, setOpenSettings] = useState(false);
 
-  const defaultToolConfigs = {
+  const defaultToolConfigs: StressToolConfigs = {
     k6: {
       vus: 50,
       duration: "30s",
@@ -130,7 +145,7 @@ export const StressTestingPage: React.FC = () => {
   };
 
   // Settings Config containing base concurrency/duration and list of active tools
-  const [config, setConfig] = useState(() => {
+  const [config, setConfig] = useState<StressRunConfig>(() => {
     const saved = localStorage.getItem('stress_test_config');
     return saved ? JSON.parse(saved) : {
       concurrency: 50,
@@ -145,11 +160,11 @@ export const StressTestingPage: React.FC = () => {
   // Tool configuration dialog state
   const [openToolConfig, setOpenToolConfig] = useState(false);
 
-  const [endpoints, setEndpoints] = useState<any[]>([]);
+  const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [selectedEndpoints, setSelectedEndpoints] = useState<string[]>([]);
 
   // Tool-specific configurations (persisted to localStorage)
-  const [toolConfigs, setToolConfigs] = useState<Record<string, any>>(() => {
+  const [toolConfigs, setToolConfigs] = useState<StressToolConfigs>(() => {
     const saved = localStorage.getItem('stress_tool_configs');
     return saved ? JSON.parse(saved) : defaultToolConfigs;
   });
@@ -166,14 +181,8 @@ export const StressTestingPage: React.FC = () => {
 
   useEffect(() => {
     if (projectSlug && scanId) {
-      axios.get(`/api/listEndpoints/`, {
-        params: {
-          project: projectSlug,
-          scan_history: scanId,
-        }
-      })
-        .then(response => {
-          const results = response.data.results || response.data || [];
+      fetchScanEndpoints(projectSlug, scanId)
+        .then(results => {
           setEndpoints(results);
         })
         .catch(error => {
@@ -208,7 +217,7 @@ export const StressTestingPage: React.FC = () => {
     setScanning(true);
 
     // Merge global settings into target active tool configs
-    const updatedToolConfigs = { ...toolConfigs };
+    const updatedToolConfigs: StressToolConfigs = { ...toolConfigs };
 
     // Concurrency/duration mappings
     if (updatedToolConfigs.k6) {
@@ -228,7 +237,7 @@ export const StressTestingPage: React.FC = () => {
       updatedToolConfigs.stressor.duration = config.duration.replace('s', ''); // script expects integer seconds
     }
 
-    const startPayload: any = {
+    const startPayload: StressStartPayload = {
       action: 'start',
       config: {
         concurrency: config.concurrency,
@@ -240,14 +249,16 @@ export const StressTestingPage: React.FC = () => {
 
     // Add configs for each selected tool
     const toolsToRun = [activeTab];
+    const configsByTool: Partial<Record<string, StressToolConfig>> = updatedToolConfigs;
     toolsToRun.forEach((tool: string) => {
-      if (updatedToolConfigs[tool]) {
-        startPayload.config[`${tool}_config`] = updatedToolConfigs[tool];
+      const toolConfig = configsByTool[tool];
+      if (toolConfig) {
+        startPayload.config[`${tool}_config`] = toolConfig;
       }
     });
 
     try {
-      await axios.post(`/api/stress/${scanId}/control/`, startPayload);
+      await startStressTest(scanId, startPayload);
     } catch (error) {
       console.error("Failed to start stress test", error);
       setScanning(false);
@@ -257,7 +268,7 @@ export const StressTestingPage: React.FC = () => {
   const handleStop = async () => {
     setIsStopping(true);
     try {
-      await axios.post(`/api/stress/${scanId}/control/`, { action: 'stop' });
+      await stopStressTest(scanId);
       setScanning(false);
     } catch (error) {
       console.error("Failed to stop stress test", error);
@@ -269,13 +280,13 @@ export const StressTestingPage: React.FC = () => {
   const handleGenerateReport = async () => {
     setIsGeneratingReport(true);
     try {
-      const response = await axios.post(`/api/stress/${scanId}/report/`, {
+      const created = await createStressReport(scanId, {
         report_template: reportTemplate === 'cyber_pro' ? 'stress_cyber_pro' : 'stress_modern',
         include_endpoints: true,
         include_timeline: true
       });
-      if (response.data.status) {
-        const reportId = response.data.report_id;
+      if (created.status) {
+        const reportId = created.report_id;
         alert(`Report generation initiated (ID: ${reportId}). Check back in a moment for your PDF.`);
 
         // Poll for report status
@@ -288,20 +299,15 @@ export const StressTestingPage: React.FC = () => {
           await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
 
           try {
-            const statusResponse = await axios.get(`/api/stress/${scanId}/report/`, {
-              params: { report_id: reportId }
-            });
+            const reportStatus = await fetchStressReportStatus(scanId, reportId);
 
-            if (statusResponse.data.status === 2) { // Success status code
+            if (reportStatus.status === 2) { // Success status code
               isComplete = true;
-              const reportUrl = statusResponse.data.report_url;
-              if (reportUrl) {
-                window.open(reportUrl, '_blank');
-              }
+              openSafeUrl(reportStatus.report_url);
               alert('Report generated successfully!');
-            } else if (statusResponse.data.status === 0) { // Failed status code
+            } else if (reportStatus.status === 0) { // Failed status code
               isComplete = true;
-              alert(`Report generation failed: ${statusResponse.data.error_message}`);
+              alert(`Report generation failed: ${reportStatus.error_message}`);
             }
           } catch (statusError) {
             console.error('Error polling report status', statusError);
@@ -515,14 +521,18 @@ export const StressTestingPage: React.FC = () => {
       case 'connected': return { label: 'PIPELINE READY', color: '#10b981', icon: <Wifi size={14} />, pulse: true };
       case 'connecting': return { label: 'ESTABLISHING LINK...', color: '#facc15', icon: <Wifi size={14} />, pulse: true };
       case 'error': return { label: 'SIGNAL ERROR', color: '#ef4444', icon: <WifiOff size={14} />, pulse: false };
-      default: return { label: 'PIPELINE OFFLINE', color: alpha('#fff', 0.3), icon: <WifiOff size={14} />, pulse: false };
+      default: return { label: 'PIPELINE OFFLINE', color: alpha(theme.palette.text.primary, 0.3), icon: <WifiOff size={14} />, pulse: false };
     }
   };
 
   const statusConfig = getStatusConfig();
 
   // Handle side panel config updates dynamically
-  const handleToolConfigChange = (toolName: string, key: string, value: any) => {
+  const handleToolConfigChange = <T extends keyof StressToolConfigs, K extends keyof StressToolConfigs[T]>(
+    toolName: T,
+    key: K,
+    value: StressToolConfigs[T][K]
+  ) => {
     setToolConfigs(prev => ({
       ...prev,
       [toolName]: {
@@ -534,7 +544,7 @@ export const StressTestingPage: React.FC = () => {
 
   // Find the latest valid metrics by scanning backwards through filtered telemetry
   const latestMetrics = useMemo(() => {
-    const metrics: any = {
+    const metrics: AggregatedStressMetrics = {
       avg_latency: 0,
       throughput_rps: 0,
       error_rate: 0,
@@ -579,7 +589,7 @@ export const StressTestingPage: React.FC = () => {
       }
 
       // Collect other named metrics from the telemetry payload
-      const fieldsToAggregate = [
+      const fieldsToAggregate: (keyof AggregatedStressMetrics)[] = [
         'error_rate', 'total_requests', 'failed_requests', 'throughput_bps',
         'min_latency', 'max_latency', 'latency_stdev',
         'p50_latency', 'p90_latency', 'p95_latency', 'p99_latency',
@@ -592,7 +602,8 @@ export const StressTestingPage: React.FC = () => {
 
       for (const field of fieldsToAggregate) {
         if (p[field] !== undefined) {
-          metrics[field] = p[field];
+          // Telemetry points are untyped tool JSON; each listed field is copied as-is.
+          (metrics as Record<keyof AggregatedStressMetrics, unknown>)[field] = p[field];
         }
       }
     }
@@ -634,7 +645,7 @@ export const StressTestingPage: React.FC = () => {
             component={RouterLink}
             to={`/${projectSlug}/scans`}
             sx={{
-              color: 'rgba(255,255,255,0.5)',
+              color: 'text.secondary',
               border: '1px solid rgba(255,255,255,0.1)',
               borderRadius: 2,
               '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.05), borderColor: theme.palette.primary.main }
@@ -646,7 +657,7 @@ export const StressTestingPage: React.FC = () => {
             <Typography variant="h4" sx={{
               fontFamily: 'Orbitron',
               fontWeight: 900,
-              color: '#fff',
+              color: 'text.primary',
               letterSpacing: 4,
               textShadow: `0 0 20px ${alpha(theme.palette.primary.main, 0.3)}`
             }}>
@@ -803,7 +814,7 @@ export const StressTestingPage: React.FC = () => {
               fontFamily: 'Orbitron',
               fontWeight: 700,
               fontSize: '0.85rem',
-              color: 'rgba(255,255,255,0.4)',
+              color: 'text.secondary',
               minWidth: 100,
               letterSpacing: 2,
               '&.Mui-selected': { color: '#00f3ff' }
@@ -830,8 +841,8 @@ export const StressTestingPage: React.FC = () => {
       {activeTab === 'k6' && (
         <K6Dashboard
           telemetry={filteredTelemetry}
-          statusCodes={((latestMetrics as any).response_codes || {})}
-          errors={((latestMetrics as any).error_breakdown || {})}
+          statusCodes={(latestMetrics.response_codes || {})}
+          errors={(latestMetrics.error_breakdown || {})}
         />
       )}
 
@@ -840,30 +851,30 @@ export const StressTestingPage: React.FC = () => {
           telemetry={filteredTelemetry}
           latencyStats={{
             // min_latency/max_latency/latency_stdev are now parsed from the full wrk latency line
-            min: (latestMetrics as any).min_latency || 0,
+            min: latestMetrics.min_latency || 0,
             avg: latestMetrics.avg_latency,
-            max: (latestMetrics as any).max_latency || 0,
-            stdev: (latestMetrics as any).latency_stdev || 0,
-            p50: (latestMetrics as any).p50_latency || 0,
-            p90: (latestMetrics as any).p90_latency || 0,
+            max: latestMetrics.max_latency || 0,
+            stdev: latestMetrics.latency_stdev || 0,
+            p50: latestMetrics.p50_latency || 0,
+            p90: latestMetrics.p90_latency || 0,
             // p95_latency emitted by WrkParser from distribution table lines
-            p95: (latestMetrics as any).p95_latency || 0,
-            p99: (latestMetrics as any).p99_latency || 0,
+            p95: latestMetrics.p95_latency || 0,
+            p99: latestMetrics.p99_latency || 0,
           }}
-          socketErrors={(latestMetrics as any).socket_errors || 0}
+          socketErrors={latestMetrics.socket_errors || 0}
           // timeout_errors is now parsed separately from the socket errors line
-          timeouts={(latestMetrics as any).timeout_errors || 0}
+          timeouts={latestMetrics.timeout_errors || 0}
         />
       )}
 
       {activeTab === 'hping3' && (
         <Hping3Dashboard
           telemetry={filteredTelemetry}
-          packetsSent={(latestMetrics as any).packets_sent || 0}
-          packetsReceived={(latestMetrics as any).packets_received || 0}
-          rttMin={(latestMetrics as any).rtt_min || 0}
-          rttAvg={(latestMetrics as any).rtt_avg || latestMetrics.avg_latency || 0}
-          rttMax={(latestMetrics as any).rtt_max || 0}
+          packetsSent={latestMetrics.packets_sent || 0}
+          packetsReceived={latestMetrics.packets_received || 0}
+          rttMin={latestMetrics.rtt_min || 0}
+          rttAvg={latestMetrics.rtt_avg || latestMetrics.avg_latency || 0}
+          rttMax={latestMetrics.rtt_max || 0}
           protocol={toolConfigs.hping3?.attack_mode?.toUpperCase() || 'ICMP'}
         />
       )}
@@ -871,38 +882,37 @@ export const StressTestingPage: React.FC = () => {
       {activeTab === 'locust' && (
         <LocustDashboard
           telemetry={filteredTelemetry}
-          totalUsers={((latestMetrics as any).total_users || 0)}
+          totalUsers={(latestMetrics.total_users || 0)}
           avgResponseTime={latestMetrics.avg_latency}
-          failureRate={((latestMetrics as any).error_rate || 0) * 100}
-          endpointCount={((latestMetrics as any).endpoint_count || 0)}
-          percentiles={((latestMetrics as any).percentiles || { p50: 0, p90: 0, p95: 0, p99: 0 })}
+          failureRate={(latestMetrics.error_rate || 0) * 100}
+          endpointCount={(latestMetrics.endpoint_count || 0)}
+          percentiles={(latestMetrics.percentiles || { p50: 0, p90: 0, p95: 0, p99: 0 })}
         />
       )}
 
       {activeTab === 'stressor' && (
         <StressorDashboard
           telemetry={filteredTelemetry}
-          attackMode={((latestMetrics as any).attack_mode || 'unknown')}
-          ppsPeak={((latestMetrics as any).pps_peak || 0)}
-          bpsPeak={((latestMetrics as any).bps_peak || 0)}
-          rpsPeak={((latestMetrics as any).rps_peak || 0)}
-          statusCodes={((latestMetrics as any).response_codes || {})}
-          protocolBreakdown={((latestMetrics as any).protocol_breakdown || {})}
-          responseRate={((latestMetrics as any).response_rate || 0)}
-          blockRate={((latestMetrics as any).block_rate || 0)}
+          attackMode={(latestMetrics.attack_mode || 'unknown')}
+          ppsPeak={(latestMetrics.pps_peak || 0)}
+          bpsPeak={(latestMetrics.bps_peak || 0)}
+          rpsPeak={(latestMetrics.rps_peak || 0)}
+          statusCodes={(latestMetrics.response_codes || {})}
+          responseRate={(latestMetrics.response_rate || 0)}
+          blockRate={(latestMetrics.block_rate || 0)}
         />
       )}
       </Box>
 
       {/* Locust Specific Metrics Tables */}
-      {activeTab === 'locust' && (latestMetrics as any).main_table && (latestMetrics as any).main_table.length > 0 && (
+      {activeTab === 'locust' && latestMetrics.main_table && latestMetrics.main_table.length > 0 && (
         <Grid container spacing={4} sx={{ mt: 2 }}>
           <Grid size={{ xs: 12 }}>
             <TacticalPanel
               title="LOCUST AGGREGATED STATISTICS"
               icon={<FileText size={18} color={theme.palette.primary.main} />}
             >
-              <TableContainer component={Paper} sx={{ bgcolor: 'rgba(0,0,0,0.3)', backgroundImage: 'none' }}>
+              <TableContainer component={Paper} sx={{ bgcolor: 'action.hover', backgroundImage: 'none' }}>
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ '& th': { color: theme.palette.primary.main, fontFamily: 'Orbitron', fontSize: '0.75rem' } }}>
@@ -920,8 +930,8 @@ export const StressTestingPage: React.FC = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {(latestMetrics as any).main_table.map((row: any, i: number) => (
-                      <TableRow key={i} sx={{ '& td': { color: 'rgba(255,255,255,0.7)', borderColor: 'rgba(255,255,255,0.05)' } }}>
+                    {latestMetrics.main_table.map((row, i: number) => (
+                      <TableRow key={i} sx={{ '& td': { color: 'text.secondary', borderColor: 'rgba(255,255,255,0.05)' } }}>
                         <TableCell>{row.method}</TableCell>
                         <TableCell>{row.name}</TableCell>
                         <TableCell align="right">{row.reqs}</TableCell>
@@ -941,13 +951,13 @@ export const StressTestingPage: React.FC = () => {
             </TacticalPanel>
           </Grid>
           
-          {(latestMetrics as any).percentile_table && (latestMetrics as any).percentile_table.length > 0 && (
+          {latestMetrics.percentile_table && latestMetrics.percentile_table.length > 0 && (
             <Grid size={{ xs: 12 }}>
               <TacticalPanel
                 title="LOCUST RESPONSE TIME PERCENTILES"
                 icon={<Activity size={18} color="#6be6c1" />}
               >
-                <TableContainer component={Paper} sx={{ bgcolor: 'rgba(0,0,0,0.3)', backgroundImage: 'none' }}>
+                <TableContainer component={Paper} sx={{ bgcolor: 'action.hover', backgroundImage: 'none' }}>
                   <Table size="small">
                     <TableHead>
                       <TableRow sx={{ '& th': { color: '#6be6c1', fontFamily: 'Orbitron', fontSize: '0.75rem' } }}>
@@ -968,8 +978,8 @@ export const StressTestingPage: React.FC = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {(latestMetrics as any).percentile_table.map((row: any, i: number) => (
-                        <TableRow key={i} sx={{ '& td': { color: 'rgba(255,255,255,0.7)', borderColor: 'rgba(255,255,255,0.05)' } }}>
+                      {latestMetrics.percentile_table.map((row, i: number) => (
+                        <TableRow key={i} sx={{ '& td': { color: 'text.secondary', borderColor: 'rgba(255,255,255,0.05)' } }}>
                           <TableCell>{row.method}</TableCell>
                           <TableCell>{row.name}</TableCell>
                           <TableCell align="right">{row.p50}</TableCell>

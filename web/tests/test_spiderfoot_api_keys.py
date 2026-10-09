@@ -23,8 +23,8 @@ class TestSpiderfootAPIKeyInjection(TestCase):
 			key_value="test_new_module"
 		)
 		
-	@patch('reNgine.tasks.osint.subprocess.Popen')
-	@patch('reNgine.tasks.osint.os.path.exists')
+	@patch('reNgine.tasks.osint.spiderfoot.subprocess.Popen')
+	@patch('reNgine.tasks.osint.spiderfoot.os.path.exists')
 	def test_api_key_injection_existing_config(self, mock_exists, mock_popen):
 		mock_exists.side_effect = lambda path: True
 		mock_popen.return_value.stdout = []
@@ -65,8 +65,8 @@ class TestSpiderfootAPIKeyInjection(TestCase):
 			self.assertIn("sfp_someother:api_key=old\n", written_lines)
 			self.assertIn("sfp_abstractapi:companyenrichment_api_key=\n", written_lines)
 			
-	@patch('reNgine.tasks.osint.subprocess.Popen')
-	@patch('reNgine.tasks.osint.os.path.exists')
+	@patch('reNgine.tasks.osint.spiderfoot.subprocess.Popen')
+	@patch('reNgine.tasks.osint.spiderfoot.os.path.exists')
 	def test_no_write_if_no_changes(self, mock_exists, mock_popen):
 		mock_exists.side_effect = lambda path: True
 		mock_popen.return_value.stdout = []

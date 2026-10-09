@@ -1,0 +1,5 @@
+# Temporal server dynamic configuration, mounted into the temporal service.
+# temporalio/server 1.30+ refuses to start without this file. Keys and their
+# defaults: https://github.com/temporalio/temporal/blob/main/common/dynamicconfig/constants.go
+# The server re-reads the file every 60s, so edits apply without a restart.
+{}

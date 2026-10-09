@@ -6,14 +6,30 @@ Run in container:
 
 import sys
 import os
+import unittest
 from unittest import TestCase
 from unittest.mock import patch, MagicMock
 
 # Allow importing plugin source directly without installation
-sys.path.insert(0, os.path.join(
+_PLUGIN_SRC = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), '..', '..',
     'r3ngine-plugins', 'email_security'
-))
+)
+sys.path.insert(0, _PLUGIN_SRC)
+
+
+def setUpModule():
+    """Skip rather than error when the plugin repository is not checked out.
+
+    r3ngine-plugins is a separate repository cloned next to this one. Without it
+    every test here raised ModuleNotFoundError on `backend.email_tasks`, which
+    put 22 errors into the suite for a missing optional dependency and buried
+    the failures that were real.
+    """
+    if not os.path.isdir(_PLUGIN_SRC):
+        raise unittest.SkipTest(
+            'r3ngine-plugins checkout not present at %s' % _PLUGIN_SRC
+        )
 
 
 class TestCheckSpf(TestCase):

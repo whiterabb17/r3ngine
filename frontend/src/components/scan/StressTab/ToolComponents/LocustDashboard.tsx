@@ -10,7 +10,7 @@ export interface LocustTelemetryPoint {
   total_users?: number;
   avg_latency?: number;
   error_rate?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface LocustDashboardProps {

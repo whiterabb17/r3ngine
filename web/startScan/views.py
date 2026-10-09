@@ -10,7 +10,7 @@ from weasyprint import HTML, CSS
 from datetime import datetime, timedelta
 from django.contrib import messages
 from django.db.models import Count, Case, When, IntegerField
-from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.template.loader import get_template
 from django.urls import reverse
@@ -22,11 +22,12 @@ from rolepermissions.decorators import has_permission_decorator
 from reNgine.charts import *
 from reNgine.common_func import *
 from reNgine.definitions import ABORTED_TASK, SUCCESS_TASK, PERM_MODIFY_SCAN_REPORT, FOUR_OH_FOUR_URL
-from reNgine.tasks import create_scan_activity, initiate_scan_temporal, run_command
+from reNgine.tasks import create_scan_activity, initiate_scan_temporal
 from scanEngine.models import EngineType
 from startScan.models import *
 from targetApp.models import *
 from reNgine.utils.graph import Neo4jManager
+from reNgine.utils.results_fs import delete_screenshot_files
 
 logger = logging.getLogger(__name__)
 
@@ -515,8 +516,7 @@ def export_urls(request, scan_id):
 def delete_scan(request, id):
     obj = get_object_or_404(ScanHistory, id=id)
     if request.method == "POST":
-        delete_dir = obj.results_dir
-        run_command('rm -rf ' + delete_dir, shell=True)
+        # The pre_delete signal removes the results directory.
         obj.delete()
         messageData = {'status': 'true'}
         messages.add_message(
@@ -547,7 +547,7 @@ def stop_scan(request, id):
                     te.ended_at = timezone.now()
                     te.save()
                 except Exception as cancel_err:
-                    logger.warning(f"Temporal cancel failed for workflow {te.workflow_id}: {cancel_err}")
+                    logger.warning("Temporal cancel failed for workflow %s: %s", te.workflow_id, cancel_err)
             scan.scan_status = ABORTED_TASK
             scan.save()
             tasks = (
@@ -727,7 +727,7 @@ def delete_scheduled_task(request, id):
         try:
             _delete_temporal_schedule_by_id(task_object.schedule_id)
         except Exception as e:
-            logger.error(f"[delete_scheduled_task] Temporal delete failed for '{task_object.schedule_id}': {e}")
+            logger.error("[delete_scheduled_task] Temporal delete failed for '%s': %s", task_object.schedule_id, e)
         task_object.delete()
         messageData = {'status': 'true'}
         messages.add_message(
@@ -755,10 +755,10 @@ def delete_scheduled_scans(request, slug):
                 try:
                     _delete_temporal_schedule_by_id(ts.schedule_id)
                 except Exception as e:
-                    logger.error(f"[delete_scheduled_scans] Temporal delete failed for '{ts.schedule_id}': {e}")
+                    logger.error("[delete_scheduled_scans] Temporal delete failed for '%s': %s", ts.schedule_id, e)
                 ts.delete()
             except TemporalSchedule.DoesNotExist:
-                logger.error(f"[delete_scheduled_scans] TemporalSchedule id={value} not found")
+                logger.error("[delete_scheduled_scans] TemporalSchedule id=%s not found", value)
             except Exception as e:
                 logger.error(e)
         messages.add_message(
@@ -782,7 +782,7 @@ def change_scheduled_task_status(request, id):
                 else:
                     _pause_temporal_schedule(ts.schedule_id)
             except Exception as e:
-                logger.error(f"[change_scheduled_task_status] Temporal pause/unpause failed for '{ts.schedule_id}': {e}")
+                logger.error("[change_scheduled_task_status] Temporal pause/unpause failed for '%s': %s", ts.schedule_id, e)
         except TemporalSchedule.DoesNotExist:
             pass
     return HttpResponse('')
@@ -833,7 +833,7 @@ def fetch_exploit_source(request, id):
 
     try:
         validate_external_url(vuln.exploit_url)
-    except Exception as exc:
+    except ValueError as exc:
         return JsonResponse({
             'status': False,
             'error': f'Invalid exploit URL: {exc}'
@@ -860,13 +860,7 @@ def delete_all_scan_results(request):
             try:
                 abort_scan_history(scan)
             except Exception:
-                pass
-            try:
-                if scan.results_dir and os.path.exists(scan.results_dir):
-                    import shutil
-                    shutil.rmtree(scan.results_dir)
-            except Exception:
-                pass
+                logger.exception('Failed to abort scan %s before deletion', scan.id)
             scan.delete()
         messageData = {'status': 'true'}
         messages.add_message(
@@ -878,8 +872,12 @@ def delete_all_scan_results(request):
 
 @has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
 def delete_all_screenshots(request):
+    messageData = {'status': 'false'}
     if request.method == 'POST':
-        run_command(f'rm -rf {settings.RENGINE_RESULTS}/*', shell=True)
+        # Screenshots only: this used to wipe every scan's results.
+        delete_screenshot_files()
+        Screenshot.objects.all().delete()
+        Subdomain.objects.exclude(screenshot_path__isnull=True).update(screenshot_path=None)
         messageData = {'status': 'true'}
         messages.add_message(
             request,
@@ -1064,8 +1062,6 @@ def delete_scans(request, slug):
             if key == 'scan_history_table_length' or key == 'csrfmiddlewaretoken':
                 continue
             scan = get_object_or_404(ScanHistory, id=value)
-            delete_dir = scan.results_dir
-            run_command('rm -rf ' + delete_dir, shell=True)
             scan.delete()
         messages.add_message(
             request,
@@ -1171,4 +1167,89 @@ def get_report_status(request, id):
         'completed_at': report.completed_at
     }
     return JsonResponse(response)
+
+
+_TARGET_REPORT_VALID_SECTIONS = frozenset({
+    'subdomain_changes', 'attack_surface_trend', 'exposures', 'certificates',
+    'waf_info', 'endpoints', 'directories', 's3_buckets', 'employees',
+    'email_breaches', 'secret_findings',
+})
+
+
+@has_permission_decorator(PERM_MODIFY_SCAN_REPORT, redirect_url=FOUR_OH_FOUR_URL)
+def create_target_report(request: HttpRequest, domain_id: int) -> JsonResponse:
+    if request.method != 'POST':
+        return JsonResponse({'status': False, 'message': 'Method not allowed'}, status=405)
+    import json as _json
+    try:
+        body: dict = _json.loads(request.body)
+    except (ValueError, TypeError):
+        body = {}
+
+    raw_scan_ids = body.get('scan_ids', '')
+    try:
+        scan_ids = [int(s.strip()) for s in str(raw_scan_ids).split(',') if s.strip()]
+    except ValueError:
+        return JsonResponse({'status': False, 'message': 'Invalid scan_ids format'}, status=400)
+
+    if len(scan_ids) < 2:
+        return JsonResponse({'status': False, 'message': 'At least 2 scan IDs are required'}, status=400)
+
+    from targetApp.models import Domain
+    domain = get_object_or_404(Domain, id=domain_id)
+
+    invalid = list(
+        ScanHistory.objects.filter(id__in=scan_ids).exclude(domain=domain).values_list('id', flat=True)
+    )
+    if invalid:
+        return JsonResponse(
+            {'status': False, 'message': 'Scan IDs %s do not belong to this target' % invalid},
+            status=400,
+        )
+
+    included_sections_raw = body.get('included_sections', '')
+    included_sections = [
+        s.strip() for s in str(included_sections_raw).split(',')
+        if s.strip() in _TARGET_REPORT_VALID_SECTIONS
+    ]
+
+    from startScan.models import TargetReport
+    report_obj = TargetReport.objects.create(
+        domain=domain,
+        selected_scan_ids=scan_ids,
+        included_sections=included_sections,
+        comments=body.get('comments', ''),
+        status=1,
+    )
+
+    from reNgine.tasks.report import generate_target_report_task
+    threading.Thread(
+        target=generate_target_report_task,
+        args=(report_obj.id,),
+        daemon=True,
+    ).start()
+
+    return JsonResponse({'status': True, 'report_id': report_obj.id})
+
+
+@has_permission_decorator(PERM_MODIFY_SCAN_REPORT, redirect_url=FOUR_OH_FOUR_URL)
+def get_target_report_status(request: HttpRequest, report_id: int) -> JsonResponse:
+    from startScan.models import TargetReport
+    report = get_object_or_404(TargetReport, id=report_id)
+    if report.status == 1 and report.created_at < timezone.now() - timedelta(minutes=30):
+        report.status = 0
+        report.error_message = 'Report generation timed out. The process may have been interrupted by a server restart.'
+        report.completed_at = timezone.now()
+        report.save()
+    # Sanitise error for client: expose safe timeout message, redact exception internals (Rule 8.1)
+    if report.status == 0:
+        client_error = report.error_message if (report.error_message and 'timed out' in report.error_message) else 'Report generation failed.'
+    else:
+        client_error = None
+    return JsonResponse({
+        'status': report.status,
+        'error_message': client_error,
+        'report_url': report.report_file.url if report.report_file else None,
+        'completed_at': report.completed_at,
+    })
 

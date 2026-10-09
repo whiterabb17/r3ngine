@@ -56,6 +56,7 @@ class TestNucleiProxyConcurrencyCap(TestCase):
         proxy.history_file = None
         proxy.activity_id = None
         proxy.activity = None
+        proxy.subdomain_id = None
 
         try:
             nuclei_scan(proxy, urls=['http://example.com'], proxies_file_path=proxy_path,
@@ -99,6 +100,7 @@ class TestNucleiProxyConcurrencyCap(TestCase):
         proxy.history_file = None
         proxy.activity_id = None
         proxy.activity = None
+        proxy.subdomain_id = None
 
         try:
             nuclei_scan(proxy, urls=['http://example.com'], proxies_file_path=proxy_path,
@@ -135,6 +137,7 @@ class TestNucleiProxyConcurrencyCap(TestCase):
         proxy.history_file = None
         proxy.activity_id = None
         proxy.activity = None
+        proxy.subdomain_id = None
 
         try:
             nuclei_scan(proxy, urls=['http://example.com'],

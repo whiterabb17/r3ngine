@@ -17,7 +17,7 @@ from dashboard.models import (
     OpenAiAPIKey, OllamaSettings, NetlasAPIKey, ChaosAPIKey, HackerOneAPIKey,
     ShodanAPIKey, CensysAPIKey, LLMConfig, SpiderfootAPIKey, LeakLookupAPIKey,
     AcunetixAPIKey, LinkedInCredentials, HunterIOAPIKey, WpScanAPIKey,
-    SOCConfiguration
+    SecurityTrailsAPIKey, SOCConfiguration
 )
 
 from scanEngine.models import (
@@ -27,12 +27,16 @@ from scanEngine.models import (
 )
 import shutil
 import tempfile
+from reNgine.definitions import INTERNAL_ERROR_MESSAGE
+import logging
+
+logger = logging.getLogger(__name__)
 
 DASHBOARD_MODELS = [
     OpenAiAPIKey, OllamaSettings, NetlasAPIKey, ChaosAPIKey, HackerOneAPIKey,
     ShodanAPIKey, CensysAPIKey, LLMConfig, SpiderfootAPIKey, LeakLookupAPIKey,
     AcunetixAPIKey, LinkedInCredentials, HunterIOAPIKey, WpScanAPIKey,
-    SOCConfiguration
+    SecurityTrailsAPIKey, SOCConfiguration
 ]
 
 SCANENGINE_MODELS = [
@@ -44,13 +48,22 @@ SCANENGINE_MODELS = [
 SINGLETON_MODELS = (
     OpenAiAPIKey, OllamaSettings, NetlasAPIKey, ChaosAPIKey, HackerOneAPIKey,
     ShodanAPIKey, CensysAPIKey, LeakLookupAPIKey, AcunetixAPIKey,
-    LinkedInCredentials, HunterIOAPIKey, WpScanAPIKey, SOCConfiguration,
+    LinkedInCredentials, HunterIOAPIKey, WpScanAPIKey, SecurityTrailsAPIKey,
+    SOCConfiguration,
     InterestingLookupModel, Notification, Proxy, OpSec, Hackerone,
     VulnerabilityReportSetting
 )
 
 # Only these model classes may be deserialized during config import
 _ALLOWED_IMPORT_MODELS = frozenset(DASHBOARD_MODELS + SCANENGINE_MODELS)
+
+WORDLIST_DIR = '/usr/src/wordlist/'
+
+# Archive member -> location of the tool's config inside the container.
+TOOL_CONFIG_FILES = {
+    'tool_configs/theharvester_api-keys.yaml': '/usr/src/github/theHarvester/api-keys.yaml',
+    'tool_configs/spiderfoot.cfg': '/usr/src/github/spiderfoot/spiderfoot.cfg',
+}
 
 class ExportConfig(APIView):
     permission_classes = [IsAuthenticated, HasPermission]
@@ -77,24 +90,18 @@ class ExportConfig(APIView):
             zip_file.writestr('scanengine_models.json', json.dumps(scanengine_data, indent=4))
 
             # 3. Export Wordlists from Filesystem
-            wordlist_dir = '/usr/src/wordlist/'
-            if os.path.exists(wordlist_dir):
-                for filename in os.listdir(wordlist_dir):
+            if os.path.exists(WORDLIST_DIR):
+                for filename in os.listdir(WORDLIST_DIR):
                     if filename.endswith('.txt'):
-                        file_path = os.path.join(wordlist_dir, filename)
+                        file_path = os.path.join(WORDLIST_DIR, filename)
                         with open(file_path, 'rb') as f:
                             zip_file.writestr(f'wordlists/{filename}', f.read())
 
             # 4. Export Spiderfoot and theHarvester Tool Configs
-            harvester_config_path = '/usr/src/github/theHarvester/api-keys.yaml'
-            if os.path.exists(harvester_config_path):
-                with open(harvester_config_path, 'rb') as f:
-                    zip_file.writestr('tool_configs/theharvester_api-keys.yaml', f.read())
-
-            spiderfoot_config_path = '/usr/src/github/spiderfoot/spiderfoot.cfg'
-            if os.path.exists(spiderfoot_config_path):
-                with open(spiderfoot_config_path, 'rb') as f:
-                    zip_file.writestr('tool_configs/spiderfoot.cfg', f.read())
+            for member, config_path in TOOL_CONFIG_FILES.items():
+                if os.path.exists(config_path):
+                    with open(config_path, 'rb') as f:
+                        zip_file.writestr(member, f.read())
 
         zip_buffer.seek(0)
         
@@ -126,17 +133,14 @@ class ImportConfig(APIView):
                     self.restore_models(scanengine_data, overwrite_existing)
 
                 # 3. Restore Wordlists to Filesystem
-                wordlist_dir = '/usr/src/wordlist/'
-                if not os.path.exists(wordlist_dir):
-                    os.makedirs(wordlist_dir)
-
-                safe_wordlist_dir = os.path.realpath(wordlist_dir)
+                os.makedirs(WORDLIST_DIR, exist_ok=True)
+                safe_wordlist_dir = os.path.realpath(WORDLIST_DIR)
                 for file_info in zip_file.infolist():
                     if file_info.filename.startswith('wordlists/') and file_info.filename.endswith('.txt'):
                         filename = os.path.basename(file_info.filename)
                         if not filename or not re.fullmatch(r'[a-zA-Z0-9_\-\.]+\.txt', filename):
                             continue
-                        file_path = os.path.realpath(os.path.join(wordlist_dir, filename))
+                        file_path = os.path.realpath(os.path.join(WORDLIST_DIR, filename))
                         if not file_path.startswith(safe_wordlist_dir + os.sep):
                             continue
                         # Only overwrite wordlists if overwrite_existing is true, or if file doesn't exist
@@ -145,25 +149,20 @@ class ImportConfig(APIView):
                                 f.write(zip_file.read(file_info.filename))
 
                 # 4. Restore Spiderfoot and theHarvester Tool Configs
-                for file_info in zip_file.infolist():
-                    if file_info.filename.startswith('tool_configs/'):
-                        dest_path = None
-                        if file_info.filename == 'tool_configs/theharvester_api-keys.yaml':
-                            dest_path = '/usr/src/github/theHarvester/api-keys.yaml'
-                        elif file_info.filename == 'tool_configs/spiderfoot.cfg':
-                            dest_path = '/usr/src/github/spiderfoot/spiderfoot.cfg'
-                        
-                        if dest_path:
-                            if overwrite_existing or not os.path.exists(dest_path):
-                                os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-                                with open(dest_path, 'wb') as f:
-                                    f.write(zip_file.read(file_info.filename))
+                for member, dest_path in TOOL_CONFIG_FILES.items():
+                    if member not in zip_file.namelist():
+                        continue
+                    if overwrite_existing or not os.path.exists(dest_path):
+                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                        with open(dest_path, 'wb') as f:
+                            f.write(zip_file.read(member))
 
             return Response({'status': True, 'message': 'Configuration imported successfully.'})
         except zipfile.BadZipFile:
             return Response({'status': False, 'message': 'Invalid zip file.'}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response({'status': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception('Configuration import failed')
+            return Response({'status': False, 'message': INTERNAL_ERROR_MESSAGE}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def restore_models(self, data, overwrite_existing):
         """Restore serialized models from a data dictionary.
@@ -186,7 +185,7 @@ class ImportConfig(APIView):
                     for deserialized_obj in deserialize('json', json_str):
                         model_class = type(deserialized_obj.object)
                         if model_class not in _ALLOWED_IMPORT_MODELS:
-                            print(f"Skipping disallowed model type during import: {model_class.__name__}")
+                            logger.warning("Skipping disallowed model type during import: %s", model_class.__name__)
                             continue
                         
                         if model_class in SINGLETON_MODELS:
@@ -207,9 +206,8 @@ class ImportConfig(APIView):
                                 # Only save if an object with this primary key does not exist
                                 if not model_class.objects.filter(pk=deserialized_obj.object.pk).exists():
                                     deserialized_obj.save()
-                except Exception as e:
-                    # Log exception and continue
-                    print(f"Error restoring {model_name}: {e}")
+                except Exception:
+                    logger.exception("Error restoring %s", model_name)
 
 class ExportScanResults(APIView):
     permission_classes = [IsAuthenticated, HasPermission]
@@ -220,14 +218,16 @@ class ExportScanResults(APIView):
         if not os.path.exists(scan_results_dir):
             return Response({'status': False, 'message': 'Scan results directory not found.'}, status=status.HTTP_404_NOT_FOUND)
         
-        temp_dir = tempfile.gettempdir()
-        zip_path = os.path.join(temp_dir, 'scan_results_backup')
-        
+        # A private directory per request: a fixed /tmp name let two concurrent
+        # exports overwrite each other's archive.
+        temp_dir = tempfile.mkdtemp(prefix='scan_results_export_')
         try:
-            shutil.make_archive(zip_path, 'zip', scan_results_dir)
-            zip_file_path = f"{zip_path}.zip"
-            
-            response = FileResponse(open(zip_file_path, 'rb'), as_attachment=True, filename='scan_results_backup.zip')
-            return response
-        except Exception as e:
-            return Response({'status': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            zip_file_path = shutil.make_archive(os.path.join(temp_dir, 'scan_results_backup'), 'zip', scan_results_dir)
+            archive = open(zip_file_path, 'rb')
+        except Exception:
+            logger.exception('Scan results export failed')
+            return Response({'status': False, 'message': INTERNAL_ERROR_MESSAGE}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        finally:
+            # The open handle keeps the archive readable after its directory is gone.
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        return FileResponse(archive, as_attachment=True, filename='scan_results_backup.zip')

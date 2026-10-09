@@ -32,6 +32,7 @@ import {
 import { useUsers, useCreateUser, useToggleUserStatus, useUpdateUser, useDeleteUser } from '../api';
 import type { User } from '../api';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import type { ApiErrorLike } from '../../../types/errors';
 
 
 const ROLES = [
@@ -120,10 +121,11 @@ export const AdminSettingsPage: React.FC = () => {
         setSnackbar({ open: true, message: 'User created successfully.', severity: 'success' });
       }
       handleCloseModal();
-    } catch (error: any) {
+    } catch (caught) {
+      const error = caught as ApiErrorLike;
       setSnackbar({ 
         open: true, 
-        message: `Error: ${error?.response?.data?.message || error.message || 'Action failed'}`, 
+        message: `Error: ${error?.response?.data?.message || error?.message || 'Action failed'}`, 
         severity: 'error' 
       });
     }
@@ -134,10 +136,11 @@ export const AdminSettingsPage: React.FC = () => {
       onSuccess: () => {
         setSnackbar({ open: true, message: 'User status toggled successfully.', severity: 'success' });
       },
-      onError: (error: any) => {
+      onError: (caught) => {
+        const error = caught as ApiErrorLike;
         setSnackbar({ 
           open: true, 
-          message: `Failed to toggle status: ${error?.response?.data?.message || error.message}`, 
+          message: `Failed to toggle status: ${error?.response?.data?.message || error?.message}`, 
           severity: 'error' 
         });
       }
@@ -150,10 +153,11 @@ export const AdminSettingsPage: React.FC = () => {
         onSuccess: () => {
           setSnackbar({ open: true, message: 'User deleted successfully.', severity: 'success' });
         },
-        onError: (error: any) => {
+        onError: (caught) => {
+          const error = caught as ApiErrorLike;
           setSnackbar({ 
             open: true, 
-            message: `Failed to delete user: ${error?.response?.data?.message || error.message}`, 
+            message: `Failed to delete user: ${error?.response?.data?.message || error?.message}`, 
             severity: 'error' 
           });
         }

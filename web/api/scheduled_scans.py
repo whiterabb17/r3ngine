@@ -92,7 +92,7 @@ class ScheduledScanViewSet(viewsets.ModelViewSet):
             else:
                 _pause_temporal_schedule(ts.schedule_id)
         except Exception as e:
-            logger.error(f"[ScheduledScanViewSet.toggle] Temporal call failed for '{ts.schedule_id}': {e}")
+            logger.error("[ScheduledScanViewSet.toggle] Temporal call failed for '%s': %s", ts.schedule_id, e)
         return Response({'status': True, 'enabled': ts.is_active})
 
     @action(detail=False, methods=['post'])
@@ -110,7 +110,7 @@ class ScheduledScanViewSet(viewsets.ModelViewSet):
             try:
                 _delete_temporal_schedule_by_id(ts.schedule_id)
             except Exception as e:
-                logger.error(f"[ScheduledScanViewSet.bulk_delete] Temporal delete failed for '{ts.schedule_id}': {e}")
+                logger.error("[ScheduledScanViewSet.bulk_delete] Temporal delete failed for '%s': %s", ts.schedule_id, e)
             ts.delete()
             deleted += 1
         return Response({'status': True, 'message': f'Deleted {deleted} scheduled scans'})

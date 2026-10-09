@@ -1,0 +1,15 @@
+{
+    "flags": "-iE",
+    "patterns": [
+        "Transfer-Encoding:",
+        "Content-Length:",
+        "TE:",
+        "chunked",
+        "x-forwarded-for:",
+        "x-original-url=",
+        "x-rewrite-url=",
+        "x-forwarded-host=",
+        "x-host=",
+        "x-forwarded-proto="
+    ]
+}

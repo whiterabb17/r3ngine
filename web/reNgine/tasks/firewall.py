@@ -5,6 +5,7 @@ Runs testssl.sh (per-finding Vulnerability records) and queries crt.sh
 certificate transparency logs (feeds subdomain pipeline).
 """
 import json
+import shlex
 import logging
 import os
 import tempfile
@@ -35,10 +36,10 @@ def run_tls_deep_audit(self, ctx, config):
     for port in ssl_ports:
         output_json = f'{self.results_dir}/testssl_{target}_{port}.json'
         cmd = (
-            f'testssl.sh --jsonfile {output_json} --color 0 --quiet '
-            f'{target}:{port}'
+            f'testssl.sh --jsonfile {shlex.quote(output_json)} --color 0 --quiet '
+            f'{shlex.quote(f"{target}:{port}")}'
         )
-        logger.warning(f'Running testssl.sh on {target}:{port}')
+        logger.warning("Running testssl.sh on %s:%s", target, port)
         run_command(
             cmd,
             shell=True,
@@ -54,7 +55,7 @@ def run_tls_deep_audit(self, ctx, config):
             with open(output_json, 'r') as f:
                 findings = json.load(f)
         except Exception as e:
-            logger.error(f'testssl.sh JSON parse error for {target}:{port}: {e}')
+            logger.error("testssl.sh JSON parse error for %s:%s: %s", target, port, e)
             continue
 
         if not isinstance(findings, list):
@@ -85,7 +86,7 @@ def run_tls_deep_audit(self, ctx, config):
 
 def run_crt_sh(self, ctx, target):
     """Query crt.sh and feed discovered certificate names into the subdomain pipeline."""
-    logger.warning(f'Querying crt.sh for {target}')
+    logger.warning("Querying crt.sh for %s", target)
     try:
         resp = requests.get(
             f'https://crt.sh/?q=%.{target}&output=json',
@@ -94,7 +95,7 @@ def run_crt_sh(self, ctx, target):
         resp.raise_for_status()
         entries = resp.json()
     except Exception as e:
-        logger.error(f'crt.sh request failed for {target}: {e}')
+        logger.error("crt.sh request failed for %s: %s", target, e)
         return
 
     seen = set()

@@ -1,0 +1,20 @@
+[
+  {
+    "vulnerability": "cPanel User Exposure",
+    "severity": "high",
+    "details": "The cPanel /cpsess user enumeration endpoint disclosed the account name 'sampleuser'.",
+    "remediation": "Restrict access to the cPanel login endpoints and enable account-name masking.",
+    "references": [
+      "https://example.com/advisories/cpanel-user-exposure"
+    ]
+  },
+  {
+    "vulnerability": "cPanel Login Page Exposed",
+    "severity": "medium",
+    "details": "The cPanel login interface is reachable from the public internet on port 2083.",
+    "remediation": "Limit port 2083 to trusted source networks or place it behind a VPN.",
+    "references": [
+      "https://example.com/advisories/cpanel-login-exposed"
+    ]
+  }
+]

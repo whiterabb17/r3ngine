@@ -3,44 +3,60 @@ import os
 import unittest
 
 
-WORKFLOWS_FILE = os.path.join(
-    os.path.dirname(__file__), '..', 'reNgine', 'temporal', 'workflows', '__init__.py'
+WORKFLOWS_DIR = os.path.join(
+    os.path.dirname(__file__), '..', 'reNgine', 'temporal', 'workflows'
+)
+
+# The flat modules that together hold the scan workflows (formerly a single
+# workflows/__init__.py). assessment_workflow.py is an older sibling with its
+# own tests and is not part of this audit.
+WORKFLOW_MODULES = (
+    '_common.py',
+    'master_scan.py',
+    'subscan.py',
+    'stress.py',
+    'jobs.py',
+    'recon.py',
 )
 
 ACTIVITIES_FILE = os.path.join(
-    os.path.dirname(__file__), '..', 'reNgine', 'temporal', 'activities', '__init__.py'
+    os.path.dirname(__file__), '..', 'reNgine', 'temporal', 'activities', 'core.py'
 )
+
+
+def _workflow_trees():
+    """Yield (module name, parsed AST) for every audited workflow module."""
+    for name in WORKFLOW_MODULES:
+        with open(os.path.join(WORKFLOWS_DIR, name), encoding='utf-8-sig') as f:
+            yield name, ast.parse(f.read())
 
 
 class TestAUD001AsyncioSleepInWorkflows(unittest.TestCase):
     """AUD-001: asyncio.sleep() must not appear inside workflow classes."""
 
     def test_no_asyncio_sleep_in_workflow_classes(self):
-        with open(WORKFLOWS_FILE, encoding='utf-8-sig') as f:
-            source = f.read()
-        tree = ast.parse(source)
-
         workflow_class_bodies = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef):
-                for decorator in node.decorator_list:
-                    dec_name = ''
-                    if isinstance(decorator, ast.Attribute):
-                        dec_name = decorator.attr
-                    elif isinstance(decorator, ast.Name):
-                        dec_name = decorator.id
-                    elif isinstance(decorator, ast.Call):
-                        # Handle @workflow.defn(...) — decorator is a Call
-                        func = decorator.func
-                        if isinstance(func, ast.Attribute):
-                            dec_name = func.attr
-                        elif isinstance(func, ast.Name):
-                            dec_name = func.id
-                    if dec_name == 'defn':
-                        workflow_class_bodies.append(node)
+        for module_name, tree in _workflow_trees():
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    for decorator in node.decorator_list:
+                        dec_name = ''
+                        if isinstance(decorator, ast.Attribute):
+                            dec_name = decorator.attr
+                        elif isinstance(decorator, ast.Name):
+                            dec_name = decorator.id
+                        elif isinstance(decorator, ast.Call):
+                            # Handle @workflow.defn(...) — decorator is a Call
+                            func = decorator.func
+                            if isinstance(func, ast.Attribute):
+                                dec_name = func.attr
+                            elif isinstance(func, ast.Name):
+                                dec_name = func.id
+                        if dec_name == 'defn':
+                            workflow_class_bodies.append((module_name, node))
 
         violations = []
-        for cls in workflow_class_bodies:
+        for module_name, cls in workflow_class_bodies:
             for node in ast.walk(cls):
                 if (
                     isinstance(node, ast.Await)
@@ -50,7 +66,7 @@ class TestAUD001AsyncioSleepInWorkflows(unittest.TestCase):
                     if isinstance(func, ast.Attribute) and func.attr == 'sleep':
                         if isinstance(func.value, ast.Name) and func.value.id == 'asyncio':
                             violations.append(
-                                f"asyncio.sleep() at line {node.lineno} in class {cls.name}"
+                                f"asyncio.sleep() at {module_name}:{node.lineno} in class {cls.name}"
                             )
 
         self.assertEqual(
@@ -63,53 +79,36 @@ class TestAUD005NucleiRetryPolicy(unittest.TestCase):
     """AUD-005: All RunNucleiActivity calls must have an explicit retry_policy."""
 
     def test_run_nuclei_activity_has_retry_policy(self):
-        with open(WORKFLOWS_FILE, encoding='utf-8-sig') as f:
-            source = f.read()
-        tree = ast.parse(source)
-
         # Find all execute_activity calls with "RunNucleiActivity"
         missing_retry = []
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Await):
-                continue
-            call = node.value
-            if not isinstance(call, ast.Call):
-                continue
-            # Check if this is workflow.execute_activity(...)
-            func = call.func
-            if not (isinstance(func, ast.Attribute) and func.attr == 'execute_activity'):
-                continue
-            # Check first arg is "RunNucleiActivity"
-            if not call.args:
-                continue
-            first_arg = call.args[0]
-            if not (isinstance(first_arg, ast.Constant) and first_arg.value == 'RunNucleiActivity'):
-                continue
-            # Check kwargs for retry_policy
-            kwarg_names = {kw.arg for kw in call.keywords}
-            if 'retry_policy' not in kwarg_names:
-                missing_retry.append(f"line {node.lineno}")
-
-        # Also assert we found at least one RunNucleiActivity call (guard against vacuous pass)
+        # Also collect every RunNucleiActivity call (guard against vacuous pass)
         all_nuclei_calls = []
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Await):
-                continue
-            call = node.value
-            if not isinstance(call, ast.Call):
-                continue
-            func = call.func
-            if not (isinstance(func, ast.Attribute) and func.attr == 'execute_activity'):
-                continue
-            if not call.args:
-                continue
-            first_arg = call.args[0]
-            if isinstance(first_arg, ast.Constant) and first_arg.value == 'RunNucleiActivity':
-                all_nuclei_calls.append(f"line {node.lineno}")
+        for module_name, tree in _workflow_trees():
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Await):
+                    continue
+                call = node.value
+                if not isinstance(call, ast.Call):
+                    continue
+                # Check if this is workflow.execute_activity(...)
+                func = call.func
+                if not (isinstance(func, ast.Attribute) and func.attr == 'execute_activity'):
+                    continue
+                # Check first arg is "RunNucleiActivity"
+                if not call.args:
+                    continue
+                first_arg = call.args[0]
+                if not (isinstance(first_arg, ast.Constant) and first_arg.value == 'RunNucleiActivity'):
+                    continue
+                all_nuclei_calls.append(f"{module_name}:{node.lineno}")
+                # Check kwargs for retry_policy
+                kwarg_names = {kw.arg for kw in call.keywords}
+                if 'retry_policy' not in kwarg_names:
+                    missing_retry.append(f"{module_name}:{node.lineno}")
 
         self.assertGreater(
             len(all_nuclei_calls), 0,
-            "No RunNucleiActivity calls found in temporal/workflows/__init__.py — is the file correct?"
+            "No RunNucleiActivity calls found in temporal/workflows/*.py — is the module list correct?"
         )
         self.assertEqual(
             missing_retry, [],
@@ -121,30 +120,27 @@ class TestAUD006NucleiChildWorkflowRetryPolicy(unittest.TestCase):
     """AUD-006: NucleiPlannerWorkflow child invocations must have retry_policy."""
 
     def test_nuclei_planner_child_workflow_has_retry_policy(self):
-        with open(WORKFLOWS_FILE, encoding='utf-8-sig') as f:
-            source = f.read()
-        tree = ast.parse(source)
-
         all_child_calls = []
         missing_retry = []
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Await):
-                continue
-            call = node.value
-            if not isinstance(call, ast.Call):
-                continue
-            func = call.func
-            if not (isinstance(func, ast.Attribute) and func.attr == 'execute_child_workflow'):
-                continue
-            if not call.args:
-                continue
-            first_arg = call.args[0]
-            if not (isinstance(first_arg, ast.Constant) and first_arg.value == 'NucleiPlannerWorkflow'):
-                continue
-            all_child_calls.append(f"line {node.lineno}")
-            kwarg_names = {kw.arg for kw in call.keywords}
-            if 'retry_policy' not in kwarg_names:
-                missing_retry.append(f"line {node.lineno}")
+        for module_name, tree in _workflow_trees():
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Await):
+                    continue
+                call = node.value
+                if not isinstance(call, ast.Call):
+                    continue
+                func = call.func
+                if not (isinstance(func, ast.Attribute) and func.attr == 'execute_child_workflow'):
+                    continue
+                if not call.args:
+                    continue
+                first_arg = call.args[0]
+                if not (isinstance(first_arg, ast.Constant) and first_arg.value == 'NucleiPlannerWorkflow'):
+                    continue
+                all_child_calls.append(f"{module_name}:{node.lineno}")
+                kwarg_names = {kw.arg for kw in call.keywords}
+                if 'retry_policy' not in kwarg_names:
+                    missing_retry.append(f"{module_name}:{node.lineno}")
 
         self.assertGreater(
             len(all_child_calls), 0,
@@ -172,9 +168,9 @@ class TestAUD003OldBehaviourIsGone(unittest.TestCase):
         with open(ACTIVITIES_FILE, encoding='utf-8-sig') as f:
             source = f.read()
         self.assertIn(
-            'time_started__isnull=True',
+            'status=INITIATED_TASK',
             source,
-            "_create_scan_activity must filter time_started__isnull=True before claiming (AUD-003)"
+            "_create_scan_activity must claim INITIATED rows only (AUD-003)"
         )
 
     def test_exception_is_reraised_not_swallowed(self):
@@ -235,12 +231,12 @@ class TestAUD003ScanActivityRetryBehaviour(DjangoTestCase):
             time=tz_module.now(),
         )
 
-        # The correct behaviour: only claim the unclaimed row
+        # The correct behaviour: only claim the unclaimed INITIATED row
         with transaction.atomic():
             updated = ScanActivity.objects.select_for_update(skip_locked=True).filter(
                 scan_of=self.scan,
                 name='nuclei_scan',
-                time_started__isnull=True,
+                status=INITIATED_TASK,
             ).update(
                 status=RUNNING_TASK,
                 time_started=tz_module.now(),

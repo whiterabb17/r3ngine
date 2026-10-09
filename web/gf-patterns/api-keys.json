@@ -1,0 +1,25 @@
+{
+    "flags": "-iE",
+    "patterns": [
+        "api_key=",
+        "apikey=",
+        "api_secret=",
+        "apisecret=",
+        "access_token=",
+        "secret_key=",
+        "secret=",
+        "client_secret=",
+        "app_key=",
+        "appkey=",
+        "private_key=",
+        "x-api-key=",
+        "auth_key=",
+        "service_key=",
+        "account_key=",
+        "aws_key=",
+        "aws_secret=",
+        "client_key=",
+        "app_secret=",
+        "signing_key="
+    ]
+}

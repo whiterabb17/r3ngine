@@ -11,6 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from startScan.models import ScanHistory, ScanReport
+from reNgine.definitions import INTERNAL_ERROR_MESSAGE
 
 logger = logging.getLogger(__name__)
 
@@ -72,11 +73,10 @@ class StressTestControlAPI(APIView):
             # Primary: Temporal signal
             try:
                 async_to_sync(_signal_stress_workflow)(scan_id)
-                logger.info(f"[StressTestControlAPI] Temporal kill_switch sent for scan {scan_id}")
+                logger.info("[StressTestControlAPI] Temporal kill_switch sent for scan %s", scan_id)
             except Exception as e:
                 logger.warning(
-                    f"[StressTestControlAPI] Temporal signal failed for scan {scan_id}: {e} "
-                    "— falling back to Redis kill switch only."
+                    "[StressTestControlAPI] Temporal signal failed for scan %s: %s — falling back to Redis kill switch only.", scan_id, e
                 )
 
             # Secondary: Redis key checked by both the Celery task and RunStressToolActivity
@@ -105,12 +105,12 @@ class StressTestControlAPI(APIView):
             try:
                 async_to_sync(_start_stress_workflow)(ctx, scan_id)
                 logger.info(
-                    f"[StressTestControlAPI] StressTestWorkflow started for scan {scan_id}"
+                    "[StressTestControlAPI] StressTestWorkflow started for scan %s", scan_id
                 )
                 return Response({"status": "started"}, status=status.HTTP_200_OK)
             except Exception as e:
                 logger.error(
-                    f"[StressTestControlAPI] Temporal start failed for scan {scan_id}: {e}"
+                    "[StressTestControlAPI] Temporal start failed for scan %s: %s", scan_id, e
                 )
                 return Response(
                     {"error": "Failed to start stress test"},
@@ -176,10 +176,10 @@ class StressReportGenerationAPI(APIView):
                 status=status.HTTP_201_CREATED,
             )
 
-        except Exception as e:
-            logger.error(f"[StressReportGenerationAPI] Error initiating report: {e}")
+        except Exception:
+            logger.exception("[StressReportGenerationAPI] Error initiating report")
             return Response(
-                {"status": False, "error": str(e)},
+                {"status": False, "error": INTERNAL_ERROR_MESSAGE},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -203,6 +203,6 @@ class StressReportGenerationAPI(APIView):
                 status=status.HTTP_200_OK,
             )
 
-        except Exception as e:
-            logger.error(f"[StressReportGenerationAPI] Error getting report status: {e}")
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception("[StressReportGenerationAPI] Error getting report status")
+            return Response({"error": INTERNAL_ERROR_MESSAGE}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

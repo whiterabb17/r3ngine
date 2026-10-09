@@ -1,0 +1,24 @@
+{
+    "flags": "-iE",
+    "patterns": [
+        "upload=",
+        "file=",
+        "filename=",
+        "attachment=",
+        "filepath=",
+        "file_path=",
+        "file_url=",
+        "fileurl=",
+        "multipart",
+        "image=",
+        "avatar=",
+        "photo=",
+        "media=",
+        "document=",
+        "import=",
+        "resume=",
+        "cv=",
+        "asset=",
+        "resource="
+    ]
+}

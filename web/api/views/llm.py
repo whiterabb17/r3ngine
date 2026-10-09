@@ -43,6 +43,7 @@ from reNgine.definitions import (
     PERM_MODIFY_TARGETS, PERM_MODIFY_SCAN_CONFIGURATIONS,
     PERM_MODIFY_WORDLISTS, PERM_INITATE_SCANS_SUBSCANS,
     PERM_MODIFY_SCAN_REPORT, PERM_MODIFY_SCAN_RESULTS,
+    INTERNAL_ERROR_MESSAGE,
 )
 from reNgine.tasks import *
 from reNgine.llm import *
@@ -176,11 +177,12 @@ class OllamaManager(APIView):
 		try:
 			pull_model_api = f'{OLLAMA_INSTANCE}/api/pull'
 			_response = requests.post(
-				pull_model_api, 
+				pull_model_api,
 				json={
 					'name': model_name,
 					'stream': False
-				}
+				},
+				timeout=600
 			).json()
 			if _response.get('error'):
 				response['status'] = False
@@ -188,7 +190,8 @@ class OllamaManager(APIView):
 			else:
 				response['status'] = True
 		except Exception as e:
-			response['error'] = str(e)		
+			logger.error('Ollama model pull failed', exc_info=True)
+			response['error'] = INTERNAL_ERROR_MESSAGE
 		return Response(response)
 	
 	def delete(self, request):
@@ -200,10 +203,11 @@ class OllamaManager(APIView):
 		}
 		try:
 			_response = requests.delete(
-				delete_model_api, 
+				delete_model_api,
 				json={
 					'name': model_name
-				}
+				},
+				timeout=60
 			).json()
 			if _response.get('error'):
 				response['status'] = False
@@ -211,7 +215,8 @@ class OllamaManager(APIView):
 			else:
 				response['status'] = True
 		except Exception as e:
-			response['error'] = str(e)
+			logger.error('Ollama model delete failed', exc_info=True)
+			response['error'] = INTERNAL_ERROR_MESSAGE
 		return Response(response)
 	
 	def put(self, request):
@@ -234,6 +239,7 @@ class OllamaManager(APIView):
 			)
 			response['status'] = True
 		except Exception as e:
-			response['error'] = str(e)
+			logger.error('Ollama settings update failed', exc_info=True)
+			response['error'] = INTERNAL_ERROR_MESSAGE
 		return Response(response)
 

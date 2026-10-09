@@ -6,6 +6,7 @@ protocol-specific tools: enum4linux-ng (SMB), onesixtyone + snmpwalk (SNMP),
 ldapsearch (LDAP), rdp-sec-check (RDP).
 """
 import json
+import shlex
 import logging
 import os
 import subprocess
@@ -44,8 +45,8 @@ def run_network_enum(self, ctx, ports_data):
 
 def _smb_enum(self, ctx, host):
     output_json = f'{self.results_dir}/enum4linux_{host.replace(".", "_")}.json'
-    cmd = f'enum4linux-ng -A {host} -oJ {output_json}'
-    logger.warning(f'Running enum4linux-ng on {host}')
+    cmd = f'enum4linux-ng -A {shlex.quote(host)} -oJ {shlex.quote(output_json)}'
+    logger.warning("Running enum4linux-ng on %s", host)
     try:
         run_command(
             cmd,
@@ -75,11 +76,11 @@ def _smb_enum(self, ctx, host):
                 dedup_fields=['name', 'http_url', 'scan_history'],
             )
     except Exception as e:
-        logger.error(f'SMB enum failed for {host}: {e}')
+        logger.error("SMB enum failed for %s: %s", host, e)
 
 
 def _snmp_enum(self, ctx, host):
-    logger.warning(f'Running SNMP enumeration on {host}')
+    logger.warning("Running SNMP enumeration on %s", host)
     communities = ['public', 'private', 'manager']
     found_community = None
 
@@ -96,7 +97,7 @@ def _snmp_enum(self, ctx, host):
                 found_community = community
                 break
         except Exception as e:
-            logger.error(f'onesixtyone failed for {host}: {e}')
+            logger.error("onesixtyone failed for %s: %s", host, e)
             break
 
     if found_community:
@@ -142,11 +143,11 @@ def _snmp_enum(self, ctx, host):
                     dedup_fields=['name', 'http_url', 'scan_history'],
                 )
         except Exception as e:
-            logger.error(f'snmpwalk failed for {host}: {e}')
+            logger.error("snmpwalk failed for %s: %s", host, e)
 
 
 def _ldap_enum(self, ctx, host):
-    logger.warning(f'Running LDAP anonymous bind check on {host}')
+    logger.warning("Running LDAP anonymous bind check on %s", host)
     try:
         result = subprocess.run(
             ['ldapsearch', '-x', '-H', f'ldap://{host}', '-b', '', '-s', 'base'],
@@ -170,11 +171,11 @@ def _ldap_enum(self, ctx, host):
                 dedup_fields=['name', 'http_url', 'scan_history'],
             )
     except Exception as e:
-        logger.error(f'LDAP enum failed for {host}: {e}')
+        logger.error("LDAP enum failed for %s: %s", host, e)
 
 
 def _rdp_enum(self, ctx, host):
-    logger.warning(f'Running rdp-sec-check on {host}')
+    logger.warning("Running rdp-sec-check on %s", host)
     try:
         result = subprocess.run(
             ['rdp-sec-check', host],
@@ -204,4 +205,4 @@ def _rdp_enum(self, ctx, host):
                 dedup_fields=['name', 'http_url', 'scan_history'],
             )
     except Exception as e:
-        logger.error(f'rdp-sec-check failed for {host}: {e}')
+        logger.error("rdp-sec-check failed for %s: %s", host, e)

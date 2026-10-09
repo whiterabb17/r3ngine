@@ -44,7 +44,7 @@ def sanitize(val, allowed_chars=None, default=""):
     if not allowed_chars:
         allowed_chars = r"^[a-zA-Z0-9.\-_/:=%]+$"
     if not re.match(allowed_chars, val_str):
-        logger.warning(f"[stress_cmd_builder] Sanitization blocked input: {val_str!r}")
+        logger.warning("[stress_cmd_builder] Sanitization blocked input: %r", val_str)
         return default
     return val_str
 
@@ -409,7 +409,7 @@ def _build_stressor_cmd(tool_config, endpoint_url, target_domain, scan_id,
             tf.close()
             temp_proxy_path = tf.name
     except Exception as e:
-        logger.error(f"[stress_cmd_builder] Failed to create stressor proxy file: {e}")
+        logger.error("[stress_cmd_builder] Failed to create stressor proxy file: %s", e)
 
     script_path = os.path.join(base_dir, "reNgine", "stressor", "stressor.py")
     stresser_proxy_file = temp_proxy_path or ""

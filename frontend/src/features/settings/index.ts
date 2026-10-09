@@ -11,3 +11,4 @@ export * from './components/NotificationSettingsPage';
 export * from './components/ProfileSettingsPage';
 export * from './components/AdminSettingsPage';
 export * from './components/RemoteWorkersPage';
+export * from './components/McpAccessPage';

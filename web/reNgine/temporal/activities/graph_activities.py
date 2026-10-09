@@ -6,7 +6,10 @@ excluded from the graph.
 """
 from django.conf import settings
 from temporalio import activity
-from asgiref.sync import sync_to_async
+# channels' wrapper, not asgiref's: it refreshes the thread's database connection
+# around each call. The plain one left a dead cached connection in place for
+# good — see check_scan_queue_status_activity for the incident.
+from channels.db import database_sync_to_async
 
 from apme.graph.builder import GraphBuilder
 from reNgine.utils.logger import get_module_logger, format_exception_for_log
@@ -29,7 +32,7 @@ async def sync_assessment_graph_activity(assessment_id: str) -> dict:
 
     logger.log_line("[GRAPH]", "START", "sync assessment %s" % assessment_id)
     try:
-        result = await sync_to_async(_run_sync, thread_sensitive=True)(assessment_id)
+        result = await database_sync_to_async(_run_sync)(assessment_id)
     except Exception as exc:
         logger.log_line(
             "[GRAPH]", "ERROR", format_exception_for_log(exc),

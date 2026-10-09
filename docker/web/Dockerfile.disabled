@@ -333,15 +333,6 @@ COPY --from=vigolium-builder /usr/local/bin/vigolium /usr/local/bin/vigolium
 # Dalfox v3 — XSS scanner (Rust rewrite; built from source in dalfox-builder stage)
 COPY --from=dalfox-builder /usr/local/bin/dalfox /usr/local/bin/dalfox
 
-# ---------------------------------------------------------------------------
-# Searchsploit — offline Exploit-DB CLI search
-# The exploit-db repo is cloned into the exploitdb volume at container start
-# (by the temporal-python-orchestrator entrypoint). We just pre-create the
-# mount point and symlink so the CLI is on PATH when the volume is populated.
-# ---------------------------------------------------------------------------
-RUN mkdir -p /usr/src/exploitdb && \
-    ln -sf /usr/src/exploitdb/searchsploit /usr/local/bin/searchsploit
-
 WORKDIR /usr/src/app
 
 # ---------------------------------------------------------------------------

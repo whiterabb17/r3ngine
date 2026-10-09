@@ -1,0 +1,28 @@
+{
+    "flags": "-iE",
+    "patterns": [
+        "\\.\\./",
+        "\\.\\.%2f",
+        "\\.\\.%5c",
+        "%2e%2e%2f",
+        "%2e%2e/",
+        "\\.\\./\\.\\.\\./",
+        "%252f",
+        "path=",
+        "dir=",
+        "file=",
+        "page=",
+        "include=",
+        "require=",
+        "template=",
+        "doc=",
+        "document=",
+        "folder=",
+        "root=",
+        "pg=",
+        "prefix=",
+        "suffix=",
+        "base_path=",
+        "config_path="
+    ]
+}

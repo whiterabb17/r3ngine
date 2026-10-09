@@ -24,8 +24,35 @@ export interface NotificationSettings {
 export interface LLMConfig {
   provider: string;
   api_key: string;
+  /** API root of an `openai_compatible` provider; empty for the others. */
+  base_url?: string;
   selected_model: string;
   is_active: boolean;
+}
+
+/** Providers with a fixed endpoint need only a key; a gateway also needs its base URL. */
+export const OPENAI_COMPATIBLE_PROVIDER = 'openai_compatible';
+
+export interface LlmSettingsUpdate {
+  provider: string;
+  api_key: string;
+  base_url?: string;
+  selected_model: string;
+  is_active: boolean;
+  action: 'save' | 'pull';
+}
+
+export interface LlmConnectionTest {
+  provider: string;
+  api_key: string;
+  model: string;
+  base_url?: string;
+}
+
+export interface LlmToolkit {
+  llm_configs: LLMConfig[];
+  active_provider: string;
+  llm_enabled: boolean;
 }
 
 export interface LLMModel {
@@ -55,14 +82,22 @@ export interface ProxySettings {
   proxies: string;
   use_proxychains: boolean;
   use_tor: boolean;
+  /** Hand-entered proxies, tried before the scraped pool and never overwritten by the fetch. */
+  priority_proxies?: string;
+  use_priority_proxies?: boolean;
+  /** Scan direct and engage the pool only once the target is found to block us. */
+  proxy_only_after_ban?: boolean;
   valid_proxy_count?: number;
   skip_validation?: boolean;
 }
 
+/** `GET /scanEngine/<slug>/task_status/<id>` (`get_proxy_task_status`). */
 export interface ProxyTaskStatus {
   task_id: string;
-  status: 'PENDING' | 'PROGRESS' | 'SUCCESS' | 'FAILURE';
-  result: string | null;
+  /** `reNgine.job_tracker` state; `NOT_FOUND` when the job id expired or never existed. */
+  status: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILURE' | 'NOT_FOUND';
+  /** Set on `SUCCESS`: `fetch_proxies_task` stores the saved list and its size. */
+  result: string | { count: number; proxies: string } | null;
   message?: string;
   progress?: number;
 }
@@ -103,6 +138,7 @@ export interface ApiVaultSettings {
   hunterio_key?: string;
   wpscan_key?: string;
   projectdiscovery_key?: string;
+  securitytrails_key?: string;
 }
 
 export interface ReportSettings {
@@ -194,7 +230,14 @@ export const useUpdateProxySettings = (slug: string) => {
       if (data.use_tor) {
         formData.append('use_tor', 'on');
       }
+      if (data.use_priority_proxies) {
+        formData.append('use_priority_proxies', 'on');
+      }
+      if (data.proxy_only_after_ban) {
+        formData.append('proxy_only_after_ban', 'on');
+      }
       formData.append('proxies', data.proxies);
+      formData.append('priority_proxies', data.priority_proxies ?? '');
       if (data.skip_validation) {
         formData.append('skip_validation', 'true');
       }
@@ -262,7 +305,7 @@ export const useProxyTaskStatus = (slug: string, taskId: string | null) => {
     enabled: !!taskId,
     refetchInterval: (query) => {
       const data = query.state.data as ProxyTaskStatus | undefined;
-      if (data && (data.status === 'SUCCESS' || data.status === 'FAILURE')) {
+      if (data && (data.status === 'SUCCESS' || data.status === 'FAILURE' || data.status === 'NOT_FOUND')) {
         return false;
       }
       return 2000;
@@ -270,8 +313,16 @@ export const useProxyTaskStatus = (slug: string, taskId: string | null) => {
   });
 };
 
+export interface TorStatus {
+  running: boolean;
+  host?: string;
+  port?: number;
+  /** How to enable the optional `tor` compose service; null while it runs. */
+  hint?: string | null;
+}
+
 export const useTorStatus = () => {
-  return useQuery<{ running: boolean }>({
+  return useQuery<TorStatus>({
     queryKey: ['tor-status'],
     queryFn: async () => {
       const response = await axios.get('/api/rengine/tor-status/', {
@@ -439,8 +490,9 @@ export const useToolVersion = () => {
 export const useUpdateTool = () => {
   return useMutation({
     mutationFn: async (toolId: number) => {
-      const { data } = await axios.get(`/api/tool/update/`, {
-        params: { tool_id: toolId },
+      // POST: the command changes server state, so it must carry a CSRF token.
+      const { data } = await axios.post(`/api/tool/update/`, { tool_id: toolId }, {
+        headers: { 'X-CSRFToken': getCsrfToken() },
       });
       return data;
     },
@@ -451,8 +503,9 @@ export const useUninstallTool = (slug: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (toolId: number) => {
-      const { data } = await axios.get(`/api/tool/uninstall/`, {
-        params: { tool_id: toolId },
+      // POST: the command changes server state, so it must carry a CSRF token.
+      const { data } = await axios.post(`/api/tool/uninstall/`, { tool_id: toolId }, {
+        headers: { 'X-CSRFToken': getCsrfToken() },
       });
       return data;
     },
@@ -530,6 +583,7 @@ export const useUpdateApiVault = (slug: string) => {
       formData.append('hunterio_key', data.hunterio_key || '');
       formData.append('wpscan_key', data.wpscan_key || '');
       formData.append('key_projectdiscovery', data.projectdiscovery_key || '');
+      formData.append('key_securitytrails', data.securitytrails_key || '');
 
       const response = await axios.post(`/scanEngine/${slug}/api_vault`, formData, {
         headers: {
@@ -546,7 +600,7 @@ export const useUpdateApiVault = (slug: string) => {
 };
 
 export const useLlmToolkit = (slug: string) => {
-  return useQuery<{ llm_configs: LLMConfig[]; active_provider: string }>({
+  return useQuery<LlmToolkit>({
     queryKey: ['llm-toolkit', slug],
     queryFn: async () => {
       const response = await axios.get(`/scanEngine/${slug}/llm_toolkit`, {
@@ -557,29 +611,66 @@ export const useLlmToolkit = (slug: string) => {
   });
 };
 
-export const useLlmModels = (slug: string, provider: string, apiKey: string) => {
+export async function fetchLlmModels(
+  slug: string, provider: string, apiKey: string, baseUrl = '',
+): Promise<LLMModel[]> {
+  const params: Record<string, string> = { provider, api_key: apiKey };
+  if (provider === OPENAI_COMPATIBLE_PROVIDER) params.base_url = baseUrl;
+  const response = await axios.get(`/scanEngine/${slug}/fetch_llm_models`, { params });
+  return response.data.models;
+}
+
+/** Whether the model list can be asked for yet: a key for cloud providers, plus a URL for a gateway. */
+export function canFetchLlmModels(provider: string, apiKey: string, baseUrl = ''): boolean {
+  if (!provider) return false;
+  if (provider === 'ollama') return true;
+  if (provider === OPENAI_COMPATIBLE_PROVIDER) return !!apiKey && !!baseUrl.trim();
+  return !!apiKey;
+}
+
+export const useLlmModels = (slug: string, provider: string, apiKey: string, baseUrl = '') => {
   return useQuery<LLMModel[]>({
-    queryKey: ['llm-models', slug, provider, apiKey],
-    queryFn: async () => {
-      const response = await axios.get(`/scanEngine/${slug}/fetch_llm_models`, {
-        params: { provider, api_key: apiKey }
-      });
-      return response.data.models;
-    },
-    enabled: !!provider && (provider === 'ollama' || !!apiKey),
+    queryKey: ['llm-models', slug, provider, apiKey, provider === OPENAI_COMPATIBLE_PROVIDER ? baseUrl : ''],
+    queryFn: () => fetchLlmModels(slug, provider, apiKey, baseUrl),
+    enabled: canFetchLlmModels(provider, apiKey, baseUrl),
   });
 };
+
+export async function saveLlmSettings(slug: string, data: LlmSettingsUpdate) {
+  const formData = new FormData();
+  formData.append('provider', data.provider);
+  formData.append('api_key', data.api_key);
+  if (data.provider === OPENAI_COMPATIBLE_PROVIDER) formData.append('base_url', data.base_url ?? '');
+  formData.append('selected_model', data.selected_model);
+  formData.append('is_active', data.is_active ? 'true' : 'false');
+  formData.append('action', data.action);
+
+  const response = await axios.post(`/scanEngine/${slug}/update_llm_settings`, formData, {
+    headers: {
+      'X-CSRFToken': getCsrfToken(),
+      'Accept': 'application/json'
+    }
+  });
+  return response.data;
+}
 
 export const useUpdateLlmSettings = (slug: string) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { provider: string; api_key: string; selected_model: string; is_active: boolean; action: 'save' | 'pull' }) => {
+    mutationFn: (data: LlmSettingsUpdate) => saveLlmSettings(slug, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['llm-toolkit', slug] });
+    },
+  });
+};
+
+export const useToggleLlmEnabled = (slug: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (enabled: boolean) => {
       const formData = new FormData();
-      formData.append('provider', data.provider);
-      formData.append('api_key', data.api_key);
-      formData.append('selected_model', data.selected_model);
-      formData.append('is_active', data.is_active ? 'true' : 'false');
-      formData.append('action', data.action);
+      formData.append('action', 'toggle_enabled');
+      formData.append('llm_enabled', enabled ? 'true' : 'false');
 
       const response = await axios.post(`/scanEngine/${slug}/update_llm_settings`, formData, {
         headers: {
@@ -587,7 +678,7 @@ export const useUpdateLlmSettings = (slug: string) => {
           'Accept': 'application/json'
         }
       });
-      return response.data;
+      return response.data as { status: string; message: string; llm_enabled: boolean };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['llm-toolkit', slug] });
@@ -615,8 +706,19 @@ export const useOllamaPullStatus = (slug: string, model: string | null) => {
   });
 };
 
+export interface OllamaServiceStatus {
+  status: string;
+  running: boolean;
+  url?: string;
+  version?: string | null;
+  /** How to enable the optional `ollama` compose service; null while it runs. */
+  hint?: string | null;
+}
+
+// Ollama is a compose service (profile `ollama`); the app only reports whether
+// it answers, so there are no start/stop mutations here.
 export const useOllamaServiceStatus = (slug: string) => {
-  return useQuery<{ status: string; running: boolean }>({
+  return useQuery<OllamaServiceStatus>({
     queryKey: ['ollama-service-status', slug],
     queryFn: async () => {
       const response = await axios.get(`/scanEngine/${slug}/ollama/service_status`, {
@@ -628,59 +730,26 @@ export const useOllamaServiceStatus = (slug: string) => {
   });
 };
 
-export const useStartOllamaService = (slug: string) => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async () => {
-      const response = await axios.post(`/scanEngine/${slug}/ollama/service_start`, {}, {
-        headers: {
-          'X-CSRFToken': getCsrfToken(),
-          'Accept': 'application/json'
-        }
-      });
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ollama-service-status', slug] });
-    },
-  });
-};
+export async function testLlmConnection(slug: string, data: LlmConnectionTest): Promise<TestLlmConnectionResult> {
+  const formData = new FormData();
+  formData.append('provider', data.provider);
+  formData.append('api_key', data.api_key);
+  formData.append('model', data.model);
+  if (data.provider === OPENAI_COMPATIBLE_PROVIDER) formData.append('base_url', data.base_url ?? '');
 
-export const useStopOllamaService = (slug: string) => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async () => {
-      const response = await axios.post(`/scanEngine/${slug}/ollama/service_stop`, {}, {
-        headers: {
-          'X-CSRFToken': getCsrfToken(),
-          'Accept': 'application/json'
-        }
-      });
-      return response.data;
+  const response = await axios.post(`/scanEngine/${slug}/test_llm_connection`, formData, {
+    headers: {
+      'X-CSRFToken': getCsrfToken(),
+      'Accept': 'application/json',
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ollama-service-status', slug] });
-    },
+    validateStatus: () => true,
   });
-};
+  return response.data as TestLlmConnectionResult;
+}
 
 export const useTestLlmConnection = (slug: string) => {
-  return useMutation<TestLlmConnectionResult, Error, { provider: string; api_key: string; model: string }>({
-    mutationFn: async (data) => {
-      const formData = new FormData();
-      formData.append('provider', data.provider);
-      formData.append('api_key', data.api_key);
-      formData.append('model', data.model);
-
-      const response = await axios.post(`/scanEngine/${slug}/test_llm_connection`, formData, {
-        headers: {
-          'X-CSRFToken': getCsrfToken(),
-          'Accept': 'application/json',
-        },
-        validateStatus: () => true,
-      });
-      return response.data as TestLlmConnectionResult;
-    },
+  return useMutation<TestLlmConnectionResult, Error, LlmConnectionTest>({
+    mutationFn: (data) => testLlmConnection(slug, data),
   });
 };
 
@@ -825,6 +894,19 @@ export interface User {
   last_login_humanized: string;
 }
 
+/** Body of `POST /api/users/`. */
+export interface CreateUserPayload {
+  username: string;
+  password: string;
+  role: string;
+}
+
+/** Body of `POST /api/users/<id>/update_user/`; an omitted password is left unchanged. */
+export interface UpdateUserPayload {
+  role?: string;
+  password?: string;
+}
+
 export const useUsers = () => {
   return useQuery<User[]>({
     queryKey: ['users'],
@@ -838,7 +920,7 @@ export const useUsers = () => {
 export const useCreateUser = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: CreateUserPayload) => {
       const response = await axios.post('/api/users/', data, {
         headers: {
           'X-CSRFToken': getCsrfToken(),
@@ -874,7 +956,7 @@ export const useToggleUserStatus = () => {
 export const useUpdateUser = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ userId, data }: { userId: number; data: any }) => {
+    mutationFn: async ({ userId, data }: { userId: number; data: UpdateUserPayload }) => {
       const response = await axios.post(`/api/users/${userId}/update_user/`, data, {
         headers: {
           'X-CSRFToken': getCsrfToken(),
@@ -910,17 +992,24 @@ export const useDeleteUser = () => {
 export interface RemoteWorker {
   id: number;
   name: string;
-  auth_token: string;
+  description: string | null;
+  task_queue: string;
+  hostname: string | null;
   ip_address: string | null;
+  is_active: boolean;
   last_heartbeat: string | null;
-  created_at: string;
+}
+
+/** Returned by create only: the worker token is shown once and stored hashed. */
+export interface CreatedRemoteWorker extends RemoteWorker {
+  auth_token: string;
 }
 
 export const useRemoteWorkers = () => {
   return useQuery<RemoteWorker[]>({
     queryKey: ['remote-workers'],
     queryFn: async () => {
-      const response = await axios.get('/api/settings/workers/');
+      const response = await axios.get('/api/workers/');
       return Array.isArray(response.data) ? response.data : response.data.results;
     },
     refetchInterval: 30000,
@@ -930,8 +1019,8 @@ export const useRemoteWorkers = () => {
 export const useCreateRemoteWorker = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { name: string, auth_token: string }) => {
-      const response = await axios.post('/api/settings/workers/', data, {
+    mutationFn: async (data: { name: string }): Promise<CreatedRemoteWorker> => {
+      const response = await axios.post('/api/workers/', data, {
         headers: {
           'X-CSRFToken': getCsrfToken(),
           'Accept': 'application/json'
@@ -949,7 +1038,7 @@ export const useDeleteRemoteWorker = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (workerId: number) => {
-      const response = await axios.delete(`/api/settings/workers/${workerId}/`, {
+      const response = await axios.delete(`/api/workers/${workerId}/`, {
         headers: {
           'X-CSRFToken': getCsrfToken(),
           'Accept': 'application/json'
@@ -962,3 +1051,49 @@ export const useDeleteRemoteWorker = () => {
     },
   });
 };
+
+/**
+ * Reads one editable tool file. `key` is the bare selector flag the endpoint expects
+ * (e.g. `nuclei_config`, `gf_pattern`); `name` picks an entry for list-type keys.
+ */
+export const fetchToolFileContent = async (key: string, name?: string): Promise<FileContentResponse> => {
+  const query = name === undefined ? key : `${key}&name=${name}`;
+  const { data } = await axios.get<FileContentResponse>(`/api/getFileContents/?${query}`);
+  return data;
+};
+
+/** Downloads the configuration backup archive (zip). */
+export const exportConfigBackup = async (): Promise<Blob> => {
+  const response = await axios.get<Blob>('/api/settings/export/', {
+    responseType: 'blob'
+  });
+  return response.data;
+};
+
+/** Downloads the scan results backup archive (zip). */
+export const exportScanResultsBackup = async (): Promise<Blob> => {
+  const response = await axios.get<Blob>('/api/settings/export/scan-results/', {
+    responseType: 'blob'
+  });
+  return response.data;
+};
+
+export interface ConfigImportResponse {
+  status: boolean;
+  message?: string;
+}
+
+export const importConfigBackup = async (file: File, overwriteExisting: boolean): Promise<ConfigImportResponse> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('overwrite_existing', overwriteExisting ? 'true' : 'false');
+
+  const response = await axios.post<ConfigImportResponse>('/api/settings/import/', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    }
+  });
+  return response.data;
+};
+
+export * from './mcp';

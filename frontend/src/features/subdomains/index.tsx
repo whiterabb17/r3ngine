@@ -38,15 +38,13 @@ import {
   AlertTriangle,
   Trash2,
   Copy,
-  FileText,
-  Bug
+  FileText
 } from 'lucide-react';
 
 import { useThemeTokens } from '../../theme/useThemeTokens';
 import { getHttpStatusColor } from '../../theme/semanticColors';
 import { useSubdomains } from './api';
 import { TacticalPanel } from '../../components/TacticalPanel';
-import { SearchsploitModal } from './SearchsploitModal';
 
 export const SubdomainsPage: React.FC = () => {
   const { tokens } = useThemeTokens();
@@ -58,9 +56,7 @@ export const SubdomainsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectedAssets, setSelectedAssets] = useState<number[]>([]);
-  const [isSearchsploitModalOpen, setIsSearchsploitModalOpen] = useState(false);
 
   const { data, isLoading } = useSubdomains(projectSlug, page, activeSearch, undefined, false, undefined, undefined, pageSize);
   const [isReady, setIsReady] = useState(false);
@@ -94,19 +90,12 @@ export const SubdomainsPage: React.FC = () => {
     setActiveSearch(searchQuery);
   };
 
-  const handleActionClick = (event: React.MouseEvent<HTMLButtonElement>, id: number) => {
+  const handleActionClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget);
-    setSelectedId(id);
   };
 
   const handleActionClose = () => {
     setAnchorEl(null);
-    setSelectedId(null);
-  };
-
-  const handleSearchsploitOpen = () => {
-    setIsSearchsploitModalOpen(true);
-    handleActionClose();
   };
 
   return (
@@ -197,13 +186,13 @@ export const SubdomainsPage: React.FC = () => {
         }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography sx={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.5)' }}>Results :</Typography>
+              <Typography sx={{ fontSize: '11px', fontWeight: 600, color: 'text.secondary' }}>Results :</Typography>
               <Box sx={{ px: 1, py: 0.5, bgcolor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 1 }}>
-                <Typography sx={{ fontSize: '11px', color: '#fff', fontWeight: 700 }}>50</Typography>
+                <Typography sx={{ fontSize: '11px', color: 'text.primary', fontWeight: 700 }}>50</Typography>
               </Box>
             </Box>
             <Box sx={{ px: 3, py: 0.8, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 1, border: '1px solid rgba(255,255,255,0.1)' }}>
-              <Typography sx={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.7)', letterSpacing: 0.5 }}>
+              <Typography sx={{ fontSize: '11px', fontWeight: 700, color: 'text.secondary', letterSpacing: 0.5 }}>
                 Showing page {page} of {Math.ceil((data?.count || 0) / 50) || 1}
               </Typography>
             </Box>
@@ -294,8 +283,8 @@ export const SubdomainsPage: React.FC = () => {
                   <td style={{ padding: '12px 16px' }}>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography sx={{ fontSize: '13px', fontWeight: 700, color: '#fff', letterSpacing: 0.2 }}>{sub.name}</Typography>
-                        <IconButton size="small" sx={{ p: 0.2, color: 'rgba(255,255,255,0.3)', '&:hover': { color: '#00f3ff' } }}>
+                        <Typography sx={{ fontSize: '13px', fontWeight: 700, color: 'text.primary', letterSpacing: 0.2 }}>{sub.name}</Typography>
+                        <IconButton size="small" sx={{ p: 0.2, color: 'text.secondary', '&:hover': { color: '#00f3ff' } }}>
                           <Copy size={12} />
                         </IconButton>
                       </Box>
@@ -303,17 +292,17 @@ export const SubdomainsPage: React.FC = () => {
                       {/* Asset Intelligence Badges (Legacy Feature) */}
                       <Box sx={{ display: 'flex', gap: 1.5, mt: 0.5 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Typography sx={{ fontSize: '9px', fontWeight: 800, color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Typography sx={{ fontSize: '9px', fontWeight: 800, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <Zap size={10} style={{ color: '#00f3ff' }} /> {sub.subscan_count || 0}
                           </Typography>
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Typography sx={{ fontSize: '9px', fontWeight: 800, color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Typography sx={{ fontSize: '9px', fontWeight: 800, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <ExternalLink size={10} style={{ color: '#7000ff' }} /> {sub.endpoint_count || 0}
                           </Typography>
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <Typography sx={{ fontSize: '9px', fontWeight: 800, color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Typography sx={{ fontSize: '9px', fontWeight: 800, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <AlertTriangle size={10} style={{ color: '#ff003c' }} /> {sub.critical_count || 0}
                           </Typography>
                         </Box>
@@ -344,7 +333,7 @@ export const SubdomainsPage: React.FC = () => {
                           key={`ip-${sub.id}-${ip.id}`}
                           sx={{
                             fontSize: '11px',
-                            color: ip.is_cdn ? '#ffae00' : 'rgba(255,255,255,0.5)',
+                            color: ip.is_cdn ? '#ffae00' : 'text.secondary',
                             fontFamily: 'monospace',
                             fontWeight: 600
                           }}
@@ -367,7 +356,7 @@ export const SubdomainsPage: React.FC = () => {
                             border: '1px solid rgba(255,255,255,0.1)'
                           }}
                         >
-                          <Typography sx={{ fontSize: '9px', fontWeight: 800, color: port.is_uncommon ? '#ff003c' : 'rgba(255,255,255,0.6)' }}>
+                          <Typography sx={{ fontSize: '9px', fontWeight: 800, color: port.is_uncommon ? '#ff003c' : 'text.secondary' }}>
                             {port.number}/{port.service_name}
                           </Typography>
                         </Box>
@@ -375,7 +364,7 @@ export const SubdomainsPage: React.FC = () => {
                     </Box>
                   </td>
                   <td style={{ padding: '12px 16px' }}>
-                    <Typography sx={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', fontFamily: 'monospace', fontWeight: 600 }}>
+                    <Typography sx={{ fontSize: '11px', color: 'text.secondary', fontFamily: 'monospace', fontWeight: 600 }}>
                       {sub.content_length?.toLocaleString() || '0'}
                     </Typography>
                   </td>
@@ -406,7 +395,7 @@ export const SubdomainsPage: React.FC = () => {
                         </Box>
                       ) : (
                         <Box sx={{ width: 50, height: 30, borderRadius: 0.5, bgcolor: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Typography sx={{ fontSize: '6px', color: 'rgba(255,255,255,0.1)' }}>NULL</Typography>
+                          <Typography sx={{ fontSize: '6px', color: 'text.disabled' }}>NULL</Typography>
                         </Box>
                       );
                     })()}
@@ -428,7 +417,7 @@ export const SubdomainsPage: React.FC = () => {
                           <FileText size={14} />
                         </IconButton>
                       </Tooltip>
-                      <IconButton size="small" onClick={(e) => handleActionClick(e, sub.id)} sx={{ color: 'rgba(255,255,255,0.3)', p: 0.5 }}>
+                      <IconButton size="small" onClick={handleActionClick} sx={{ color: 'text.secondary', p: 0.5 }}>
                         <MoreHorizontal size={14} />
                       </IconButton>
                     </Box>
@@ -449,7 +438,7 @@ export const SubdomainsPage: React.FC = () => {
               size="small"
               sx={{
                 '& .MuiPaginationItem-root': {
-                  color: 'rgba(255,255,255,0.5)',
+                  color: 'text.secondary',
                   borderColor: 'rgba(255,255,255,0.1)',
                   fontFamily: 'Orbitron',
                   fontSize: '10px',
@@ -524,10 +513,6 @@ export const SubdomainsPage: React.FC = () => {
           <ListItemIcon><FilePlus size={16} color="#00f3ff" /></ListItemIcon>
           <ListItemText primary="ADD NOTE" />
         </MenuItem>
-        <MenuItem onClick={handleSearchsploitOpen}>
-          <ListItemIcon><Bug size={16} color="#00f3ff" /></ListItemIcon>
-          <ListItemText primary="SEARCHSPLOIT" />
-        </MenuItem>
         <MenuItem onClick={handleActionClose} sx={{ color: '#ffae00' }}>
           <ListItemIcon><Shield size={16} color="#ffae00" /></ListItemIcon>
           <ListItemText primary="MARK IMPORTANT" />
@@ -545,11 +530,6 @@ export const SubdomainsPage: React.FC = () => {
           100% { transform: scale(1); opacity: 1; }
         }
       `}</style> */}
-      <SearchsploitModal 
-        open={isSearchsploitModalOpen} 
-        onClose={() => setIsSearchsploitModalOpen(false)} 
-        subdomain={data?.results.find((s) => s.id === selectedId) || null} 
-      />
     </Container>
   );
 };

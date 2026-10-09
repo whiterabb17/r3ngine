@@ -609,7 +609,7 @@ class Layer4(Thread):
     def FIVEMTOKEN(self) -> None:
         global BYTES_SEND, REQUESTS_SENT
 
-        # Generete token and guid
+        # Generate token and guid
         token = str(uuid4())
         steamid_min = 76561197960265728
         steamid_max = 76561199999999999
@@ -1400,7 +1400,7 @@ class ProxyManager:
                         data.splitlines(), proxy_type):
                     proxes.add(proxy)
             except Exception as e:
-                logger.error(f'Download Proxy Error: {(e.__str__() or e.__repr__())}')
+                logger.error("Download Proxy Error: %s", e.__str__() or e.__repr__())
         return proxes
 
 
@@ -1537,8 +1537,8 @@ class ToolsConsole:
                     print('please wait ...', end="\r")
 
                     info = ToolsConsole.ts_srv(domain)
-                    logger.info(f"TCP: {(info['_tsdns._tcp.'])}\n")
-                    logger.info(f"UDP: {(info['_ts3._udp.'])}\n")
+                    logger.info("TCP: %s\n", info['_tsdns._tcp.'])
+                    logger.info("UDP: %s\n", info['_ts3._udp.'])
 
             if cmd == "PING":
                 while True:
@@ -1643,12 +1643,13 @@ def handleProxyList(con, proxy_li, proxy_ty, url=None):
         proxy_ty = randchoice([4, 5, 1])
     if not proxy_li.exists():
         logger.warning(
-            f"{bcolors.WARNING}The file doesn't exist, creating files and downloading proxies.{bcolors.RESET}")
+            "%sThe file doesn't exist, creating files and downloading proxies.%s", bcolors.WARNING, bcolors.RESET)
         proxy_li.parent.mkdir(parents=True, exist_ok=True)
         with proxy_li.open("w") as wr:
             Proxies: Set[Proxy] = ProxyManager.DownloadFromConfig(con, proxy_ty)
             logger.info(
-                f"{bcolors.OKBLUE}{len(Proxies):,}{bcolors.WARNING} Proxies are getting checked, this may take awhile{bcolors.RESET}!"
+                "%s%s%s Proxies are getting checked, this may take awhile%s!",
+                bcolors.OKBLUE, format(len(Proxies), ","), bcolors.WARNING, bcolors.RESET,
             )
             Proxies = ProxyChecker.checkAll(
                 Proxies, timeout=5, threads=threads,
@@ -1667,10 +1668,10 @@ def handleProxyList(con, proxy_li, proxy_ty, url=None):
 
     proxies = ProxyUtiles.readFromFile(proxy_li)
     if proxies:
-        logger.info(f"{bcolors.WARNING}Proxy Count: {bcolors.OKBLUE}{len(proxies):,}{bcolors.RESET}")
+        logger.info("%sProxy Count: %s%s%s", bcolors.WARNING, bcolors.OKBLUE, format(len(proxies), ","), bcolors.RESET)
     else:
         logger.info(
-            f"{bcolors.WARNING}Empty Proxy File, running flood without proxy{bcolors.RESET}")
+            "%sEmpty Proxy File, running flood without proxy%s", bcolors.WARNING, bcolors.RESET)
         proxies = None
 
     return proxies

@@ -13,9 +13,9 @@ import {
 } from '@mui/material';
 import { X, Terminal } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 import { getDialogPaperSx } from '../../../theme/semanticColors';
+import { fetchDirectoryFileAuthLogs } from '../api/scanResults';
 
 interface ExtractAuthModalProps {
   open: boolean;
@@ -25,11 +25,6 @@ interface ExtractAuthModalProps {
   status: 'idle' | 'extracting' | 'completed' | 'error';
   onComplete?: (status: 'completed' | 'error') => void;
 }
-
-const fetchAuthLogs = async (workflowId: string): Promise<string[]> => {
-  const { data } = await axios.get(`/api/action/directory-file/auth-logs/?workflow_id=${workflowId}`);
-  return (data.logs ?? []) as string[];
-};
 
 // Returns true when the log stream has reached a terminal state.
 const isTerminalLogs = (logs: string[]) =>
@@ -84,7 +79,7 @@ export const ExtractAuthModal: React.FC<ExtractAuthModalProps> = ({
   // so that the interval is driven by the query's own data, not external React state.
   const { data: logs = [] } = useQuery<string[]>({
     queryKey: ['auth-logs', workflowId],
-    queryFn: () => fetchAuthLogs(workflowId as string),
+    queryFn: () => fetchDirectoryFileAuthLogs(workflowId as string),
     enabled: !!workflowId && open,
     refetchInterval: (_query) => {
       const current = (_query.state.data as string[] | undefined) ?? [];

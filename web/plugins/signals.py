@@ -12,7 +12,7 @@ def cleanup_plugin_files(sender, instance, **kwargs):
     Cleanup all files associated with the plugin after it is deleted from the DB.
     """
     try:
-        logger.info(f"Cleaning up files for deleted plugin: {instance.name} ({instance.slug})")
+        logger.info("Cleaning up files for deleted plugin: %s (%s)", instance.name, instance.slug)
         PluginManager.delete_plugin_files(instance.slug)
     except Exception as e:
-        logger.error(f"Error during plugin file cleanup for {instance.slug}: {str(e)}")
+        logger.error("Error during plugin file cleanup for %s: %s", instance.slug, str(e))

@@ -4,6 +4,45 @@
  */
 
 export interface paths {
+    "/api/action/ad-assessment/from-subdomain/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an ADAssessment pre-populated from a Subdomain's root domain.
+         * @description The AD Intelligence plugin must be installed. The assessment is created
+         *     in PENDING state; users start it explicitly from the AD plugin dashboard.
+         *     This view intentionally does NOT start the workflow automatically to avoid
+         *     unintended automated enumeration activity.
+         */
+        post: operations["api_action_ad-assessment_from-subdomain_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/capabilities/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_action_capabilities_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/action/create/project": {
         parameters: {
             query?: never;
@@ -14,6 +53,66 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["api_action_create_project_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/directory-file/auth-logs/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fetch logs from Redis for an authentication extraction workflow.
+         * @description GET /api/action/directory-file/auth-logs/?workflow_id=...
+         */
+        get: operations["api_action_directory-file_auth-logs_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/directory-file/delete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete DirectoryFile records by primary key.
+         * @description POST /api/action/directory-file/delete/
+         */
+        post: operations["api_action_directory-file_delete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/directory-file/dispatch/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dispatch a security testing action against a specific directory file URL.
+         * @description POST /api/action/directory-file/dispatch/
+         */
+        post: operations["api_action_directory-file_dispatch_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -68,6 +167,163 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/action/engines/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["api_action_engines_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/followups/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_action_followups_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/followups/metrics/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_action_followups_metrics_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/followups/propose/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_action_followups_propose_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/followups/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["api_action_followups_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/followups/{id}/abort/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_action_followups_abort_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/followups/{id}/approve/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_action_followups_approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/followups/{id}/retry/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_action_followups_retry_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/followups/{id}/update/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Operator (or agent until first operator edit) updates proposed steps. */
+        post: operations["api_action_followups_update_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/action/initiate/scan/": {
         parameters: {
             query?: never;
@@ -93,7 +349,103 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Initiate a set of subscans on one or more subdomains. */
         post: operations["api_action_initiate_subtask_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/note/delete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_action_note_delete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/pause/scan/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_action_pause_scan_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/resume/scan/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_action_resume_scan_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/retry/task/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_action_retry_task_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/retry/tier/{scan_id}/{tier}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+                tier: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry every failed activity of one tier of a scan.
+         * @description ``POST /api/action/retry/tier/<scan_id>/<tier>/``
+         *
+         *     Reuses the single-task path: the same guard rails as
+         *     ``ScanActivityRetryAPIView`` and one ``SingleTaskRetryWorkflow`` per failed
+         *     row. Rows that are not FAILED are left untouched, and rows whose task name
+         *     the workflow cannot dispatch are skipped and reported rather than failing the
+         *     whole request.
+         */
+        post: operations["api_action_retry_tier_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -132,6 +484,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/action/subdomain/add/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_action_subdomain_add_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/action/subdomain/delete/": {
         parameters: {
             query?: never;
@@ -142,6 +510,57 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["api_action_subdomain_delete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/tool/run/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_action_tool_run_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/tool/{tool}/args/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tool: string;
+            };
+            cookie?: never;
+        };
+        /** @description Return cached CLI/schema args for a pipeline tool (from installed binary help). */
+        get: operations["api_action_tool_args_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/action/unpause/scan/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_action_unpause_scan_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -228,6 +647,141 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/api-intel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description GET /mapi/api-intel/
+         *     Returns APIIntelligenceProfile list. Filter by scan_id query param.
+         */
+        get: operations["api_api-intel_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/api-intel/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this api intelligence profile. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** @description GET /mapi/api-intel/<pk>/ */
+        get: operations["api_api-intel_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/apme/attack-trees/{scan_id}/{target_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * GET /api/apme/attack-trees/<scan_id>/<target_id>/
+         * @description Returns the hierarchical AND/OR attack tree for a specific target asset.
+         */
+        get: operations["api_apme_attack-trees_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/apme/explain/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/apme/explain/ */
+        post: operations["api_apme_explain_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/apme/impact/regenerate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/apme/impact/regenerate/  body: {path_id} */
+        post: operations["api_apme_impact_regenerate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/apme/impact/{path_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                path_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET /api/apme/impact/<str:path_id>/ */
+        get: operations["api_apme_impact_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/apme/path/{path_id}/dismiss/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                path_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description PATCH /api/apme/path/<str:path_id>/dismiss/  body: {reason?} */
+        patch: operations["api_apme_path_dismiss_partial_update"];
+        trace?: never;
+    };
     "/api/apme/paths/": {
         parameters: {
             query?: never;
@@ -242,6 +796,59 @@ export interface paths {
          *     Each step is tagged as 'validated' or 'inferred'.
          */
         get: operations["api_apme_paths_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/apme/recalculate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/apme/recalculate/ */
+        post: operations["api_apme_recalculate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/apme/risk-summary/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET /api/apme/risk-summary/?scan_id=<id> */
+        get: operations["api_apme_risk-summary_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/apme/tree/{target_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET /api/apme/tree/<str:target_id>/  (URL-encoded target_id) */
+        get: operations["api_apme_tree_read"];
         put?: never;
         post?: never;
         delete?: never;
@@ -276,10 +883,6 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * @description Takes a set of user credentials and returns an access and refresh JSON web
-         *     token pair to prove the authentication of those credentials.
-         */
         post: operations["api_auth_token_create"];
         delete?: never;
         options?: never;
@@ -307,6 +910,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/certificates/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET /mapi/certificates/?scan_id=<id> (scan_id optional) */
+        get: operations["api_certificates_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/certificates/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET /mapi/certificates/<int:pk>/ */
+        get: operations["api_certificates_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/certificates/{id}/flag/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description PATCH /mapi/certificates/<int:pk>/flag/  body: {flag, note?} */
+        patch: operations["api_certificates_flag_partial_update"];
+        trace?: never;
+    };
+    "/api/certificates/{id}/resync/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /mapi/certificates/<int:pk>/resync/ */
+        post: operations["api_certificates_resync_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/certs/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/certs/?scan_id=<id>[&project=<slug>][&page=<n>][&page_size=<n>]
+         * @description Returns CertificateIntelligence records for a scan, ordered by risk
+         *     (expired first, then weak-cipher, then self-signed).  Requires at least
+         *     Auditor role.  The scan must belong to the project identified by the
+         *     project slug so that cross-project IDOR is not possible.
+         */
+        get: operations["api_certs_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/createOrganization/": {
         parameters: {
             query?: never;
@@ -317,6 +1017,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["api_createOrganization_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cwe-info/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_cwe-info_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -339,6 +1055,903 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/emailBreaches/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * ViewSet for viewing email breaches.
+         * @description Allows listing email breaches filtered by scan_id, target_id, or project.
+         */
+        get: operations["api_emailBreaches_list"];
+        put?: never;
+        /**
+         * ViewSet for viewing email breaches.
+         * @description Allows listing email breaches filtered by scan_id, target_id, or project.
+         */
+        post: operations["api_emailBreaches_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/emailBreaches/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this email breach. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * ViewSet for viewing email breaches.
+         * @description Allows listing email breaches filtered by scan_id, target_id, or project.
+         */
+        get: operations["api_emailBreaches_read"];
+        /**
+         * ViewSet for viewing email breaches.
+         * @description Allows listing email breaches filtered by scan_id, target_id, or project.
+         */
+        put: operations["api_emailBreaches_update"];
+        post?: never;
+        /**
+         * ViewSet for viewing email breaches.
+         * @description Allows listing email breaches filtered by scan_id, target_id, or project.
+         */
+        delete: operations["api_emailBreaches_delete"];
+        options?: never;
+        head?: never;
+        /**
+         * ViewSet for viewing email breaches.
+         * @description Allows listing email breaches filtered by scan_id, target_id, or project.
+         */
+        patch: operations["api_emailBreaches_partial_update"];
+        trace?: never;
+    };
+    "/api/emailDiscovery/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/emailDiscovery/start/ — kick off background email discovery for a scan. */
+        post: operations["api_emailDiscovery_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/emailDiscovery/stop/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/emailDiscovery/stop/ — signal an active discovery job to stop. */
+        post: operations["api_emailDiscovery_stop_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/emailDiscovery/{job_id}/replay/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET /api/emailDiscovery/<job_id>/replay/ — replay log stream events for a job. */
+        get: operations["api_emailDiscovery_replay_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/emails/check_breach/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Handle the POST request to manually check a single email address. */
+        post: operations["api_emails_check_breach_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/emails/manual/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/emails/manual/ — add one or more email addresses to a scan. */
+        post: operations["api_emails_manual_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/employeeIntel/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/employeeIntel/start/ — kick off background employee intelligence for a scan. */
+        post: operations["api_employeeIntel_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/employeeIntel/stop/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/employeeIntel/stop/ — send stop signal to a running employee intel job. */
+        post: operations["api_employeeIntel_stop_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/employeeIntel/{job_id}/replay/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET /api/employeeIntel/<job_id>/replay/ — replay log stream events for a job. */
+        get: operations["api_employeeIntel_replay_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/assessments/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_engagements_assessments_list"];
+        put?: never;
+        post: operations["api_engagements_assessments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/assessments/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["api_engagements_assessments_read"];
+        put: operations["api_engagements_assessments_update"];
+        post?: never;
+        delete: operations["api_engagements_assessments_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["api_engagements_assessments_partial_update"];
+        trace?: never;
+    };
+    "/api/engagements/assessments/{id}/approve-validation/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send validation_approved signal to the ValidationWorkflow child.
+         * @description This unblocks the ValidationWorkflow wait state and allows the assessment
+         *     to proceed to the Reporting phase.
+         */
+        post: operations["api_engagements_assessments_approve_validation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/assessments/{id}/assets/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["api_engagements_assessments_assets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/assessments/{id}/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_engagements_assessments_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/assessments/{id}/pause/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_engagements_assessments_pause"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/assessments/{id}/resume/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_engagements_assessments_resume"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/assessments/{id}/scans/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["api_engagements_assessments_scans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/assessments/{id}/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_engagements_assessments_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/assets/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_engagements_assets_list"];
+        put?: never;
+        post: operations["api_engagements_assets_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/assets/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment asset. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["api_engagements_assets_read"];
+        put: operations["api_engagements_assets_update"];
+        post?: never;
+        delete: operations["api_engagements_assets_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["api_engagements_assets_partial_update"];
+        trace?: never;
+    };
+    "/api/engagements/clients/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_engagements_clients_list"];
+        put?: never;
+        post: operations["api_engagements_clients_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/clients/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this client. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["api_engagements_clients_read"];
+        put: operations["api_engagements_clients_update"];
+        post?: never;
+        delete: operations["api_engagements_clients_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["api_engagements_clients_partial_update"];
+        trace?: never;
+    };
+    "/api/engagements/engagements/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_engagements_engagements_list"];
+        put?: never;
+        post: operations["api_engagements_engagements_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/engagements/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this engagement. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["api_engagements_engagements_read"];
+        put: operations["api_engagements_engagements_update"];
+        post?: never;
+        delete: operations["api_engagements_engagements_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["api_engagements_engagements_partial_update"];
+        trace?: never;
+    };
+    "/api/engagements/scopes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_engagements_scopes_list"];
+        put?: never;
+        post: operations["api_engagements_scopes_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/scopes/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment scope. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["api_engagements_scopes_read"];
+        put: operations["api_engagements_scopes_update"];
+        post?: never;
+        delete: operations["api_engagements_scopes_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["api_engagements_scopes_partial_update"];
+        trace?: never;
+    };
+    "/api/evidence/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retrieve and manage individual Evidence items.
+         * @description GET /api/evidence/ — list (supports ?collection=<uuid> filter)
+         *     GET /api/evidence/{uuid}/ — get detail
+         *     GET /api/evidence/{uuid}/download/ — get signed download URL or redirect
+         *     POST /api/evidence/{uuid}/verify/ — verify integrity
+         *     POST /api/evidence/{uuid}/archive/ — archive item
+         *     DELETE /api/evidence/{uuid}/purge/ — purge item
+         *     POST /api/evidence/{uuid}/annotations/ — add annotation
+         *     GET /api/evidence/{uuid}/annotations/ — list annotations
+         */
+        get: operations["api_evidence_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evidence/collections/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * CRUD for EvidenceCollection records.
+         * @description GET /api/evidence/collections/ — list all collections for authenticated user
+         *     POST /api/evidence/collections/ — create a new collection
+         *     GET /api/evidence/collections/{uuid}/ — retrieve a single collection
+         *     GET /api/evidence/collections/{uuid}/items/ — list evidence items in collection
+         *     POST /api/evidence/collections/{uuid}/archive/ — archive the collection
+         */
+        get: operations["api_evidence_collections_list"];
+        put?: never;
+        /**
+         * CRUD for EvidenceCollection records.
+         * @description GET /api/evidence/collections/ — list all collections for authenticated user
+         *     POST /api/evidence/collections/ — create a new collection
+         *     GET /api/evidence/collections/{uuid}/ — retrieve a single collection
+         *     GET /api/evidence/collections/{uuid}/items/ — list evidence items in collection
+         *     POST /api/evidence/collections/{uuid}/archive/ — archive the collection
+         */
+        post: operations["api_evidence_collections_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evidence/collections/{uuid}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * CRUD for EvidenceCollection records.
+         * @description GET /api/evidence/collections/ — list all collections for authenticated user
+         *     POST /api/evidence/collections/ — create a new collection
+         *     GET /api/evidence/collections/{uuid}/ — retrieve a single collection
+         *     GET /api/evidence/collections/{uuid}/items/ — list evidence items in collection
+         *     POST /api/evidence/collections/{uuid}/archive/ — archive the collection
+         */
+        get: operations["api_evidence_collections_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evidence/collections/{uuid}/archive/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive all active evidence in this collection.
+         * @description POST /api/evidence/collections/{uuid}/archive/
+         */
+        post: operations["api_evidence_collections_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evidence/collections/{uuid}/items/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List evidence items in this collection.
+         * @description Supports filtering by status and evidence_type.
+         *     GET /api/evidence/collections/{uuid}/items/?status=Active&type=Screenshot
+         */
+        get: operations["api_evidence_collections_items"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evidence/upload/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Handle evidence file upload, validate, hash, store, and return the created item. */
+        post: operations["api_evidence_upload_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evidence/{uuid}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Retrieve and manage individual Evidence items.
+         * @description GET /api/evidence/ — list (supports ?collection=<uuid> filter)
+         *     GET /api/evidence/{uuid}/ — get detail
+         *     GET /api/evidence/{uuid}/download/ — get signed download URL or redirect
+         *     POST /api/evidence/{uuid}/verify/ — verify integrity
+         *     POST /api/evidence/{uuid}/archive/ — archive item
+         *     DELETE /api/evidence/{uuid}/purge/ — purge item
+         *     POST /api/evidence/{uuid}/annotations/ — add annotation
+         *     GET /api/evidence/{uuid}/annotations/ — list annotations
+         */
+        get: operations["api_evidence_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evidence/{uuid}/annotations/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List or create annotations for an evidence item.
+         * @description GET  /api/evidence/{uuid}/annotations/ — list annotations
+         *     POST /api/evidence/{uuid}/annotations/ — create annotation
+         */
+        get: operations["api_evidence_annotations_read"];
+        put?: never;
+        /**
+         * List or create annotations for an evidence item.
+         * @description GET  /api/evidence/{uuid}/annotations/ — list annotations
+         *     POST /api/evidence/{uuid}/annotations/ — create annotation
+         */
+        post: operations["api_evidence_annotations_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evidence/{uuid}/archive/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive an evidence item.
+         * @description POST /api/evidence/{uuid}/archive/
+         */
+        post: operations["api_evidence_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evidence/{uuid}/download/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Return a signed download URL for an evidence file.
+         * @description Returns a redirect to the signed URL, or a JSON object with the URL.
+         *     GET /api/evidence/{uuid}/download/
+         *
+         *     Query params:
+         *         redirect=1 — redirect to URL instead of returning JSON.
+         */
+        get: operations["api_evidence_download"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evidence/{uuid}/purge/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Purge an evidence item.
+         * @description DELETE /api/evidence/{uuid}/purge/
+         */
+        delete: operations["api_evidence_purge"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evidence/{uuid}/verify/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify the SHA-256 integrity of an evidence file.
+         * @description POST /api/evidence/{uuid}/verify/
+         */
+        post: operations["api_evidence_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/exposures/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET /mapi/exposures/?scan_id=<id>[&status=<status>] */
+        get: operations["api_exposures_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/exposures/bulk-status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /mapi/exposures/bulk-status/  body: {ids: [], status} */
+        post: operations["api_exposures_bulk-status_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/exposures/stats/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET /mapi/exposures/stats/?scan_id=<id> */
+        get: operations["api_exposures_stats_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/exposures/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET /mapi/exposures/<int:pk>/ */
+        get: operations["api_exposures_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/exposures/{id}/status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description PATCH /mapi/exposures/<int:pk>/status/  body: {status, note?} */
+        patch: operations["api_exposures_status_partial_update"];
         trace?: never;
     };
     "/api/external/tool/get_current_release/": {
@@ -429,6 +2042,105 @@ export interface paths {
             cookie?: never;
         };
         get: operations["api_github_tool_get_latest_releases_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/graph/chain/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/graph/chain/?scan_id=<id>
+         * @description Returns nodes and edges for the full attack chain graph in a scan.
+         *     Neo4j is queried only if scan_id is a valid integer tied to an existing scan.
+         */
+        get: operations["api_graph_chain_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/graph/chain/nodes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/graph/chain/nodes/?scan_id=<id>&type=<NodeType>
+         * @description Returns all nodes of a specific type for a scan.
+         *     `type` is validated against the allowlist — returns 400 for invalid types.
+         */
+        get: operations["api_graph_chain_nodes_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/graph/node/{node_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Fetch detailed metadata for a specific graph node. */
+        get: operations["api_graph_node_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/graph/scan/{scan_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Fetch Cytoscape-compatible graph data for a specific scan. */
+        get: operations["api_graph_scan_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/graph/target/{target_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Fetch Cytoscape-compatible graph data for an entire target. */
+        get: operations["api_graph_target_read"];
         put?: never;
         post?: never;
         delete?: never;
@@ -551,6 +2263,184 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/hardwareProfiles/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_hardwareProfiles_list"];
+        put?: never;
+        post: operations["api_hardwareProfiles_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/hardwareProfiles/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this hardware profile. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["api_hardwareProfiles_read"];
+        put: operations["api_hardwareProfiles_update"];
+        post?: never;
+        delete: operations["api_hardwareProfiles_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["api_hardwareProfiles_partial_update"];
+        trace?: never;
+    };
+    "/api/identity/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/identity/?scan_id=<id>[&project=<slug>]
+         * @description Returns all IdentityInfraDiscovery records for a scan.
+         *     Response includes a summary dict keyed by infra_type.
+         *     Requires Auditor role or above.
+         */
+        get: operations["api_identity_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/identity/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET /mapi/identity/<int:pk>/ */
+        get: operations["api_identity_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/identity/{id}/confirm/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description PATCH /mapi/identity/<int:pk>/confirm/  body: {"confirmed": bool} */
+        patch: operations["api_identity_confirm_partial_update"];
+        trace?: never;
+    };
+    "/api/identity/{id}/dismiss/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description PATCH /mapi/identity/<int:pk>/dismiss/  body: {"reason"?: str} */
+        patch: operations["api_identity_dismiss_partial_update"];
+        trace?: never;
+    };
+    "/api/linkedin/session/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["api_linkedin_session_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/linkedin/session/helper/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_linkedin_session_helper_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/linkedin/session/status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_linkedin_session_status_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/linkedin/session/upload/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_linkedin_session_upload_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/listActivityLogs/": {
         parameters: {
             query?: never;
@@ -644,9 +2534,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Directory (endpoint) listing for the scan detail page.
+         * @description Read-only: no client writes through this route, and as a ModelViewSet it
+         *     exposed create/update/delete of EndPoint rows to every sys_admin and
+         *     penetration_tester (IsAuditor only blocks writes for pure auditors).
+         */
         get: operations["api_listDirectories_list"];
         put?: never;
-        post: operations["api_listDirectories_create"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -658,18 +2554,24 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this directory file. */
+                /** @description A unique integer value identifying this end point. */
                 id: number;
             };
             cookie?: never;
         };
+        /**
+         * Directory (endpoint) listing for the scan detail page.
+         * @description Read-only: no client writes through this route, and as a ModelViewSet it
+         *     exposed create/update/delete of EndPoint rows to every sys_admin and
+         *     penetration_tester (IsAuditor only blocks writes for pure auditors).
+         */
         get: operations["api_listDirectories_read"];
-        put: operations["api_listDirectories_update"];
+        put?: never;
         post?: never;
-        delete: operations["api_listDirectories_delete"];
+        delete?: never;
         options?: never;
         head?: never;
-        patch: operations["api_listDirectories_partial_update"];
+        patch?: never;
         trace?: never;
     };
     "/api/listEndPointChanges/": {
@@ -756,6 +2658,41 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/listExposures/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_listExposures_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/listExposures/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this exposure. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["api_listExposures_read"];
+        put: operations["api_listExposures_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["api_listExposures_partial_update"];
         trace?: never;
     };
     "/api/listInterestingEndpoints/": {
@@ -895,6 +2832,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/listParameters/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_listParameters_list"];
+        put?: never;
+        post: operations["api_listParameters_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/listParameters/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this parameter. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["api_listParameters_read"];
+        put: operations["api_listParameters_update"];
+        post?: never;
+        delete: operations["api_listParameters_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["api_listParameters_partial_update"];
+        trace?: never;
+    };
     "/api/listScanHistory/": {
         parameters: {
             query?: never;
@@ -978,6 +2950,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/listScans/bulk_pause/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_listScans_bulk_pause"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/listScans/bulk_stop/": {
         parameters: {
             query?: never;
@@ -988,6 +2976,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["api_listScans_bulk_stop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/listScans/bulk_unpause/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_listScans_bulk_unpause"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1030,6 +3034,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/listScans/{id}/pause_scan/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_listScans_pause_scan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/listScans/{id}/stop_scan/": {
         parameters: {
             query?: never;
@@ -1042,6 +3064,24 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["api_listScans_stop_scan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/listScans/{id}/unpause_scan/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_listScans_unpause_scan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1185,6 +3225,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/listTools/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Handles GET request to list all installed external tools. */
+        get: operations["api_listTools_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/listVulnerability/": {
         parameters: {
             query?: never;
@@ -1195,6 +3252,22 @@ export interface paths {
         get: operations["api_listVulnerability_list"];
         put?: never;
         post: operations["api_listVulnerability_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/listVulnerability/queue/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_listVulnerability_queue"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1220,6 +3293,84 @@ export interface paths {
         patch: operations["api_listVulnerability_partial_update"];
         trace?: never;
     };
+    "/api/listVulnerability/{id}/reject/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vulnerability. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_listVulnerability_reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/listVulnerability/{id}/update_severity/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vulnerability. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Update vulnerability severity based on accepted AI recommendation or manual input. */
+        post: operations["api_listVulnerability_update_severity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/listVulnerability/{id}/validate_severity/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vulnerability. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Validate vulnerability severity using LLM. */
+        post: operations["api_listVulnerability_validate_severity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/listVulnerability/{id}/verify/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vulnerability. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_listVulnerability_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/listWordlists/": {
         parameters: {
             query?: never;
@@ -1228,6 +3379,1212 @@ export interface paths {
             cookie?: never;
         };
         get: operations["api_listWordlists_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/agents/{agent_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["api_mcp_agents_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/apme/recalculate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_apme_recalculate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/apme/trigger/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_apme_trigger_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/attack-paths/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_attack-paths_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/attack-paths/{path_id}/enrich/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                path_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["api_mcp_attack-paths_enrich_partial_update"];
+        trace?: never;
+    };
+    "/api/mcp/audit/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_audit_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/capabilities/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_capabilities_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/dashboard/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_dashboard_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/email-discovery/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_email-discovery_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/email-discovery/stop/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_email-discovery_stop_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/emails/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_emails_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/employee-intel/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_employee-intel_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/employee-intel/stop/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_employee-intel_stop_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/employees/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_employees_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/endpoints/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_endpoints_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/endpoints/{id}/detail/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["api_mcp_endpoints_detail_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/engines/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_engines_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/engines/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["api_mcp_engines_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/exposures/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_exposures_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/exposures/{id}/detail/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["api_mcp_exposures_detail_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/followups/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_followups_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/followups/metrics/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_followups_metrics_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/followups/propose/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_followups_propose_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/followups/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["api_mcp_followups_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/followups/{id}/abort/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_followups_abort_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/followups/{id}/approve/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_followups_approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/followups/{id}/retry/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_followups_retry_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/followups/{id}/update/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_followups_update_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/health/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_health_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/keys/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_keys_list"];
+        put?: never;
+        post: operations["api_mcp_keys_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/keys/{id}/regenerate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_keys_regenerate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/keys/{id}/revoke/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_keys_revoke_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/notes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET list (any MCP key) + POST create (pentester/sys-admin). */
+        get: operations["api_mcp_notes_list"];
+        put?: never;
+        /** @description GET list (any MCP key) + POST create (pentester/sys-admin). */
+        post: operations["api_mcp_notes_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/notes/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET one note (any MCP key) + PATCH update (pentester/sys-admin). No DELETE. */
+        get: operations["api_mcp_notes_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description GET one note (any MCP key) + PATCH update (pentester/sys-admin). No DELETE. */
+        patch: operations["api_mcp_notes_partial_update"];
+        trace?: never;
+    };
+    "/api/mcp/osint-staging/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Pending (default) OSINT staging rows for the main assessor to package for OSINT verify. */
+        get: operations["api_mcp_osint-staging_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/osint-staging/verify/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Set agent_verified True/False on staging rows. Does not promote or delete. */
+        post: operations["api_mcp_osint-staging_verify_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/projects/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_projects_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/scan-status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_scan-status_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/scans/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_scans_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/scans/pause/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_scans_pause_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/scans/resume/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_scans_resume_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/scans/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_scans_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/scans/stop/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_scans_stop_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/scans/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["api_mcp_scans_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/scans/{id}/detail/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["api_mcp_scans_detail_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/scans/{id}/export-ai/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Same Analyst Assist AI export as the scan-detail UI, as JSON for agents.
+         * @description Returns markdown overview, triage prompt, full structured bundle, and
+         *     manifest — equivalent to the ZIP the UI downloads, without binary packaging.
+         */
+        get: operations["api_mcp_scans_export-ai_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/search/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_search_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/sessions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_sessions_list"];
+        put?: never;
+        post: operations["api_mcp_sessions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/sessions/{id}/end/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_sessions_end_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/sessions/{id}/events/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["api_mcp_sessions_events_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/sessions/{id}/heartbeat/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_sessions_heartbeat_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/sessions/{id}/revoke/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_sessions_revoke_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_settings_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["api_mcp_settings_partial_update"];
+        trace?: never;
+    };
+    "/api/mcp/subdomains/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_subdomains_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/subdomains/{id}/detail/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["api_mcp_subdomains_detail_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/subscans/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_subscans_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/subscans/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_subscans_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/subscans/{id}/detail/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["api_mcp_subscans_detail_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/targets/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_targets_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/targets/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["api_mcp_targets_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/targets/{id}/detail/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["api_mcp_targets_detail_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/tasks/retry/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_tasks_retry_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/tools/run/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_tools_run_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/tools/{tool}/args/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tool: string;
+            };
+            cookie?: never;
+        };
+        get: operations["api_mcp_tools_args_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/vulnerabilities/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_mcp_vulnerabilities_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/vulnerabilities/{id}/analyze/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Packaged SAFE analysis context for one vulnerability. */
+        get: operations["api_mcp_vulnerabilities_analyze_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/vulnerabilities/{id}/detail/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["api_mcp_vulnerabilities_detail_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/vulnerabilities/{id}/enrich/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["api_mcp_vulnerabilities_enrich_partial_update"];
+        trace?: never;
+    };
+    "/api/mcp/vulnerabilities/{id}/validation/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["api_mcp_vulnerabilities_validation_partial_update"];
+        trace?: never;
+    };
+    "/api/mcp/workflows/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_mcp_workflows_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/media/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_media_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1403,6 +4760,182 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/osintStaging/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_osintStaging_list"];
+        put?: never;
+        post: operations["api_osintStaging_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/osintStaging/add_verified/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Promote all agent_verified=True rows for a scan (pending). */
+        post: operations["api_osintStaging_add_verified"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/osintStaging/bulk_discard/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Bulk delete staging items. */
+        post: operations["api_osintStaging_bulk_discard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/osintStaging/bulk_promote/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Bulk promote staging items to primary tables. */
+        post: operations["api_osintStaging_bulk_promote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/osintStaging/clear_all/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Delete all pending staging rows for a scan. */
+        post: operations["api_osintStaging_clear_all"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/osintStaging/clear_false_positives/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Delete staging rows marked agent_verified=False for a scan. */
+        post: operations["api_osintStaging_clear_false_positives"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/osintStaging/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["api_osintStaging_read"];
+        put: operations["api_osintStaging_update"];
+        post?: never;
+        delete: operations["api_osintStaging_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["api_osintStaging_partial_update"];
+        trace?: never;
+    };
+    "/api/osintStaging/{id}/discard/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Individual discard. */
+        post: operations["api_osintStaging_discard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/osintStaging/{id}/promote/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Individual promote. */
+        post: operations["api_osintStaging_promote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/parameters/summary/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_parameters_summary_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/": {
         parameters: {
             query?: never;
@@ -1413,6 +4946,77 @@ export interface paths {
         get: operations["api_plugins_list"];
         put?: never;
         post: operations["api_plugins_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/install-status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_plugins_install_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/marketplace/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns available plugins from the marketplace. */
+        get: operations["api_plugins_marketplace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/marketplace/install/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Installs a plugin from the marketplace using an async background thread,
+         *     identical to the upload flow. Returns an install_id immediately (HTTP 202)
+         *     so the frontend InstallProgressOverlay can poll for real-time progress.
+         */
+        post: operations["api_plugins_marketplace_marketplace_install"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/marketplace/refresh/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Force refreshes the marketplace cache. */
+        post: operations["api_plugins_marketplace_marketplace_refresh"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1430,6 +5034,45 @@ export interface paths {
         get: operations["api_plugins_registry"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/restart-orchestrator/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_plugins_restart_orchestrator"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/restart-server/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * User-triggered restart of the orchestrator and web container after plugin install.
+         * @description The orchestrator is told over Redis and exits itself; this process is
+         *     terminated a few seconds later (so the response reaches the client) and
+         *     compose's ``restart: always`` starts the web container again. Neither
+         *     needs the Docker API.
+         */
+        post: operations["api_plugins_restart_server"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1468,6 +5111,47 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["api_plugins_partial_update"];
+        trace?: never;
+    };
+    "/api/plugins/{slug}/docs/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * @description GET /api/plugins/{slug}/docs/
+         *     Reads the markdown files in plugins_data/{slug}/docs/ and returns them.
+         */
+        get: operations["api_plugins_get_docs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{slug}/icon/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        /** @description Serves the plugin's bundled icon. */
+        get: operations["api_plugins_get_icon"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/projects/": {
@@ -1519,6 +5203,39 @@ export interface paths {
         put?: never;
         post: operations["api_projects_delete_project"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/push-token/register/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /mapi/push-token/register/
+         * @description Registers or updates an Expo push notification token for the authenticated user.
+         *     Called by the mobile app on startup after the user logs in and notification
+         *     permissions have been granted.
+         *
+         *     Request body:
+         *     	token (str): The Expo push token string (e.g. ExponentPushToken[xxxx]).
+         *     	device_label (str, optional): Human-readable label for the device.
+         *
+         *     Returns 200 on success with the token record. Returns 400 if no token provided.
+         */
+        post: operations["api_push-token_register_create"];
+        /**
+         * DELETE /mapi/push-token/register/
+         * @description Deactivates all push tokens for the authenticated user so the backend
+         *     stops delivering push notifications to their devices.
+         */
+        delete: operations["api_push-token_register_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1764,6 +5481,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rengine/fetch-proxies/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_rengine_fetch-proxies_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rengine/proxy-settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_rengine_proxy-settings_list"];
+        put?: never;
+        post: operations["api_rengine_proxy-settings_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rengine/system-settings/": {
         parameters: {
             query?: never;
@@ -1772,6 +5521,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["api_rengine_system-settings_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rengine/tor-exit-ip/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_rengine_tor-exit-ip_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rengine/tor-status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_rengine_tor-status_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1817,11 +5598,12 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                id: string;
                 slug: string;
+                id: string;
             };
             cookie?: never;
         };
+        /** @description Fetch and return summary information for a specific scan. */
         get: operations["api_scan-summary_read"];
         put?: never;
         post?: never;
@@ -1829,6 +5611,59 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/scan-summary/{slug}/{id}/export-ai/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_scan-summary_export-ai_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scanProfiles/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_scanProfiles_list"];
+        put?: never;
+        post: operations["api_scanProfiles_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scanProfiles/{name}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        get: operations["api_scanProfiles_read"];
+        put: operations["api_scanProfiles_update"];
+        post?: never;
+        delete: operations["api_scanProfiles_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["api_scanProfiles_partial_update"];
         trace?: never;
     };
     "/api/scan_status/": {
@@ -1870,8 +5705,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * ViewSet for TemporalSchedule CRUD + toggle/bulk_delete actions.
+         * @description Named ScheduledScanViewSet (not TemporalScheduleViewSet) so existing
+         *     URL router registrations require no changes.
+         */
         get: operations["api_scheduledScans_list"];
         put?: never;
+        /**
+         * ViewSet for TemporalSchedule CRUD + toggle/bulk_delete actions.
+         * @description Named ScheduledScanViewSet (not TemporalScheduleViewSet) so existing
+         *     URL router registrations require no changes.
+         */
         post: operations["api_scheduledScans_create"];
         delete?: never;
         options?: never;
@@ -1888,6 +5733,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * ViewSet for TemporalSchedule CRUD + toggle/bulk_delete actions.
+         * @description Named ScheduledScanViewSet (not TemporalScheduleViewSet) so existing
+         *     URL router registrations require no changes.
+         */
         post: operations["api_scheduledScans_bulk_delete"];
         delete?: never;
         options?: never;
@@ -1900,17 +5750,37 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this periodic task. */
+                /** @description A unique integer value identifying this temporal schedule. */
                 id: number;
             };
             cookie?: never;
         };
+        /**
+         * ViewSet for TemporalSchedule CRUD + toggle/bulk_delete actions.
+         * @description Named ScheduledScanViewSet (not TemporalScheduleViewSet) so existing
+         *     URL router registrations require no changes.
+         */
         get: operations["api_scheduledScans_read"];
+        /**
+         * ViewSet for TemporalSchedule CRUD + toggle/bulk_delete actions.
+         * @description Named ScheduledScanViewSet (not TemporalScheduleViewSet) so existing
+         *     URL router registrations require no changes.
+         */
         put: operations["api_scheduledScans_update"];
         post?: never;
+        /**
+         * ViewSet for TemporalSchedule CRUD + toggle/bulk_delete actions.
+         * @description Named ScheduledScanViewSet (not TemporalScheduleViewSet) so existing
+         *     URL router registrations require no changes.
+         */
         delete: operations["api_scheduledScans_delete"];
         options?: never;
         head?: never;
+        /**
+         * ViewSet for TemporalSchedule CRUD + toggle/bulk_delete actions.
+         * @description Named ScheduledScanViewSet (not TemporalScheduleViewSet) so existing
+         *     URL router registrations require no changes.
+         */
         patch: operations["api_scheduledScans_partial_update"];
         trace?: never;
     };
@@ -1919,18 +5789,58 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this periodic task. */
+                /** @description A unique integer value identifying this temporal schedule. */
                 id: number;
             };
             cookie?: never;
         };
         get?: never;
         put?: never;
+        /**
+         * ViewSet for TemporalSchedule CRUD + toggle/bulk_delete actions.
+         * @description Named ScheduledScanViewSet (not TemporalScheduleViewSet) so existing
+         *     URL router registrations require no changes.
+         */
         post: operations["api_scheduledScans_toggle"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/screenshots/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_screenshots_list"];
+        put?: never;
+        post: operations["api_screenshots_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/screenshots/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this screenshot. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["api_screenshots_read"];
+        put: operations["api_screenshots_update"];
+        post?: never;
+        delete: operations["api_screenshots_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["api_screenshots_partial_update"];
         trace?: never;
     };
     "/api/search/": {
@@ -1957,6 +5867,179 @@ export interface paths {
             cookie?: never;
         };
         get: operations["api_search_history_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/secretLeaks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_secretLeaks_list"];
+        put?: never;
+        post: operations["api_secretLeaks_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/secretLeaks/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this secret leak. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["api_secretLeaks_read"];
+        put: operations["api_secretLeaks_update"];
+        post?: never;
+        delete: operations["api_secretLeaks_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["api_secretLeaks_partial_update"];
+        trace?: never;
+    };
+    "/api/settings/export/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_settings_export_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/export/scan-results/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_settings_export_scan-results_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/import/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_settings_import_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/workers/heartbeat/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_settings_workers_heartbeat_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/soc-settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ViewSet for managing global SOC configuration. */
+        get: operations["api_soc-settings_list"];
+        put?: never;
+        /** @description ViewSet for managing global SOC configuration. */
+        post: operations["api_soc-settings_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/soc-settings/toggle_streaming/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description ViewSet for managing global SOC configuration. */
+        post: operations["api_soc-settings_toggle_streaming"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/soc-settings/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this SOC Configuration. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** @description ViewSet for managing global SOC configuration. */
+        get: operations["api_soc-settings_read"];
+        /** @description ViewSet for managing global SOC configuration. */
+        put: operations["api_soc-settings_update"];
+        post?: never;
+        /** @description ViewSet for managing global SOC configuration. */
+        delete: operations["api_soc-settings_delete"];
+        options?: never;
+        head?: never;
+        /** @description ViewSet for managing global SOC configuration. */
+        patch: operations["api_soc-settings_partial_update"];
+        trace?: never;
+    };
+    "/api/stress-testing/history/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_stress-testing_history_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1994,8 +6077,35 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Start or Stop a stress test. */
+        /**
+         * Start or stop a stress test for a given scan.
+         * @description POST action='start' — launches a StressTestWorkflow via Temporal.
+         *                           Falls back to the legacy Celery task if Temporal
+         *                           is unreachable (dual-run migration period).
+         *     POST action='stop'  — sends a Temporal kill_switch signal and sets the
+         *                           Redis kill-switch key as a belt-and-braces fallback.
+         */
         post: operations["api_stress_control_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stress/{scan_id}/report/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Generate a stress test report in PDF format. */
+        get: operations["api_stress_report_list"];
+        put?: never;
+        /** @description Generate a stress test report in PDF format. */
+        post: operations["api_stress_report_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2011,7 +6121,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** @description Get the current status of the stress test (e.g., if kill switch is active). */
+        /** @description Return the current stress test status for a scan. */
         get: operations["api_stress_status_list"];
         put?: never;
         post?: never;
@@ -2088,16 +6198,50 @@ export interface paths {
         patch: operations["api_subscans_partial_update"];
         trace?: never;
     };
+    "/api/system/health/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_system_health_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/logs/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Fetch system logs based on log type query parameter. */
+        get: operations["api_system_logs_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/target-summary/{slug}/{id}/": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                id: string;
                 slug: string;
+                id: string;
             };
             cookie?: never;
         };
+        /** @description Fetch and return summary information for a specific target domain. */
         get: operations["api_target-summary_read"];
         put?: never;
         post?: never;
@@ -2105,6 +6249,45 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/todos/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET + POST /mapi/todos/ */
+        get: operations["api_todos_list"];
+        put?: never;
+        /** @description GET + POST /mapi/todos/ */
+        post: operations["api_todos_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/todos/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET + PATCH + DELETE /mapi/todos/<pk>/ */
+        get: operations["api_todos_read"];
+        put?: never;
+        post?: never;
+        /** @description GET + PATCH + DELETE /mapi/todos/<pk>/ */
+        delete: operations["api_todos_delete"];
+        options?: never;
+        head?: never;
+        /** @description GET + PATCH + DELETE /mapi/todos/<pk>/ */
+        patch: operations["api_todos_partial_update"];
         trace?: never;
     };
     "/api/toggle-bug-bounty-mode/": {
@@ -2117,6 +6300,70 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["api_toggle-bug-bounty-mode_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/toggle-scan-queueing-mode/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_toggle-scan-queueing-mode_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/toggle/monitoring/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_toggle_monitoring_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/toggle/note/importance/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_toggle_note_importance_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/toggle/note/status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_toggle_note_status_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2168,7 +6415,7 @@ export interface paths {
         };
         get: operations["api_tool_uninstall_list"];
         put?: never;
-        post?: never;
+        post: operations["api_tool_uninstall_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2184,7 +6431,7 @@ export interface paths {
         };
         get: operations["api_tool_update_list"];
         put?: never;
-        post?: never;
+        post: operations["api_tool_update_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2207,6 +6454,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tools/cve_description_generate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Generate and save an AI-written description for a CVE via the active LLM. */
+        post: operations["api_tools_cve_description_generate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tools/cve_details/": {
         parameters: {
             query?: never;
@@ -2214,6 +6478,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Retrieve CVE details, performing live enrichment if the CVE is not in the database. */
         get: operations["api_tools_cve_details_list"];
         put?: never;
         post?: never;
@@ -2246,6 +6511,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Retrieve or trigger LLM generation of attack surface analysis for a subdomain. */
         get: operations["api_tools_gpt_get_possible_attacks_list"];
         put?: never;
         post?: never;
@@ -2262,6 +6528,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Enrich vulnerability with LLM generated descriptions and mitigation options. */
         get: operations["api_tools_gpt_vulnerability_report_list"];
         put?: never;
         post?: never;
@@ -2351,6 +6618,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/update/target/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["api_update_target_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/updateOrganization/": {
         parameters: {
             query?: never;
@@ -2374,8 +6657,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * @description A ViewSet for managing User creation, editing, status toggling, deletion, and profile retrieval.
+         *     Requires SysAdmin permission for all actions except displaying the currently logged-in user's own profile.
+         */
         get: operations["api_users_list"];
         put?: never;
+        /** @description Create a new user with a specified username, password, and system role. */
         post: operations["api_users_create"];
         delete?: never;
         options?: never;
@@ -2390,6 +6678,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Retrieve the details and serialized profile of the currently logged-in user. */
         get: operations["api_users_me"];
         put?: never;
         post?: never;
@@ -2409,12 +6698,28 @@ export interface paths {
             };
             cookie?: never;
         };
+        /**
+         * @description A ViewSet for managing User creation, editing, status toggling, deletion, and profile retrieval.
+         *     Requires SysAdmin permission for all actions except displaying the currently logged-in user's own profile.
+         */
         get: operations["api_users_read"];
+        /**
+         * @description A ViewSet for managing User creation, editing, status toggling, deletion, and profile retrieval.
+         *     Requires SysAdmin permission for all actions except displaying the currently logged-in user's own profile.
+         */
         put: operations["api_users_update"];
         post?: never;
+        /**
+         * @description A ViewSet for managing User creation, editing, status toggling, deletion, and profile retrieval.
+         *     Requires SysAdmin permission for all actions except displaying the currently logged-in user's own profile.
+         */
         delete: operations["api_users_delete"];
         options?: never;
         head?: never;
+        /**
+         * @description A ViewSet for managing User creation, editing, status toggling, deletion, and profile retrieval.
+         *     Requires SysAdmin permission for all actions except displaying the currently logged-in user's own profile.
+         */
         patch: operations["api_users_partial_update"];
         trace?: never;
     };
@@ -2430,6 +6735,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * @description Toggle the active status (enabled/disabled) of a specific user.
+         *     Prevents administrative users from disabling their own accounts.
+         */
         post: operations["api_users_toggle_status"];
         delete?: never;
         options?: never;
@@ -2449,6 +6758,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Update an existing user's role and/or password. */
         post: operations["api_users_update_user"];
         delete?: never;
         options?: never;
@@ -2472,6 +6782,124 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workers/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Remote workers: anyone with a role may list them, only sys admins change them. */
+        get: operations["api_workers_list"];
+        put?: never;
+        /** @description Remote workers: anyone with a role may list them, only sys admins change them. */
+        post: operations["api_workers_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workers/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this scan worker. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** @description Remote workers: anyone with a role may list them, only sys admins change them. */
+        get: operations["api_workers_read"];
+        /** @description Remote workers: anyone with a role may list them, only sys admins change them. */
+        put: operations["api_workers_update"];
+        post?: never;
+        /** @description Remote workers: anyone with a role may list them, only sys admins change them. */
+        delete: operations["api_workers_delete"];
+        options?: never;
+        head?: never;
+        /** @description Remote workers: anyone with a role may list them, only sys admins change them. */
+        patch: operations["api_workers_partial_update"];
+        trace?: never;
+    };
+    "/api/workflows/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["api_workflows_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workflows/{workflow_slug}/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_slug: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start any of the 13 rengine-ng standalone workflow types via a single endpoint.
+         * @description POST /api/v1/workflows/<workflow_slug>/start/
+         */
+        post: operations["api_workflows_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/ad-assessment/from-subdomain/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an ADAssessment pre-populated from a Subdomain's root domain.
+         * @description The AD Intelligence plugin must be installed. The assessment is created
+         *     in PENDING state; users start it explicitly from the AD plugin dashboard.
+         *     This view intentionally does NOT start the workflow automatically to avoid
+         *     unintended automated enumeration activity.
+         */
+        post: operations["mapi_action_ad-assessment_from-subdomain_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/capabilities/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_action_capabilities_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mapi/action/create/project": {
         parameters: {
             query?: never;
@@ -2482,6 +6910,66 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["mapi_action_create_project_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/directory-file/auth-logs/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fetch logs from Redis for an authentication extraction workflow.
+         * @description GET /api/action/directory-file/auth-logs/?workflow_id=...
+         */
+        get: operations["mapi_action_directory-file_auth-logs_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/directory-file/delete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete DirectoryFile records by primary key.
+         * @description POST /api/action/directory-file/delete/
+         */
+        post: operations["mapi_action_directory-file_delete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/directory-file/dispatch/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dispatch a security testing action against a specific directory file URL.
+         * @description POST /api/action/directory-file/dispatch/
+         */
+        post: operations["mapi_action_directory-file_dispatch_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2536,6 +7024,163 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mapi/action/engines/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_action_engines_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/followups/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_action_followups_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/followups/metrics/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_action_followups_metrics_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/followups/propose/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_action_followups_propose_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/followups/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_action_followups_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/followups/{id}/abort/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_action_followups_abort_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/followups/{id}/approve/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_action_followups_approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/followups/{id}/retry/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_action_followups_retry_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/followups/{id}/update/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Operator (or agent until first operator edit) updates proposed steps. */
+        post: operations["mapi_action_followups_update_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mapi/action/initiate/scan/": {
         parameters: {
             query?: never;
@@ -2561,7 +7206,103 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Initiate a set of subscans on one or more subdomains. */
         post: operations["mapi_action_initiate_subtask_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/note/delete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_action_note_delete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/pause/scan/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_action_pause_scan_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/resume/scan/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_action_resume_scan_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/retry/task/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_action_retry_task_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/retry/tier/{scan_id}/{tier}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+                tier: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry every failed activity of one tier of a scan.
+         * @description ``POST /api/action/retry/tier/<scan_id>/<tier>/``
+         *
+         *     Reuses the single-task path: the same guard rails as
+         *     ``ScanActivityRetryAPIView`` and one ``SingleTaskRetryWorkflow`` per failed
+         *     row. Rows that are not FAILED are left untouched, and rows whose task name
+         *     the workflow cannot dispatch are skipped and reported rather than failing the
+         *     whole request.
+         */
+        post: operations["mapi_action_retry_tier_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2600,6 +7341,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mapi/action/subdomain/add/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_action_subdomain_add_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mapi/action/subdomain/delete/": {
         parameters: {
             query?: never;
@@ -2610,6 +7367,57 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["mapi_action_subdomain_delete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/tool/run/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_action_tool_run_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/tool/{tool}/args/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tool: string;
+            };
+            cookie?: never;
+        };
+        /** @description Return cached CLI/schema args for a pipeline tool (from installed binary help). */
+        get: operations["mapi_action_tool_args_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/action/unpause/scan/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_action_unpause_scan_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2696,6 +7504,141 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mapi/api-intel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description GET /mapi/api-intel/
+         *     Returns APIIntelligenceProfile list. Filter by scan_id query param.
+         */
+        get: operations["mapi_api-intel_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/api-intel/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this api intelligence profile. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** @description GET /mapi/api-intel/<pk>/ */
+        get: operations["mapi_api-intel_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/apme/attack-trees/{scan_id}/{target_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * GET /api/apme/attack-trees/<scan_id>/<target_id>/
+         * @description Returns the hierarchical AND/OR attack tree for a specific target asset.
+         */
+        get: operations["mapi_apme_attack-trees_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/apme/explain/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/apme/explain/ */
+        post: operations["mapi_apme_explain_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/apme/impact/regenerate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/apme/impact/regenerate/  body: {path_id} */
+        post: operations["mapi_apme_impact_regenerate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/apme/impact/{path_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                path_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET /api/apme/impact/<str:path_id>/ */
+        get: operations["mapi_apme_impact_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/apme/path/{path_id}/dismiss/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                path_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description PATCH /api/apme/path/<str:path_id>/dismiss/  body: {reason?} */
+        patch: operations["mapi_apme_path_dismiss_partial_update"];
+        trace?: never;
+    };
     "/mapi/apme/paths/": {
         parameters: {
             query?: never;
@@ -2710,6 +7653,59 @@ export interface paths {
          *     Each step is tagged as 'validated' or 'inferred'.
          */
         get: operations["mapi_apme_paths_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/apme/recalculate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/apme/recalculate/ */
+        post: operations["mapi_apme_recalculate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/apme/risk-summary/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET /api/apme/risk-summary/?scan_id=<id> */
+        get: operations["mapi_apme_risk-summary_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/apme/tree/{target_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET /api/apme/tree/<str:target_id>/  (URL-encoded target_id) */
+        get: operations["mapi_apme_tree_read"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2744,10 +7740,6 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * @description Takes a set of user credentials and returns an access and refresh JSON web
-         *     token pair to prove the authentication of those credentials.
-         */
         post: operations["mapi_auth_token_create"];
         delete?: never;
         options?: never;
@@ -2775,6 +7767,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mapi/certificates/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET /mapi/certificates/?scan_id=<id> (scan_id optional) */
+        get: operations["mapi_certificates_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/certificates/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET /mapi/certificates/<int:pk>/ */
+        get: operations["mapi_certificates_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/certificates/{id}/flag/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description PATCH /mapi/certificates/<int:pk>/flag/  body: {flag, note?} */
+        patch: operations["mapi_certificates_flag_partial_update"];
+        trace?: never;
+    };
+    "/mapi/certificates/{id}/resync/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /mapi/certificates/<int:pk>/resync/ */
+        post: operations["mapi_certificates_resync_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/certs/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/certs/?scan_id=<id>[&project=<slug>][&page=<n>][&page_size=<n>]
+         * @description Returns CertificateIntelligence records for a scan, ordered by risk
+         *     (expired first, then weak-cipher, then self-signed).  Requires at least
+         *     Auditor role.  The scan must belong to the project identified by the
+         *     project slug so that cross-project IDOR is not possible.
+         */
+        get: operations["mapi_certs_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mapi/createOrganization/": {
         parameters: {
             query?: never;
@@ -2785,6 +7874,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["mapi_createOrganization_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/cwe-info/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_cwe-info_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2807,6 +7912,294 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/mapi/emailBreaches/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * ViewSet for viewing email breaches.
+         * @description Allows listing email breaches filtered by scan_id, target_id, or project.
+         */
+        get: operations["mapi_emailBreaches_list"];
+        put?: never;
+        /**
+         * ViewSet for viewing email breaches.
+         * @description Allows listing email breaches filtered by scan_id, target_id, or project.
+         */
+        post: operations["mapi_emailBreaches_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/emailBreaches/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this email breach. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * ViewSet for viewing email breaches.
+         * @description Allows listing email breaches filtered by scan_id, target_id, or project.
+         */
+        get: operations["mapi_emailBreaches_read"];
+        /**
+         * ViewSet for viewing email breaches.
+         * @description Allows listing email breaches filtered by scan_id, target_id, or project.
+         */
+        put: operations["mapi_emailBreaches_update"];
+        post?: never;
+        /**
+         * ViewSet for viewing email breaches.
+         * @description Allows listing email breaches filtered by scan_id, target_id, or project.
+         */
+        delete: operations["mapi_emailBreaches_delete"];
+        options?: never;
+        head?: never;
+        /**
+         * ViewSet for viewing email breaches.
+         * @description Allows listing email breaches filtered by scan_id, target_id, or project.
+         */
+        patch: operations["mapi_emailBreaches_partial_update"];
+        trace?: never;
+    };
+    "/mapi/emailDiscovery/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/emailDiscovery/start/ — kick off background email discovery for a scan. */
+        post: operations["mapi_emailDiscovery_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/emailDiscovery/stop/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/emailDiscovery/stop/ — signal an active discovery job to stop. */
+        post: operations["mapi_emailDiscovery_stop_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/emailDiscovery/{job_id}/replay/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET /api/emailDiscovery/<job_id>/replay/ — replay log stream events for a job. */
+        get: operations["mapi_emailDiscovery_replay_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/emails/check_breach/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Handle the POST request to manually check a single email address. */
+        post: operations["mapi_emails_check_breach_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/emails/manual/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/emails/manual/ — add one or more email addresses to a scan. */
+        post: operations["mapi_emails_manual_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/employeeIntel/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/employeeIntel/start/ — kick off background employee intelligence for a scan. */
+        post: operations["mapi_employeeIntel_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/employeeIntel/stop/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/employeeIntel/stop/ — send stop signal to a running employee intel job. */
+        post: operations["mapi_employeeIntel_stop_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/employeeIntel/{job_id}/replay/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET /api/employeeIntel/<job_id>/replay/ — replay log stream events for a job. */
+        get: operations["mapi_employeeIntel_replay_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/exposures/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET /mapi/exposures/?scan_id=<id>[&status=<status>] */
+        get: operations["mapi_exposures_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/exposures/bulk-status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /mapi/exposures/bulk-status/  body: {ids: [], status} */
+        post: operations["mapi_exposures_bulk-status_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/exposures/stats/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET /mapi/exposures/stats/?scan_id=<id> */
+        get: operations["mapi_exposures_stats_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/exposures/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET /mapi/exposures/<int:pk>/ */
+        get: operations["mapi_exposures_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/exposures/{id}/status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description PATCH /mapi/exposures/<int:pk>/status/  body: {status, note?} */
+        patch: operations["mapi_exposures_status_partial_update"];
         trace?: never;
     };
     "/mapi/external/tool/get_current_release/": {
@@ -2897,6 +8290,105 @@ export interface paths {
             cookie?: never;
         };
         get: operations["mapi_github_tool_get_latest_releases_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/graph/chain/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/graph/chain/?scan_id=<id>
+         * @description Returns nodes and edges for the full attack chain graph in a scan.
+         *     Neo4j is queried only if scan_id is a valid integer tied to an existing scan.
+         */
+        get: operations["mapi_graph_chain_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/graph/chain/nodes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/graph/chain/nodes/?scan_id=<id>&type=<NodeType>
+         * @description Returns all nodes of a specific type for a scan.
+         *     `type` is validated against the allowlist — returns 400 for invalid types.
+         */
+        get: operations["mapi_graph_chain_nodes_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/graph/node/{node_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Fetch detailed metadata for a specific graph node. */
+        get: operations["mapi_graph_node_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/graph/scan/{scan_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Fetch Cytoscape-compatible graph data for a specific scan. */
+        get: operations["mapi_graph_scan_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/graph/target/{target_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Fetch Cytoscape-compatible graph data for an entire target. */
+        get: operations["mapi_graph_target_read"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3019,6 +8511,184 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mapi/hardwareProfiles/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_hardwareProfiles_list"];
+        put?: never;
+        post: operations["mapi_hardwareProfiles_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/hardwareProfiles/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this hardware profile. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_hardwareProfiles_read"];
+        put: operations["mapi_hardwareProfiles_update"];
+        post?: never;
+        delete: operations["mapi_hardwareProfiles_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["mapi_hardwareProfiles_partial_update"];
+        trace?: never;
+    };
+    "/mapi/identity/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * GET /api/identity/?scan_id=<id>[&project=<slug>]
+         * @description Returns all IdentityInfraDiscovery records for a scan.
+         *     Response includes a summary dict keyed by infra_type.
+         *     Requires Auditor role or above.
+         */
+        get: operations["mapi_identity_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/identity/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET /mapi/identity/<int:pk>/ */
+        get: operations["mapi_identity_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/identity/{id}/confirm/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description PATCH /mapi/identity/<int:pk>/confirm/  body: {"confirmed": bool} */
+        patch: operations["mapi_identity_confirm_partial_update"];
+        trace?: never;
+    };
+    "/mapi/identity/{id}/dismiss/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description PATCH /mapi/identity/<int:pk>/dismiss/  body: {"reason"?: str} */
+        patch: operations["mapi_identity_dismiss_partial_update"];
+        trace?: never;
+    };
+    "/mapi/linkedin/session/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["mapi_linkedin_session_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/linkedin/session/helper/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_linkedin_session_helper_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/linkedin/session/status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_linkedin_session_status_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/linkedin/session/upload/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_linkedin_session_upload_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mapi/listActivityLogs/": {
         parameters: {
             query?: never;
@@ -3112,9 +8782,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Directory (endpoint) listing for the scan detail page.
+         * @description Read-only: no client writes through this route, and as a ModelViewSet it
+         *     exposed create/update/delete of EndPoint rows to every sys_admin and
+         *     penetration_tester (IsAuditor only blocks writes for pure auditors).
+         */
         get: operations["mapi_listDirectories_list"];
         put?: never;
-        post: operations["mapi_listDirectories_create"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3126,18 +8802,24 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this directory file. */
+                /** @description A unique integer value identifying this end point. */
                 id: number;
             };
             cookie?: never;
         };
+        /**
+         * Directory (endpoint) listing for the scan detail page.
+         * @description Read-only: no client writes through this route, and as a ModelViewSet it
+         *     exposed create/update/delete of EndPoint rows to every sys_admin and
+         *     penetration_tester (IsAuditor only blocks writes for pure auditors).
+         */
         get: operations["mapi_listDirectories_read"];
-        put: operations["mapi_listDirectories_update"];
+        put?: never;
         post?: never;
-        delete: operations["mapi_listDirectories_delete"];
+        delete?: never;
         options?: never;
         head?: never;
-        patch: operations["mapi_listDirectories_partial_update"];
+        patch?: never;
         trace?: never;
     };
     "/mapi/listEndPointChanges/": {
@@ -3224,6 +8906,41 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/mapi/listExposures/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_listExposures_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/listExposures/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this exposure. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_listExposures_read"];
+        put: operations["mapi_listExposures_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["mapi_listExposures_partial_update"];
         trace?: never;
     };
     "/mapi/listInterestingEndpoints/": {
@@ -3363,6 +9080,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mapi/listParameters/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_listParameters_list"];
+        put?: never;
+        post: operations["mapi_listParameters_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/listParameters/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this parameter. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_listParameters_read"];
+        put: operations["mapi_listParameters_update"];
+        post?: never;
+        delete: operations["mapi_listParameters_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["mapi_listParameters_partial_update"];
+        trace?: never;
+    };
     "/mapi/listScanHistory/": {
         parameters: {
             query?: never;
@@ -3446,6 +9198,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mapi/listScans/bulk_pause/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_listScans_bulk_pause"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mapi/listScans/bulk_stop/": {
         parameters: {
             query?: never;
@@ -3456,6 +9224,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["mapi_listScans_bulk_stop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/listScans/bulk_unpause/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_listScans_bulk_unpause"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3498,6 +9282,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mapi/listScans/{id}/pause_scan/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_listScans_pause_scan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mapi/listScans/{id}/stop_scan/": {
         parameters: {
             query?: never;
@@ -3510,6 +9312,24 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["mapi_listScans_stop_scan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/listScans/{id}/unpause_scan/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_listScans_unpause_scan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3653,6 +9473,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mapi/listTools/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Handles GET request to list all installed external tools. */
+        get: operations["mapi_listTools_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mapi/listVulnerability/": {
         parameters: {
             query?: never;
@@ -3663,6 +9500,22 @@ export interface paths {
         get: operations["mapi_listVulnerability_list"];
         put?: never;
         post: operations["mapi_listVulnerability_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/listVulnerability/queue/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_listVulnerability_queue"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3688,6 +9541,84 @@ export interface paths {
         patch: operations["mapi_listVulnerability_partial_update"];
         trace?: never;
     };
+    "/mapi/listVulnerability/{id}/reject/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vulnerability. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_listVulnerability_reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/listVulnerability/{id}/update_severity/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vulnerability. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Update vulnerability severity based on accepted AI recommendation or manual input. */
+        post: operations["mapi_listVulnerability_update_severity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/listVulnerability/{id}/validate_severity/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vulnerability. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Validate vulnerability severity using LLM. */
+        post: operations["mapi_listVulnerability_validate_severity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/listVulnerability/{id}/verify/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vulnerability. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_listVulnerability_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mapi/listWordlists/": {
         parameters: {
             query?: never;
@@ -3696,6 +9627,1212 @@ export interface paths {
             cookie?: never;
         };
         get: operations["mapi_listWordlists_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/agents/{agent_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["mapi_mcp_agents_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/apme/recalculate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_apme_recalculate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/apme/trigger/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_apme_trigger_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/attack-paths/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_attack-paths_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/attack-paths/{path_id}/enrich/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                path_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["mapi_mcp_attack-paths_enrich_partial_update"];
+        trace?: never;
+    };
+    "/mapi/mcp/audit/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_audit_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/capabilities/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_capabilities_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/dashboard/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_dashboard_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/email-discovery/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_email-discovery_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/email-discovery/stop/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_email-discovery_stop_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/emails/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_emails_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/employee-intel/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_employee-intel_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/employee-intel/stop/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_employee-intel_stop_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/employees/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_employees_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/endpoints/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_endpoints_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/endpoints/{id}/detail/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_endpoints_detail_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/engines/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_engines_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/engines/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_engines_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/exposures/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_exposures_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/exposures/{id}/detail/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_exposures_detail_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/followups/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_followups_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/followups/metrics/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_followups_metrics_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/followups/propose/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_followups_propose_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/followups/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_followups_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/followups/{id}/abort/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_followups_abort_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/followups/{id}/approve/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_followups_approve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/followups/{id}/retry/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_followups_retry_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/followups/{id}/update/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_followups_update_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/health/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_health_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/keys/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_keys_list"];
+        put?: never;
+        post: operations["mapi_mcp_keys_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/keys/{id}/regenerate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_keys_regenerate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/keys/{id}/revoke/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_keys_revoke_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/notes/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET list (any MCP key) + POST create (pentester/sys-admin). */
+        get: operations["mapi_mcp_notes_list"];
+        put?: never;
+        /** @description GET list (any MCP key) + POST create (pentester/sys-admin). */
+        post: operations["mapi_mcp_notes_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/notes/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET one note (any MCP key) + PATCH update (pentester/sys-admin). No DELETE. */
+        get: operations["mapi_mcp_notes_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description GET one note (any MCP key) + PATCH update (pentester/sys-admin). No DELETE. */
+        patch: operations["mapi_mcp_notes_partial_update"];
+        trace?: never;
+    };
+    "/mapi/mcp/osint-staging/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Pending (default) OSINT staging rows for the main assessor to package for OSINT verify. */
+        get: operations["mapi_mcp_osint-staging_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/osint-staging/verify/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Set agent_verified True/False on staging rows. Does not promote or delete. */
+        post: operations["mapi_mcp_osint-staging_verify_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/projects/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_projects_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/scan-status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_scan-status_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/scans/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_scans_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/scans/pause/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_scans_pause_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/scans/resume/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_scans_resume_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/scans/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_scans_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/scans/stop/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_scans_stop_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/scans/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_scans_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/scans/{id}/detail/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_scans_detail_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/scans/{id}/export-ai/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Same Analyst Assist AI export as the scan-detail UI, as JSON for agents.
+         * @description Returns markdown overview, triage prompt, full structured bundle, and
+         *     manifest — equivalent to the ZIP the UI downloads, without binary packaging.
+         */
+        get: operations["mapi_mcp_scans_export-ai_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/search/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_search_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/sessions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_sessions_list"];
+        put?: never;
+        post: operations["mapi_mcp_sessions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/sessions/{id}/end/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_sessions_end_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/sessions/{id}/events/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_sessions_events_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/sessions/{id}/heartbeat/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_sessions_heartbeat_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/sessions/{id}/revoke/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_sessions_revoke_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_settings_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["mapi_mcp_settings_partial_update"];
+        trace?: never;
+    };
+    "/mapi/mcp/subdomains/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_subdomains_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/subdomains/{id}/detail/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_subdomains_detail_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/subscans/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_subscans_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/subscans/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_subscans_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/subscans/{id}/detail/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_subscans_detail_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/targets/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_targets_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/targets/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_targets_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/targets/{id}/detail/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_targets_detail_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/tasks/retry/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_tasks_retry_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/tools/run/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_tools_run_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/tools/{tool}/args/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tool: string;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_tools_args_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/vulnerabilities/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_vulnerabilities_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/vulnerabilities/{id}/analyze/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description Packaged SAFE analysis context for one vulnerability. */
+        get: operations["mapi_mcp_vulnerabilities_analyze_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/vulnerabilities/{id}/detail/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_mcp_vulnerabilities_detail_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/mcp/vulnerabilities/{id}/enrich/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["mapi_mcp_vulnerabilities_enrich_partial_update"];
+        trace?: never;
+    };
+    "/mapi/mcp/vulnerabilities/{id}/validation/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["mapi_mcp_vulnerabilities_validation_partial_update"];
+        trace?: never;
+    };
+    "/mapi/mcp/workflows/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_mcp_workflows_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/media/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_media_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3871,6 +11008,182 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mapi/osintStaging/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_osintStaging_list"];
+        put?: never;
+        post: operations["mapi_osintStaging_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/osintStaging/add_verified/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Promote all agent_verified=True rows for a scan (pending). */
+        post: operations["mapi_osintStaging_add_verified"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/osintStaging/bulk_discard/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Bulk delete staging items. */
+        post: operations["mapi_osintStaging_bulk_discard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/osintStaging/bulk_promote/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Bulk promote staging items to primary tables. */
+        post: operations["mapi_osintStaging_bulk_promote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/osintStaging/clear_all/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Delete all pending staging rows for a scan. */
+        post: operations["mapi_osintStaging_clear_all"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/osintStaging/clear_false_positives/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Delete staging rows marked agent_verified=False for a scan. */
+        post: operations["mapi_osintStaging_clear_false_positives"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/osintStaging/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_osintStaging_read"];
+        put: operations["mapi_osintStaging_update"];
+        post?: never;
+        delete: operations["mapi_osintStaging_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["mapi_osintStaging_partial_update"];
+        trace?: never;
+    };
+    "/mapi/osintStaging/{id}/discard/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Individual discard. */
+        post: operations["mapi_osintStaging_discard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/osintStaging/{id}/promote/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Individual promote. */
+        post: operations["mapi_osintStaging_promote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/parameters/summary/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_parameters_summary_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mapi/plugins/": {
         parameters: {
             query?: never;
@@ -3881,6 +11194,77 @@ export interface paths {
         get: operations["mapi_plugins_list"];
         put?: never;
         post: operations["mapi_plugins_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/plugins/install-status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_plugins_install_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/plugins/marketplace/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Returns available plugins from the marketplace. */
+        get: operations["mapi_plugins_marketplace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/plugins/marketplace/install/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Installs a plugin from the marketplace using an async background thread,
+         *     identical to the upload flow. Returns an install_id immediately (HTTP 202)
+         *     so the frontend InstallProgressOverlay can poll for real-time progress.
+         */
+        post: operations["mapi_plugins_marketplace_marketplace_install"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/plugins/marketplace/refresh/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Force refreshes the marketplace cache. */
+        post: operations["mapi_plugins_marketplace_marketplace_refresh"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3898,6 +11282,45 @@ export interface paths {
         get: operations["mapi_plugins_registry"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/plugins/restart-orchestrator/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_plugins_restart_orchestrator"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/plugins/restart-server/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * User-triggered restart of the orchestrator and web container after plugin install.
+         * @description The orchestrator is told over Redis and exits itself; this process is
+         *     terminated a few seconds later (so the response reaches the client) and
+         *     compose's ``restart: always`` starts the web container again. Neither
+         *     needs the Docker API.
+         */
+        post: operations["mapi_plugins_restart_server"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3936,6 +11359,47 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["mapi_plugins_partial_update"];
+        trace?: never;
+    };
+    "/mapi/plugins/{slug}/docs/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * @description GET /api/plugins/{slug}/docs/
+         *     Reads the markdown files in plugins_data/{slug}/docs/ and returns them.
+         */
+        get: operations["mapi_plugins_get_docs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/plugins/{slug}/icon/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        /** @description Serves the plugin's bundled icon. */
+        get: operations["mapi_plugins_get_icon"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/mapi/projects/": {
@@ -3987,6 +11451,39 @@ export interface paths {
         put?: never;
         post: operations["mapi_projects_delete_project"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/push-token/register/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * POST /mapi/push-token/register/
+         * @description Registers or updates an Expo push notification token for the authenticated user.
+         *     Called by the mobile app on startup after the user logs in and notification
+         *     permissions have been granted.
+         *
+         *     Request body:
+         *     	token (str): The Expo push token string (e.g. ExponentPushToken[xxxx]).
+         *     	device_label (str, optional): Human-readable label for the device.
+         *
+         *     Returns 200 on success with the token record. Returns 400 if no token provided.
+         */
+        post: operations["mapi_push-token_register_create"];
+        /**
+         * DELETE /mapi/push-token/register/
+         * @description Deactivates all push tokens for the authenticated user so the backend
+         *     stops delivering push notifications to their devices.
+         */
+        delete: operations["mapi_push-token_register_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4232,6 +11729,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mapi/rengine/fetch-proxies/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_rengine_fetch-proxies_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/rengine/proxy-settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_rengine_proxy-settings_list"];
+        put?: never;
+        post: operations["mapi_rengine_proxy-settings_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mapi/rengine/system-settings/": {
         parameters: {
             query?: never;
@@ -4240,6 +11769,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["mapi_rengine_system-settings_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/rengine/tor-exit-ip/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_rengine_tor-exit-ip_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/rengine/tor-status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_rengine_tor-status_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4285,11 +11846,12 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                id: string;
                 slug: string;
+                id: string;
             };
             cookie?: never;
         };
+        /** @description Fetch and return summary information for a specific scan. */
         get: operations["mapi_scan-summary_read"];
         put?: never;
         post?: never;
@@ -4297,6 +11859,59 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/mapi/scan-summary/{slug}/{id}/export-ai/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_scan-summary_export-ai_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/scanProfiles/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_scanProfiles_list"];
+        put?: never;
+        post: operations["mapi_scanProfiles_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/scanProfiles/{name}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_scanProfiles_read"];
+        put: operations["mapi_scanProfiles_update"];
+        post?: never;
+        delete: operations["mapi_scanProfiles_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["mapi_scanProfiles_partial_update"];
         trace?: never;
     };
     "/mapi/scan_status/": {
@@ -4338,8 +11953,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * ViewSet for TemporalSchedule CRUD + toggle/bulk_delete actions.
+         * @description Named ScheduledScanViewSet (not TemporalScheduleViewSet) so existing
+         *     URL router registrations require no changes.
+         */
         get: operations["mapi_scheduledScans_list"];
         put?: never;
+        /**
+         * ViewSet for TemporalSchedule CRUD + toggle/bulk_delete actions.
+         * @description Named ScheduledScanViewSet (not TemporalScheduleViewSet) so existing
+         *     URL router registrations require no changes.
+         */
         post: operations["mapi_scheduledScans_create"];
         delete?: never;
         options?: never;
@@ -4356,6 +11981,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * ViewSet for TemporalSchedule CRUD + toggle/bulk_delete actions.
+         * @description Named ScheduledScanViewSet (not TemporalScheduleViewSet) so existing
+         *     URL router registrations require no changes.
+         */
         post: operations["mapi_scheduledScans_bulk_delete"];
         delete?: never;
         options?: never;
@@ -4368,17 +11998,37 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this periodic task. */
+                /** @description A unique integer value identifying this temporal schedule. */
                 id: number;
             };
             cookie?: never;
         };
+        /**
+         * ViewSet for TemporalSchedule CRUD + toggle/bulk_delete actions.
+         * @description Named ScheduledScanViewSet (not TemporalScheduleViewSet) so existing
+         *     URL router registrations require no changes.
+         */
         get: operations["mapi_scheduledScans_read"];
+        /**
+         * ViewSet for TemporalSchedule CRUD + toggle/bulk_delete actions.
+         * @description Named ScheduledScanViewSet (not TemporalScheduleViewSet) so existing
+         *     URL router registrations require no changes.
+         */
         put: operations["mapi_scheduledScans_update"];
         post?: never;
+        /**
+         * ViewSet for TemporalSchedule CRUD + toggle/bulk_delete actions.
+         * @description Named ScheduledScanViewSet (not TemporalScheduleViewSet) so existing
+         *     URL router registrations require no changes.
+         */
         delete: operations["mapi_scheduledScans_delete"];
         options?: never;
         head?: never;
+        /**
+         * ViewSet for TemporalSchedule CRUD + toggle/bulk_delete actions.
+         * @description Named ScheduledScanViewSet (not TemporalScheduleViewSet) so existing
+         *     URL router registrations require no changes.
+         */
         patch: operations["mapi_scheduledScans_partial_update"];
         trace?: never;
     };
@@ -4387,18 +12037,58 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this periodic task. */
+                /** @description A unique integer value identifying this temporal schedule. */
                 id: number;
             };
             cookie?: never;
         };
         get?: never;
         put?: never;
+        /**
+         * ViewSet for TemporalSchedule CRUD + toggle/bulk_delete actions.
+         * @description Named ScheduledScanViewSet (not TemporalScheduleViewSet) so existing
+         *     URL router registrations require no changes.
+         */
         post: operations["mapi_scheduledScans_toggle"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/mapi/screenshots/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_screenshots_list"];
+        put?: never;
+        post: operations["mapi_screenshots_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/screenshots/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this screenshot. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_screenshots_read"];
+        put: operations["mapi_screenshots_update"];
+        post?: never;
+        delete: operations["mapi_screenshots_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["mapi_screenshots_partial_update"];
         trace?: never;
     };
     "/mapi/search/": {
@@ -4425,6 +12115,179 @@ export interface paths {
             cookie?: never;
         };
         get: operations["mapi_search_history_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/secretLeaks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_secretLeaks_list"];
+        put?: never;
+        post: operations["mapi_secretLeaks_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/secretLeaks/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this secret leak. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        get: operations["mapi_secretLeaks_read"];
+        put: operations["mapi_secretLeaks_update"];
+        post?: never;
+        delete: operations["mapi_secretLeaks_delete"];
+        options?: never;
+        head?: never;
+        patch: operations["mapi_secretLeaks_partial_update"];
+        trace?: never;
+    };
+    "/mapi/settings/export/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_settings_export_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/settings/export/scan-results/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_settings_export_scan-results_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/settings/import/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_settings_import_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/settings/workers/heartbeat/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_settings_workers_heartbeat_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/soc-settings/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description ViewSet for managing global SOC configuration. */
+        get: operations["mapi_soc-settings_list"];
+        put?: never;
+        /** @description ViewSet for managing global SOC configuration. */
+        post: operations["mapi_soc-settings_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/soc-settings/toggle_streaming/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description ViewSet for managing global SOC configuration. */
+        post: operations["mapi_soc-settings_toggle_streaming"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/soc-settings/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this SOC Configuration. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** @description ViewSet for managing global SOC configuration. */
+        get: operations["mapi_soc-settings_read"];
+        /** @description ViewSet for managing global SOC configuration. */
+        put: operations["mapi_soc-settings_update"];
+        post?: never;
+        /** @description ViewSet for managing global SOC configuration. */
+        delete: operations["mapi_soc-settings_delete"];
+        options?: never;
+        head?: never;
+        /** @description ViewSet for managing global SOC configuration. */
+        patch: operations["mapi_soc-settings_partial_update"];
+        trace?: never;
+    };
+    "/mapi/stress-testing/history/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_stress-testing_history_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4518,16 +12381,50 @@ export interface paths {
         patch: operations["mapi_subscans_partial_update"];
         trace?: never;
     };
+    "/mapi/system/health/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_system_health_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/system/logs/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Fetch system logs based on log type query parameter. */
+        get: operations["mapi_system_logs_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mapi/target-summary/{slug}/{id}/": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                id: string;
                 slug: string;
+                id: string;
             };
             cookie?: never;
         };
+        /** @description Fetch and return summary information for a specific target domain. */
         get: operations["mapi_target-summary_read"];
         put?: never;
         post?: never;
@@ -4535,6 +12432,45 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/mapi/todos/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET + POST /mapi/todos/ */
+        get: operations["mapi_todos_list"];
+        put?: never;
+        /** @description GET + POST /mapi/todos/ */
+        post: operations["mapi_todos_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/todos/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** @description GET + PATCH + DELETE /mapi/todos/<pk>/ */
+        get: operations["mapi_todos_read"];
+        put?: never;
+        post?: never;
+        /** @description GET + PATCH + DELETE /mapi/todos/<pk>/ */
+        delete: operations["mapi_todos_delete"];
+        options?: never;
+        head?: never;
+        /** @description GET + PATCH + DELETE /mapi/todos/<pk>/ */
+        patch: operations["mapi_todos_partial_update"];
         trace?: never;
     };
     "/mapi/toggle-bug-bounty-mode/": {
@@ -4547,6 +12483,70 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["mapi_toggle-bug-bounty-mode_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/toggle-scan-queueing-mode/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_toggle-scan-queueing-mode_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/toggle/monitoring/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_toggle_monitoring_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/toggle/note/importance/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_toggle_note_importance_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/toggle/note/status/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_toggle_note_status_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4598,7 +12598,7 @@ export interface paths {
         };
         get: operations["mapi_tool_uninstall_list"];
         put?: never;
-        post?: never;
+        post: operations["mapi_tool_uninstall_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4614,7 +12614,7 @@ export interface paths {
         };
         get: operations["mapi_tool_update_list"];
         put?: never;
-        post?: never;
+        post: operations["mapi_tool_update_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4637,6 +12637,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mapi/tools/cve_description_generate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Generate and save an AI-written description for a CVE via the active LLM. */
+        post: operations["mapi_tools_cve_description_generate_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mapi/tools/cve_details/": {
         parameters: {
             query?: never;
@@ -4644,6 +12661,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Retrieve CVE details, performing live enrichment if the CVE is not in the database. */
         get: operations["mapi_tools_cve_details_list"];
         put?: never;
         post?: never;
@@ -4676,6 +12694,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Retrieve or trigger LLM generation of attack surface analysis for a subdomain. */
         get: operations["mapi_tools_gpt_get_possible_attacks_list"];
         put?: never;
         post?: never;
@@ -4692,6 +12711,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Enrich vulnerability with LLM generated descriptions and mitigation options. */
         get: operations["mapi_tools_gpt_vulnerability_report_list"];
         put?: never;
         post?: never;
@@ -4781,6 +12801,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mapi/update/target/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mapi_update_target_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mapi/updateOrganization/": {
         parameters: {
             query?: never;
@@ -4804,8 +12840,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * @description A ViewSet for managing User creation, editing, status toggling, deletion, and profile retrieval.
+         *     Requires SysAdmin permission for all actions except displaying the currently logged-in user's own profile.
+         */
         get: operations["mapi_users_list"];
         put?: never;
+        /** @description Create a new user with a specified username, password, and system role. */
         post: operations["mapi_users_create"];
         delete?: never;
         options?: never;
@@ -4820,6 +12861,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Retrieve the details and serialized profile of the currently logged-in user. */
         get: operations["mapi_users_me"];
         put?: never;
         post?: never;
@@ -4839,12 +12881,28 @@ export interface paths {
             };
             cookie?: never;
         };
+        /**
+         * @description A ViewSet for managing User creation, editing, status toggling, deletion, and profile retrieval.
+         *     Requires SysAdmin permission for all actions except displaying the currently logged-in user's own profile.
+         */
         get: operations["mapi_users_read"];
+        /**
+         * @description A ViewSet for managing User creation, editing, status toggling, deletion, and profile retrieval.
+         *     Requires SysAdmin permission for all actions except displaying the currently logged-in user's own profile.
+         */
         put: operations["mapi_users_update"];
         post?: never;
+        /**
+         * @description A ViewSet for managing User creation, editing, status toggling, deletion, and profile retrieval.
+         *     Requires SysAdmin permission for all actions except displaying the currently logged-in user's own profile.
+         */
         delete: operations["mapi_users_delete"];
         options?: never;
         head?: never;
+        /**
+         * @description A ViewSet for managing User creation, editing, status toggling, deletion, and profile retrieval.
+         *     Requires SysAdmin permission for all actions except displaying the currently logged-in user's own profile.
+         */
         patch: operations["mapi_users_partial_update"];
         trace?: never;
     };
@@ -4860,6 +12918,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * @description Toggle the active status (enabled/disabled) of a specific user.
+         *     Prevents administrative users from disabling their own accounts.
+         */
         post: operations["mapi_users_toggle_status"];
         delete?: never;
         options?: never;
@@ -4879,6 +12941,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Update an existing user's role and/or password. */
         post: operations["mapi_users_update_user"];
         delete?: never;
         options?: never;
@@ -4902,10 +12965,122 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mapi/workers/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Remote workers: anyone with a role may list them, only sys admins change them. */
+        get: operations["mapi_workers_list"];
+        put?: never;
+        /** @description Remote workers: anyone with a role may list them, only sys admins change them. */
+        post: operations["mapi_workers_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/workers/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this scan worker. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** @description Remote workers: anyone with a role may list them, only sys admins change them. */
+        get: operations["mapi_workers_read"];
+        /** @description Remote workers: anyone with a role may list them, only sys admins change them. */
+        put: operations["mapi_workers_update"];
+        post?: never;
+        /** @description Remote workers: anyone with a role may list them, only sys admins change them. */
+        delete: operations["mapi_workers_delete"];
+        options?: never;
+        head?: never;
+        /** @description Remote workers: anyone with a role may list them, only sys admins change them. */
+        patch: operations["mapi_workers_partial_update"];
+        trace?: never;
+    };
+    "/mapi/workflows/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["mapi_workflows_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mapi/workflows/{workflow_slug}/start/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_slug: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start any of the 13 rengine-ng standalone workflow types via a single endpoint.
+         * @description POST /api/v1/workflows/<workflow_slug>/start/
+         */
+        post: operations["mapi_workflows_start_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        APIIntelProfile: {
+            /** Id */
+            readonly id?: number;
+            /** Scan history */
+            scan_history: number | null;
+            /** Target domain */
+            target_domain?: number | null;
+            /** Subdomain */
+            subdomain?: number | null;
+            /**
+             * Base url
+             * Format: uri
+             */
+            base_url: string;
+            /**
+             * Api type
+             * @default rest
+             * @enum {string}
+             */
+            api_type: "rest" | "graphql" | "soap" | "generic";
+            /** Endpoint count */
+            endpoint_count?: number;
+            /** Requires auth */
+            requires_auth?: boolean;
+            /** Auth scheme */
+            auth_scheme?: string | null;
+            /** Parameters sample */
+            parameters_sample?: Record<string, never>;
+            /** Graphql schema snippet */
+            graphql_schema_snippet?: string | null;
+            /** Raw endpoints */
+            raw_endpoints?: Record<string, never>;
+        };
         TokenObtainPair: {
             /** Username */
             username: string;
@@ -4917,6 +13092,493 @@ export interface components {
             refresh: string;
             /** Access */
             readonly access?: string;
+        };
+        EmailBreach: {
+            /** Id */
+            readonly id?: number;
+            /** Email address */
+            email_address: string;
+            /** Breach name */
+            breach_name: string;
+            /** Breach date */
+            breach_date?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Compromised data */
+            compromised_data?: Record<string, never>;
+            /** Source */
+            source?: string;
+            /**
+             * Discovered date
+             * Format: date-time
+             */
+            readonly discovered_date?: string;
+            /** Scan history */
+            scan_history?: number | null;
+            /** Email */
+            email?: number | null;
+        };
+        Assessment: {
+            /** ID */
+            readonly id?: number;
+            /**
+             * Uuid
+             * Format: uuid
+             */
+            readonly uuid?: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Assessment type
+             * @enum {string}
+             */
+            assessment_type: "External" | "Internal" | "Web" | "API" | "Mobile" | "Cloud" | "AD" | "Hybrid";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status?: "Draft" | "Ready" | "Discovery" | "Enumeration" | "Analysis" | "Correlation" | "Validation" | "GraphSync" | "Reporting" | "Review" | "Complete" | "Failed" | "Cancelled";
+            /**
+             * Started at
+             * Format: date-time
+             */
+            started_at?: string | null;
+            /**
+             * Completed at
+             * Format: date-time
+             */
+            completed_at?: string | null;
+            /** Active duration */
+            active_duration?: string | null;
+            /** Paused duration */
+            paused_duration?: string | null;
+            /** Total duration */
+            total_duration?: string | null;
+            /**
+             * Retention days
+             * @description How long evidence for this assessment is retained before archiving.
+             * @enum {integer}
+             */
+            retention_days?: 90 | 180 | 365 | 0;
+            /**
+             * Created at
+             * Format: date-time
+             */
+            readonly created_at?: string;
+            /**
+             * Updated at
+             * Format: date-time
+             */
+            readonly updated_at?: string;
+            /** Engagement */
+            engagement: number;
+            /**
+             * Preferred engine
+             * @description Override engine; defaults to assessment-type default engine if unset.
+             */
+            preferred_engine?: number | null;
+            /** Created by */
+            readonly created_by?: number | null;
+        };
+        AssessmentAsset: {
+            /** ID */
+            readonly id?: number;
+            /**
+             * Uuid
+             * Format: uuid
+             */
+            readonly uuid?: string;
+            /** Object id */
+            object_id: number;
+            /**
+             * Created at
+             * Format: date-time
+             */
+            readonly created_at?: string;
+            /** Assessment */
+            assessment: number;
+            /** Content type */
+            content_type: number;
+        };
+        Client: {
+            /** ID */
+            readonly id?: number;
+            /**
+             * Uuid
+             * Format: uuid
+             */
+            readonly uuid?: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Primary contact */
+            primary_contact?: string | null;
+            /**
+             * Email
+             * Format: email
+             */
+            email?: string | null;
+            /** Phone */
+            phone?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status?: "Active" | "Inactive" | "Archived";
+            /**
+             * Created at
+             * Format: date-time
+             */
+            readonly created_at?: string;
+            /**
+             * Updated at
+             * Format: date-time
+             */
+            readonly updated_at?: string;
+            /** Created by */
+            readonly created_by?: number | null;
+        };
+        Engagement: {
+            /** ID */
+            readonly id?: number;
+            /**
+             * Uuid
+             * Format: uuid
+             */
+            readonly uuid?: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Engagement type
+             * @enum {string}
+             */
+            engagement_type: "Penetration Test" | "Vulnerability Assessment" | "Attack Surface Review" | "API Assessment" | "AD Assessment" | "Hybrid Assessment";
+            /**
+             * Start date
+             * Format: date
+             */
+            start_date?: string | null;
+            /**
+             * End date
+             * Format: date
+             */
+            end_date?: string | null;
+            /**
+             * Sla due date
+             * Format: date
+             */
+            sla_due_date?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status?: "Draft" | "Scheduled" | "Active" | "Paused" | "Completed" | "Archived";
+            /**
+             * Created at
+             * Format: date-time
+             */
+            readonly created_at?: string;
+            /**
+             * Updated at
+             * Format: date-time
+             */
+            readonly updated_at?: string;
+            /** Client */
+            client: number;
+            /** Created by */
+            readonly created_by?: number | null;
+        };
+        AssessmentScope: {
+            /** ID */
+            readonly id?: number;
+            /**
+             * Uuid
+             * Format: uuid
+             */
+            readonly uuid?: string;
+            /**
+             * Scope type
+             * @enum {string}
+             */
+            scope_type: "Domain" | "Subdomain" | "CIDR" | "IP" | "URL" | "Application" | "Cloud Asset";
+            /** Value */
+            value: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status?: "In Scope" | "Out Of Scope" | "Excluded";
+            /**
+             * Created at
+             * Format: date-time
+             */
+            readonly created_at?: string;
+            /**
+             * Updated at
+             * Format: date-time
+             */
+            readonly updated_at?: string;
+            /** Assessment */
+            assessment: number;
+        };
+        EvidenceList: {
+            /**
+             * Uuid
+             * Format: uuid
+             */
+            readonly uuid?: string;
+            /**
+             * Evidence type
+             * @enum {string}
+             */
+            evidence_type?: "Screenshot" | "NetworkCapture" | "RequestResponse" | "CommandOutput" | "Log" | "Report" | "Other";
+            /** Title */
+            title: string;
+            /** File name */
+            file_name?: string | null;
+            /** File size mb */
+            readonly file_size_mb?: number;
+            /** Mime type */
+            mime_type?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status?: "Draft" | "Active" | "Archived" | "Purged";
+            /**
+             * Collected at
+             * Format: date-time
+             */
+            collected_at?: string;
+            /**
+             * Created at
+             * Format: date-time
+             */
+            readonly created_at?: string;
+            /** Download url */
+            readonly download_url?: string;
+        };
+        EvidenceRetentionPolicy: {
+            /** ID */
+            readonly id?: number;
+            /**
+             * Archive after days
+             * @description Days until archive. 0=never.
+             */
+            archive_after_days?: number;
+            /**
+             * Purge after days
+             * @description Days after archive to purge. 0=never.
+             */
+            purge_after_days?: number;
+            /**
+             * Purge files
+             * @description Delete actual files on purge?
+             */
+            purge_files?: boolean;
+            /**
+             * Last enforced at
+             * Format: date-time
+             */
+            readonly last_enforced_at?: string | null;
+            /**
+             * Next action at
+             * Format: date-time
+             */
+            readonly next_action_at?: string | null;
+            /**
+             * Created at
+             * Format: date-time
+             */
+            readonly created_at?: string;
+            /**
+             * Updated at
+             * Format: date-time
+             */
+            readonly updated_at?: string;
+        };
+        EvidenceCollection: {
+            /**
+             * Uuid
+             * Format: uuid
+             */
+            readonly uuid?: string;
+            /** Assessment */
+            assessment: number;
+            /** Scan history */
+            scan_history?: number | null;
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status?: "Draft" | "Active" | "Archived" | "Purged";
+            /** Item count */
+            readonly item_count?: number;
+            retention_policy?: components["schemas"]["EvidenceRetentionPolicy"];
+            /**
+             * Created at
+             * Format: date-time
+             */
+            readonly created_at?: string;
+            /**
+             * Updated at
+             * Format: date-time
+             */
+            readonly updated_at?: string;
+        };
+        EvidenceEvent: {
+            /** ID */
+            readonly id?: number;
+            /**
+             * Event type
+             * @enum {string}
+             */
+            readonly event_type?: "Created" | "Updated" | "Verified" | "Downloaded" | "Annotated" | "Archived" | "Purged";
+            /** Actor username */
+            readonly actor_username?: string | null;
+            /** Note */
+            readonly note?: string | null;
+            /** Hash at event */
+            readonly hash_at_event?: string | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            readonly timestamp?: string;
+            /** Ip address */
+            readonly ip_address?: string | null;
+        };
+        EvidenceAnnotation: {
+            /** ID */
+            readonly id?: number;
+            /**
+             * Annotation type
+             * @enum {string}
+             */
+            annotation_type?: "Note" | "Tag" | "Highlight";
+            /** Content */
+            content: string;
+            /**
+             * Region
+             * @description Optional highlighted region descriptor
+             */
+            region?: Record<string, never> | null;
+            /** Author username */
+            readonly author_username?: string | null;
+            /**
+             * Created at
+             * Format: date-time
+             */
+            readonly created_at?: string;
+            /**
+             * Updated at
+             * Format: date-time
+             */
+            readonly updated_at?: string;
+        };
+        Evidence: {
+            /**
+             * Uuid
+             * Format: uuid
+             */
+            readonly uuid?: string;
+            /** Collection */
+            collection: number;
+            /**
+             * Evidence type
+             * @enum {string}
+             */
+            evidence_type?: "Screenshot" | "NetworkCapture" | "RequestResponse" | "CommandOutput" | "Log" | "Report" | "Other";
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /** File name */
+            file_name?: string | null;
+            /**
+             * File size
+             * @description Size in bytes
+             */
+            readonly file_size?: number;
+            /** File size mb */
+            readonly file_size_mb?: number;
+            /** Mime type */
+            readonly mime_type?: string | null;
+            /**
+             * Sha256 hash
+             * @description SHA-256 hex digest of raw file content for tamper detection
+             */
+            readonly sha256_hash?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status?: "Draft" | "Active" | "Archived" | "Purged";
+            /**
+             * Collected at
+             * Format: date-time
+             */
+            collected_at?: string;
+            /** Collected by username */
+            readonly collected_by_username?: string | null;
+            /**
+             * Created at
+             * Format: date-time
+             */
+            readonly created_at?: string;
+            /**
+             * Updated at
+             * Format: date-time
+             */
+            readonly updated_at?: string;
+            /** Download url */
+            readonly download_url?: string;
+            readonly vulnerability_ids?: number[];
+            readonly events?: components["schemas"]["EvidenceEvent"][];
+            readonly annotations?: components["schemas"]["EvidenceAnnotation"][];
+        };
+        HardwareProfile: {
+            /** Id */
+            readonly id?: number;
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @description Description of the profile
+             */
+            description?: string | null;
+            /** Threads */
+            threads?: number;
+            /** Rate limit */
+            rate_limit?: number;
+            /**
+             * Timeout
+             * @description Timeout in minutes
+             */
+            timeout?: number;
+            /**
+             * Delay
+             * @description Delay between requests in seconds
+             */
+            delay?: number;
+            /** Retries */
+            retries?: number;
+            /**
+             * Profile type
+             * @enum {string}
+             */
+            profile_type?: "builtin" | "custom";
+            /** Is active */
+            is_active?: boolean;
+            /** Is default */
+            is_default?: boolean;
         };
         Command: {
             /** Id */
@@ -4944,10 +13606,10 @@ export interface components {
                  * Scan status
                  * @enum {integer}
                  */
-                scan_status?: -1 | 0 | 1 | 2 | 3 | 4;
+                scan_status?: -1 | 0 | 1 | 2 | 3 | 4 | 5;
                 /** Results dir */
                 results_dir?: string;
-                celery_ids?: string[];
+                workflow_ids?: string[];
                 tasks?: string[] | null;
                 /**
                  * Stop scan date
@@ -4958,6 +13620,8 @@ export interface components {
                 used_gf_patterns?: string | null;
                 /** Error message */
                 error_message?: string | null;
+                /** Recovery count */
+                recovery_count?: number;
                 cfg_out_of_scope_subdomains?: string[] | null;
                 /** Cfg starting point path */
                 cfg_starting_point_path?: string | null;
@@ -4969,6 +13633,10 @@ export interface components {
                 domain: number;
                 /** Scan type */
                 scan_type: number;
+                /** Assessment */
+                assessment?: number | null;
+                /** Hardware profile */
+                hardware_profile?: number | null;
                 /** Initiated by */
                 initiated_by?: number | null;
                 /** Aborted by */
@@ -4981,10 +13649,29 @@ export interface components {
             readonly activity?: {
                 /** Id */
                 readonly id?: number;
+                /**
+                 * Task uid
+                 * Format: uuid
+                 */
+                task_uid?: string;
+                /**
+                 * Time started
+                 * Format: date-time
+                 */
+                time_started?: string | null;
+                /**
+                 * Time ended
+                 * Format: date-time
+                 */
+                time_ended?: string | null;
+                /** Tier */
+                tier?: number | null;
                 /** Title */
                 title: string;
                 /** Name */
                 name: string;
+                /** Target host */
+                target_host?: string | null;
                 /**
                  * Time
                  * Format: date-time
@@ -4996,10 +13683,12 @@ export interface components {
                 error_message?: string | null;
                 /** Traceback */
                 traceback?: string | null;
-                /** Celery id */
-                celery_id?: string | null;
+                /** Execution id */
+                execution_id?: string | null;
                 /** Scan of */
                 scan_of?: number | null;
+                /** Subscan */
+                subscan?: number | null;
             };
         };
         Port: {
@@ -5018,6 +13707,8 @@ export interface components {
             /** Id */
             readonly id?: number;
             ports: components["schemas"]["Port"][];
+            /** Geo iso name */
+            readonly geo_iso_name?: string;
             /** Address */
             address?: string | null;
             /** Is cdn */
@@ -5028,6 +13719,12 @@ export interface components {
             is_private?: boolean;
             /** Reverse pointer */
             reverse_pointer?: string | null;
+            /** Asn */
+            asn?: string | null;
+            /** Asn cidr */
+            asn_cidr?: string | null;
+            /** Asn org */
+            asn_org?: string | null;
             /** Geo iso */
             geo_iso?: number | null;
             ip_subscan_ids: number[];
@@ -5098,6 +13795,8 @@ export interface components {
             readonly id?: number;
             /** Screenshot path */
             readonly screenshot_path?: string;
+            /** Subdomain name */
+            readonly subdomain_name?: string;
             /**
              * Url
              * Format: uri
@@ -5202,9 +13901,33 @@ export interface components {
             /** Criticality reason */
             criticality_reason?: string | null;
             /** Scan history */
-            scan_history?: number | null;
+            scan_history: number | null;
             /** Target domain */
             target_domain?: number | null;
+        };
+        EndPointDirectory: {
+            /** Id */
+            readonly id?: number;
+            /**
+             * Length
+             * @default 0
+             */
+            length: number;
+            /** Lines */
+            readonly lines?: string;
+            /** Http status */
+            http_status?: number | null;
+            /** Words */
+            readonly words?: string;
+            /** Name */
+            readonly name?: string;
+            /** Url */
+            url: string;
+            /**
+             * Content type
+             * @default text/html
+             */
+            content_type: string;
         };
         EndPointChanges: {
             /** Id */
@@ -5247,19 +13970,93 @@ export interface components {
             techs?: number[];
             endpoint_subscan_ids?: number[];
         };
+        ParameterEndpoint: {
+            /** Id */
+            readonly id?: number;
+            /** Http url */
+            http_url: string;
+        };
         Parameter: {
+            /** Id */
+            readonly id?: number;
             /** Name */
             name: string;
             /** Value */
             value?: string | null;
             /** Type */
             type?: string | null;
+            /**
+             * Confidence
+             * @description 0-100 confidence score aggregated from all evidence sources
+             */
+            confidence?: number;
+            /**
+             * Sources
+             * @description Evidence source labels e.g. ['arjun','js_ast','openapi']
+             */
+            sources?: Record<string, never>;
+            /**
+             * Param location
+             * @description json_body|query_string|header|graphql_var|form_data|path
+             */
+            param_location?: string | null;
+            /**
+             * Data type
+             * @description Inferred JS type: string, number, boolean, object, array
+             */
+            data_type?: string | null;
+            /**
+             * Is auth related
+             * @description True when name matches auth header/token patterns
+             */
+            is_auth_related?: boolean;
+            /** Observed in js */
+            observed_in_js?: boolean;
+            /** Observed in openapi */
+            observed_in_openapi?: boolean;
+            /** Observed in graphql */
+            observed_in_graphql?: boolean;
+            endpoint?: components["schemas"]["ParameterEndpoint"];
+        };
+        AuthCandidate: {
+            /** Id */
+            readonly id?: number;
+            /** Target */
+            target: string;
+            /**
+             * Protocol
+             * @enum {string}
+             */
+            protocol: "http" | "smb" | "rdp" | "ssh" | "ftp" | "telnet";
+            /** Port */
+            port: number;
+            /** Source tool */
+            source_tool?: string | null;
+            /** Metadata */
+            metadata?: Record<string, never>;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status?: "pending" | "processing" | "completed" | "failed";
+            /**
+             * Discovered date
+             * Format: date-time
+             */
+            readonly discovered_date?: string;
+            /** Scan history */
+            scan_history: number;
+            /** Subdomain */
+            subdomain?: number | null;
+            /** Endpoint */
+            endpoint?: number | null;
         };
         Endpoint: {
             /** Id */
             readonly id?: number;
             techs: components["schemas"]["Technology"][];
             readonly parameters?: components["schemas"]["Parameter"][];
+            readonly auth_candidates?: components["schemas"]["AuthCandidate"][];
             /** Source */
             source?: string | null;
             /** Http url */
@@ -5295,6 +14092,670 @@ export interface components {
             subdomain?: number | null;
             endpoint_subscan_ids?: number[];
         };
+        ExposureEvidence: {
+            /** Id */
+            readonly id?: number;
+            /** Source tool */
+            source_tool: string;
+            /** Evidence data */
+            evidence_data?: Record<string, never>;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            readonly timestamp?: string;
+            /** Exposure */
+            exposure: number;
+        };
+        Exposure: {
+            /** Id */
+            readonly id?: number;
+            readonly evidence?: components["schemas"]["ExposureEvidence"][];
+            /** Scan history */
+            readonly scan_history?: string;
+            /** Discovered date */
+            readonly discovered_date?: string;
+            type?: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status?: "open" | "verified" | "accepted" | "false_positive" | "remediated" | "resolved";
+            /** Status note */
+            status_note?: string;
+            /**
+             * First seen
+             * Format: date-time
+             */
+            readonly first_seen?: string;
+            /**
+             * Last seen
+             * Format: date-time
+             */
+            readonly last_seen?: string;
+            /** Risk score */
+            risk_score?: number;
+            readonly target_domain?: {
+                /** Id */
+                readonly id?: number;
+                /** Name */
+                name: string;
+                /**
+                 * Target type
+                 * @enum {string}
+                 */
+                target_type?: "domain" | "host" | "subdomain" | "url" | "ip" | "cidr" | "email" | "username" | "phone" | "crypto_address" | "code_path";
+                /** H1 team handle */
+                h1_team_handle?: string | null;
+                /** Ip address cidr */
+                ip_address_cidr?: string | null;
+                /** Description */
+                description?: string | null;
+                /**
+                 * Insert date
+                 * Format: date-time
+                 */
+                insert_date?: string | null;
+                /**
+                 * Start scan date
+                 * Format: date-time
+                 */
+                start_scan_date?: string | null;
+                /** Request headers */
+                request_headers?: Record<string, never> | null;
+                /** Starting point path */
+                starting_point_path?: string | null;
+                /** Excluded paths */
+                excluded_paths?: Record<string, never> | null;
+                /** In scope ips */
+                in_scope_ips?: string | null;
+                /** Secondary domains */
+                secondary_domains?: string | null;
+                /** Manual subdomains */
+                manual_subdomains?: string | null;
+                /** Is monitored */
+                is_monitored?: boolean;
+                /**
+                 * Monitor frequency
+                 * @enum {string}
+                 */
+                monitor_frequency?: "hourly" | "daily" | "weekly" | "monthly";
+                /**
+                 * Monitor scan scope
+                 * @enum {string}
+                 */
+                monitor_scan_scope?: "targeted" | "full";
+                /**
+                 * Last monitored
+                 * Format: date-time
+                 */
+                last_monitored?: string | null;
+                readonly domain_info?: {
+                    /** Id */
+                    readonly id?: number;
+                    /** Dnssec */
+                    dnssec?: boolean;
+                    /**
+                     * Created
+                     * Format: date-time
+                     */
+                    created?: string | null;
+                    /**
+                     * Updated
+                     * Format: date-time
+                     */
+                    updated?: string | null;
+                    /**
+                     * Expires
+                     * Format: date-time
+                     */
+                    expires?: string | null;
+                    /** Geolocation iso */
+                    geolocation_iso?: string | null;
+                    /** Whois server */
+                    whois_server?: string | null;
+                    /** Whois raw */
+                    whois_raw?: Record<string, never> | null;
+                    /** Registrar */
+                    registrar?: number | null;
+                    /** Registrant */
+                    registrant?: number | null;
+                    /** Admin */
+                    admin?: number | null;
+                    /** Tech */
+                    tech?: number | null;
+                    status?: number[];
+                    name_servers?: number[];
+                    dns_records?: number[];
+                    related_domains?: number[];
+                    related_tlds?: number[];
+                    similar_domains?: number[];
+                    historical_ips?: number[];
+                };
+                readonly project?: {
+                    /** Id */
+                    readonly id?: number;
+                    /** Name */
+                    name: string;
+                    /**
+                     * Slug
+                     * Format: slug
+                     */
+                    slug: string;
+                    /**
+                     * Insert date
+                     * Format: date-time
+                     */
+                    insert_date: string;
+                };
+                readonly monitor_engine?: {
+                    /** Id */
+                    readonly id?: number;
+                    /** Engine name */
+                    engine_name: string;
+                    /** Yaml configuration */
+                    yaml_configuration: string;
+                    /** Default engine */
+                    default_engine?: boolean | null;
+                };
+                readonly temporal_schedule?: {
+                    /** ID */
+                    readonly id?: number;
+                    /** Schedule id */
+                    schedule_id: string;
+                    /** Name */
+                    name: string;
+                    /** Workflow type */
+                    workflow_type: string;
+                    /** Workflow args */
+                    workflow_args?: Record<string, never>;
+                    /** Cron expression */
+                    cron_expression?: string;
+                    /** Interval seconds */
+                    interval_seconds?: number | null;
+                    /**
+                     * Clocked time
+                     * Format: date-time
+                     */
+                    clocked_time?: string | null;
+                    /** One off */
+                    one_off?: boolean;
+                    /** Is active */
+                    is_active?: boolean;
+                    /** Total run count */
+                    total_run_count?: number;
+                    /**
+                     * Last run at
+                     * Format: date-time
+                     */
+                    last_run_at?: string | null;
+                    /**
+                     * Created at
+                     * Format: date-time
+                     */
+                    readonly created_at?: string;
+                    /**
+                     * Updated at
+                     * Format: date-time
+                     */
+                    readonly updated_at?: string;
+                    /** Domain */
+                    domain?: number | null;
+                };
+            };
+            readonly subdomain?: {
+                /** Id */
+                readonly id?: number;
+                /** Name */
+                name: string;
+                /** Is imported subdomain */
+                is_imported_subdomain?: boolean;
+                /** Is important */
+                is_important?: boolean | null;
+                /** Http url */
+                http_url?: string | null;
+                /** Screenshot path */
+                screenshot_path?: string | null;
+                /** Http header path */
+                http_header_path?: string | null;
+                /**
+                 * Discovered date
+                 * Format: date-time
+                 */
+                discovered_date?: string | null;
+                /** Cname */
+                cname?: string | null;
+                /** Is cdn */
+                is_cdn?: boolean | null;
+                /** Cdn name */
+                cdn_name?: string | null;
+                /** Http status */
+                http_status?: number;
+                /** Content type */
+                content_type?: string | null;
+                /** Response time */
+                response_time?: number | null;
+                /** Webserver */
+                webserver?: string | null;
+                /** Content length */
+                content_length?: number | null;
+                /** Page title */
+                page_title?: string | null;
+                /** Origin ip */
+                origin_ip?: string | null;
+                /** Attack surface */
+                attack_surface?: string | null;
+                /** Criticality level */
+                criticality_level?: number | null;
+                /** Criticality reason */
+                criticality_reason?: string | null;
+                readonly scan_history?: {
+                    /** Id */
+                    readonly id?: number;
+                    /**
+                     * Start scan date
+                     * Format: date-time
+                     */
+                    start_scan_date: string;
+                    /**
+                     * Scan status
+                     * @enum {integer}
+                     */
+                    scan_status?: -1 | 0 | 1 | 2 | 3 | 4 | 5;
+                    /** Results dir */
+                    results_dir?: string;
+                    workflow_ids?: string[];
+                    tasks?: string[] | null;
+                    /**
+                     * Stop scan date
+                     * Format: date-time
+                     */
+                    stop_scan_date?: string | null;
+                    /** Used gf patterns */
+                    used_gf_patterns?: string | null;
+                    /** Error message */
+                    error_message?: string | null;
+                    /** Recovery count */
+                    recovery_count?: number;
+                    cfg_out_of_scope_subdomains?: string[] | null;
+                    /** Cfg starting point path */
+                    cfg_starting_point_path?: string | null;
+                    cfg_excluded_paths?: string[] | null;
+                    cfg_imported_subdomains?: string[] | null;
+                    /** Cfg custom dorks */
+                    cfg_custom_dorks?: string | null;
+                    /** Domain */
+                    domain: number;
+                    /** Scan type */
+                    scan_type: number;
+                    /** Assessment */
+                    assessment?: number | null;
+                    /** Hardware profile */
+                    hardware_profile?: number | null;
+                    /** Initiated by */
+                    initiated_by?: number | null;
+                    /** Aborted by */
+                    aborted_by?: number | null;
+                    emails?: number[];
+                    employees?: number[];
+                    buckets?: number[];
+                    dorks?: number[];
+                };
+                readonly target_domain?: {
+                    /** Id */
+                    readonly id?: number;
+                    /** Name */
+                    name: string;
+                    /**
+                     * Target type
+                     * @enum {string}
+                     */
+                    target_type?: "domain" | "host" | "subdomain" | "url" | "ip" | "cidr" | "email" | "username" | "phone" | "crypto_address" | "code_path";
+                    /** H1 team handle */
+                    h1_team_handle?: string | null;
+                    /** Ip address cidr */
+                    ip_address_cidr?: string | null;
+                    /** Description */
+                    description?: string | null;
+                    /**
+                     * Insert date
+                     * Format: date-time
+                     */
+                    insert_date?: string | null;
+                    /**
+                     * Start scan date
+                     * Format: date-time
+                     */
+                    start_scan_date?: string | null;
+                    /** Request headers */
+                    request_headers?: Record<string, never> | null;
+                    /** Starting point path */
+                    starting_point_path?: string | null;
+                    /** Excluded paths */
+                    excluded_paths?: Record<string, never> | null;
+                    /** In scope ips */
+                    in_scope_ips?: string | null;
+                    /** Secondary domains */
+                    secondary_domains?: string | null;
+                    /** Manual subdomains */
+                    manual_subdomains?: string | null;
+                    /** Is monitored */
+                    is_monitored?: boolean;
+                    /**
+                     * Monitor frequency
+                     * @enum {string}
+                     */
+                    monitor_frequency?: "hourly" | "daily" | "weekly" | "monthly";
+                    /**
+                     * Monitor scan scope
+                     * @enum {string}
+                     */
+                    monitor_scan_scope?: "targeted" | "full";
+                    /**
+                     * Last monitored
+                     * Format: date-time
+                     */
+                    last_monitored?: string | null;
+                    /** Domain info */
+                    domain_info?: number | null;
+                    /** Project */
+                    project?: number | null;
+                    /** Monitor engine */
+                    monitor_engine?: number | null;
+                    /** Temporal schedule */
+                    temporal_schedule?: number | null;
+                };
+                readonly technologies?: {
+                    /** Id */
+                    readonly id?: number;
+                    /** Name */
+                    name?: string | null;
+                }[];
+                readonly ip_addresses?: {
+                    /** Id */
+                    readonly id?: number;
+                    /** Address */
+                    address?: string | null;
+                    /** Is cdn */
+                    is_cdn?: boolean;
+                    /** Version */
+                    version?: number | null;
+                    /** Is private */
+                    is_private?: boolean;
+                    /** Reverse pointer */
+                    reverse_pointer?: string | null;
+                    /** Asn */
+                    asn?: string | null;
+                    /** Asn cidr */
+                    asn_cidr?: string | null;
+                    /** Asn org */
+                    asn_org?: string | null;
+                    /** Geo iso */
+                    geo_iso?: number | null;
+                    ports: number[];
+                    ip_subscan_ids: number[];
+                }[];
+                readonly directories?: {
+                    /** Id */
+                    readonly id?: number;
+                    /** Command line */
+                    command_line?: string | null;
+                    /**
+                     * Scanned date
+                     * Format: date-time
+                     */
+                    scanned_date?: string | null;
+                    directory_files?: number[];
+                    dir_subscan_ids?: number[];
+                }[];
+                readonly waf?: {
+                    /** Id */
+                    readonly id?: number;
+                    /** Name */
+                    name: string;
+                    /** Manufacturer */
+                    manufacturer?: string | null;
+                }[];
+            };
+            readonly endpoint?: {
+                /** Id */
+                readonly id?: number;
+                /** Source */
+                source?: string | null;
+                /** Http url */
+                http_url: string;
+                /** Content length */
+                content_length?: number | null;
+                /** Page title */
+                page_title?: string | null;
+                /** Http status */
+                http_status?: number | null;
+                /** Content type */
+                content_type?: string | null;
+                /**
+                 * Discovered date
+                 * Format: date-time
+                 */
+                discovered_date?: string | null;
+                /** Response time */
+                response_time?: number | null;
+                /** Webserver */
+                webserver?: string | null;
+                /** Is default */
+                is_default?: boolean | null;
+                /** Is redirect */
+                is_redirect?: boolean;
+                /** Matched gf patterns */
+                matched_gf_patterns?: string | null;
+                readonly scan_history?: {
+                    /** Id */
+                    readonly id?: number;
+                    /**
+                     * Start scan date
+                     * Format: date-time
+                     */
+                    start_scan_date: string;
+                    /**
+                     * Scan status
+                     * @enum {integer}
+                     */
+                    scan_status?: -1 | 0 | 1 | 2 | 3 | 4 | 5;
+                    /** Results dir */
+                    results_dir?: string;
+                    workflow_ids?: string[];
+                    tasks?: string[] | null;
+                    /**
+                     * Stop scan date
+                     * Format: date-time
+                     */
+                    stop_scan_date?: string | null;
+                    /** Used gf patterns */
+                    used_gf_patterns?: string | null;
+                    /** Error message */
+                    error_message?: string | null;
+                    /** Recovery count */
+                    recovery_count?: number;
+                    cfg_out_of_scope_subdomains?: string[] | null;
+                    /** Cfg starting point path */
+                    cfg_starting_point_path?: string | null;
+                    cfg_excluded_paths?: string[] | null;
+                    cfg_imported_subdomains?: string[] | null;
+                    /** Cfg custom dorks */
+                    cfg_custom_dorks?: string | null;
+                    /** Domain */
+                    domain: number;
+                    /** Scan type */
+                    scan_type: number;
+                    /** Assessment */
+                    assessment?: number | null;
+                    /** Hardware profile */
+                    hardware_profile?: number | null;
+                    /** Initiated by */
+                    initiated_by?: number | null;
+                    /** Aborted by */
+                    aborted_by?: number | null;
+                    emails?: number[];
+                    employees?: number[];
+                    buckets?: number[];
+                    dorks?: number[];
+                };
+                readonly target_domain?: {
+                    /** Id */
+                    readonly id?: number;
+                    /** Name */
+                    name: string;
+                    /**
+                     * Target type
+                     * @enum {string}
+                     */
+                    target_type?: "domain" | "host" | "subdomain" | "url" | "ip" | "cidr" | "email" | "username" | "phone" | "crypto_address" | "code_path";
+                    /** H1 team handle */
+                    h1_team_handle?: string | null;
+                    /** Ip address cidr */
+                    ip_address_cidr?: string | null;
+                    /** Description */
+                    description?: string | null;
+                    /**
+                     * Insert date
+                     * Format: date-time
+                     */
+                    insert_date?: string | null;
+                    /**
+                     * Start scan date
+                     * Format: date-time
+                     */
+                    start_scan_date?: string | null;
+                    /** Request headers */
+                    request_headers?: Record<string, never> | null;
+                    /** Starting point path */
+                    starting_point_path?: string | null;
+                    /** Excluded paths */
+                    excluded_paths?: Record<string, never> | null;
+                    /** In scope ips */
+                    in_scope_ips?: string | null;
+                    /** Secondary domains */
+                    secondary_domains?: string | null;
+                    /** Manual subdomains */
+                    manual_subdomains?: string | null;
+                    /** Is monitored */
+                    is_monitored?: boolean;
+                    /**
+                     * Monitor frequency
+                     * @enum {string}
+                     */
+                    monitor_frequency?: "hourly" | "daily" | "weekly" | "monthly";
+                    /**
+                     * Monitor scan scope
+                     * @enum {string}
+                     */
+                    monitor_scan_scope?: "targeted" | "full";
+                    /**
+                     * Last monitored
+                     * Format: date-time
+                     */
+                    last_monitored?: string | null;
+                    /** Domain info */
+                    domain_info?: number | null;
+                    /** Project */
+                    project?: number | null;
+                    /** Monitor engine */
+                    monitor_engine?: number | null;
+                    /** Temporal schedule */
+                    temporal_schedule?: number | null;
+                };
+                readonly subdomain?: {
+                    /** Id */
+                    readonly id?: number;
+                    /** Name */
+                    name: string;
+                    /** Is imported subdomain */
+                    is_imported_subdomain?: boolean;
+                    /** Is important */
+                    is_important?: boolean | null;
+                    /** Http url */
+                    http_url?: string | null;
+                    /** Screenshot path */
+                    screenshot_path?: string | null;
+                    /** Http header path */
+                    http_header_path?: string | null;
+                    /**
+                     * Discovered date
+                     * Format: date-time
+                     */
+                    discovered_date?: string | null;
+                    /** Cname */
+                    cname?: string | null;
+                    /** Is cdn */
+                    is_cdn?: boolean | null;
+                    /** Cdn name */
+                    cdn_name?: string | null;
+                    /** Http status */
+                    http_status?: number;
+                    /** Content type */
+                    content_type?: string | null;
+                    /** Response time */
+                    response_time?: number | null;
+                    /** Webserver */
+                    webserver?: string | null;
+                    /** Content length */
+                    content_length?: number | null;
+                    /** Page title */
+                    page_title?: string | null;
+                    /** Origin ip */
+                    origin_ip?: string | null;
+                    /** Attack surface */
+                    attack_surface?: string | null;
+                    /** Criticality level */
+                    criticality_level?: number | null;
+                    /** Criticality reason */
+                    criticality_reason?: string | null;
+                    /** Scan history */
+                    scan_history: number | null;
+                    /** Target domain */
+                    target_domain?: number | null;
+                    technologies?: number[];
+                    ip_addresses?: number[];
+                    directories?: number[];
+                    waf?: number[];
+                };
+                readonly techs?: {
+                    /** Id */
+                    readonly id?: number;
+                    /** Name */
+                    name?: string | null;
+                }[];
+                readonly endpoint_subscan_ids?: {
+                    /** Id */
+                    readonly id?: number;
+                    /** Type */
+                    type?: string | null;
+                    /**
+                     * Start scan date
+                     * Format: date-time
+                     */
+                    start_scan_date: string;
+                    /** Status */
+                    status: number;
+                    workflow_ids?: string[];
+                    /**
+                     * Stop scan date
+                     * Format: date-time
+                     */
+                    stop_scan_date?: string | null;
+                    /** Error message */
+                    error_message?: string | null;
+                    /** Scan history */
+                    scan_history: number;
+                    /** Assessment */
+                    assessment?: number | null;
+                    /** Subdomain */
+                    subdomain: number;
+                    /** Engine */
+                    engine?: number | null;
+                    subdomain_subscan_ids?: number[];
+                }[];
+            };
+        };
         IpSubdomain: {
             /** Name */
             name: string;
@@ -5311,6 +14772,12 @@ export interface components {
                 is_private?: boolean;
                 /** Reverse pointer */
                 reverse_pointer?: string | null;
+                /** Asn */
+                asn?: string | null;
+                /** Asn cidr */
+                asn_cidr?: string | null;
+                /** Asn org */
+                asn_org?: string | null;
                 /** Geo iso */
                 geo_iso?: number | null;
                 ports: number[];
@@ -5352,10 +14819,10 @@ export interface components {
              * Scan status
              * @enum {integer}
              */
-            scan_status?: -1 | 0 | 1 | 2 | 3 | 4;
+            scan_status?: -1 | 0 | 1 | 2 | 3 | 4 | 5;
             /** Results dir */
             results_dir?: string;
-            celery_ids?: string[];
+            workflow_ids?: string[];
             tasks?: string[] | null;
             /**
              * Stop scan date
@@ -5369,6 +14836,11 @@ export interface components {
                 readonly id?: number;
                 /** Name */
                 name: string;
+                /**
+                 * Target type
+                 * @enum {string}
+                 */
+                target_type?: "domain" | "host" | "subdomain" | "url" | "ip" | "cidr" | "email" | "username" | "phone" | "crypto_address" | "code_path";
                 /** H1 team handle */
                 h1_team_handle?: string | null;
                 /** Ip address cidr */
@@ -5391,6 +14863,12 @@ export interface components {
                 starting_point_path?: string | null;
                 /** Excluded paths */
                 excluded_paths?: Record<string, never> | null;
+                /** In scope ips */
+                in_scope_ips?: string | null;
+                /** Secondary domains */
+                secondary_domains?: string | null;
+                /** Manual subdomains */
+                manual_subdomains?: string | null;
                 /** Is monitored */
                 is_monitored?: boolean;
                 /**
@@ -5414,8 +14892,8 @@ export interface components {
                 project?: number | null;
                 /** Monitor engine */
                 monitor_engine?: number | null;
-                /** Monitor periodic task */
-                monitor_periodic_task?: number | null;
+                /** Temporal schedule */
+                temporal_schedule?: number | null;
             };
             readonly scan_type?: {
                 /** Id */
@@ -5434,6 +14912,20 @@ export interface components {
             readonly engine_name?: string;
             /** Cfg starting point path */
             cfg_starting_point_path?: string | null;
+            /** Is spiderfoot running */
+            readonly is_spiderfoot_running?: string;
+            /** Successful task count */
+            readonly successful_task_count?: string;
+            /** Failed task count */
+            readonly failed_task_count?: string;
+            /** Total task count */
+            readonly total_task_count?: string;
+            /** Current tier */
+            readonly current_tier?: string;
+            /** Total tiers */
+            readonly total_tiers?: string;
+            /** Current tier progress */
+            readonly current_tier_progress?: string;
         };
         SubdomainChanges: {
             /** Id */
@@ -5486,7 +14978,7 @@ export interface components {
             /** Criticality reason */
             criticality_reason?: string | null;
             /** Scan history */
-            scan_history?: number | null;
+            scan_history: number | null;
             /** Target domain */
             target_domain?: number | null;
             technologies?: number[];
@@ -5499,6 +14991,10 @@ export interface components {
             readonly id?: number;
             /** Vuln count */
             readonly vuln_count?: string;
+            /** Subdomain count */
+            readonly subdomain_count?: string;
+            /** Vulnerability count */
+            readonly vulnerability_count?: string;
             /** Organization */
             readonly organization?: string;
             /** Most recent scan */
@@ -5511,8 +15007,17 @@ export interface components {
             readonly start_scan_date?: string;
             /** Start scan date humanized */
             readonly start_scan_date_humanized?: string;
+            /** Most recent scan status */
+            readonly most_recent_scan_status?: string;
+            /** Most recent scan progress */
+            readonly most_recent_scan_progress?: string;
             /** Name */
             name: string;
+            /**
+             * Target type
+             * @enum {string}
+             */
+            target_type?: "domain" | "host" | "subdomain" | "url" | "ip" | "cidr" | "email" | "username" | "phone" | "crypto_address" | "code_path";
             /** H1 team handle */
             h1_team_handle?: string | null;
             /** Ip address cidr */
@@ -5525,6 +15030,12 @@ export interface components {
             starting_point_path?: string | null;
             /** Excluded paths */
             excluded_paths?: Record<string, never> | null;
+            /** In scope ips */
+            in_scope_ips?: string | null;
+            /** Secondary domains */
+            secondary_domains?: string | null;
+            /** Manual subdomains */
+            manual_subdomains?: string | null;
             /** Is monitored */
             is_monitored?: boolean;
             /**
@@ -5566,6 +15077,8 @@ export interface components {
                 geolocation_iso?: string | null;
                 /** Whois server */
                 whois_server?: string | null;
+                /** Whois raw */
+                whois_raw?: Record<string, never> | null;
                 readonly registrar?: {
                     /** Id */
                     readonly id?: number;
@@ -5733,184 +15246,110 @@ export interface components {
                 /** Default engine */
                 default_engine?: boolean | null;
             };
-            readonly monitor_periodic_task?: {
+            readonly temporal_schedule?: {
                 /** ID */
                 readonly id?: number;
-                /**
-                 * Name
-                 * @description Short Description For This Task
-                 */
+                /** Schedule id */
+                schedule_id: string;
+                /** Name */
                 name: string;
+                /** Workflow type */
+                workflow_type: string;
+                /** Workflow args */
+                workflow_args?: Record<string, never>;
+                /** Cron expression */
+                cron_expression?: string;
+                /** Interval seconds */
+                interval_seconds?: number | null;
                 /**
-                 * Task Name
-                 * @description The Name of the Celery Task that Should be Run.  (Example: "proj.tasks.import_contacts")
-                 */
-                task: string;
-                /**
-                 * Positional Arguments
-                 * @description JSON encoded positional arguments (Example: ["arg1", "arg2"])
-                 */
-                args?: string;
-                /**
-                 * Keyword Arguments
-                 * @description JSON encoded keyword arguments (Example: {"argument": "value"})
-                 */
-                kwargs?: string;
-                /**
-                 * Queue Override
-                 * @description Queue defined in CELERY_TASK_QUEUES. Leave None for default queuing.
-                 */
-                queue?: string | null;
-                /**
-                 * Exchange
-                 * @description Override Exchange for low-level AMQP routing
-                 */
-                exchange?: string | null;
-                /**
-                 * Routing Key
-                 * @description Override Routing Key for low-level AMQP routing
-                 */
-                routing_key?: string | null;
-                /**
-                 * AMQP Message Headers
-                 * @description JSON encoded message headers for the AMQP message.
-                 */
-                headers?: string;
-                /**
-                 * Priority
-                 * @description Priority Number between 0 and 255. Supported by: RabbitMQ, Redis (priority reversed, 0 is highest).
-                 */
-                priority?: number | null;
-                /**
-                 * Expires Datetime
+                 * Clocked time
                  * Format: date-time
-                 * @description Datetime after which the schedule will no longer trigger the task to run
                  */
-                expires?: string | null;
-                /**
-                 * Expires timedelta with seconds
-                 * @description Timedelta with seconds which the schedule will no longer trigger the task to run
-                 */
-                expire_seconds?: number | null;
-                /**
-                 * One-off Task
-                 * @description If True, the schedule will only run the task a single time
-                 */
+                clocked_time?: string | null;
+                /** One off */
                 one_off?: boolean;
+                /** Is active */
+                is_active?: boolean;
+                /** Total run count */
+                total_run_count?: number;
                 /**
-                 * Start Datetime
+                 * Last run at
                  * Format: date-time
-                 * @description Datetime when the schedule should begin triggering the task to run
                  */
-                start_time?: string | null;
+                last_run_at?: string | null;
                 /**
-                 * Enabled
-                 * @description Set to False to disable the schedule
-                 */
-                enabled?: boolean;
-                /**
-                 * Last Run Datetime
+                 * Created at
                  * Format: date-time
-                 * @description Datetime that the schedule last triggered the task to run. Reset to None if enabled is set to False.
                  */
-                readonly last_run_at?: string;
+                readonly created_at?: string;
                 /**
-                 * Total Run Count
-                 * @description Running count of how many times the schedule has triggered the task
-                 */
-                readonly total_run_count?: number;
-                /**
-                 * Last Modified
+                 * Updated at
                  * Format: date-time
-                 * @description Datetime that this PeriodicTask was last modified
                  */
-                readonly date_changed?: string;
-                /**
-                 * Description
-                 * @description Detailed description about the details of this Periodic Task
-                 */
-                description?: string;
-                readonly interval?: {
-                    /** ID */
+                readonly updated_at?: string;
+                readonly domain?: {
+                    /** Id */
                     readonly id?: number;
+                    /** Name */
+                    name: string;
                     /**
-                     * Number of Periods
-                     * @description Number of interval periods to wait before running the task again
-                     */
-                    every: number;
-                    /**
-                     * Interval Period
-                     * @description The type of period between task runs (Example: days)
+                     * Target type
                      * @enum {string}
                      */
-                    period: "days" | "hours" | "minutes" | "seconds" | "microseconds";
-                };
-                readonly crontab?: {
-                    /** ID */
-                    readonly id?: number;
+                    target_type?: "domain" | "host" | "subdomain" | "url" | "ip" | "cidr" | "email" | "username" | "phone" | "crypto_address" | "code_path";
+                    /** H1 team handle */
+                    h1_team_handle?: string | null;
+                    /** Ip address cidr */
+                    ip_address_cidr?: string | null;
+                    /** Description */
+                    description?: string | null;
                     /**
-                     * Minute(s)
-                     * @description Cron Minutes to Run. Use "*" for "all". (Example: "0,30")
-                     */
-                    minute?: string;
-                    /**
-                     * Hour(s)
-                     * @description Cron Hours to Run. Use "*" for "all". (Example: "8,20")
-                     */
-                    hour?: string;
-                    /**
-                     * Day(s) Of The Month
-                     * @description Cron Days Of The Month to Run. Use "*" for "all". (Example: "1,15")
-                     */
-                    day_of_month?: string;
-                    /**
-                     * Month(s) Of The Year
-                     * @description Cron Months (1-12) Of The Year to Run. Use "*" for "all". (Example: "1,12")
-                     */
-                    month_of_year?: string;
-                    /**
-                     * Day(s) Of The Week
-                     * @description Cron Days Of The Week to Run. Use "*" for "all", Sunday is 0 or 7, Monday is 1. (Example: "0,5")
-                     */
-                    day_of_week?: string;
-                    /**
-                     * Cron Timezone
-                     * @description Timezone to Run the Cron Schedule on. Default is UTC.
-                     * @enum {string}
-                     */
-                    timezone?: "Asia/Macau" | "America/Recife" | "Africa/Bissau" | "America/Mendoza" | "GMT0" | "America/St_Vincent" | "Australia/Broken_Hill" | "America/Ensenada" | "Asia/Kolkata" | "Europe/San_Marino" | "US/Mountain" | "Pacific/Johnston" | "America/Thule" | "America/Bogota" | "America/Porto_Velho" | "Asia/Hong_Kong" | "Antarctica/Rothera" | "Asia/Tbilisi" | "Indian/Cocos" | "Asia/Urumqi" | "America/Belize" | "Indian/Chagos" | "EET" | "Pacific/Norfolk" | "America/Indiana/Petersburg" | "Europe/Kaliningrad" | "America/Cordoba" | "Pacific/Guam" | "Canada/Mountain" | "Africa/Abidjan" | "America/Rainy_River" | "Asia/Thimbu" | "America/Caracas" | "America/Denver" | "Asia/Kuching" | "Asia/Magadan" | "Asia/Manila" | "Pacific/Marquesas" | "Israel" | "Etc/GMT+6" | "Africa/Asmera" | "Africa/Mbabane" | "Asia/Yangon" | "Europe/London" | "Atlantic/Bermuda" | "America/Ojinaga" | "Asia/Barnaul" | "America/Monterrey" | "America/Fort_Nelson" | "Europe/Saratov" | "America/St_Kitts" | "Asia/Jayapura" | "America/Moncton" | "America/Miquelon" | "Asia/Yekaterinburg" | "Asia/Dacca" | "Pacific/Wake" | "Etc/GMT-10" | "Europe/Bucharest" | "Etc/GMT+7" | "Eire" | "America/Buenos_Aires" | "Asia/Kuala_Lumpur" | "Europe/Busingen" | "Australia/Adelaide" | "Indian/Christmas" | "America/Boise" | "Pacific/Honolulu" | "Indian/Mauritius" | "Etc/GMT" | "Australia/Perth" | "Pacific/Samoa" | "America/Halifax" | "Europe/Helsinki" | "Antarctica/McMurdo" | "Asia/Damascus" | "Asia/Oral" | "Canada/Pacific" | "Europe/Athens" | "Africa/Kigali" | "US/Indiana-Starke" | "Asia/Bishkek" | "Asia/Colombo" | "Asia/Kashgar" | "America/Chihuahua" | "Asia/Tokyo" | "America/Port-au-Prince" | "Pacific/Tahiti" | "America/Anguilla" | "Asia/Harbin" | "America/Rio_Branco" | "Asia/Gaza" | "Atlantic/Cape_Verde" | "Asia/Vladivostok" | "America/Resolute" | "Africa/Mogadishu" | "Chile/Continental" | "Europe/Malta" | "Asia/Ho_Chi_Minh" | "Canada/Newfoundland" | "Asia/Choibalsan" | "America/Whitehorse" | "America/Cancun" | "Asia/Pontianak" | "Europe/Ljubljana" | "America/Grenada" | "America/Santa_Isabel" | "Arctic/Longyearbyen" | "Pacific/Yap" | "America/Swift_Current" | "US/Alaska" | "Asia/Kuwait" | "Europe/Warsaw" | "America/Phoenix" | "America/Porto_Acre" | "America/Kentucky/Louisville" | "Africa/Freetown" | "GMT" | "US/Pacific" | "Australia/Hobart" | "Africa/Bujumbura" | "Etc/GMT-14" | "America/Creston" | "Pacific/Majuro" | "Asia/Chita" | "Australia/LHI" | "America/Lower_Princes" | "Asia/Ujung_Pandang" | "America/Cayman" | "Pacific/Ponape" | "Europe/Budapest" | "America/Los_Angeles" | "Asia/Khandyga" | "Asia/Yakutsk" | "Africa/Dakar" | "America/Noronha" | "Cuba" | "America/Paramaribo" | "America/Nipigon" | "Etc/GMT0" | "America/Rosario" | "America/Indiana/Marengo" | "America/Grand_Turk" | "Europe/Zurich" | "Europe/Minsk" | "America/Cuiaba" | "Africa/Maputo" | "America/Vancouver" | "EST" | "Etc/GMT-9" | "Australia/Brisbane" | "Etc/GMT-8" | "America/Menominee" | "Etc/GMT-1" | "Africa/Harare" | "Africa/Lagos" | "America/Regina" | "Etc/GMT-4" | "Portugal" | "Pacific/Pitcairn" | "Brazil/Acre" | "MST7MDT" | "America/Cambridge_Bay" | "America/Argentina/Salta" | "America/Barbados" | "America/Santiago" | "Australia/Tasmania" | "US/Michigan" | "America/Nome" | "America/Eirunepe" | "Etc/UCT" | "Asia/Istanbul" | "Africa/El_Aaiun" | "UTC" | "America/Panama" | "Europe/Chisinau" | "Asia/Makassar" | "America/Punta_Arenas" | "Europe/Rome" | "Etc/GMT+12" | "Atlantic/South_Georgia" | "America/Sao_Paulo" | "Asia/Rangoon" | "America/Manaus" | "America/Argentina/Jujuy" | "Brazil/East" | "EST5EDT" | "Asia/Chungking" | "America/Louisville" | "Africa/Gaborone" | "Asia/Taipei" | "GMT+0" | "Antarctica/Syowa" | "Australia/Sydney" | "Europe/Lisbon" | "Canada/Central" | "Iran" | "Africa/Libreville" | "Asia/Shanghai" | "Asia/Pyongyang" | "Atlantic/Stanley" | "America/Belem" | "Europe/Sofia" | "America/Mazatlan" | "Etc/GMT-12" | "Pacific/Palau" | "Europe/Guernsey" | "Australia/Eucla" | "Australia/Darwin" | "Etc/Zulu" | "Africa/Banjul" | "Atlantic/Reykjavik" | "Europe/Tiraspol" | "America/Asuncion" | "Europe/Riga" | "Brazil/West" | "Indian/Antananarivo" | "America/Nassau" | "Africa/Ndjamena" | "America/Atikokan" | "Antarctica/Vostok" | "Europe/Brussels" | "America/Argentina/San_Luis" | "America/Indiana/Tell_City" | "Europe/Prague" | "Pacific/Port_Moresby" | "America/Aruba" | "America/Montserrat" | "Europe/Isle_of_Man" | "America/Guatemala" | "Etc/GMT-2" | "America/Yakutat" | "Antarctica/Macquarie" | "America/Argentina/Tucuman" | "Pacific/Kiritimati" | "Africa/Timbuktu" | "Asia/Beirut" | "US/Central" | "Etc/GMT-5" | "America/Indiana/Vevay" | "America/Mexico_City" | "Asia/Baku" | "Europe/Paris" | "US/Eastern" | "Asia/Aden" | "Africa/Dar_es_Salaam" | "Asia/Tomsk" | "America/Tegucigalpa" | "America/St_Thomas" | "Africa/Niamey" | "America/Tijuana" | "Asia/Dili" | "America/Fort_Wayne" | "Asia/Dubai" | "Asia/Tel_Aviv" | "Africa/Algiers" | "Pacific/Enderbury" | "Asia/Atyrau" | "America/Jamaica" | "Asia/Dushanbe" | "Africa/Addis_Ababa" | "Australia/NSW" | "Africa/Cairo" | "Asia/Brunei" | "America/Puerto_Rico" | "Asia/Riyadh" | "Africa/Lubumbashi" | "Asia/Almaty" | "America/Rankin_Inlet" | "Canada/Atlantic" | "Poland" | "Indian/Maldives" | "WET" | "Antarctica/Casey" | "Europe/Berlin" | "Pacific/Pohnpei" | "America/Lima" | "Etc/GMT-7" | "America/Nuuk" | "Pacific/Bougainville" | "Europe/Samara" | "Africa/Casablanca" | "Europe/Podgorica" | "Asia/Hebron" | "America/Argentina/San_Juan" | "Pacific/Tongatapu" | "Australia/Melbourne" | "Asia/Karachi" | "America/Dominica" | "America/Glace_Bay" | "America/Danmarkshavn" | "Atlantic/St_Helena" | "Asia/Krasnoyarsk" | "Europe/Simferopol" | "Europe/Sarajevo" | "Etc/GMT+1" | "Atlantic/Canary" | "GB-Eire" | "Japan" | "Europe/Kiev" | "Etc/UTC" | "America/Sitka" | "Europe/Kyiv" | "Asia/Nicosia" | "Australia/South" | "Pacific/Pago_Pago" | "US/East-Indiana" | "Etc/GMT-11" | "Pacific/Gambier" | "Africa/Lusaka" | "America/Guadeloupe" | "Europe/Oslo" | "America/Goose_Bay" | "Africa/Sao_Tome" | "Asia/Kathmandu" | "Africa/Conakry" | "Asia/Baghdad" | "Antarctica/Davis" | "Singapore" | "Navajo" | "Europe/Vienna" | "ROK" | "Pacific/Nauru" | "Greenwich" | "PST8PDT" | "Etc/GMT+3" | "America/Yellowknife" | "America/Thunder_Bay" | "Europe/Istanbul" | "Pacific/Guadalcanal" | "Etc/Universal" | "Africa/Bangui" | "Europe/Ulyanovsk" | "Australia/ACT" | "Antarctica/Mawson" | "America/Bahia_Banderas" | "Libya" | "America/Matamoros" | "Asia/Ashkhabad" | "Asia/Sakhalin" | "America/Toronto" | "Pacific/Midway" | "Pacific/Galapagos" | "Pacific/Kwajalein" | "NZ-CHAT" | "America/Indianapolis" | "America/Virgin" | "America/Martinique" | "Asia/Muscat" | "Asia/Hovd" | "US/Samoa" | "CET" | "America/Indiana/Knox" | "Canada/Yukon" | "Asia/Kabul" | "Pacific/Funafuti" | "America/St_Barthelemy" | "Asia/Jerusalem" | "America/Santo_Domingo" | "America/Coyhaique" | "Asia/Chongqing" | "Africa/Accra" | "Asia/Omsk" | "US/Arizona" | "Australia/Lord_Howe" | "Indian/Reunion" | "Indian/Kerguelen" | "Africa/Lome" | "America/New_York" | "Africa/Bamako" | "Jamaica" | "Asia/Anadyr" | "Pacific/Apia" | "Africa/Porto-Novo" | "America/Araguaina" | "Pacific/Niue" | "Europe/Dublin" | "Etc/GMT+10" | "Etc/GMT+5" | "Europe/Skopje" | "America/North_Dakota/New_Salem" | "Asia/Ulan_Bator" | "Zulu" | "UCT" | "Indian/Comoro" | "America/Hermosillo" | "Etc/Greenwich" | "America/Indiana/Winamac" | "Pacific/Kosrae" | "Africa/Ouagadougou" | "America/Atka" | "Pacific/Tarawa" | "Mexico/BajaSur" | "America/Merida" | "Asia/Aqtobe" | "Europe/Nicosia" | "Pacific/Auckland" | "America/Bahia" | "NZ" | "Africa/Malabo" | "GMT-0" | "Europe/Bratislava" | "America/Catamarca" | "America/North_Dakota/Center" | "Europe/Volgograd" | "Asia/Srednekolymsk" | "Asia/Aqtau" | "Etc/GMT-0" | "America/Ciudad_Juarez" | "Africa/Douala" | "America/St_Johns" | "Canada/Eastern" | "Asia/Qyzylorda" | "America/Boa_Vista" | "Pacific/Wallis" | "Asia/Amman" | "Europe/Madrid" | "America/Maceio" | "America/Jujuy" | "Asia/Yerevan" | "America/Pangnirtung" | "Atlantic/Faroe" | "Asia/Samarkand" | "Etc/GMT+0" | "Europe/Gibraltar" | "America/Indiana/Indianapolis" | "Egypt" | "Australia/Victoria" | "Europe/Vaduz" | "America/Kentucky/Monticello" | "Asia/Singapore" | "Africa/Blantyre" | "Chile/EasterIsland" | "America/Costa_Rica" | "Europe/Moscow" | "America/Havana" | "Asia/Bahrain" | "America/Indiana/Vincennes" | "Canada/Saskatchewan" | "Europe/Belgrade" | "Europe/Amsterdam" | "GB" | "America/Argentina/Cordoba" | "Africa/Windhoek" | "Asia/Qatar" | "Mexico/General" | "Africa/Brazzaville" | "Africa/Luanda" | "Pacific/Chatham" | "Australia/Queensland" | "HST" | "Africa/Maseru" | "Asia/Novokuznetsk" | "Asia/Qostanay" | "Europe/Copenhagen" | "PRC" | "Antarctica/DumontDUrville" | "Etc/GMT+8" | "Europe/Vilnius" | "America/Godthab" | "Atlantic/Faeroe" | "America/Edmonton" | "America/Fortaleza" | "Asia/Bangkok" | "Pacific/Rarotonga" | "America/Argentina/ComodRivadavia" | "America/Argentina/Catamarca" | "Africa/Nairobi" | "Asia/Thimphu" | "Asia/Ulaanbaatar" | "Australia/Yancowinna" | "Africa/Djibouti" | "Europe/Tallinn" | "Indian/Mayotte" | "America/Cayenne" | "Asia/Ust-Nera" | "Europe/Stockholm" | "Pacific/Saipan" | "Africa/Monrovia" | "Antarctica/Palmer" | "America/Detroit" | "Africa/Nouakchott" | "Europe/Zagreb" | "Europe/Mariehamn" | "America/North_Dakota/Beulah" | "Europe/Belfast" | "Australia/West" | "CST6CDT" | "US/Hawaii" | "Etc/GMT-13" | "America/Chicago" | "Europe/Andorra" | "America/Iqaluit" | "Australia/Currie" | "Asia/Ashgabat" | "Antarctica/South_Pole" | "Pacific/Fakaofo" | "America/Adak" | "America/La_Paz" | "Europe/Kirov" | "America/Argentina/La_Rioja" | "Pacific/Chuuk" | "Pacific/Easter" | "Africa/Tripoli" | "Pacific/Kanton" | "America/Santarem" | "Atlantic/Jan_Mayen" | "America/Blanc-Sablon" | "Pacific/Noumea" | "Europe/Astrakhan" | "America/Shiprock" | "Africa/Asmara" | "Asia/Dhaka" | "Africa/Khartoum" | "ROC" | "Africa/Kinshasa" | "Australia/North" | "Etc/GMT+11" | "Etc/GMT-3" | "Atlantic/Azores" | "Asia/Tashkent" | "America/Coral_Harbour" | "Asia/Vientiane" | "Universal" | "Europe/Uzhgorod" | "Iceland" | "Asia/Calcutta" | "Turkey" | "America/Dawson_Creek" | "Europe/Monaco" | "MST" | "America/Port_of_Spain" | "Asia/Irkutsk" | "Asia/Kamchatka" | "Mexico/BajaNorte" | "America/Tortola" | "Asia/Phnom_Penh" | "Australia/Lindeman" | "America/Dawson" | "Etc/GMT+2" | "Africa/Kampala" | "Europe/Luxembourg" | "America/El_Salvador" | "Asia/Famagusta" | "Asia/Tehran" | "America/Guayaquil" | "America/Argentina/Rio_Gallegos" | "America/Curacao" | "America/Kralendijk" | "Asia/Novosibirsk" | "W-SU" | "Africa/Ceuta" | "US/Aleutian" | "Indian/Mahe" | "America/Argentina/Mendoza" | "Asia/Jakarta" | "MET" | "Asia/Macao" | "Africa/Johannesburg" | "America/Metlakatla" | "Brazil/DeNoronha" | "Europe/Zaporozhye" | "America/Scoresbysund" | "Asia/Katmandu" | "Etc/GMT+9" | "Pacific/Efate" | "Pacific/Fiji" | "America/Montevideo" | "Europe/Tirane" | "Antarctica/Troll" | "Asia/Saigon" | "Africa/Juba" | "America/Argentina/Buenos_Aires" | "Africa/Tunis" | "Etc/GMT-6" | "Kwajalein" | "America/Knox_IN" | "America/Inuvik" | "America/Juneau" | "America/Argentina/Ushuaia" | "Hongkong" | "America/Guyana" | "America/Montreal" | "Europe/Jersey" | "America/Campo_Grande" | "Europe/Vatican" | "Australia/Canberra" | "Pacific/Truk" | "America/St_Lucia" | "Etc/GMT+4" | "America/Marigot" | "localtime" | "America/Managua" | "Asia/Seoul" | "America/Antigua" | "America/Winnipeg" | "America/Anchorage" | "Atlantic/Madeira";
-                };
-                readonly solar?: {
-                    /** ID */
-                    readonly id?: number;
-                    /**
-                     * Solar Event
-                     * @description The type of solar event when the job should run
-                     * @enum {string}
-                     */
-                    event: "dawn_astronomical" | "dawn_civil" | "dawn_nautical" | "dusk_astronomical" | "dusk_civil" | "dusk_nautical" | "solar_noon" | "sunrise" | "sunset";
-                    /**
-                     * Latitude
-                     * Format: decimal
-                     * @description Run the task when the event happens at this latitude
-                     */
-                    latitude: string;
-                    /**
-                     * Longitude
-                     * Format: decimal
-                     * @description Run the task when the event happens at this longitude
-                     */
-                    longitude: string;
-                };
-                readonly clocked?: {
-                    /** ID */
-                    readonly id?: number;
-                    /**
-                     * Clock Time
+                     * Insert date
                      * Format: date-time
-                     * @description Run the task at clocked time
                      */
-                    clocked_time: string;
+                    insert_date?: string | null;
+                    /**
+                     * Start scan date
+                     * Format: date-time
+                     */
+                    start_scan_date?: string | null;
+                    /** Request headers */
+                    request_headers?: Record<string, never> | null;
+                    /** Starting point path */
+                    starting_point_path?: string | null;
+                    /** Excluded paths */
+                    excluded_paths?: Record<string, never> | null;
+                    /** In scope ips */
+                    in_scope_ips?: string | null;
+                    /** Secondary domains */
+                    secondary_domains?: string | null;
+                    /** Manual subdomains */
+                    manual_subdomains?: string | null;
+                    /** Is monitored */
+                    is_monitored?: boolean;
+                    /**
+                     * Monitor frequency
+                     * @enum {string}
+                     */
+                    monitor_frequency?: "hourly" | "daily" | "weekly" | "monthly";
+                    /**
+                     * Monitor scan scope
+                     * @enum {string}
+                     */
+                    monitor_scan_scope?: "targeted" | "full";
+                    /**
+                     * Last monitored
+                     * Format: date-time
+                     */
+                    last_monitored?: string | null;
+                    /** Domain info */
+                    domain_info?: number | null;
+                    /** Project */
+                    project?: number | null;
+                    /** Monitor engine */
+                    monitor_engine?: number | null;
+                    /** Temporal schedule */
+                    temporal_schedule?: number | null;
                 };
             };
         };
@@ -5941,7 +15380,7 @@ export interface components {
             /** Id */
             readonly id?: number;
             /** Discovered date */
-            readonly discovered_date?: string;
+            readonly discovered_date?: string | null;
             /** Severity */
             readonly severity?: string;
             /** Scan history */
@@ -5966,6 +15405,7 @@ export interface components {
             /** Remediation */
             remediation?: string | null;
             extracted_results?: string[] | null;
+            affected_urls?: string[] | null;
             /** Cvss metrics */
             cvss_metrics?: string | null;
             /** Cvss score */
@@ -5993,8 +15433,6 @@ export interface components {
              * @enum {string}
              */
             validation_status?: "new" | "verified" | "needs_review" | "false_positive" | "accepted_risk" | "resolved";
-            /** Validation reason */
-            validation_reason?: string | null;
             /** Validation confidence */
             validation_confidence?: number | null;
             /** Correlation score */
@@ -6003,6 +15441,16 @@ export interface components {
             is_suppressed?: boolean;
             /** Group key */
             group_key?: string | null;
+            /**
+             * Validation reason
+             * @description Reason/justification for status change
+             */
+            validation_reason?: string | null;
+            /**
+             * Agent enrichment
+             * @description SAFE agent enrichment: impact_classes, validation_verdict, confidence, rationale, cve_signals, attck_techniques — never exploit payloads.
+             */
+            agent_enrichment?: Record<string, never>;
             readonly subdomain?: {
                 /** Id */
                 readonly id?: number;
@@ -6061,10 +15509,10 @@ export interface components {
                      * Scan status
                      * @enum {integer}
                      */
-                    scan_status?: -1 | 0 | 1 | 2 | 3 | 4;
+                    scan_status?: -1 | 0 | 1 | 2 | 3 | 4 | 5;
                     /** Results dir */
                     results_dir?: string;
-                    celery_ids?: string[];
+                    workflow_ids?: string[];
                     tasks?: string[] | null;
                     /**
                      * Stop scan date
@@ -6075,6 +15523,8 @@ export interface components {
                     used_gf_patterns?: string | null;
                     /** Error message */
                     error_message?: string | null;
+                    /** Recovery count */
+                    recovery_count?: number;
                     cfg_out_of_scope_subdomains?: string[] | null;
                     /** Cfg starting point path */
                     cfg_starting_point_path?: string | null;
@@ -6086,6 +15536,10 @@ export interface components {
                     domain: number;
                     /** Scan type */
                     scan_type: number;
+                    /** Assessment */
+                    assessment?: number | null;
+                    /** Hardware profile */
+                    hardware_profile?: number | null;
                     /** Initiated by */
                     initiated_by?: number | null;
                     /** Aborted by */
@@ -6100,6 +15554,11 @@ export interface components {
                     readonly id?: number;
                     /** Name */
                     name: string;
+                    /**
+                     * Target type
+                     * @enum {string}
+                     */
+                    target_type?: "domain" | "host" | "subdomain" | "url" | "ip" | "cidr" | "email" | "username" | "phone" | "crypto_address" | "code_path";
                     /** H1 team handle */
                     h1_team_handle?: string | null;
                     /** Ip address cidr */
@@ -6122,6 +15581,12 @@ export interface components {
                     starting_point_path?: string | null;
                     /** Excluded paths */
                     excluded_paths?: Record<string, never> | null;
+                    /** In scope ips */
+                    in_scope_ips?: string | null;
+                    /** Secondary domains */
+                    secondary_domains?: string | null;
+                    /** Manual subdomains */
+                    manual_subdomains?: string | null;
                     /** Is monitored */
                     is_monitored?: boolean;
                     /**
@@ -6145,8 +15610,8 @@ export interface components {
                     project?: number | null;
                     /** Monitor engine */
                     monitor_engine?: number | null;
-                    /** Monitor periodic task */
-                    monitor_periodic_task?: number | null;
+                    /** Temporal schedule */
+                    temporal_schedule?: number | null;
                 };
                 readonly technologies?: {
                     /** Id */
@@ -6167,6 +15632,12 @@ export interface components {
                     is_private?: boolean;
                     /** Reverse pointer */
                     reverse_pointer?: string | null;
+                    /** Asn */
+                    asn?: string | null;
+                    /** Asn cidr */
+                    asn_cidr?: string | null;
+                    /** Asn org */
+                    asn_org?: string | null;
                     /** Geo iso */
                     geo_iso?: number | null;
                     ports: number[];
@@ -6236,10 +15707,10 @@ export interface components {
                      * Scan status
                      * @enum {integer}
                      */
-                    scan_status?: -1 | 0 | 1 | 2 | 3 | 4;
+                    scan_status?: -1 | 0 | 1 | 2 | 3 | 4 | 5;
                     /** Results dir */
                     results_dir?: string;
-                    celery_ids?: string[];
+                    workflow_ids?: string[];
                     tasks?: string[] | null;
                     /**
                      * Stop scan date
@@ -6250,6 +15721,8 @@ export interface components {
                     used_gf_patterns?: string | null;
                     /** Error message */
                     error_message?: string | null;
+                    /** Recovery count */
+                    recovery_count?: number;
                     cfg_out_of_scope_subdomains?: string[] | null;
                     /** Cfg starting point path */
                     cfg_starting_point_path?: string | null;
@@ -6261,6 +15734,10 @@ export interface components {
                     domain: number;
                     /** Scan type */
                     scan_type: number;
+                    /** Assessment */
+                    assessment?: number | null;
+                    /** Hardware profile */
+                    hardware_profile?: number | null;
                     /** Initiated by */
                     initiated_by?: number | null;
                     /** Aborted by */
@@ -6275,6 +15752,11 @@ export interface components {
                     readonly id?: number;
                     /** Name */
                     name: string;
+                    /**
+                     * Target type
+                     * @enum {string}
+                     */
+                    target_type?: "domain" | "host" | "subdomain" | "url" | "ip" | "cidr" | "email" | "username" | "phone" | "crypto_address" | "code_path";
                     /** H1 team handle */
                     h1_team_handle?: string | null;
                     /** Ip address cidr */
@@ -6297,6 +15779,12 @@ export interface components {
                     starting_point_path?: string | null;
                     /** Excluded paths */
                     excluded_paths?: Record<string, never> | null;
+                    /** In scope ips */
+                    in_scope_ips?: string | null;
+                    /** Secondary domains */
+                    secondary_domains?: string | null;
+                    /** Manual subdomains */
+                    manual_subdomains?: string | null;
                     /** Is monitored */
                     is_monitored?: boolean;
                     /**
@@ -6320,8 +15808,8 @@ export interface components {
                     project?: number | null;
                     /** Monitor engine */
                     monitor_engine?: number | null;
-                    /** Monitor periodic task */
-                    monitor_periodic_task?: number | null;
+                    /** Temporal schedule */
+                    temporal_schedule?: number | null;
                 };
                 readonly subdomain?: {
                     /** Id */
@@ -6370,7 +15858,7 @@ export interface components {
                     /** Criticality reason */
                     criticality_reason?: string | null;
                     /** Scan history */
-                    scan_history?: number | null;
+                    scan_history: number | null;
                     /** Target domain */
                     target_domain?: number | null;
                     technologies?: number[];
@@ -6396,7 +15884,7 @@ export interface components {
                     start_scan_date: string;
                     /** Status */
                     status: number;
-                    celery_ids?: string[];
+                    workflow_ids?: string[];
                     /**
                      * Stop scan date
                      * Format: date-time
@@ -6406,6 +15894,8 @@ export interface components {
                     error_message?: string | null;
                     /** Scan history */
                     scan_history: number;
+                    /** Assessment */
+                    assessment?: number | null;
                     /** Subdomain */
                     subdomain: number;
                     /** Engine */
@@ -6413,11 +15903,250 @@ export interface components {
                     subdomain_subscan_ids?: number[];
                 }[];
             };
+            readonly exposure?: {
+                /** Id */
+                readonly id?: number;
+                type?: string[];
+                /**
+                 * Status
+                 * @enum {string}
+                 */
+                status?: "open" | "verified" | "accepted" | "false_positive" | "remediated" | "resolved";
+                /** Status note */
+                status_note?: string;
+                /**
+                 * First seen
+                 * Format: date-time
+                 */
+                readonly first_seen?: string;
+                /**
+                 * Last seen
+                 * Format: date-time
+                 */
+                readonly last_seen?: string;
+                /** Risk score */
+                risk_score?: number;
+                readonly scan_history?: {
+                    /** Id */
+                    readonly id?: number;
+                    /**
+                     * Start scan date
+                     * Format: date-time
+                     */
+                    start_scan_date: string;
+                    /**
+                     * Scan status
+                     * @enum {integer}
+                     */
+                    scan_status?: -1 | 0 | 1 | 2 | 3 | 4 | 5;
+                    /** Results dir */
+                    results_dir?: string;
+                    workflow_ids?: string[];
+                    tasks?: string[] | null;
+                    /**
+                     * Stop scan date
+                     * Format: date-time
+                     */
+                    stop_scan_date?: string | null;
+                    /** Used gf patterns */
+                    used_gf_patterns?: string | null;
+                    /** Error message */
+                    error_message?: string | null;
+                    /** Recovery count */
+                    recovery_count?: number;
+                    cfg_out_of_scope_subdomains?: string[] | null;
+                    /** Cfg starting point path */
+                    cfg_starting_point_path?: string | null;
+                    cfg_excluded_paths?: string[] | null;
+                    cfg_imported_subdomains?: string[] | null;
+                    /** Cfg custom dorks */
+                    cfg_custom_dorks?: string | null;
+                    /** Domain */
+                    domain: number;
+                    /** Scan type */
+                    scan_type: number;
+                    /** Assessment */
+                    assessment?: number | null;
+                    /** Hardware profile */
+                    hardware_profile?: number | null;
+                    /** Initiated by */
+                    initiated_by?: number | null;
+                    /** Aborted by */
+                    aborted_by?: number | null;
+                    emails?: number[];
+                    employees?: number[];
+                    buckets?: number[];
+                    dorks?: number[];
+                };
+                readonly target_domain?: {
+                    /** Id */
+                    readonly id?: number;
+                    /** Name */
+                    name: string;
+                    /**
+                     * Target type
+                     * @enum {string}
+                     */
+                    target_type?: "domain" | "host" | "subdomain" | "url" | "ip" | "cidr" | "email" | "username" | "phone" | "crypto_address" | "code_path";
+                    /** H1 team handle */
+                    h1_team_handle?: string | null;
+                    /** Ip address cidr */
+                    ip_address_cidr?: string | null;
+                    /** Description */
+                    description?: string | null;
+                    /**
+                     * Insert date
+                     * Format: date-time
+                     */
+                    insert_date?: string | null;
+                    /**
+                     * Start scan date
+                     * Format: date-time
+                     */
+                    start_scan_date?: string | null;
+                    /** Request headers */
+                    request_headers?: Record<string, never> | null;
+                    /** Starting point path */
+                    starting_point_path?: string | null;
+                    /** Excluded paths */
+                    excluded_paths?: Record<string, never> | null;
+                    /** In scope ips */
+                    in_scope_ips?: string | null;
+                    /** Secondary domains */
+                    secondary_domains?: string | null;
+                    /** Manual subdomains */
+                    manual_subdomains?: string | null;
+                    /** Is monitored */
+                    is_monitored?: boolean;
+                    /**
+                     * Monitor frequency
+                     * @enum {string}
+                     */
+                    monitor_frequency?: "hourly" | "daily" | "weekly" | "monthly";
+                    /**
+                     * Monitor scan scope
+                     * @enum {string}
+                     */
+                    monitor_scan_scope?: "targeted" | "full";
+                    /**
+                     * Last monitored
+                     * Format: date-time
+                     */
+                    last_monitored?: string | null;
+                    /** Domain info */
+                    domain_info?: number | null;
+                    /** Project */
+                    project?: number | null;
+                    /** Monitor engine */
+                    monitor_engine?: number | null;
+                    /** Temporal schedule */
+                    temporal_schedule?: number | null;
+                };
+                readonly subdomain?: {
+                    /** Id */
+                    readonly id?: number;
+                    /** Name */
+                    name: string;
+                    /** Is imported subdomain */
+                    is_imported_subdomain?: boolean;
+                    /** Is important */
+                    is_important?: boolean | null;
+                    /** Http url */
+                    http_url?: string | null;
+                    /** Screenshot path */
+                    screenshot_path?: string | null;
+                    /** Http header path */
+                    http_header_path?: string | null;
+                    /**
+                     * Discovered date
+                     * Format: date-time
+                     */
+                    discovered_date?: string | null;
+                    /** Cname */
+                    cname?: string | null;
+                    /** Is cdn */
+                    is_cdn?: boolean | null;
+                    /** Cdn name */
+                    cdn_name?: string | null;
+                    /** Http status */
+                    http_status?: number;
+                    /** Content type */
+                    content_type?: string | null;
+                    /** Response time */
+                    response_time?: number | null;
+                    /** Webserver */
+                    webserver?: string | null;
+                    /** Content length */
+                    content_length?: number | null;
+                    /** Page title */
+                    page_title?: string | null;
+                    /** Origin ip */
+                    origin_ip?: string | null;
+                    /** Attack surface */
+                    attack_surface?: string | null;
+                    /** Criticality level */
+                    criticality_level?: number | null;
+                    /** Criticality reason */
+                    criticality_reason?: string | null;
+                    /** Scan history */
+                    scan_history: number | null;
+                    /** Target domain */
+                    target_domain?: number | null;
+                    technologies?: number[];
+                    ip_addresses?: number[];
+                    directories?: number[];
+                    waf?: number[];
+                };
+                readonly endpoint?: {
+                    /** Id */
+                    readonly id?: number;
+                    /** Source */
+                    source?: string | null;
+                    /** Http url */
+                    http_url: string;
+                    /** Content length */
+                    content_length?: number | null;
+                    /** Page title */
+                    page_title?: string | null;
+                    /** Http status */
+                    http_status?: number | null;
+                    /** Content type */
+                    content_type?: string | null;
+                    /**
+                     * Discovered date
+                     * Format: date-time
+                     */
+                    discovered_date?: string | null;
+                    /** Response time */
+                    response_time?: number | null;
+                    /** Webserver */
+                    webserver?: string | null;
+                    /** Is default */
+                    is_default?: boolean | null;
+                    /** Is redirect */
+                    is_redirect?: boolean;
+                    /** Matched gf patterns */
+                    matched_gf_patterns?: string | null;
+                    /** Scan history */
+                    scan_history?: number | null;
+                    /** Target domain */
+                    target_domain?: number | null;
+                    /** Subdomain */
+                    subdomain?: number | null;
+                    techs?: number[];
+                    endpoint_subscan_ids?: number[];
+                };
+            };
             readonly target_domain?: {
                 /** Id */
                 readonly id?: number;
                 /** Name */
                 name: string;
+                /**
+                 * Target type
+                 * @enum {string}
+                 */
+                target_type?: "domain" | "host" | "subdomain" | "url" | "ip" | "cidr" | "email" | "username" | "phone" | "crypto_address" | "code_path";
                 /** H1 team handle */
                 h1_team_handle?: string | null;
                 /** Ip address cidr */
@@ -6440,6 +16169,12 @@ export interface components {
                 starting_point_path?: string | null;
                 /** Excluded paths */
                 excluded_paths?: Record<string, never> | null;
+                /** In scope ips */
+                in_scope_ips?: string | null;
+                /** Secondary domains */
+                secondary_domains?: string | null;
+                /** Manual subdomains */
+                manual_subdomains?: string | null;
                 /** Is monitored */
                 is_monitored?: boolean;
                 /**
@@ -6481,6 +16216,8 @@ export interface components {
                     geolocation_iso?: string | null;
                     /** Whois server */
                     whois_server?: string | null;
+                    /** Whois raw */
+                    whois_raw?: Record<string, never> | null;
                     /** Registrar */
                     registrar?: number | null;
                     /** Registrant */
@@ -6523,123 +16260,49 @@ export interface components {
                     /** Default engine */
                     default_engine?: boolean | null;
                 };
-                readonly monitor_periodic_task?: {
+                readonly temporal_schedule?: {
                     /** ID */
                     readonly id?: number;
-                    /**
-                     * Name
-                     * @description Short Description For This Task
-                     */
+                    /** Schedule id */
+                    schedule_id: string;
+                    /** Name */
                     name: string;
+                    /** Workflow type */
+                    workflow_type: string;
+                    /** Workflow args */
+                    workflow_args?: Record<string, never>;
+                    /** Cron expression */
+                    cron_expression?: string;
+                    /** Interval seconds */
+                    interval_seconds?: number | null;
                     /**
-                     * Task Name
-                     * @description The Name of the Celery Task that Should be Run.  (Example: "proj.tasks.import_contacts")
-                     */
-                    task: string;
-                    /**
-                     * Positional Arguments
-                     * @description JSON encoded positional arguments (Example: ["arg1", "arg2"])
-                     */
-                    args?: string;
-                    /**
-                     * Keyword Arguments
-                     * @description JSON encoded keyword arguments (Example: {"argument": "value"})
-                     */
-                    kwargs?: string;
-                    /**
-                     * Queue Override
-                     * @description Queue defined in CELERY_TASK_QUEUES. Leave None for default queuing.
-                     */
-                    queue?: string | null;
-                    /**
-                     * Exchange
-                     * @description Override Exchange for low-level AMQP routing
-                     */
-                    exchange?: string | null;
-                    /**
-                     * Routing Key
-                     * @description Override Routing Key for low-level AMQP routing
-                     */
-                    routing_key?: string | null;
-                    /**
-                     * AMQP Message Headers
-                     * @description JSON encoded message headers for the AMQP message.
-                     */
-                    headers?: string;
-                    /**
-                     * Priority
-                     * @description Priority Number between 0 and 255. Supported by: RabbitMQ, Redis (priority reversed, 0 is highest).
-                     */
-                    priority?: number | null;
-                    /**
-                     * Expires Datetime
+                     * Clocked time
                      * Format: date-time
-                     * @description Datetime after which the schedule will no longer trigger the task to run
                      */
-                    expires?: string | null;
-                    /**
-                     * Expires timedelta with seconds
-                     * @description Timedelta with seconds which the schedule will no longer trigger the task to run
-                     */
-                    expire_seconds?: number | null;
-                    /**
-                     * One-off Task
-                     * @description If True, the schedule will only run the task a single time
-                     */
+                    clocked_time?: string | null;
+                    /** One off */
                     one_off?: boolean;
+                    /** Is active */
+                    is_active?: boolean;
+                    /** Total run count */
+                    total_run_count?: number;
                     /**
-                     * Start Datetime
+                     * Last run at
                      * Format: date-time
-                     * @description Datetime when the schedule should begin triggering the task to run
                      */
-                    start_time?: string | null;
+                    last_run_at?: string | null;
                     /**
-                     * Enabled
-                     * @description Set to False to disable the schedule
-                     */
-                    enabled?: boolean;
-                    /**
-                     * Last Run Datetime
+                     * Created at
                      * Format: date-time
-                     * @description Datetime that the schedule last triggered the task to run. Reset to None if enabled is set to False.
                      */
-                    readonly last_run_at?: string;
+                    readonly created_at?: string;
                     /**
-                     * Total Run Count
-                     * @description Running count of how many times the schedule has triggered the task
-                     */
-                    readonly total_run_count?: number;
-                    /**
-                     * Last Modified
+                     * Updated at
                      * Format: date-time
-                     * @description Datetime that this PeriodicTask was last modified
                      */
-                    readonly date_changed?: string;
-                    /**
-                     * Description
-                     * @description Detailed description about the details of this Periodic Task
-                     */
-                    description?: string;
-                    /**
-                     * Interval Schedule
-                     * @description Interval Schedule to run the task on.  Set only one schedule type, leave the others null.
-                     */
-                    interval?: number | null;
-                    /**
-                     * Crontab Schedule
-                     * @description Crontab Schedule to run the task on.  Set only one schedule type, leave the others null.
-                     */
-                    crontab?: number | null;
-                    /**
-                     * Solar Schedule
-                     * @description Solar Schedule to run the task on.  Set only one schedule type, leave the others null.
-                     */
-                    solar?: number | null;
-                    /**
-                     * Clocked Schedule
-                     * @description Clocked Schedule to run the task on.  Set only one schedule type, leave the others null.
-                     */
-                    clocked?: number | null;
+                    readonly updated_at?: string;
+                    /** Domain */
+                    domain?: number | null;
                 };
             };
             readonly tags?: {
@@ -6661,6 +16324,107 @@ export interface components {
                 name: string;
                 /** Is cisa kev */
                 is_cisa_kev?: boolean;
+                /** Cvss v31 base score */
+                cvss_v31_base_score?: number | null;
+                /** Attack vector */
+                attack_vector?: string | null;
+                /** Attack complexity */
+                attack_complexity?: string | null;
+                /** Privileges required */
+                privileges_required?: string | null;
+                /** User interaction */
+                user_interaction?: string | null;
+                /** Confidentiality impact */
+                confidentiality_impact?: string | null;
+                /** Integrity impact */
+                integrity_impact?: string | null;
+                /** Availability impact */
+                availability_impact?: string | null;
+                /** Epss score */
+                epss_score?: number | null;
+                /** Epss percentile */
+                epss_percentile?: number | null;
+                /**
+                 * Published date
+                 * Format: date-time
+                 */
+                published_date?: string | null;
+                /**
+                 * Last modified date
+                 * Format: date-time
+                 */
+                last_modified_date?: string | null;
+                /** Vulnerability type */
+                vulnerability_type?: string | null;
+                /** Is poc */
+                is_poc?: boolean;
+                /** Is template */
+                is_template?: boolean;
+                /** Ai risk assessment */
+                ai_risk_assessment?: string | null;
+                /** Public exploits */
+                public_exploits?: Record<string, never>;
+                /** Hackerone data */
+                hackerone_data?: Record<string, never>;
+                /** Patching priority */
+                patching_priority?: string | null;
+                /** Mitigation ideas */
+                mitigation_ideas?: string | null;
+                readonly related_cves?: {
+                    /** Id */
+                    readonly id?: number;
+                    /** Name */
+                    name: string;
+                    /** Is cisa kev */
+                    is_cisa_kev?: boolean;
+                    /** Cvss v31 base score */
+                    cvss_v31_base_score?: number | null;
+                    /** Attack vector */
+                    attack_vector?: string | null;
+                    /** Attack complexity */
+                    attack_complexity?: string | null;
+                    /** Privileges required */
+                    privileges_required?: string | null;
+                    /** User interaction */
+                    user_interaction?: string | null;
+                    /** Confidentiality impact */
+                    confidentiality_impact?: string | null;
+                    /** Integrity impact */
+                    integrity_impact?: string | null;
+                    /** Availability impact */
+                    availability_impact?: string | null;
+                    /** Epss score */
+                    epss_score?: number | null;
+                    /** Epss percentile */
+                    epss_percentile?: number | null;
+                    /**
+                     * Published date
+                     * Format: date-time
+                     */
+                    published_date?: string | null;
+                    /**
+                     * Last modified date
+                     * Format: date-time
+                     */
+                    last_modified_date?: string | null;
+                    /** Vulnerability type */
+                    vulnerability_type?: string | null;
+                    /** Is poc */
+                    is_poc?: boolean;
+                    /** Is template */
+                    is_template?: boolean;
+                    /** Ai risk assessment */
+                    ai_risk_assessment?: string | null;
+                    /** Public exploits */
+                    public_exploits?: Record<string, never>;
+                    /** Hackerone data */
+                    hackerone_data?: Record<string, never>;
+                    /** Patching priority */
+                    patching_priority?: string | null;
+                    /** Mitigation ideas */
+                    mitigation_ideas?: string | null;
+                    related_cves?: number[];
+                }[];
             }[];
             readonly cwe_ids?: {
                 /** Id */
@@ -6680,7 +16444,7 @@ export interface components {
                 start_scan_date: string;
                 /** Status */
                 status: number;
-                celery_ids?: string[];
+                workflow_ids?: string[];
                 /**
                  * Stop scan date
                  * Format: date-time
@@ -6700,10 +16464,10 @@ export interface components {
                      * Scan status
                      * @enum {integer}
                      */
-                    scan_status?: -1 | 0 | 1 | 2 | 3 | 4;
+                    scan_status?: -1 | 0 | 1 | 2 | 3 | 4 | 5;
                     /** Results dir */
                     results_dir?: string;
-                    celery_ids?: string[];
+                    workflow_ids?: string[];
                     tasks?: string[] | null;
                     /**
                      * Stop scan date
@@ -6714,6 +16478,8 @@ export interface components {
                     used_gf_patterns?: string | null;
                     /** Error message */
                     error_message?: string | null;
+                    /** Recovery count */
+                    recovery_count?: number;
                     cfg_out_of_scope_subdomains?: string[] | null;
                     /** Cfg starting point path */
                     cfg_starting_point_path?: string | null;
@@ -6725,6 +16491,10 @@ export interface components {
                     domain: number;
                     /** Scan type */
                     scan_type: number;
+                    /** Assessment */
+                    assessment?: number | null;
+                    /** Hardware profile */
+                    hardware_profile?: number | null;
                     /** Initiated by */
                     initiated_by?: number | null;
                     /** Aborted by */
@@ -6733,6 +16503,70 @@ export interface components {
                     employees?: number[];
                     buckets?: number[];
                     dorks?: number[];
+                };
+                readonly assessment?: {
+                    /** ID */
+                    readonly id?: number;
+                    /**
+                     * Uuid
+                     * Format: uuid
+                     */
+                    readonly uuid?: string;
+                    /** Name */
+                    name: string;
+                    /** Description */
+                    description?: string | null;
+                    /**
+                     * Assessment type
+                     * @enum {string}
+                     */
+                    assessment_type: "External" | "Internal" | "Web" | "API" | "Mobile" | "Cloud" | "AD" | "Hybrid";
+                    /**
+                     * Status
+                     * @enum {string}
+                     */
+                    status?: "Draft" | "Ready" | "Discovery" | "Enumeration" | "Analysis" | "Correlation" | "Validation" | "GraphSync" | "Reporting" | "Review" | "Complete" | "Failed" | "Cancelled";
+                    /**
+                     * Started at
+                     * Format: date-time
+                     */
+                    started_at?: string | null;
+                    /**
+                     * Completed at
+                     * Format: date-time
+                     */
+                    completed_at?: string | null;
+                    /** Active duration */
+                    active_duration?: string | null;
+                    /** Paused duration */
+                    paused_duration?: string | null;
+                    /** Total duration */
+                    total_duration?: string | null;
+                    /**
+                     * Retention days
+                     * @description How long evidence for this assessment is retained before archiving.
+                     * @enum {integer}
+                     */
+                    retention_days?: 90 | 180 | 365 | 0;
+                    /**
+                     * Created at
+                     * Format: date-time
+                     */
+                    readonly created_at?: string;
+                    /**
+                     * Updated at
+                     * Format: date-time
+                     */
+                    readonly updated_at?: string;
+                    /** Engagement */
+                    engagement: number;
+                    /**
+                     * Preferred engine
+                     * @description Override engine; defaults to assessment-type default engine if unset.
+                     */
+                    preferred_engine?: number | null;
+                    /** Created by */
+                    created_by?: number | null;
                 };
                 readonly subdomain?: {
                     /** Id */
@@ -6781,7 +16615,7 @@ export interface components {
                     /** Criticality reason */
                     criticality_reason?: string | null;
                     /** Scan history */
-                    scan_history?: number | null;
+                    scan_history: number | null;
                     /** Target domain */
                     target_domain?: number | null;
                     technologies?: number[];
@@ -6846,7 +16680,7 @@ export interface components {
                     /** Criticality reason */
                     criticality_reason?: string | null;
                     /** Scan history */
-                    scan_history?: number | null;
+                    scan_history: number | null;
                     /** Target domain */
                     target_domain?: number | null;
                     technologies?: number[];
@@ -6914,6 +16748,49 @@ export interface components {
             /** Project */
             project?: number | null;
         };
+        OsintStaging: {
+            /** Id */
+            readonly id?: number;
+            /** Discovered date humanized */
+            readonly discovered_date_humanized?: string;
+            /** Target domain name */
+            readonly target_domain_name?: string;
+            /** Scan history id */
+            readonly scan_history_id?: number;
+            /** Osint type */
+            osint_type: string;
+            /** Content */
+            content: string;
+            /** Source */
+            source: string;
+            /** Confidence */
+            confidence?: number;
+            /** Metadata */
+            metadata?: Record<string, never>;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status?: "pending" | "validated" | "ignored";
+            /**
+             * Discovered date
+             * Format: date-time
+             */
+            readonly discovered_date?: string;
+            /** Agent verified */
+            agent_verified?: boolean | null;
+            /**
+             * Agent verified at
+             * Format: date-time
+             */
+            agent_verified_at?: string | null;
+            /** Scan history */
+            scan_history: number;
+            /** Target domain */
+            target_domain: number;
+            /** Agent verified by */
+            agent_verified_by?: number | null;
+        };
         Plugin: {
             /** ID */
             readonly id?: number;
@@ -6948,6 +16825,11 @@ export interface components {
             /** Manifest */
             readonly manifest?: Record<string, never>;
             /**
+             * Tools config
+             * @description Metadata from tools.yaml
+             */
+            readonly tools_config?: Record<string, never>;
+            /**
              * Installed at
              * Format: date-time
              */
@@ -6959,6 +16841,12 @@ export interface components {
             readonly updated_at?: string;
             /** Icon path */
             icon_path?: string | null;
+            /** Needs restart */
+            readonly needs_restart?: string;
+            /** Author */
+            readonly author?: string;
+            /** Trust level */
+            readonly trust_level?: string;
         };
         Project: {
             /** Id */
@@ -6978,55 +16866,130 @@ export interface components {
              */
             insert_date: string;
         };
-        PeriodicTask: {
+        ScanProfile: {
             /** ID */
             readonly id?: number;
-            /**
-             * Name
-             * @description Short Description For This Task
-             */
+            /** Name */
             name: string;
+            /** Description */
+            description?: string;
             /**
-             * Task Name
-             * @description The Name of the Celery Task that Should be Run.  (Example: "proj.tasks.import_contacts")
+             * Category
+             * @enum {string}
              */
-            task: string;
+            category?: "speed" | "evasion" | "content" | "network" | "general" | "hardware";
+            /** Is builtin */
+            readonly is_builtin?: boolean;
+            /** Rate limit */
+            rate_limit?: number | null;
+            /** Delay */
+            delay?: number | null;
+            /** Threads */
+            threads?: number | null;
+            /** Timeout */
+            timeout?: number | null;
+            /** Retries */
+            retries?: number | null;
+            /** Passive */
+            passive?: boolean;
+            /** Active */
+            active?: boolean;
+            /** Stealth */
+            stealth?: boolean;
+            /** Headless */
+            headless?: boolean;
+            /** Screenshot */
+            screenshot?: boolean;
+            /** Hunt secrets */
+            hunt_secrets?: boolean;
+            /** Nuclei full */
+            nuclei_full?: boolean;
+            /** Brute dns */
+            brute_dns?: boolean;
+            /** Brute http */
+            brute_http?: boolean;
+            /** Test ssl */
+            test_ssl?: boolean;
+            /** All ports */
+            all_ports?: boolean;
+            /** Tor */
+            tor?: boolean;
+            /** Fragment */
+            fragment?: boolean;
+            /**
+             * Created at
+             * Format: date-time
+             */
+            readonly created_at?: string;
+            /**
+             * Updated at
+             * Format: date-time
+             */
+            readonly updated_at?: string;
+        };
+        TemporalSchedule: {
+            /** ID */
+            readonly id?: number;
+            /** Name */
+            name: string;
+            /** Task */
+            readonly task?: string;
             /** Description */
             readonly description?: string;
             /** Frequency */
             readonly frequency?: string;
+            /** Enabled */
+            enabled: boolean;
             /**
-             * Enabled
-             * @description Set to False to disable the schedule
-             */
-            enabled?: boolean;
-            /**
-             * Last Run Datetime
+             * Last run at
              * Format: date-time
-             * @description Datetime that the schedule last triggered the task to run. Reset to None if enabled is set to False.
              */
-            readonly last_run_at?: string;
-            /**
-             * Total Run Count
-             * @description Running count of how many times the schedule has triggered the task
-             */
-            readonly total_run_count?: number;
-            /**
-             * One-off Task
-             * @description If True, the schedule will only run the task a single time
-             */
+            last_run_at?: string | null;
+            /** Total run count */
+            total_run_count?: number;
+            /** One off */
             one_off?: boolean;
+            /** Kwargs */
+            kwargs: Record<string, never>;
             /**
-             * Keyword Arguments
-             * @description JSON encoded keyword arguments (Example: {"argument": "value"})
-             */
-            kwargs?: string;
-            /**
-             * Last Modified
+             * Date changed
              * Format: date-time
-             * @description Datetime that this PeriodicTask was last modified
              */
             readonly date_changed?: string;
+        };
+        SecretLeak: {
+            /** Id */
+            readonly id?: number;
+            /** Tool name */
+            tool_name: string;
+            /** Secret type */
+            secret_type: string;
+            /** Source url */
+            source_url: string;
+            /** Match content */
+            match_content: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status?: "unverified" | "verified" | "false_positive";
+            /**
+             * Discovered date
+             * Format: date-time
+             */
+            readonly discovered_date?: string;
+            /** Scan history */
+            scan_history: number;
+            /** Subdomain */
+            subdomain?: number | null;
+        };
+        SOCConfiguration: {
+            /** ID */
+            readonly id?: number;
+            /** Enable live log streaming */
+            enable_live_log_streaming?: boolean;
+            /** Log retention count */
+            log_retention_count?: number;
         };
         SubScan: {
             /** Id */
@@ -7050,7 +17013,7 @@ export interface components {
             start_scan_date: string;
             /** Status */
             status: number;
-            celery_ids?: string[];
+            workflow_ids?: string[];
             /**
              * Stop scan date
              * Format: date-time
@@ -7060,6 +17023,8 @@ export interface components {
             error_message?: string | null;
             /** Scan history */
             scan_history: number;
+            /** Assessment */
+            assessment?: number | null;
             /** Subdomain */
             subdomain: number;
             subdomain_subscan_ids?: number[];
@@ -7106,10 +17071,36 @@ export interface components {
             /** Last login humanized */
             readonly last_login_humanized?: string;
         };
+        ScanWorker: {
+            /** Id */
+            readonly id?: number;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Task queue */
+            readonly task_queue?: string;
+            /** Hostname */
+            readonly hostname?: string | null;
+            /** Ip address */
+            readonly ip_address?: string | null;
+            /** Is active */
+            is_active?: boolean;
+            /**
+             * Last heartbeat
+             * Format: date-time
+             */
+            readonly last_heartbeat?: string | null;
+        };
     };
     responses: never;
     parameters: never;
     requestBodies: {
+        AssessmentScope: {
+            content: {
+                "application/json": components["schemas"]["AssessmentScope"];
+            };
+        };
         ScanHistory: {
             content: {
                 "application/json": components["schemas"]["ScanHistory"];
@@ -7120,9 +17111,9 @@ export interface components {
                 "application/json": components["schemas"]["Domain"];
             };
         };
-        PeriodicTask: {
+        Parameter: {
             content: {
-                "application/json": components["schemas"]["PeriodicTask"];
+                "application/json": components["schemas"]["Parameter"];
             };
         };
         Endpoint: {
@@ -7130,9 +17121,44 @@ export interface components {
                 "application/json": components["schemas"]["Endpoint"];
             };
         };
+        ScanProfile: {
+            content: {
+                "application/json": components["schemas"]["ScanProfile"];
+            };
+        };
         Command: {
             content: {
                 "application/json": components["schemas"]["Command"];
+            };
+        };
+        SecretLeak: {
+            content: {
+                "application/json": components["schemas"]["SecretLeak"];
+            };
+        };
+        Screenshot: {
+            content: {
+                "application/json": components["schemas"]["Screenshot"];
+            };
+        };
+        Client: {
+            content: {
+                "application/json": components["schemas"]["Client"];
+            };
+        };
+        Exposure: {
+            content: {
+                "application/json": components["schemas"]["Exposure"];
+            };
+        };
+        Evidence: {
+            content: {
+                "application/json": components["schemas"]["Evidence"];
+            };
+        };
+        ScanWorker: {
+            content: {
+                "application/json": components["schemas"]["ScanWorker"];
             };
         };
         EndPointChanges: {
@@ -7160,9 +17186,34 @@ export interface components {
                 "application/json": components["schemas"]["TokenRefresh"];
             };
         };
-        DirectoryFile: {
+        EmailBreach: {
             content: {
-                "application/json": components["schemas"]["DirectoryFile"];
+                "application/json": components["schemas"]["EmailBreach"];
+            };
+        };
+        Assessment: {
+            content: {
+                "application/json": components["schemas"]["Assessment"];
+            };
+        };
+        AssessmentAsset: {
+            content: {
+                "application/json": components["schemas"]["AssessmentAsset"];
+            };
+        };
+        Engagement: {
+            content: {
+                "application/json": components["schemas"]["Engagement"];
+            };
+        };
+        EvidenceCollection: {
+            content: {
+                "application/json": components["schemas"]["EvidenceCollection"];
+            };
+        };
+        HardwareProfile: {
+            content: {
+                "application/json": components["schemas"]["HardwareProfile"];
             };
         };
         SubdomainChanges: {
@@ -7185,6 +17236,11 @@ export interface components {
                 "application/json": components["schemas"]["InAppNotification"];
             };
         };
+        OsintStaging: {
+            content: {
+                "application/json": components["schemas"]["OsintStaging"];
+            };
+        };
         Plugin: {
             content: {
                 "application/json": components["schemas"]["Plugin"];
@@ -7193,6 +17249,16 @@ export interface components {
         Project: {
             content: {
                 "application/json": components["schemas"]["Project"];
+            };
+        };
+        TemporalSchedule: {
+            content: {
+                "application/json": components["schemas"]["TemporalSchedule"];
+            };
+        };
+        SOCConfiguration: {
+            content: {
+                "application/json": components["schemas"]["SOCConfiguration"];
             };
         };
         SubScan: {
@@ -7211,7 +17277,92 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "api_action_ad-assessment_from-subdomain_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_capabilities_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     api_action_create_project_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_action_directory-file_auth-logs_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_action_directory-file_delete_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_action_directory-file_dispatch_create": {
         parameters: {
             query?: never;
             header?: never;
@@ -7279,6 +17430,171 @@ export interface operations {
             };
         };
     };
+    api_action_engines_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_followups_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_followups_metrics_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_followups_propose_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_followups_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_followups_abort_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_followups_approve_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_followups_retry_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_followups_update_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     api_action_initiate_scan_create: {
         parameters: {
             query?: never;
@@ -7301,6 +17617,96 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_note_delete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_pause_scan_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_resume_scan_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_retry_task_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_retry_tier_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+                tier: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -7347,7 +17753,77 @@ export interface operations {
             };
         };
     };
+    api_action_subdomain_add_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     api_action_subdomain_delete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_tool_run_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_tool_args_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tool: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_action_unpause_scan_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -7449,11 +17925,197 @@ export interface operations {
             };
         };
     };
+    "api_api-intel_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIIntelProfile"][];
+                };
+            };
+        };
+    };
+    "api_api-intel_read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this api intelligence profile. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIIntelProfile"];
+                };
+            };
+        };
+    };
+    "api_apme_attack-trees_read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_apme_explain_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_apme_impact_regenerate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_apme_impact_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                path_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_apme_path_dismiss_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                path_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     api_apme_paths_list: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_apme_recalculate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_apme_risk-summary_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_apme_tree_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -7521,6 +18183,97 @@ export interface operations {
             };
         };
     };
+    api_certificates_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_certificates_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_certificates_flag_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_certificates_resync_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_certs_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     api_createOrganization_create: {
         parameters: {
             query?: never;
@@ -7538,12 +18291,1508 @@ export interface operations {
             };
         };
     };
+    "api_cwe-info_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     api_dashboard_read: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_emailBreaches_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailBreach"][];
+                };
+            };
+        };
+    };
+    api_emailBreaches_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["EmailBreach"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailBreach"];
+                };
+            };
+        };
+    };
+    api_emailBreaches_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this email breach. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailBreach"];
+                };
+            };
+        };
+    };
+    api_emailBreaches_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this email breach. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["EmailBreach"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailBreach"];
+                };
+            };
+        };
+    };
+    api_emailBreaches_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this email breach. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_emailBreaches_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this email breach. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["EmailBreach"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailBreach"];
+                };
+            };
+        };
+    };
+    api_emailDiscovery_start_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_emailDiscovery_stop_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_emailDiscovery_replay_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_emails_check_breach_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_emails_manual_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_employeeIntel_start_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_employeeIntel_stop_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_employeeIntel_replay_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_engagements_assessments_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["Assessment"][];
+                    };
+                };
+            };
+        };
+    };
+    api_engagements_assessments_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Assessment"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assessment"];
+                };
+            };
+        };
+    };
+    api_engagements_assessments_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assessment"];
+                };
+            };
+        };
+    };
+    api_engagements_assessments_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Assessment"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assessment"];
+                };
+            };
+        };
+    };
+    api_engagements_assessments_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_engagements_assessments_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Assessment"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assessment"];
+                };
+            };
+        };
+    };
+    api_engagements_assessments_approve_validation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Assessment"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assessment"];
+                };
+            };
+        };
+    };
+    api_engagements_assessments_assets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assessment"];
+                };
+            };
+        };
+    };
+    api_engagements_assessments_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Assessment"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assessment"];
+                };
+            };
+        };
+    };
+    api_engagements_assessments_pause: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Assessment"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assessment"];
+                };
+            };
+        };
+    };
+    api_engagements_assessments_resume: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Assessment"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assessment"];
+                };
+            };
+        };
+    };
+    api_engagements_assessments_scans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assessment"];
+                };
+            };
+        };
+    };
+    api_engagements_assessments_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Assessment"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assessment"];
+                };
+            };
+        };
+    };
+    api_engagements_assets_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["AssessmentAsset"][];
+                    };
+                };
+            };
+        };
+    };
+    api_engagements_assets_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["AssessmentAsset"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentAsset"];
+                };
+            };
+        };
+    };
+    api_engagements_assets_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment asset. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentAsset"];
+                };
+            };
+        };
+    };
+    api_engagements_assets_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment asset. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["AssessmentAsset"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentAsset"];
+                };
+            };
+        };
+    };
+    api_engagements_assets_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment asset. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_engagements_assets_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment asset. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["AssessmentAsset"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentAsset"];
+                };
+            };
+        };
+    };
+    api_engagements_clients_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["Client"][];
+                    };
+                };
+            };
+        };
+    };
+    api_engagements_clients_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Client"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Client"];
+                };
+            };
+        };
+    };
+    api_engagements_clients_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this client. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Client"];
+                };
+            };
+        };
+    };
+    api_engagements_clients_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this client. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Client"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Client"];
+                };
+            };
+        };
+    };
+    api_engagements_clients_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this client. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_engagements_clients_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this client. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Client"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Client"];
+                };
+            };
+        };
+    };
+    api_engagements_engagements_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["Engagement"][];
+                    };
+                };
+            };
+        };
+    };
+    api_engagements_engagements_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Engagement"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engagement"];
+                };
+            };
+        };
+    };
+    api_engagements_engagements_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this engagement. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engagement"];
+                };
+            };
+        };
+    };
+    api_engagements_engagements_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this engagement. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Engagement"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engagement"];
+                };
+            };
+        };
+    };
+    api_engagements_engagements_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this engagement. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_engagements_engagements_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this engagement. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Engagement"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Engagement"];
+                };
+            };
+        };
+    };
+    api_engagements_scopes_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["AssessmentScope"][];
+                    };
+                };
+            };
+        };
+    };
+    api_engagements_scopes_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["AssessmentScope"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentScope"];
+                };
+            };
+        };
+    };
+    api_engagements_scopes_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment scope. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentScope"];
+                };
+            };
+        };
+    };
+    api_engagements_scopes_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment scope. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["AssessmentScope"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentScope"];
+                };
+            };
+        };
+    };
+    api_engagements_scopes_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment scope. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_engagements_scopes_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this assessment scope. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["AssessmentScope"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssessmentScope"];
+                };
+            };
+        };
+    };
+    api_evidence_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["EvidenceList"][];
+                    };
+                };
+            };
+        };
+    };
+    api_evidence_collections_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["EvidenceCollection"][];
+                    };
+                };
+            };
+        };
+    };
+    api_evidence_collections_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["EvidenceCollection"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceCollection"];
+                };
+            };
+        };
+    };
+    api_evidence_collections_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceCollection"];
+                };
+            };
+        };
+    };
+    api_evidence_collections_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["EvidenceCollection"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceCollection"];
+                };
+            };
+        };
+    };
+    api_evidence_collections_items: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceCollection"];
+                };
+            };
+        };
+    };
+    api_evidence_upload_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_evidence_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Evidence"];
+                };
+            };
+        };
+    };
+    api_evidence_annotations_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Evidence"];
+                };
+            };
+        };
+    };
+    api_evidence_annotations_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Evidence"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Evidence"];
+                };
+            };
+        };
+    };
+    api_evidence_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Evidence"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Evidence"];
+                };
+            };
+        };
+    };
+    api_evidence_download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Evidence"];
+                };
+            };
+        };
+    };
+    api_evidence_purge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_evidence_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Evidence"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Evidence"];
+                };
+            };
+        };
+    };
+    api_exposures_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_exposures_bulk-status_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_exposures_stats_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_exposures_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_exposures_status_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
             };
             cookie?: never;
         };
@@ -7647,6 +19896,97 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_graph_chain_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_graph_chain_nodes_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_graph_node_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_graph_scan_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_graph_target_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -7773,6 +20113,282 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_hardwareProfiles_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["HardwareProfile"][];
+                    };
+                };
+            };
+        };
+    };
+    api_hardwareProfiles_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["HardwareProfile"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HardwareProfile"];
+                };
+            };
+        };
+    };
+    api_hardwareProfiles_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this hardware profile. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HardwareProfile"];
+                };
+            };
+        };
+    };
+    api_hardwareProfiles_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this hardware profile. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["HardwareProfile"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HardwareProfile"];
+                };
+            };
+        };
+    };
+    api_hardwareProfiles_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this hardware profile. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_hardwareProfiles_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this hardware profile. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["HardwareProfile"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HardwareProfile"];
+                };
+            };
+        };
+    };
+    api_identity_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_identity_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_identity_confirm_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_identity_dismiss_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_linkedin_session_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_linkedin_session_helper_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_linkedin_session_status_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_linkedin_session_upload_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8088,27 +20704,8 @@ export interface operations {
                         next?: string | null;
                         /** Format: uri */
                         previous?: string | null;
-                        results: components["schemas"]["DirectoryFile"][];
+                        results: components["schemas"]["EndPointDirectory"][];
                     };
-                };
-            };
-        };
-    };
-    api_listDirectories_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["DirectoryFile"];
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DirectoryFile"];
                 };
             };
         };
@@ -8118,7 +20715,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this directory file. */
+                /** @description A unique integer value identifying this end point. */
                 id: number;
             };
             cookie?: never;
@@ -8130,71 +20727,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DirectoryFile"];
-                };
-            };
-        };
-    };
-    api_listDirectories_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this directory file. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["DirectoryFile"];
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DirectoryFile"];
-                };
-            };
-        };
-    };
-    api_listDirectories_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this directory file. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    api_listDirectories_partial_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this directory file. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["DirectoryFile"];
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DirectoryFile"];
+                    "application/json": components["schemas"]["EndPointDirectory"];
                 };
             };
         };
@@ -8338,6 +20871,8 @@ export interface operations {
             query?: {
                 /** @description A page number within the paginated result set. */
                 page?: number;
+                /** @description Number of results to return per page. */
+                length?: number;
             };
             header?: never;
             path?: never;
@@ -8481,6 +21016,103 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    api_listExposures_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                length?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["Exposure"][];
+                    };
+                };
+            };
+        };
+    };
+    api_listExposures_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this exposure. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exposure"];
+                };
+            };
+        };
+    };
+    api_listExposures_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this exposure. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Exposure"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exposure"];
+                };
+            };
+        };
+    };
+    api_listExposures_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this exposure. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Exposure"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exposure"];
+                };
             };
         };
     };
@@ -8920,6 +21552,140 @@ export interface operations {
             };
         };
     };
+    api_listParameters_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["Parameter"][];
+                    };
+                };
+            };
+        };
+    };
+    api_listParameters_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Parameter"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Parameter"];
+                };
+            };
+        };
+    };
+    api_listParameters_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this parameter. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Parameter"];
+                };
+            };
+        };
+    };
+    api_listParameters_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this parameter. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Parameter"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Parameter"];
+                };
+            };
+        };
+    };
+    api_listParameters_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this parameter. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_listParameters_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this parameter. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Parameter"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Parameter"];
+                };
+            };
+        };
+    };
     api_listScanHistory_list: {
         parameters: {
             query?: never;
@@ -9138,7 +21904,45 @@ export interface operations {
             };
         };
     };
+    api_listScans_bulk_pause: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanHistory"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanHistory"];
+                };
+            };
+        };
+    };
     api_listScans_bulk_stop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanHistory"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanHistory"];
+                };
+            };
+        };
+    };
+    api_listScans_bulk_unpause: {
         parameters: {
             query?: never;
             header?: never;
@@ -9260,7 +22064,49 @@ export interface operations {
             };
         };
     };
+    api_listScans_pause_scan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanHistory"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanHistory"];
+                };
+            };
+        };
+    };
     api_listScans_stop_scan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanHistory"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanHistory"];
+                };
+            };
+        };
+    };
+    api_listScans_unpause_scan: {
         parameters: {
             query?: never;
             header?: never;
@@ -9717,11 +22563,30 @@ export interface operations {
             };
         };
     };
+    api_listTools_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     api_listVulnerability_list: {
         parameters: {
             query?: {
                 /** @description A page number within the paginated result set. */
                 page?: number;
+                /** @description Number of results to return per page. */
+                length?: number;
             };
             header?: never;
             path?: never;
@@ -9761,6 +22626,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Vulnerability"];
+                };
+            };
+        };
+    };
+    api_listVulnerability_queue: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                length?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["Vulnerability"][];
+                    };
                 };
             };
         };
@@ -9851,7 +22747,1447 @@ export interface operations {
             };
         };
     };
+    api_listVulnerability_reject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vulnerability. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Vulnerability"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vulnerability"];
+                };
+            };
+        };
+    };
+    api_listVulnerability_update_severity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vulnerability. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Vulnerability"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vulnerability"];
+                };
+            };
+        };
+    };
+    api_listVulnerability_validate_severity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vulnerability. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Vulnerability"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vulnerability"];
+                };
+            };
+        };
+    };
+    api_listVulnerability_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vulnerability. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Vulnerability"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vulnerability"];
+                };
+            };
+        };
+    };
     api_listWordlists_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_agents_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_apme_recalculate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_apme_trigger_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_mcp_attack-paths_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_mcp_attack-paths_enrich_partial_update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                path_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_audit_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_capabilities_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_dashboard_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_mcp_email-discovery_start_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_mcp_email-discovery_stop_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_emails_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_mcp_employee-intel_start_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_mcp_employee-intel_stop_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_employees_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_endpoints_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_endpoints_detail_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_engines_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_engines_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_exposures_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_exposures_detail_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_followups_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_followups_metrics_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_followups_propose_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_followups_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_followups_abort_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_followups_approve_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_followups_retry_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_followups_update_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_health_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_keys_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_keys_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_keys_regenerate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_keys_revoke_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_notes_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_notes_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_notes_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_notes_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_mcp_osint-staging_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_mcp_osint-staging_verify_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_projects_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_mcp_scan-status_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_scans_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_scans_pause_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_scans_resume_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_scans_start_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_scans_stop_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_scans_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_scans_detail_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_mcp_scans_export-ai_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_search_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_sessions_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_sessions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_sessions_end_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_sessions_events_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_sessions_heartbeat_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_sessions_revoke_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_settings_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_settings_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_subdomains_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_subdomains_detail_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_subscans_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_subscans_start_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_subscans_detail_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_targets_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_targets_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_targets_detail_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_tasks_retry_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_tools_run_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_tools_args_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tool: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_vulnerabilities_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_vulnerabilities_analyze_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_vulnerabilities_detail_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_vulnerabilities_enrich_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_vulnerabilities_validation_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_mcp_workflows_start_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_media_list: {
         parameters: {
             query?: never;
             header?: never;
@@ -10263,6 +24599,296 @@ export interface operations {
             };
         };
     };
+    api_osintStaging_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["OsintStaging"][];
+                    };
+                };
+            };
+        };
+    };
+    api_osintStaging_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    api_osintStaging_add_verified: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    api_osintStaging_bulk_discard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    api_osintStaging_bulk_promote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    api_osintStaging_clear_all: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    api_osintStaging_clear_false_positives: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    api_osintStaging_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    api_osintStaging_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    api_osintStaging_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_osintStaging_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    api_osintStaging_discard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    api_osintStaging_promote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    api_parameters_summary_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     api_plugins_list: {
         parameters: {
             query?: never;
@@ -10301,6 +24927,82 @@ export interface operations {
             };
         };
     };
+    api_plugins_install_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"][];
+                };
+            };
+        };
+    };
+    api_plugins_marketplace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"][];
+                };
+            };
+        };
+    };
+    api_plugins_marketplace_marketplace_install: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Plugin"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"];
+                };
+            };
+        };
+    };
+    api_plugins_marketplace_marketplace_refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Plugin"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"];
+                };
+            };
+        };
+    };
     api_plugins_registry: {
         parameters: {
             query?: never;
@@ -10316,6 +25018,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Plugin"][];
+                };
+            };
+        };
+    };
+    api_plugins_restart_orchestrator: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Plugin"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"];
+                };
+            };
+        };
+    };
+    api_plugins_restart_server: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Plugin"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"];
                 };
             };
         };
@@ -10410,6 +25150,48 @@ export interface operations {
             cookie?: never;
         };
         requestBody: components["requestBodies"]["Plugin"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"];
+                };
+            };
+        };
+    };
+    api_plugins_get_docs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"];
+                };
+            };
+        };
+    };
+    api_plugins_get_icon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {
@@ -10574,6 +25356,40 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Project"];
                 };
+            };
+        };
+    };
+    "api_push-token_register_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_push-token_register_delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -10849,7 +25665,92 @@ export interface operations {
             };
         };
     };
+    "api_rengine_fetch-proxies_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_rengine_proxy-settings_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_rengine_proxy-settings_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     "api_rengine_system-settings_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_rengine_tor-exit-ip_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_rengine_tor-status_list": {
         parameters: {
             query?: never;
             header?: never;
@@ -10922,8 +25823,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: string;
                 slug: string;
+                id: string;
             };
             cookie?: never;
         };
@@ -10934,6 +25835,156 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    "api_scan-summary_export-ai_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_scanProfiles_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["ScanProfile"][];
+                    };
+                };
+            };
+        };
+    };
+    api_scanProfiles_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanProfile"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanProfile"];
+                };
+            };
+        };
+    };
+    api_scanProfiles_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanProfile"];
+                };
+            };
+        };
+    };
+    api_scanProfiles_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanProfile"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanProfile"];
+                };
+            };
+        };
+    };
+    api_scanProfiles_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_scanProfiles_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanProfile"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanProfile"];
+                };
             };
         };
     };
@@ -10994,7 +26045,7 @@ export interface operations {
                         next?: string | null;
                         /** Format: uri */
                         previous?: string | null;
-                        results: components["schemas"]["PeriodicTask"][];
+                        results: components["schemas"]["TemporalSchedule"][];
                     };
                 };
             };
@@ -11007,14 +26058,14 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["PeriodicTask"];
+        requestBody: components["requestBodies"]["TemporalSchedule"];
         responses: {
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PeriodicTask"];
+                    "application/json": components["schemas"]["TemporalSchedule"];
                 };
             };
         };
@@ -11026,14 +26077,14 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["PeriodicTask"];
+        requestBody: components["requestBodies"]["TemporalSchedule"];
         responses: {
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PeriodicTask"];
+                    "application/json": components["schemas"]["TemporalSchedule"];
                 };
             };
         };
@@ -11043,7 +26094,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this periodic task. */
+                /** @description A unique integer value identifying this temporal schedule. */
                 id: number;
             };
             cookie?: never;
@@ -11055,7 +26106,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PeriodicTask"];
+                    "application/json": components["schemas"]["TemporalSchedule"];
                 };
             };
         };
@@ -11065,19 +26116,19 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this periodic task. */
+                /** @description A unique integer value identifying this temporal schedule. */
                 id: number;
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["PeriodicTask"];
+        requestBody: components["requestBodies"]["TemporalSchedule"];
         responses: {
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PeriodicTask"];
+                    "application/json": components["schemas"]["TemporalSchedule"];
                 };
             };
         };
@@ -11087,7 +26138,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this periodic task. */
+                /** @description A unique integer value identifying this temporal schedule. */
                 id: number;
             };
             cookie?: never;
@@ -11107,19 +26158,19 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this periodic task. */
+                /** @description A unique integer value identifying this temporal schedule. */
                 id: number;
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["PeriodicTask"];
+        requestBody: components["requestBodies"]["TemporalSchedule"];
         responses: {
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PeriodicTask"];
+                    "application/json": components["schemas"]["TemporalSchedule"];
                 };
             };
         };
@@ -11129,19 +26180,153 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this periodic task. */
+                /** @description A unique integer value identifying this temporal schedule. */
                 id: number;
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["PeriodicTask"];
+        requestBody: components["requestBodies"]["TemporalSchedule"];
         responses: {
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PeriodicTask"];
+                    "application/json": components["schemas"]["TemporalSchedule"];
+                };
+            };
+        };
+    };
+    api_screenshots_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["Screenshot"][];
+                    };
+                };
+            };
+        };
+    };
+    api_screenshots_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Screenshot"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Screenshot"];
+                };
+            };
+        };
+    };
+    api_screenshots_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this screenshot. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Screenshot"];
+                };
+            };
+        };
+    };
+    api_screenshots_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this screenshot. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Screenshot"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Screenshot"];
+                };
+            };
+        };
+    };
+    api_screenshots_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this screenshot. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_screenshots_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this screenshot. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Screenshot"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Screenshot"];
                 };
             };
         };
@@ -11180,6 +26365,378 @@ export interface operations {
             };
         };
     };
+    api_secretLeaks_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["SecretLeak"][];
+                    };
+                };
+            };
+        };
+    };
+    api_secretLeaks_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SecretLeak"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretLeak"];
+                };
+            };
+        };
+    };
+    api_secretLeaks_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this secret leak. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretLeak"];
+                };
+            };
+        };
+    };
+    api_secretLeaks_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this secret leak. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SecretLeak"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretLeak"];
+                };
+            };
+        };
+    };
+    api_secretLeaks_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this secret leak. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_secretLeaks_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this secret leak. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SecretLeak"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretLeak"];
+                };
+            };
+        };
+    };
+    api_settings_export_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_settings_export_scan-results_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_settings_import_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_settings_workers_heartbeat_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_soc-settings_list": {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["SOCConfiguration"][];
+                    };
+                };
+            };
+        };
+    };
+    "api_soc-settings_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SOCConfiguration"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SOCConfiguration"];
+                };
+            };
+        };
+    };
+    "api_soc-settings_toggle_streaming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SOCConfiguration"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SOCConfiguration"];
+                };
+            };
+        };
+    };
+    "api_soc-settings_read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this SOC Configuration. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SOCConfiguration"];
+                };
+            };
+        };
+    };
+    "api_soc-settings_update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this SOC Configuration. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SOCConfiguration"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SOCConfiguration"];
+                };
+            };
+        };
+    };
+    "api_soc-settings_delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this SOC Configuration. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_soc-settings_partial_update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this SOC Configuration. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SOCConfiguration"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SOCConfiguration"];
+                };
+            };
+        };
+    };
+    "api_stress-testing_history_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     "api_stress-testing_read": {
         parameters: {
             query?: never;
@@ -11200,6 +26757,44 @@ export interface operations {
         };
     };
     api_stress_control_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_stress_report_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_stress_report_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -11409,13 +27004,138 @@ export interface operations {
             };
         };
     };
+    api_system_health_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_system_logs_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     "api_target-summary_read": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                id: string;
                 slug: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_todos_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_todos_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_todos_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_todos_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_todos_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
             };
             cookie?: never;
         };
@@ -11430,6 +27150,74 @@ export interface operations {
         };
     };
     "api_toggle-bug-bounty-mode_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "api_toggle-scan-queueing-mode_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_toggle_monitoring_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_toggle_note_importance_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_toggle_note_status_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -11531,6 +27319,23 @@ export interface operations {
             };
         };
     };
+    api_tool_uninstall_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     api_tool_update_list: {
         parameters: {
             query?: never;
@@ -11548,6 +27353,23 @@ export interface operations {
             };
         };
     };
+    api_tool_update_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     api_tools_cms_detector_list: {
         parameters: {
             query?: never;
@@ -11558,6 +27380,23 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_tools_cve_description_generate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11702,6 +27541,23 @@ export interface operations {
         };
     };
     "api_update-theme_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_update_target_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -11959,7 +27815,262 @@ export interface operations {
             };
         };
     };
+    api_workers_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["ScanWorker"][];
+                    };
+                };
+            };
+        };
+    };
+    api_workers_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanWorker"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanWorker"];
+                };
+            };
+        };
+    };
+    api_workers_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this scan worker. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanWorker"];
+                };
+            };
+        };
+    };
+    api_workers_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this scan worker. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanWorker"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanWorker"];
+                };
+            };
+        };
+    };
+    api_workers_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this scan worker. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_workers_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this scan worker. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanWorker"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanWorker"];
+                };
+            };
+        };
+    };
+    api_workflows_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    api_workflows_start_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_action_ad-assessment_from-subdomain_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_capabilities_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mapi_action_create_project_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_action_directory-file_auth-logs_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_action_directory-file_delete_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_action_directory-file_dispatch_create": {
         parameters: {
             query?: never;
             header?: never;
@@ -12027,6 +28138,171 @@ export interface operations {
             };
         };
     };
+    mapi_action_engines_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_followups_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_followups_metrics_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_followups_propose_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_followups_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_followups_abort_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_followups_approve_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_followups_retry_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_followups_update_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mapi_action_initiate_scan_create: {
         parameters: {
             query?: never;
@@ -12049,6 +28325,96 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_note_delete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_pause_scan_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_resume_scan_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_retry_task_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_retry_tier_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+                tier: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -12095,7 +28461,77 @@ export interface operations {
             };
         };
     };
+    mapi_action_subdomain_add_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mapi_action_subdomain_delete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_tool_run_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_tool_args_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tool: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_action_unpause_scan_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -12197,11 +28633,197 @@ export interface operations {
             };
         };
     };
+    "mapi_api-intel_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIIntelProfile"][];
+                };
+            };
+        };
+    };
+    "mapi_api-intel_read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this api intelligence profile. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIIntelProfile"];
+                };
+            };
+        };
+    };
+    "mapi_apme_attack-trees_read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_apme_explain_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_apme_impact_regenerate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_apme_impact_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                path_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_apme_path_dismiss_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                path_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mapi_apme_paths_list: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_apme_recalculate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_apme_risk-summary_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_apme_tree_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -12269,6 +28891,97 @@ export interface operations {
             };
         };
     };
+    mapi_certificates_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_certificates_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_certificates_flag_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_certificates_resync_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_certs_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mapi_createOrganization_create: {
         parameters: {
             query?: never;
@@ -12286,12 +28999,382 @@ export interface operations {
             };
         };
     };
+    "mapi_cwe-info_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mapi_dashboard_read: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_emailBreaches_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailBreach"][];
+                };
+            };
+        };
+    };
+    mapi_emailBreaches_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["EmailBreach"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailBreach"];
+                };
+            };
+        };
+    };
+    mapi_emailBreaches_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this email breach. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailBreach"];
+                };
+            };
+        };
+    };
+    mapi_emailBreaches_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this email breach. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["EmailBreach"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailBreach"];
+                };
+            };
+        };
+    };
+    mapi_emailBreaches_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this email breach. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_emailBreaches_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this email breach. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["EmailBreach"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailBreach"];
+                };
+            };
+        };
+    };
+    mapi_emailDiscovery_start_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_emailDiscovery_stop_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_emailDiscovery_replay_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_emails_check_breach_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_emails_manual_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_employeeIntel_start_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_employeeIntel_stop_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_employeeIntel_replay_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_exposures_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_exposures_bulk-status_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_exposures_stats_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_exposures_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_exposures_status_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
             };
             cookie?: never;
         };
@@ -12395,6 +29478,97 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_graph_chain_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_graph_chain_nodes_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_graph_node_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                node_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_graph_scan_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_graph_target_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -12521,6 +29695,282 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_hardwareProfiles_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["HardwareProfile"][];
+                    };
+                };
+            };
+        };
+    };
+    mapi_hardwareProfiles_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["HardwareProfile"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HardwareProfile"];
+                };
+            };
+        };
+    };
+    mapi_hardwareProfiles_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this hardware profile. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HardwareProfile"];
+                };
+            };
+        };
+    };
+    mapi_hardwareProfiles_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this hardware profile. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["HardwareProfile"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HardwareProfile"];
+                };
+            };
+        };
+    };
+    mapi_hardwareProfiles_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this hardware profile. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_hardwareProfiles_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this hardware profile. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["HardwareProfile"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HardwareProfile"];
+                };
+            };
+        };
+    };
+    mapi_identity_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_identity_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_identity_confirm_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_identity_dismiss_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_linkedin_session_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_linkedin_session_helper_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_linkedin_session_status_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_linkedin_session_upload_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12836,27 +30286,8 @@ export interface operations {
                         next?: string | null;
                         /** Format: uri */
                         previous?: string | null;
-                        results: components["schemas"]["DirectoryFile"][];
+                        results: components["schemas"]["EndPointDirectory"][];
                     };
-                };
-            };
-        };
-    };
-    mapi_listDirectories_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["DirectoryFile"];
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DirectoryFile"];
                 };
             };
         };
@@ -12866,7 +30297,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this directory file. */
+                /** @description A unique integer value identifying this end point. */
                 id: number;
             };
             cookie?: never;
@@ -12878,71 +30309,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DirectoryFile"];
-                };
-            };
-        };
-    };
-    mapi_listDirectories_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this directory file. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["DirectoryFile"];
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DirectoryFile"];
-                };
-            };
-        };
-    };
-    mapi_listDirectories_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this directory file. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    mapi_listDirectories_partial_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this directory file. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: components["requestBodies"]["DirectoryFile"];
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DirectoryFile"];
+                    "application/json": components["schemas"]["EndPointDirectory"];
                 };
             };
         };
@@ -13086,6 +30453,8 @@ export interface operations {
             query?: {
                 /** @description A page number within the paginated result set. */
                 page?: number;
+                /** @description Number of results to return per page. */
+                length?: number;
             };
             header?: never;
             path?: never;
@@ -13229,6 +30598,103 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    mapi_listExposures_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                length?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["Exposure"][];
+                    };
+                };
+            };
+        };
+    };
+    mapi_listExposures_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this exposure. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exposure"];
+                };
+            };
+        };
+    };
+    mapi_listExposures_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this exposure. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Exposure"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exposure"];
+                };
+            };
+        };
+    };
+    mapi_listExposures_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this exposure. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Exposure"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exposure"];
+                };
             };
         };
     };
@@ -13668,6 +31134,140 @@ export interface operations {
             };
         };
     };
+    mapi_listParameters_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["Parameter"][];
+                    };
+                };
+            };
+        };
+    };
+    mapi_listParameters_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Parameter"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Parameter"];
+                };
+            };
+        };
+    };
+    mapi_listParameters_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this parameter. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Parameter"];
+                };
+            };
+        };
+    };
+    mapi_listParameters_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this parameter. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Parameter"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Parameter"];
+                };
+            };
+        };
+    };
+    mapi_listParameters_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this parameter. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_listParameters_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this parameter. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Parameter"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Parameter"];
+                };
+            };
+        };
+    };
     mapi_listScanHistory_list: {
         parameters: {
             query?: never;
@@ -13886,7 +31486,45 @@ export interface operations {
             };
         };
     };
+    mapi_listScans_bulk_pause: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanHistory"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanHistory"];
+                };
+            };
+        };
+    };
     mapi_listScans_bulk_stop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanHistory"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanHistory"];
+                };
+            };
+        };
+    };
+    mapi_listScans_bulk_unpause: {
         parameters: {
             query?: never;
             header?: never;
@@ -14008,7 +31646,49 @@ export interface operations {
             };
         };
     };
+    mapi_listScans_pause_scan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanHistory"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanHistory"];
+                };
+            };
+        };
+    };
     mapi_listScans_stop_scan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanHistory"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanHistory"];
+                };
+            };
+        };
+    };
+    mapi_listScans_unpause_scan: {
         parameters: {
             query?: never;
             header?: never;
@@ -14465,11 +32145,30 @@ export interface operations {
             };
         };
     };
+    mapi_listTools_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mapi_listVulnerability_list: {
         parameters: {
             query?: {
                 /** @description A page number within the paginated result set. */
                 page?: number;
+                /** @description Number of results to return per page. */
+                length?: number;
             };
             header?: never;
             path?: never;
@@ -14509,6 +32208,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Vulnerability"];
+                };
+            };
+        };
+    };
+    mapi_listVulnerability_queue: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description Number of results to return per page. */
+                length?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["Vulnerability"][];
+                    };
                 };
             };
         };
@@ -14599,7 +32329,1447 @@ export interface operations {
             };
         };
     };
+    mapi_listVulnerability_reject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vulnerability. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Vulnerability"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vulnerability"];
+                };
+            };
+        };
+    };
+    mapi_listVulnerability_update_severity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vulnerability. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Vulnerability"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vulnerability"];
+                };
+            };
+        };
+    };
+    mapi_listVulnerability_validate_severity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vulnerability. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Vulnerability"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vulnerability"];
+                };
+            };
+        };
+    };
+    mapi_listVulnerability_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this vulnerability. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Vulnerability"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vulnerability"];
+                };
+            };
+        };
+    };
     mapi_listWordlists_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_agents_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_apme_recalculate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_apme_trigger_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_mcp_attack-paths_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_mcp_attack-paths_enrich_partial_update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                path_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_audit_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_capabilities_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_dashboard_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_mcp_email-discovery_start_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_mcp_email-discovery_stop_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_emails_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_mcp_employee-intel_start_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_mcp_employee-intel_stop_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_employees_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_endpoints_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_endpoints_detail_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_engines_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_engines_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_exposures_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_exposures_detail_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_followups_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_followups_metrics_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_followups_propose_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_followups_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_followups_abort_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_followups_approve_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_followups_retry_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_followups_update_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_health_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_keys_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_keys_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_keys_regenerate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_keys_revoke_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_notes_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_notes_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_notes_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_notes_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_mcp_osint-staging_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_mcp_osint-staging_verify_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_projects_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_mcp_scan-status_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_scans_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_scans_pause_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_scans_resume_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_scans_start_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_scans_stop_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_scans_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_scans_detail_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_mcp_scans_export-ai_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_search_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_sessions_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_sessions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_sessions_end_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_sessions_events_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_sessions_heartbeat_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_sessions_revoke_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_settings_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_settings_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_subdomains_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_subdomains_detail_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_subscans_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_subscans_start_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_subscans_detail_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_targets_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_targets_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_targets_detail_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_tasks_retry_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_tools_run_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_tools_args_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tool: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_vulnerabilities_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_vulnerabilities_analyze_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_vulnerabilities_detail_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_vulnerabilities_enrich_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_vulnerabilities_validation_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_mcp_workflows_start_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_media_list: {
         parameters: {
             query?: never;
             header?: never;
@@ -15011,6 +34181,296 @@ export interface operations {
             };
         };
     };
+    mapi_osintStaging_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["OsintStaging"][];
+                    };
+                };
+            };
+        };
+    };
+    mapi_osintStaging_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    mapi_osintStaging_add_verified: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    mapi_osintStaging_bulk_discard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    mapi_osintStaging_bulk_promote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    mapi_osintStaging_clear_all: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    mapi_osintStaging_clear_false_positives: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    mapi_osintStaging_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    mapi_osintStaging_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    mapi_osintStaging_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_osintStaging_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    mapi_osintStaging_discard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    mapi_osintStaging_promote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this osint staging. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["OsintStaging"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OsintStaging"];
+                };
+            };
+        };
+    };
+    mapi_parameters_summary_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mapi_plugins_list: {
         parameters: {
             query?: never;
@@ -15049,6 +34509,82 @@ export interface operations {
             };
         };
     };
+    mapi_plugins_install_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"][];
+                };
+            };
+        };
+    };
+    mapi_plugins_marketplace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"][];
+                };
+            };
+        };
+    };
+    mapi_plugins_marketplace_marketplace_install: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Plugin"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"];
+                };
+            };
+        };
+    };
+    mapi_plugins_marketplace_marketplace_refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Plugin"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"];
+                };
+            };
+        };
+    };
     mapi_plugins_registry: {
         parameters: {
             query?: never;
@@ -15064,6 +34600,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Plugin"][];
+                };
+            };
+        };
+    };
+    mapi_plugins_restart_orchestrator: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Plugin"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"];
+                };
+            };
+        };
+    };
+    mapi_plugins_restart_server: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Plugin"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"];
                 };
             };
         };
@@ -15158,6 +34732,48 @@ export interface operations {
             cookie?: never;
         };
         requestBody: components["requestBodies"]["Plugin"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"];
+                };
+            };
+        };
+    };
+    mapi_plugins_get_docs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plugin"];
+                };
+            };
+        };
+    };
+    mapi_plugins_get_icon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {
@@ -15322,6 +34938,40 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Project"];
                 };
+            };
+        };
+    };
+    "mapi_push-token_register_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_push-token_register_delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -15597,7 +35247,92 @@ export interface operations {
             };
         };
     };
+    "mapi_rengine_fetch-proxies_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_rengine_proxy-settings_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_rengine_proxy-settings_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     "mapi_rengine_system-settings_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_rengine_tor-exit-ip_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_rengine_tor-status_list": {
         parameters: {
             query?: never;
             header?: never;
@@ -15670,8 +35405,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                id: string;
                 slug: string;
+                id: string;
             };
             cookie?: never;
         };
@@ -15682,6 +35417,156 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    "mapi_scan-summary_export-ai_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_scanProfiles_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["ScanProfile"][];
+                    };
+                };
+            };
+        };
+    };
+    mapi_scanProfiles_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanProfile"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanProfile"];
+                };
+            };
+        };
+    };
+    mapi_scanProfiles_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanProfile"];
+                };
+            };
+        };
+    };
+    mapi_scanProfiles_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanProfile"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanProfile"];
+                };
+            };
+        };
+    };
+    mapi_scanProfiles_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_scanProfiles_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanProfile"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanProfile"];
+                };
             };
         };
     };
@@ -15742,7 +35627,7 @@ export interface operations {
                         next?: string | null;
                         /** Format: uri */
                         previous?: string | null;
-                        results: components["schemas"]["PeriodicTask"][];
+                        results: components["schemas"]["TemporalSchedule"][];
                     };
                 };
             };
@@ -15755,14 +35640,14 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["PeriodicTask"];
+        requestBody: components["requestBodies"]["TemporalSchedule"];
         responses: {
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PeriodicTask"];
+                    "application/json": components["schemas"]["TemporalSchedule"];
                 };
             };
         };
@@ -15774,14 +35659,14 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["PeriodicTask"];
+        requestBody: components["requestBodies"]["TemporalSchedule"];
         responses: {
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PeriodicTask"];
+                    "application/json": components["schemas"]["TemporalSchedule"];
                 };
             };
         };
@@ -15791,7 +35676,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this periodic task. */
+                /** @description A unique integer value identifying this temporal schedule. */
                 id: number;
             };
             cookie?: never;
@@ -15803,7 +35688,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PeriodicTask"];
+                    "application/json": components["schemas"]["TemporalSchedule"];
                 };
             };
         };
@@ -15813,19 +35698,19 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this periodic task. */
+                /** @description A unique integer value identifying this temporal schedule. */
                 id: number;
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["PeriodicTask"];
+        requestBody: components["requestBodies"]["TemporalSchedule"];
         responses: {
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PeriodicTask"];
+                    "application/json": components["schemas"]["TemporalSchedule"];
                 };
             };
         };
@@ -15835,7 +35720,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this periodic task. */
+                /** @description A unique integer value identifying this temporal schedule. */
                 id: number;
             };
             cookie?: never;
@@ -15855,19 +35740,19 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this periodic task. */
+                /** @description A unique integer value identifying this temporal schedule. */
                 id: number;
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["PeriodicTask"];
+        requestBody: components["requestBodies"]["TemporalSchedule"];
         responses: {
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PeriodicTask"];
+                    "application/json": components["schemas"]["TemporalSchedule"];
                 };
             };
         };
@@ -15877,19 +35762,153 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this periodic task. */
+                /** @description A unique integer value identifying this temporal schedule. */
                 id: number;
             };
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["PeriodicTask"];
+        requestBody: components["requestBodies"]["TemporalSchedule"];
         responses: {
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PeriodicTask"];
+                    "application/json": components["schemas"]["TemporalSchedule"];
+                };
+            };
+        };
+    };
+    mapi_screenshots_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["Screenshot"][];
+                    };
+                };
+            };
+        };
+    };
+    mapi_screenshots_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Screenshot"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Screenshot"];
+                };
+            };
+        };
+    };
+    mapi_screenshots_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this screenshot. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Screenshot"];
+                };
+            };
+        };
+    };
+    mapi_screenshots_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this screenshot. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Screenshot"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Screenshot"];
+                };
+            };
+        };
+    };
+    mapi_screenshots_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this screenshot. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_screenshots_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this screenshot. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["Screenshot"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Screenshot"];
                 };
             };
         };
@@ -15912,6 +35931,378 @@ export interface operations {
         };
     };
     mapi_search_history_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_secretLeaks_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["SecretLeak"][];
+                    };
+                };
+            };
+        };
+    };
+    mapi_secretLeaks_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SecretLeak"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretLeak"];
+                };
+            };
+        };
+    };
+    mapi_secretLeaks_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this secret leak. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretLeak"];
+                };
+            };
+        };
+    };
+    mapi_secretLeaks_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this secret leak. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SecretLeak"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretLeak"];
+                };
+            };
+        };
+    };
+    mapi_secretLeaks_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this secret leak. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_secretLeaks_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this secret leak. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SecretLeak"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretLeak"];
+                };
+            };
+        };
+    };
+    mapi_settings_export_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_settings_export_scan-results_list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_settings_import_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_settings_workers_heartbeat_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_soc-settings_list": {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["SOCConfiguration"][];
+                    };
+                };
+            };
+        };
+    };
+    "mapi_soc-settings_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SOCConfiguration"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SOCConfiguration"];
+                };
+            };
+        };
+    };
+    "mapi_soc-settings_toggle_streaming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SOCConfiguration"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SOCConfiguration"];
+                };
+            };
+        };
+    };
+    "mapi_soc-settings_read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this SOC Configuration. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SOCConfiguration"];
+                };
+            };
+        };
+    };
+    "mapi_soc-settings_update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this SOC Configuration. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SOCConfiguration"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SOCConfiguration"];
+                };
+            };
+        };
+    };
+    "mapi_soc-settings_delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this SOC Configuration. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_soc-settings_partial_update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this SOC Configuration. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["SOCConfiguration"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SOCConfiguration"];
+                };
+            };
+        };
+    };
+    "mapi_stress-testing_history_list": {
         parameters: {
             query?: never;
             header?: never;
@@ -16119,13 +36510,138 @@ export interface operations {
             };
         };
     };
+    mapi_system_health_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_system_logs_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     "mapi_target-summary_read": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                id: string;
                 slug: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_todos_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_todos_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_todos_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_todos_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_todos_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
             };
             cookie?: never;
         };
@@ -16140,6 +36656,74 @@ export interface operations {
         };
     };
     "mapi_toggle-bug-bounty-mode_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "mapi_toggle-scan-queueing-mode_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_toggle_monitoring_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_toggle_note_importance_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_toggle_note_status_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -16241,6 +36825,23 @@ export interface operations {
             };
         };
     };
+    mapi_tool_uninstall_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mapi_tool_update_list: {
         parameters: {
             query?: never;
@@ -16258,6 +36859,23 @@ export interface operations {
             };
         };
     };
+    mapi_tool_update_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mapi_tools_cms_detector_list: {
         parameters: {
             query?: never;
@@ -16268,6 +36886,23 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_tools_cve_description_generate_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16412,6 +37047,23 @@ export interface operations {
         };
     };
     "mapi_update-theme_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_update_target_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -16662,6 +37314,176 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_workers_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        /** Format: uri */
+                        next?: string | null;
+                        /** Format: uri */
+                        previous?: string | null;
+                        results: components["schemas"]["ScanWorker"][];
+                    };
+                };
+            };
+        };
+    };
+    mapi_workers_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanWorker"];
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanWorker"];
+                };
+            };
+        };
+    };
+    mapi_workers_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this scan worker. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanWorker"];
+                };
+            };
+        };
+    };
+    mapi_workers_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this scan worker. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanWorker"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanWorker"];
+                };
+            };
+        };
+    };
+    mapi_workers_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this scan worker. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_workers_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A unique integer value identifying this scan worker. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["ScanWorker"];
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanWorker"];
+                };
+            };
+        };
+    };
+    mapi_workflows_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mapi_workflows_start_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

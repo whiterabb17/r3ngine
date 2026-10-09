@@ -1,17 +1,71 @@
+# VCS / editor / local tooling — never COPY'd into the image
 .git
 .gitignore
+.gitattributes
 .github
 .gitmodules
-.dockerignore
+.agents
+.claude
+.cursorrules
+.cursor
+.dev
+.remember
+.superpowers
+.vscode
+.idea
 .sonarcloud.properties
-db.sqlite3
-Dockerfile
-docker-compose.yml
+.dockerignore
+
+# Nested companion checkouts sitting next to the app (not part of the web image)
+r3ngine-mobile
+r3ngine-plugins
+
+# Secrets and local env
+.env
+.env.*
+secrets
+secret
+*.pem
+*.key
+*.crt
+
+# Docs and repo meta
 *.md
 _config.yml
 LICENSE
+docs
+documents
+
+# Host-side install / compose helpers
+Makefile
+make.bat
+install.sh
+full_yaml_config.yaml
+Dockerfile
+docker-compose.yml
+
+# Python artifacts
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+venv
+.venv
+web/staticfiles
+
+# Frontend artifacts rebuilt inside the image.
+# Host node_modules is the usual Windows BuildKit killer: tens of thousands of
+# tiny files hashed over the Docker Desktop TLS session, which surfaces as
+# "failed to compute cache key: failed to copy: tls: bad record MAC".
+**/node_modules
+frontend/dist
+
+# Runtime / local data
 downloads
 uploads
 logs
-venv
-secret
+db.sqlite3
+backups
+media
+assessments
+web/assessment_*

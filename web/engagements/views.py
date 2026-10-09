@@ -8,6 +8,7 @@ from .serializers import (
 )
 from api.serializers import ScanHistorySerializer
 from reNgine.utils.logger import get_module_logger
+from reNgine.definitions import INTERNAL_ERROR_MESSAGE
 
 logger = get_module_logger(__name__)
 
@@ -86,9 +87,12 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             state.save()
             
             return Response({'status': 'Assessment started', 'workflow_id': workflow_id})
-        except Exception as e:
-            logger.log_line("[ASSESSMENT]", "ERROR", f"Failed to start assessment {assessment.uuid}: {e}", level="error", exc_info=True)
+        except ValueError as e:
+            # Raised by the state machine for a transition the assessment cannot make.
             return Response({'error': str(e)}, status=400)
+        except Exception:
+            logger.log_line("[ASSESSMENT]", "ERROR", "Failed to start assessment %s" % assessment.uuid, level="error", exc_info=True)
+            return Response({'error': INTERNAL_ERROR_MESSAGE}, status=500)
 
     @action(detail=True, methods=['post'])
     def pause(self, request, pk=None):
@@ -103,9 +107,12 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             handle = client.get_workflow_handle(workflow_id)
             async_to_sync(handle.signal)("pause_assessment")
             return Response({'status': 'Assessment pause signal sent'})
-        except Exception as e:
-            logger.log_line("[ASSESSMENT]", "ERROR", f"Failed to pause assessment {assessment.uuid}: {e}", level="error", exc_info=True)
+        except ValueError as e:
+            # Raised by the state machine for a transition the assessment cannot make.
             return Response({'error': str(e)}, status=400)
+        except Exception:
+            logger.log_line("[ASSESSMENT]", "ERROR", "Failed to pause assessment %s" % assessment.uuid, level="error", exc_info=True)
+            return Response({'error': INTERNAL_ERROR_MESSAGE}, status=500)
 
     @action(detail=True, methods=['post'])
     def resume(self, request, pk=None):
@@ -120,9 +127,12 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             handle = client.get_workflow_handle(workflow_id)
             async_to_sync(handle.signal)("resume_assessment")
             return Response({'status': 'Assessment resume signal sent'})
-        except Exception as e:
-            logger.log_line("[ASSESSMENT]", "ERROR", f"Failed to resume assessment {assessment.uuid}: {e}", level="error", exc_info=True)
+        except ValueError as e:
+            # Raised by the state machine for a transition the assessment cannot make.
             return Response({'error': str(e)}, status=400)
+        except Exception:
+            logger.log_line("[ASSESSMENT]", "ERROR", "Failed to resume assessment %s" % assessment.uuid, level="error", exc_info=True)
+            return Response({'error': INTERNAL_ERROR_MESSAGE}, status=500)
 
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
@@ -140,9 +150,12 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             handle = client.get_workflow_handle(workflow_id)
             async_to_sync(handle.signal)("cancel_assessment")
             return Response({'status': 'Assessment cancel signal sent'})
-        except Exception as e:
-            logger.log_line("[ASSESSMENT]", "ERROR", f"Failed to cancel assessment {assessment.uuid}: {e}", level="error", exc_info=True)
+        except ValueError as e:
+            # Raised by the state machine for a transition the assessment cannot make.
             return Response({'error': str(e)}, status=400)
+        except Exception:
+            logger.log_line("[ASSESSMENT]", "ERROR", "Failed to cancel assessment %s" % assessment.uuid, level="error", exc_info=True)
+            return Response({'error': INTERNAL_ERROR_MESSAGE}, status=500)
 
     @action(detail=True, methods=['post'], url_path='approve-validation')
     def approve_validation(self, request, pk=None):
@@ -165,9 +178,12 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             async_to_sync(handle.signal)("validation_approved")
             AssessmentStateMachine.transition_to(assessment, 'Reporting', user=request.user)
             return Response({'status': 'Validation approved, proceeding to Reporting'})
-        except Exception as e:
-            logger.log_line("[ASSESSMENT]", "ERROR", f"Failed to approve validation for {assessment.uuid}: {e}", level="error", exc_info=True)
+        except ValueError as e:
+            # Raised by the state machine for a transition the assessment cannot make.
             return Response({'error': str(e)}, status=400)
+        except Exception:
+            logger.log_line("[ASSESSMENT]", "ERROR", "Failed to approve validation for %s" % assessment.uuid, level="error", exc_info=True)
+            return Response({'error': INTERNAL_ERROR_MESSAGE}, status=500)
 
 class AssessmentScopeViewSet(viewsets.ModelViewSet):
     queryset = AssessmentScope.objects.all()

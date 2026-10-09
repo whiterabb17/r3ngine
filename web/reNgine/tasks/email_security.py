@@ -1,7 +1,5 @@
-"""Email security scanning functions — SPF, DMARC, DKIM, SMTP relay, STARTTLS, user enum."""
+"""Email security scanning functions — SPF, DMARC, DKIM, SMTP relay, STARTTLS, certs."""
 import logging
-import os
-import subprocess
 from reNgine.utils.task import run_command
 
 logger = logging.getLogger(__name__)
@@ -90,8 +88,8 @@ def check_dkim(domain: str) -> dict:
                 txt = str(rdata).strip('"')
                 if 'v=DKIM1' in txt or 'p=' in txt:
                     return {"found": True, "selector": selector, "record": txt}
-        except (Exception,):
-            continue
+        except dns.exception.DNSException:
+            continue  # NXDOMAIN / no TXT / timeout: try the next selector
     return {"found": False, "selector": None, "record": None}
 
 
@@ -244,68 +242,3 @@ def swaks_starttls_check(host: str, port: int, timeout: int = 15) -> dict:
     return result
 
 
-SMTP_USERNAMES_WORDLIST = '/usr/src/wordlist/smtp-usernames.txt'
-
-
-def smtp_user_enum(
-    targets: list,
-    wordlist: str = SMTP_USERNAMES_WORDLIST,
-    method: str = 'VRFY',
-    timeout: int = 120,
-    domain: str = '',
-) -> dict:
-    """Run smtp-user-enum against each host:port target individually.
-
-    Args:
-        targets: list of (host, port) tuples
-        wordlist: path to usernames wordlist
-        method: VRFY, EXPN, or RCPT
-        timeout: seconds per target before killing the process
-        domain: when set, passes -d to smtp-user-enum so it sends
-                VRFY user@domain instead of bare VRFY user (required
-                by servers that enforce RFC 2821 FQDN syntax)
-
-    Returns:
-        {"users_found": {"host:port": [usernames]}, "raw": str}
-    """
-    if not targets:
-        return {"users_found": {}, "raw": ""}
-
-    if not os.path.isfile(wordlist):
-        logger.warning("[smtp_user_enum] wordlist not found: %s", wordlist)
-        return {"users_found": {}, "raw": ""}
-
-    result: dict = {"users_found": {}, "raw": ""}
-    all_raw: list = []
-
-    for host, port in targets:
-        host_port = "%s:%s" % (host, port)
-        cmd = ['smtp-user-enum', '-m', method, '-U', wordlist]
-        if domain:
-            cmd += ['-d', domain]
-        cmd += [host, str(port)]
-        try:
-            return_code, output = run_command(cmd, timeout=timeout + 10)
-            all_raw.append("=== %s ===\n%s" % (host_port, output[:2000]))
-
-            for line in output.splitlines():
-                if 'EXISTS' not in line and '250 ' not in line:
-                    continue
-                user = line.rsplit(':', 1)[-1].replace('EXISTS', '').strip()
-                if user and '@' not in user:
-                    result["users_found"].setdefault(host_port, [])
-                    if user not in result["users_found"][host_port]:
-                        result["users_found"][host_port].append(user)
-
-            if return_code != 0:
-                logger.warning(
-                    "[smtp_user_enum] %s exited %d: %s",
-                    host_port,
-                    return_code,
-                    output[:200],
-                )
-        except Exception as e:
-            logger.debug("[smtp_user_enum] %s error: %s", host_port, e)
-
-    result["raw"] = "\n".join(all_raw)[:10000]
-    return result

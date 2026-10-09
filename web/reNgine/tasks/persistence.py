@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import os
 from urllib.parse import urlparse
 
@@ -43,7 +43,7 @@ def remove_duplicate_endpoints(
 		filter_status (list): List of HTTP status codes to filter on.
 		duplicate_removal_fields (list): List of Endpoint model fields to check for duplicates
 	"""
-	logger.info(f'Removing duplicate endpoints based on {duplicate_removal_fields}')
+	logger.info("Removing duplicate endpoints based on %s", duplicate_removal_fields)
 	endpoints = (
 		EndPoint.objects
 		.filter(scan_history__id=scan_history_id)
@@ -114,13 +114,24 @@ def process_httpx_response(line, ctx={}, is_ran_from_subdomain_scan=False):
 	if not subdomain:
 		return None, False
 
+	is_default = is_ran_from_subdomain_scan
+	if not is_default and 'url' in line:
+		from reNgine.common_func import sanitize_url
+		original_url = sanitize_url(line['url'])
+		scan_id = ctx.get('scan_history_id')
+		if scan_id:
+			from startScan.models import EndPoint
+			orig_ep = EndPoint.objects.filter(scan_history_id=scan_id, http_url=original_url).first()
+			if orig_ep and orig_ep.is_default:
+				is_default = True
+
 	# Save default HTTP URL to endpoint object in DB
 	endpoint, created = save_endpoint(
 		http_url,
 		crawl=False,
 		ctx=ctx,
 		subdomain=subdomain,
-		is_default=is_ran_from_subdomain_scan
+		is_default=is_default
 	)
 	if not endpoint:
 		return None, False
@@ -134,8 +145,11 @@ def process_httpx_response(line, ctx={}, is_ran_from_subdomain_scan=False):
 	endpoint.is_redirect = is_redirect
 	endpoint.save()
 
-	# Sync Subdomain status attributes if this is the default endpoint
-	if endpoint.is_default and subdomain:
+	_record_final_url(line.get('url'), http_url, ctx)
+
+	# Sync subdomain status whenever we have real data and the subdomain hasn't
+	# been probed yet, or this is the canonical endpoint.
+	if subdomain and (endpoint.is_default or not subdomain.http_status):
 		subdomain.http_status = http_status
 		subdomain.page_title = page_title
 		subdomain.content_length = content_length
@@ -146,6 +160,23 @@ def process_httpx_response(line, ctx={}, is_ran_from_subdomain_scan=False):
 		subdomain.save()
 
 	return endpoint, created
+
+
+def _record_final_url(input_url, final_url, ctx) -> None:
+	"""Remember where a probe of a host's root ended, on the probed host.
+
+	The endpoint is saved under the final host, so without this a host that
+	redirects elsewhere keeps no trace of where it went. Only root probes count:
+	a deep path redirecting to a login page says nothing about the host.
+	"""
+	scan_id = (ctx or {}).get('scan_history_id')
+	if not (input_url and final_url and scan_id):
+		return
+	if urlparse(input_url if '://' in input_url else f'http://{input_url}').path not in ('', '/'):
+		return
+	Subdomain.objects.filter(
+		scan_history_id=scan_id, name=get_subdomain_from_url(input_url),
+	).update(final_url=str(final_url)[:2000])
 
 
 def extract_httpx_url(line):
@@ -196,7 +227,7 @@ def save_metadata_info(meta_dict):
 	Returns:
 		list: List of startScan.MetaFinderDocument objects.
 	"""
-	logger.warning(f'Getting metadata for {meta_dict.osint_target}')
+	logger.warning("Getting metadata for %s", meta_dict.osint_target)
 
 	scan_history = ScanHistory.objects.get(id=meta_dict.scan_id)
 
@@ -207,11 +238,11 @@ def save_metadata_info(meta_dict):
 	try:
 		result = extract_metadata_from_google_search(meta_dict.osint_target, meta_dict.documents_limit)
 	except Exception as e:
-		logger.error(f'Error extracting metadata from Google Search for {meta_dict.osint_target}: {str(e)}')
+		logger.error("Error extracting metadata from Google Search for %s: %s", meta_dict.osint_target, str(e))
 		return []
 
 	if not result:
-		logger.error(f'No metadata result from Google Search for {meta_dict.osint_target}.')
+		logger.error("No metadata result from Google Search for %s.", meta_dict.osint_target)
 		return []
 
 	# Add metadata info to DB
@@ -253,7 +284,7 @@ def create_scan_activity(scan_history_id, message, status):
 
 def save_ip_address(ip_address, subdomain=None, subscan=None, scan_id=None, activity_id=None, **kwargs):
 	if not (validators.ipv4(ip_address) or validators.ipv6(ip_address)):
-		logger.info(f'IP {ip_address} is not a valid IP. Skipping.')
+		logger.info("IP %s is not a valid IP. Skipping.", ip_address)
 		return None, False
 	ip, created = IpAddress.objects.get_or_create(address=ip_address)
 	if created:
@@ -275,7 +306,7 @@ def save_ip_address(ip_address, subdomain=None, subscan=None, scan_id=None, acti
 		try:
 			run_and_close(loop, _start())
 		except Exception as e:
-			logger.warning(f"Failed to start GeoLocalizeWorkflow for IP {ip_address} in scan {scan_id}: {e}")
+			logger.warning("Failed to start GeoLocalizeWorkflow for IP %s in scan %s: %s", ip_address, scan_id, e)
 
 	# Set extra attributes
 	for key, value in kwargs.items():

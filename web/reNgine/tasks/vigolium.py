@@ -5,6 +5,8 @@ import shlex
 import subprocess
 import tempfile
 
+from django.conf import settings
+
 from reNgine.definitions import (
     ANTHROPIC,
     NUCLEI_SEVERITY_MAP,
@@ -20,10 +22,16 @@ from reNgine.definitions import (
     VIGOLIUM_AUDIT_TIMEOUT,
     VIGOLIUM_AUDIT_USE_AI,
     VIGOLIUM_CONCURRENCY,
+    VIGOLIUM_DISCOVERY,
     VIGOLIUM_HARVEST,
     VIGOLIUM_MODULES,
     VIGOLIUM_RATE_LIMIT,
+    VIGOLIUM_RUN_PHASE_A,
+    VIGOLIUM_RUN_PHASE_B,
+    VIGOLIUM_SCOPE_ORIGIN,
     VIGOLIUM_SEVERITY_FILTER,
+    VIGOLIUM_SKIP_SPIDERING,
+    VIGOLIUM_SPIDER_MAX_TIME,
     VIGOLIUM_STRATEGY,
     VIGOLIUM_TIMEOUT,
     VULNERABILITY_SCAN,
@@ -59,7 +67,24 @@ def _iter_jsonl(output_file):
             try:
                 yield json.loads(line)
             except json.JSONDecodeError:
-                logger.warning(f"vigolium: skipping non-JSON line: {line[:80]}")
+                logger.warning("vigolium: skipping non-JSON line: %s", line[:80])
+
+
+def _has_records(output_file) -> bool:
+    """Return True if the output file contains any finding, http_record, or scan entries.
+
+    Used to distinguish between a genuine proxy block (zero output) and a tool that
+    completed partially — e.g. KnownIssueScan where Nuclei hit its internal timeout
+    and was curtailed before flushing the scan-summary record, but still wrote
+    hundreds of findings to disk.  In that case the proxy is innocent and retrying
+    the entire command would discard all valid work already done.
+    """
+    if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
+        return False
+    for record in _iter_jsonl(output_file):
+        if record.get('type') in ('finding', 'http_record', 'scan'):
+            return True
+    return False
 
 
 def parse_vigolium_finding(task_instance, finding_data, subdomain):
@@ -151,23 +176,138 @@ def parse_vigolium_http_record(task_instance, record_data):
     )
 
 
-def _run_vigolium_phase(task_instance, cmd, output_file, phase_label, save_http_records=False):
+def _discovery_output_file(scan_results_dir: str) -> str:
+    """Return the JSONL path the earlier vigolium discovery pass writes for a scan."""
+    return f"{scan_results_dir}/vigolium/discovery/discovery.jsonl"
+
+
+def _discovery_produced_results(scan_results_dir: str) -> bool:
+    """Return True when the earlier vigolium discovery pass left usable output.
+
+    This is the evidence that the pass actually ran against this scan's targets —
+    not merely that it was enabled in the engine config. It is False when the pass
+    was disabled, crashed before writing, returned early because the scan had no
+    targets, or was blocked and wrote nothing, and in every one of those cases the
+    Tier 5 analysis has to run `discovery` itself or the scan loses that coverage.
+
+    `_has_records` is reused so the two places that judge a vigolium output file
+    agree: a file counts once it holds a finding, http_record or scan record.
+    A scan record with no http_record means discovery probed the same subdomain
+    roots and found nothing to add — repeating it in Tier 5 would find nothing
+    either, so that still counts as "it ran".
+
+    Args:
+        scan_results_dir: `ScanHistory.results_dir` for the current scan.
+
+    Returns:
+        bool: True if the discovery output file holds at least one record.
+    """
+    return _has_records(_discovery_output_file(scan_results_dir))
+
+
+def _analysis_phases(skip_spidering: bool, discovery_already_ran: bool) -> str:
+    """Build the --only phase list for the Tier 5 analysis pass.
+
+    Two phases are deliberately absent from it:
+
+    - `external-harvest` is skipped by vigolium itself in `--stateless` mode, which
+      every r3ngine invocation uses, because it needs a database session to ingest
+      passive sources. Asking for it only lengthened the flag.
+    - `discovery` is the same phase, over the same subdomain roots, that
+      `vigolium_discovery` ran earlier in the scan, and whose endpoints are already
+      in the database. It is dropped only when that earlier pass demonstrably
+      produced output for this scan (see `_discovery_produced_results`); a pass that
+      was disabled, failed or found no targets leaves it in the list, so no scan
+      loses that coverage.
+
+    Args:
+        skip_spidering: Engine config — run without the browser crawl.
+        discovery_already_ran: Whether the earlier vigolium discovery pass actually
+            ran and produced results for this scan.
+
+    Returns:
+        str: Comma-separated phase list for `--only`.
+    """
+    phases = []
+    if not skip_spidering:
+        phases.append('spidering')
+    if not discovery_already_ran:
+        phases.append('discovery')
+    phases += ['known-issue-scan', 'dynamic-assessment']
+    return ','.join(phases)
+
+
+def _run_vigolium_phase(task_instance, cmd, output_file, phase_label, save_http_records=False, proxy=None):
     """Execute a vigolium command, then parse and persist findings from the JSONL output.
 
     Args:
         task_instance: Temporal task proxy with scan context.
-        cmd: Full vigolium command string.
+        cmd: Full vigolium command string (without proxy).
         output_file: Path where vigolium writes its JSONL output.
         phase_label: Human-readable label for logging.
         save_http_records: If True, also save http_record entries as EndPoints.
+        proxy: The proxy string to use, if any.
     """
     from reNgine.tasks import stream_command
+    import json
+    import os
 
-    logger.info(f"Running Vigolium {phase_label}")
-    logger.warning(f"Command: {cmd}")
+    def run_cmd_and_check(current_cmd):
+        logger.info("Running Vigolium %s", phase_label)
+        logger.warning("Command: %s", current_cmd)
+        for _ in stream_command(current_cmd, scan_id=task_instance.scan_id, activity_id=task_instance.activity_id, timeout=43200):
+            pass
 
-    for _ in stream_command(cmd, scan_id=task_instance.scan_id, activity_id=task_instance.activity_id):
-        pass
+        # No output file means vigolium crashed or produced nothing — treat as proxy failure.
+        if not os.path.exists(output_file):
+            logger.warning("Vigolium %s produced no output file.", phase_label)
+            return False
+
+        # Look for the scan-summary record; if total_requests > 0 the proxy was fine.
+        with open(output_file, 'r') as f:
+            for line in f:
+                try:
+                    record = json.loads(line)
+                    if record.get('type') == 'scan':
+                        total_req = record.get('data', {}).get('total_requests', 0)
+                        if total_req > 0:
+                            return True
+                        # total_requests == 0 in the summary — fall through to record check
+                        # before concluding proxy failure (Nuclei deadline may have prevented
+                        # the summary from being flushed correctly).
+                        break
+                except (ValueError, AttributeError, TypeError):
+                    pass  # not a well-formed JSONL record
+
+        # No valid scan-summary (or total_requests == 0).  Before blaming the proxy,
+        # check whether the file already contains real findings from phases that ran
+        # successfully.  KnownIssueScan's Nuclei sub-runner can be curtailed at its
+        # internal deadline and still emit findings — the proxy was not the cause.
+        if _has_records(output_file):
+            logger.info(
+                "Vigolium %s: scan-summary absent or shows 0 requests but %s contains records — treating as partial success, proxy retry suppressed.", phase_label, output_file
+            )
+            return True
+
+        return False
+
+    success = False
+    if proxy:
+        proxy_cmd = f"{cmd} --proxy {proxy}"
+        success = run_cmd_and_check(proxy_cmd)
+        if not success:
+            logger.warning(
+                "Vigolium %s failed or made 0 requests using proxy %s. Retrying without proxy...", phase_label, proxy
+            )
+            # Only erase the output file before the no-proxy retry if it is genuinely
+            # empty.  If records exist from phases that completed before the proxy
+            # started blocking, preserve them — the retry will overwrite the file
+            # anyway (vigolium appends), so deleting here risks losing valid data.
+            if os.path.exists(output_file) and not _has_records(output_file):
+                os.remove(output_file)
+
+    if not success:
+        run_cmd_and_check(cmd)
 
     findings_saved = 0
     duplicates_skipped = 0
@@ -207,15 +347,14 @@ def _run_vigolium_phase(task_instance, cmd, output_file, phase_label, save_http_
                 parse_vigolium_finding(task_instance, data, subdomain)
                 findings_saved += 1
             else:
-                logger.warning(f"Vigolium {phase_label}: no subdomain found for '{hostname}', skipping finding.")
+                logger.warning("Vigolium %s: no subdomain found for '%s', skipping finding.", phase_label, hostname)
 
         elif record_type == 'http_record' and save_http_records:
             parse_vigolium_http_record(task_instance, data)
             endpoints_saved += 1
 
     logger.info(
-        f"Vigolium {phase_label} complete — {findings_saved} findings saved, "
-        f"{duplicates_skipped} in-file duplicates skipped, {endpoints_saved} endpoints saved"
+        "Vigolium %s complete — %s findings saved, %s in-file duplicates skipped, %s endpoints saved", phase_label, findings_saved, duplicates_skipped, endpoints_saved
     )
 
 
@@ -239,26 +378,68 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
     concurrency = vig_config.get(VIGOLIUM_CONCURRENCY, 50)
     rate_limit = vig_config.get(VIGOLIUM_RATE_LIMIT, 100)
     timeout = _ensure_duration(vig_config.get(VIGOLIUM_TIMEOUT, '300s'))
+    spider_max_time = _ensure_duration(vig_config.get(VIGOLIUM_SPIDER_MAX_TIME, '20m'))
     modules = vig_config.get(VIGOLIUM_MODULES, [])
     severity_filter = vig_config.get(VIGOLIUM_SEVERITY_FILTER, [])
+    # Phase toggles — both default True so existing behaviour is unchanged
+    run_phase_a = vig_config.get(VIGOLIUM_RUN_PHASE_A, True)
+    run_phase_b = vig_config.get(VIGOLIUM_RUN_PHASE_B, True)
+    scope_origin = vig_config.get(VIGOLIUM_SCOPE_ORIGIN, 'balanced')
+    skip_spidering = vig_config.get(VIGOLIUM_SKIP_SPIDERING, False)
+
+    if not run_phase_a and not run_phase_b:
+        logger.info("Vigolium scan: both Phase A and Phase B are disabled. Skipping.")
+        return "Vigolium scan skipped (all phases disabled)"
+
+    # Prefer the task results_dir (subscan-local) so concurrent subscans do not
+    # overwrite a shared targets file under the parent scan results dir.
+    _raw_results = getattr(self, 'results_dir', None)
+    if isinstance(_raw_results, str) and _raw_results:
+        base_results = _raw_results
+    else:
+        _scan_dir = getattr(getattr(self, 'scan', None), 'results_dir', None)
+        base_results = _scan_dir if isinstance(_scan_dir, str) and _scan_dir else (
+            os.path.join(settings.RENGINE_RESULTS, str(self.scan_id))
+        )
 
     if urls:
         target_urls = urls
     else:
-        from reNgine.common_func import get_http_urls
-        target_urls = get_http_urls(ctx={
-            'scan_history_id': self.scan_id,
-            'domain_id': getattr(self, 'domain_id', None),
-        })
+        from reNgine.common_func import collect_all_scan_urls
+        scope_ctx = dict(ctx or {})
+        scope_ctx.setdefault('scan_history_id', self.scan_id)
+        if getattr(self, 'domain_id', None) is not None:
+            scope_ctx.setdefault('domain_id', self.domain_id)
+        subdomain = getattr(self, 'subdomain', None)
+        if subdomain is not None:
+            scope_ctx.setdefault('subdomain_id', subdomain.id)
+            scope_ctx.setdefault('subdomain_name', subdomain.name)
+        elif getattr(self, 'subdomain_id', None):
+            scope_ctx.setdefault('subdomain_id', self.subdomain_id)
+        target_urls = collect_all_scan_urls(
+            ctx=scope_ctx,
+            results_dir=base_results,
+            ignore_files=True,
+        )
 
     if not target_urls:
-        if self.scan and self.scan.domain:
+        subdomain = getattr(self, 'subdomain', None)
+        name = (
+            (getattr(subdomain, 'name', None) or '').strip()
+            or ((ctx or {}).get('subdomain_name') or '').strip()
+        )
+        http_url = ((ctx or {}).get('subdomain_http_url') or '').strip()
+        if http_url:
+            target_urls = [http_url]
+        elif name:
+            target_urls = [f"https://{name}"]
+        elif self.scan and self.scan.domain:
             target_urls = [f"https://{self.scan.domain.name}"]
         else:
             logger.warning("Vigolium scan: no targets found. Skipping.")
             return
 
-    results_dir = f"{self.scan.results_dir}/vigolium/vuln"
+    results_dir = f"{base_results}/vigolium/vuln"
     os.makedirs(results_dir, exist_ok=True)
 
     targets_file = f"{results_dir}/targets.txt"
@@ -266,33 +447,68 @@ def vigolium_scan(self, urls=None, ctx={}, description=None):
         for url in target_urls:
             f.write(f"{url}\n")
 
-    output_file = f"{results_dir}/findings.jsonl"
-
-    cmd = (
-        f"vigolium scan"
-        f" -T {targets_file}"
+    # Shared base command — no --only and no -o yet; added per phase below.
+    base_cmd = (
+        f"cat {targets_file} | vigolium scan"
         f" --stateless"
         f" --format jsonl"
         f" --verbose"
-        f" -o {output_file}"
-        # f" --only known-issue-scan,dynamic-assessment"
         f" -c {concurrency}"
         f" -r {rate_limit}"
         f" --timeout {timeout}"
+        f" --spider-max-time {spider_max_time}"
         f" --strategy {strategy}"
+        f" --scope-origin {scope_origin}"
         f" --skip-dependency-check"
         f" --omit-response"
     )
 
     if modules:
-        cmd += f" -m {','.join(modules)}"
-
+        base_cmd += f" -m {','.join(modules)}"
 
     proxy = get_random_proxy()
-    if proxy:
-        cmd += f" --proxy {proxy}"
 
-    _run_vigolium_phase(self, cmd, output_file, "Vulnerability Scan", save_http_records=False)
+    # --- Phase A: Spidering only ---
+    # Browser crawl of all targets so spidering-discovered endpoints feed Phase B.
+    # Discovery is intentionally omitted here — the dedicated vigolium_discovery
+    # task (Tier 2) and vigolium_analysis (Tier 5) already cover that phase.
+    # ExternalHarvest is excluded — vigolium skips it in --stateless mode anyway
+    # (it requires an active database session to ingest passive sources).
+    # When skip_spidering is True, Phase A has nothing left to run and is skipped.
+    if run_phase_a and not skip_spidering:
+        output_file_spidering = f"{results_dir}/findings_spidering.jsonl"
+        cmd_a = base_cmd + f" --only spidering -o {output_file_spidering}"
+        _run_vigolium_phase(
+            self, cmd_a, output_file_spidering,
+            "Scan/Spidering (spidering)",
+            save_http_records=False,
+            proxy=proxy,
+        )
+    elif run_phase_a and skip_spidering:
+        logger.info(
+            "Vigolium Phase A (spidering) skipped — skip_spidering is enabled "
+            "(discovery is not part of the Tier 6 vulnerability scan)."
+        )
+    else:
+        logger.info("Vigolium Phase A (spidering) skipped by configuration.")
+
+    # --- Phase B: KnownIssueScan + DynamicAssessment ---
+    # Runs the Nuclei-based template scanner and the dynamic interaction engine
+    # against the full target list.  Kept as a separate _run_vigolium_phase call
+    # so that a KnownIssueScan Nuclei timeout (which clears total_requests in the
+    # scan-summary) only triggers a Phase B proxy-retry, never a Phase A restart.
+    if run_phase_b:
+        output_file_vuln = f"{results_dir}/findings_vuln.jsonl"
+        cmd_b = base_cmd + f" --only known-issue-scan,dynamic-assessment -o {output_file_vuln}"
+        _run_vigolium_phase(
+            self, cmd_b, output_file_vuln,
+            "Scan/Vulnerability (known-issue-scan+dynamic-assessment)",
+            save_http_records=False,
+            proxy=proxy,
+        )
+    else:
+        logger.info("Vigolium Phase B (known-issue-scan+dynamic-assessment) skipped by configuration.")
+
     return "Vigolium scan completed"
 
 
@@ -318,7 +534,8 @@ def vigolium_harvest(self, ctx={}, description=None):
     rate_limit = harvest_config.get(VIGOLIUM_RATE_LIMIT, 100)
     timeout = _ensure_duration(harvest_config.get(VIGOLIUM_TIMEOUT, '60s'))
 
-    if self.subscan and self.subdomain:
+    # Prefer subdomain from ctx even when SubScan FK was not stamped on the activity.
+    if getattr(self, 'subdomain', None):
         target_hosts = [f"https://{self.subdomain.name}"]
     else:
         subdomains = list(Subdomain.objects.filter(scan_history=self.scan))
@@ -341,8 +558,7 @@ def vigolium_harvest(self, ctx={}, description=None):
     output_file = f"{results_dir}/harvest.jsonl"
 
     cmd = (
-        f"vigolium scan"
-        f" -T {targets_file}"
+        f"cat {targets_file} | vigolium scan"
         f" --stateless"
         f" --format jsonl"
         f" -o {output_file}"
@@ -355,19 +571,18 @@ def vigolium_harvest(self, ctx={}, description=None):
     )
 
     proxy = get_random_proxy()
-    if proxy:
-        cmd += f" --proxy {proxy}"
 
-    _run_vigolium_phase(self, cmd, output_file, f"Harvest ({len(target_hosts)} targets)", save_http_records=True)
+    _run_vigolium_phase(self, cmd, output_file, f"Harvest ({len(target_hosts)} targets)", save_http_records=True, proxy=proxy)
     return "Vigolium harvest completed"
 
 
 def vigolium_discovery(self, ctx={}, description=None):
-    """Run vigolium active discovery at Tier 1.
+    """Run vigolium active discovery against all known targets.
 
-    Executes vigolium's discovery phase (active probing / crawling) against all
-    known targets. Runs in Tier 1 in parallel with subdomain enumeration so that
-    vigolium-discovered endpoints are available to http_crawl in Tier 2.
+    Executes vigolium's discovery phase (active probing / crawling). The workflow
+    schedules it in Tier 2 — after subdomain enumeration has finished, so it sees
+    every enumerated subdomain — concurrently with http_crawl and port_scan, and
+    `task_plan._TASK_TIER` labels it tier 2 to match.
 
     Falls back to the root domain if no subdomains have been enumerated yet,
     ensuring the task is never a no-op early in a full scan.
@@ -375,7 +590,8 @@ def vigolium_discovery(self, ctx={}, description=None):
     """
     logger.info("Starting Vigolium Discovery")
 
-    discovery_config = self.yaml_configuration.get('vigolium_discovery', {})
+    discovery_config = self.yaml_configuration.get(VIGOLIUM_DISCOVERY, {})
+    vuln_vig = self.yaml_configuration.get(VULNERABILITY_SCAN, {}).get(VIGOLIUM, {})
     if not discovery_config.get(RUN_VIGOLIUM_DISCOVERY, True):
         logger.info("Vigolium discovery disabled in configuration. Skipping.")
         return
@@ -384,8 +600,10 @@ def vigolium_discovery(self, ctx={}, description=None):
     concurrency = discovery_config.get(VIGOLIUM_CONCURRENCY, 40)
     rate_limit = discovery_config.get(VIGOLIUM_RATE_LIMIT, 100)
     timeout = _ensure_duration(discovery_config.get(VIGOLIUM_TIMEOUT, '30s'))
+    scope_origin = discovery_config.get(VIGOLIUM_SCOPE_ORIGIN, vuln_vig.get(VIGOLIUM_SCOPE_ORIGIN, 'balanced'))
+    skip_spidering = discovery_config.get(VIGOLIUM_SKIP_SPIDERING, vuln_vig.get(VIGOLIUM_SKIP_SPIDERING, False))
 
-    if self.subscan and self.subdomain:
+    if getattr(self, 'subdomain', None):
         target_hosts = [f"https://{self.subdomain.name}"]
     else:
         subdomains = list(Subdomain.objects.filter(scan_history=self.scan))
@@ -405,11 +623,10 @@ def vigolium_discovery(self, ctx={}, description=None):
         for host in target_hosts:
             f.write(f"{host}\n")
 
-    output_file = f"{results_dir}/discovery.jsonl"
+    output_file = _discovery_output_file(self.scan.results_dir)
 
     cmd = (
-        f"vigolium scan"
-        f" -T {targets_file}"
+        f"cat {targets_file} | vigolium scan"
         f" --stateless"
         f" --format jsonl"
         f" -o {output_file}"
@@ -418,14 +635,12 @@ def vigolium_discovery(self, ctx={}, description=None):
         f" -r {rate_limit}"
         f" --timeout {timeout}"
         f" --strategy {strategy}"
+        f" --scope-origin {scope_origin}"
         f" --skip-dependency-check"
     )
-
     proxy = get_random_proxy()
-    if proxy:
-        cmd += f" --proxy {proxy}"
 
-    _run_vigolium_phase(self, cmd, output_file, f"Discovery ({len(target_hosts)} targets)", save_http_records=True)
+    _run_vigolium_phase(self, cmd, output_file, f"Discovery ({len(target_hosts)} targets)", save_http_records=True, proxy=proxy)
 
     return "Vigolium discovery completed"
 
@@ -440,6 +655,7 @@ def vigolium_analysis(self, ctx={}, description=None):
     logger.info("Starting Vigolium Dynamic Analysis")
 
     analysis_config = self.yaml_configuration.get('vigolium_analysis', {})
+    vuln_vig = self.yaml_configuration.get(VULNERABILITY_SCAN, {}).get(VIGOLIUM, {})
     if not analysis_config.get(RUN_VIGOLIUM_ANALYSIS, True):
         logger.info("Vigolium analysis disabled in configuration. Skipping.")
         return
@@ -448,8 +664,11 @@ def vigolium_analysis(self, ctx={}, description=None):
     concurrency = analysis_config.get(VIGOLIUM_CONCURRENCY, 20)
     rate_limit = analysis_config.get(VIGOLIUM_RATE_LIMIT, 50)
     timeout = _ensure_duration(analysis_config.get(VIGOLIUM_TIMEOUT, '10s'))
+    spider_max_time = _ensure_duration(analysis_config.get(VIGOLIUM_SPIDER_MAX_TIME, '20m'))
+    scope_origin = analysis_config.get(VIGOLIUM_SCOPE_ORIGIN, vuln_vig.get(VIGOLIUM_SCOPE_ORIGIN, 'balanced'))
+    skip_spidering = analysis_config.get(VIGOLIUM_SKIP_SPIDERING, vuln_vig.get(VIGOLIUM_SKIP_SPIDERING, False))
 
-    if self.subscan and self.subdomain:
+    if getattr(self, 'subdomain', None):
         subdomains = list(Subdomain.objects.filter(pk=self.subdomain.id))
     else:
         subdomains = list(Subdomain.objects.filter(scan_history=self.scan))
@@ -468,26 +687,38 @@ def vigolium_analysis(self, ctx={}, description=None):
 
     output_file = f"{results_dir}/analysis.jsonl"
 
+    discovery_already_ran = _discovery_produced_results(self.scan.results_dir)
+    if not discovery_already_ran:
+        logger.info(
+            "Vigolium analysis: no usable output from the earlier discovery pass at %s — "
+            "running the discovery phase here.",
+            _discovery_output_file(self.scan.results_dir),
+        )
+
+    only_phases = _analysis_phases(
+        skip_spidering=skip_spidering,
+        discovery_already_ran=discovery_already_ran,
+    )
+
     cmd = (
-        f"vigolium scan"
-        f" -T {targets_file}"
+        f"cat {targets_file} | vigolium scan"
         f" --stateless"
         f" --format jsonl"
         f" -o {output_file}"
-        f" --only external-harvest,spidering,discovery,known-issue-scan,dynamic-assessment"
+        f" --only {only_phases}"
         f" -c {concurrency}"
         f" -r {rate_limit}"
         f" --timeout {timeout}"
+        f" --spider-max-time {spider_max_time}"
         f" --strategy {strategy}"
+        f" --scope-origin {scope_origin}"
         f" --skip-dependency-check"
         f" --omit-response"
     )
 
     proxy = get_random_proxy()
-    if proxy:
-        cmd += f" --proxy {proxy}"
 
-    _run_vigolium_phase(self, cmd, output_file, f"Analysis ({len(subdomains)} targets)", save_http_records=True)
+    _run_vigolium_phase(self, cmd, output_file, f"Analysis ({len(subdomains)} targets)", save_http_records=True, proxy=proxy)
 
     return "Vigolium analysis completed"
 
@@ -689,7 +920,7 @@ def vigolium_audit_scan(self, code_path=None, ctx={}, description=None):
     try:
         if os.path.exists(temp_db):
             os.unlink(temp_db)
-    except Exception:
-        pass
+    except OSError:
+        logger.warning("Could not remove vigolium temp db %s", temp_db, exc_info=True)
 
     return "Vigolium audit completed"

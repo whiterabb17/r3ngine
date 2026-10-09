@@ -85,7 +85,7 @@ export function getElevatedSurfaceSx(isLight: boolean, theme: Theme, tokens: Res
   }
   return {
     bgcolor: alpha(tokens.surface.elevated, 0.82),
-    backdropFilter: 'blur(14px)',
+    backdropFilter: 'blur(12px)',
     border: `1px solid ${tokens.border.subtle}`,
     borderRadius: 1,
     boxShadow: `0 12px 36px ${alpha('#000', 0.55)}`,

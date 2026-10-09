@@ -114,35 +114,35 @@ class TestTypeRouterDispatch(TestCase):
             scan_type=self.engine,
         )
 
-    @patch('reNgine.tasks.osint.save_subdomain')
+    @patch('reNgine.tasks.osint.spiderfoot.save_subdomain')
     def test_subdomain_dispatches(self, mock_save):
         persist_osint_item(
             self.scan, self.domain, 'Subdomain', 'sub.dispatch-test.com', 90,
         )
         mock_save.assert_called_once()
 
-    @patch('reNgine.tasks.osint.save_email')
+    @patch('reNgine.tasks.osint.spiderfoot.save_email')
     def test_email_dispatches(self, mock_save):
         persist_osint_item(
             self.scan, self.domain, 'Email', 'user@dispatch-test.com', 90,
         )
         mock_save.assert_called_once()
 
-    @patch('reNgine.tasks.osint.save_employee')
+    @patch('reNgine.tasks.osint.spiderfoot.save_employee')
     def test_employee_dispatches(self, mock_save):
         persist_osint_item(
             self.scan, self.domain, 'Employee', 'Jane Doe', 90,
         )
         mock_save.assert_called_once()
 
-    @patch('reNgine.tasks.osint.save_endpoint')
+    @patch('reNgine.tasks.osint.spiderfoot.save_endpoint')
     def test_url_dispatches_valid_url(self, mock_save):
         persist_osint_item(
             self.scan, self.domain, 'URL', 'https://dispatch-test.com/path', 90,
         )
         mock_save.assert_called_once()
 
-    @patch('reNgine.tasks.osint.save_endpoint')
+    @patch('reNgine.tasks.osint.spiderfoot.save_endpoint')
     def test_url_skips_invalid_url(self, mock_save):
         persist_osint_item(
             self.scan, self.domain, 'URL', 'not-a-url', 90,
@@ -176,7 +176,7 @@ class TestHandleSsl(TestCase):
         self.scan.results_dir = '/tmp/scan_results'
         self.scan.save()
 
-    @patch('reNgine.tasks.osint.run_certificate_intel')
+    @patch('reNgine.tasks.osint.spiderfoot.run_certificate_intel')
     def test_ssl_with_host_and_results_dir_calls_cert_intel(self, mock_run):
         persist_osint_item(
             self.scan, self.domain, 'SSL',
@@ -191,7 +191,7 @@ class TestHandleSsl(TestCase):
         )
         mock_run.assert_called_once_with(self.scan.id, '/tmp/scan_results')
 
-    @patch('reNgine.tasks.osint.run_certificate_intel')
+    @patch('reNgine.tasks.osint.spiderfoot.run_certificate_intel')
     def test_ssl_without_host_creates_partial_cert(self, mock_run):
         persist_osint_item(
             self.scan, self.domain, 'SSL',
@@ -207,7 +207,7 @@ class TestHandleSsl(TestCase):
             ).exists()
         )
 
-    @patch('reNgine.tasks.osint.run_certificate_intel', side_effect=Exception('tlsx error'))
+    @patch('reNgine.tasks.osint.spiderfoot.run_certificate_intel', side_effect=Exception('tlsx error'))
     def test_ssl_falls_back_to_partial_on_error(self, mock_run):
         self.scan.results_dir = '/tmp/scan_results'
         persist_osint_item(
@@ -228,7 +228,7 @@ class TestHandleSsl(TestCase):
             ).exists()
         )
 
-    @patch('reNgine.tasks.osint.run_certificate_intel')
+    @patch('reNgine.tasks.osint.spiderfoot.run_certificate_intel')
     def test_ssl_with_host_but_no_results_dir_creates_partial_cert(self, mock_run):
         self.scan.results_dir = ''
         self.scan.save()
@@ -446,7 +446,7 @@ class TestHandleHosting(TestCase):
             scan_type=engine,
         )
 
-    @patch('reNgine.tasks.osint.save_subdomain')
+    @patch('reNgine.tasks.osint.spiderfoot.save_subdomain')
     def test_hosting_calls_save_subdomain(self, mock_save):
         persist_osint_item(
             self.scan, self.domain, 'Hosting',
@@ -455,7 +455,7 @@ class TestHandleHosting(TestCase):
         )
         mock_save.assert_called_once_with('co-tenant.hosting-test.com', ctx=None)
 
-    @patch('reNgine.tasks.osint.save_subdomain')
+    @patch('reNgine.tasks.osint.spiderfoot.save_subdomain')
     def test_hosting_falls_back_to_e_data_when_metadata_missing(self, mock_save):
         persist_osint_item(
             self.scan, self.domain, 'Hosting',

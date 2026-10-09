@@ -26,9 +26,9 @@ class TestOsintOrchestratorAlwaysRuns(TestCase):
             scan_type=self.engine,
         )
 
-    @patch('reNgine.tasks.osint.osint_orchestrator')
-    @patch('reNgine.tasks.osint.finish_osint')
-    @patch('reNgine.tasks.osint.osint_discovery')
+    @patch('reNgine.tasks.osint.pipeline.osint_orchestrator')
+    @patch('reNgine.tasks.osint.pipeline.finish_osint')
+    @patch('reNgine.tasks.osint.pipeline.osint_discovery')
     def test_orchestrator_called_when_discovery_produces_results(
         self, mock_discovery, mock_finish, mock_orchestrator
     ):
@@ -50,8 +50,8 @@ class TestOsintOrchestratorAlwaysRuns(TestCase):
 
         mock_orchestrator.assert_called_once_with(scan_history_id=self.scan.id)
 
-    @patch('reNgine.tasks.osint.osint_orchestrator')
-    @patch('reNgine.tasks.osint.finish_osint')
+    @patch('reNgine.tasks.osint.pipeline.osint_orchestrator')
+    @patch('reNgine.tasks.osint.pipeline.finish_osint')
     def test_orchestrator_called_when_no_discovery_config(
         self, mock_finish, mock_orchestrator
     ):

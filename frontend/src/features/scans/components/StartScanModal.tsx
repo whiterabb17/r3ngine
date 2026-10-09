@@ -94,7 +94,7 @@ export const StartScanModal: React.FC<StartScanModalProps> = ({
     if (!formData.engine_id || !formData.hardware_profile_id || domainIds.length === 0) return;
 
     initiateScan({
-      domain_id: domainIds.length === 1 ? domainIds[0] : domainIds as any,
+      domain_id: domainIds.length === 1 ? domainIds[0] : domainIds,
       engine_id: formData.engine_id as number,
       hardware_profile_id: formData.hardware_profile_id as number,
       customDorkSwitch: formData.customDorkSwitch,

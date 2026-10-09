@@ -1,8 +1,11 @@
+import contextlib
 import hashlib
 import logging
+import shlex
 import os
 import base64
 import json
+from typing import Optional
 import threading
 from urllib.parse import urlparse
 from django.utils import timezone
@@ -30,6 +33,7 @@ from reNgine.definitions import (
 	CUSTOM_HEADERS,
 	CUSTOM_HEADER,
 	FFUF_DEFAULT_WORDLIST_PATH,
+	RUN_FFUF,
 	RUN_DIRSEARCH,
 	RUN_FEROXBUSTER,
 )
@@ -40,6 +44,7 @@ from reNgine.settings import (
 	DEFAULT_THREADS
 )
 from reNgine.utils.opsec import OpSecManager, get_opsec_manager
+from reNgine.utils.redis_lock import renewed_lock
 from reNgine.common_func import get_http_urls, get_subdomain_from_url, extract_path_from_url, get_random_proxy, sanitize_url
 from reNgine.utils.task import (
 	run_command,
@@ -58,8 +63,73 @@ _FUZZ_BATCH_SIZE = 100
 
 
 def _fuzz_target_marker(results_dir, target_url):
-	digest = hashlib.md5(target_url.encode('utf-8')).hexdigest()
+	digest = hashlib.md5(target_url.encode('utf-8'), usedforsecurity=False).hexdigest()
 	return os.path.join(results_dir, f'fuzz_done_{digest}.marker')
+
+
+_EXT_PLACEHOLDER = '%EXT%'
+
+
+def expand_ext_wordlist(wordlist_path: str, extensions: list[str], output_dir: str) -> tuple[str, bool]:
+	"""Resolve dirsearch-style ``%EXT%`` placeholders into a plain wordlist for ffuf/feroxbuster.
+
+	ffuf's ``-e`` appends every extension to every word and sends ``%EXT%`` literally,
+	so a dirsearch wordlist such as dicc costs ``words x (1 + extensions)`` requests.
+	The expanded copy holds each ``%EXT%`` word once per extension and every other
+	word as-is, which is what dirsearch requests. It is keyed on the wordlist
+	identity and the extensions, so targets and retries of a scan share one file.
+
+	Returns ``(path, expanded)``: the original path and ``False`` when the wordlist
+	has no placeholder or cannot be read or expanded.
+	"""
+	try:
+		stat = os.stat(wordlist_path)
+		with open(wordlist_path, encoding='utf-8', errors='surrogateescape') as fh:
+			has_placeholder = any(_EXT_PLACEHOLDER in line for line in fh)
+	except OSError as exc:
+		logger.warning('Cannot read wordlist %s, ffuf keeps -e expansion: %s', wordlist_path, exc)
+		return wordlist_path, False
+	if not has_placeholder:
+		return wordlist_path, False
+
+	bare_extensions = [ext.lstrip('.') for ext in extensions]
+	cache_key = f'{wordlist_path}|{stat.st_mtime_ns}|{stat.st_size}|{",".join(bare_extensions)}'
+	digest = hashlib.sha256(cache_key.encode('utf-8', 'surrogateescape')).hexdigest()[:16]
+	expanded_path = os.path.join(output_dir, f'ffuf_wordlist_{digest}.txt')
+
+	if os.path.isfile(expanded_path):
+		with open(expanded_path, encoding='utf-8', errors='surrogateescape') as fh:
+			entry_count = sum(1 for _ in fh)
+		logger.info('Reusing expanded ffuf wordlist %s (%d entries)', expanded_path, entry_count)
+		return expanded_path, True
+
+	entries: dict[str, None] = {}
+	with open(wordlist_path, encoding='utf-8', errors='surrogateescape') as fh:
+		for line in fh:
+			word = line.strip().lstrip('/')
+			if not word:
+				continue
+			if _EXT_PLACEHOLDER in word:
+				for ext in bare_extensions:
+					entries.setdefault(word.replace(_EXT_PLACEHOLDER, ext), None)
+			else:
+				entries.setdefault(word, None)
+
+	part_path = f'{expanded_path}.{os.getpid()}.{threading.get_ident()}.part'
+	try:
+		os.makedirs(output_dir, exist_ok=True)
+		with open(part_path, 'w', encoding='utf-8', errors='surrogateescape') as fh:
+			fh.writelines(f'{word}\n' for word in entries)
+		os.replace(part_path, expanded_path)
+	except OSError as exc:
+		logger.warning('Cannot write expanded wordlist %s, ffuf keeps -e expansion: %s', expanded_path, exc)
+		with contextlib.suppress(OSError):
+			os.remove(part_path)
+		return wordlist_path, False
+
+	logger.info('Expanded %s for ffuf: %d entries (%d extensions) in %s',
+		wordlist_path, len(entries), len(bare_extensions), expanded_path)
+	return expanded_path, True
 
 
 def filter_fuzz_batch_with_redis(batch, scan_history_id, subdomain_id, max_repeat, tool_name):
@@ -76,7 +146,13 @@ def filter_fuzz_batch_with_redis(batch, scan_history_id, subdomain_id, max_repea
 		keys = []
 		for item in batch:
 			status = item.get('status') or item.get('http_status') or 0
-			length = item.get('length') or item.get('content_length') or item.get('content-length') or 0
+			length = (
+			item.get('length')
+			or item.get('contentLength')
+			or item.get('content_length')
+			or item.get('content-length')
+			or 0
+		)
 			words = item.get('words') or item.get('word_count') or 0
 			lines = item.get('lines') or item.get('line_count') or 0
 			
@@ -185,6 +261,66 @@ def _flush_ffuf_batch(batch, dirscan, ctx, scan, subdomain_id=0, max_repeat=10):
 		dirscan.directory_files.add(*dfiles)
 
 
+def build_dirsearch_run_cmd(base_cmd, target_url, output_path, proxy=None):
+	"""Build a single-target dirsearch CLI (compatible with dirsearch >= 0.5.0).
+
+	dirsearch 0.5.0 renamed ``--format`` to ``--output-formats``.
+	"""
+	cmd = (
+		f'{base_cmd} -u {shlex.quote(str(target_url).rstrip("/"))}'
+		f' --output-formats=json -o {output_path} --no-color'
+	)
+	if proxy:
+		cmd += f' --proxy {shlex.quote(proxy)}'
+	return cmd
+
+
+_HTTPX_PROXY_SCHEMES = ('http://', 'https://', 'socks5://', 'socks5h://')
+_KNOWN_PROXY_SCHEMES = _HTTPX_PROXY_SCHEMES + ('socks4://', 'socks4a://')
+
+
+def _is_httpx_compatible_proxy(proxy):
+	"""True when *proxy* uses a scheme httpx (dirsearch 0.5 / ffuf path) accepts."""
+	if not proxy:
+		return False
+	return proxy.lower().startswith(_HTTPX_PROXY_SCHEMES)
+
+
+def resolve_httpx_compatible_proxy(proxy, tool_name='tool', max_retries=25):
+	"""Return an httpx-compatible proxy, or None if none can be found.
+
+	dirsearch 0.5 (httpx) rejects ``socks4://`` with
+	``ValueError: Unknown scheme for proxy URL``. Prefer http(s)/socks5; if the
+	given proxy is socks4, draw replacements from the pool before giving up.
+	"""
+	if not proxy:
+		return None
+
+	candidate = proxy.strip()
+	if not candidate.lower().startswith(_KNOWN_PROXY_SCHEMES):
+		candidate = 'http://' + candidate
+
+	if _is_httpx_compatible_proxy(candidate):
+		return candidate
+
+	for _ in range(max_retries):
+		new_proxy = get_random_proxy()
+		if not new_proxy:
+			break
+		if not new_proxy.lower().startswith(_KNOWN_PROXY_SCHEMES):
+			new_proxy = 'http://' + new_proxy
+		if _is_httpx_compatible_proxy(new_proxy):
+			return new_proxy
+
+	logger.warning(
+		'%s proxy requirement: no http(s)/socks5 proxy after %d retries '
+		'(socks4 not supported by httpx); continuing without proxy',
+		tool_name,
+		max_retries,
+	)
+	return None
+
+
 def _flush_ds_batch(batch, dirscan_ds, ctx, scan, subdomain_id=0, max_repeat=10):
 	"""Persist a batch of dirsearch result dicts with batched DB writes."""
 	if not batch or not scan:
@@ -236,8 +372,20 @@ def _flush_ds_batch(batch, dirscan_ds, ctx, scan, subdomain_id=0, max_repeat=10)
 		if not ep:
 			continue
 		status = ds_res.get('status', 0)
-		length = ds_res.get('content-length', 0)
-		content_type = ds_res.get('content-type', '')
+		# dirsearch 0.5+ uses camelCase; older reports used kebab-case
+		length = (
+			ds_res.get('contentLength')
+			or ds_res.get('content-length')
+			or ds_res.get('content_length')
+			or ds_res.get('length')
+			or 0
+		)
+		content_type = (
+			ds_res.get('contentType')
+			or ds_res.get('content-type')
+			or ds_res.get('content_type')
+			or ''
+		)
 		ep.http_status = status
 		ep.content_length = length
 		ep.content_type = content_type
@@ -345,21 +493,52 @@ def _flush_ferox_batch(batch, dirscan, ctx, scan, subdomain_id=0, max_repeat=10)
 		dirscan.directory_files.add(*dfiles)
 
 
+def selected_fuzzers(config: dict, ctx: Optional[dict] = None) -> tuple[bool, bool, bool]:
+	"""Return ``(run_ffuf, run_dirsearch, run_feroxbuster)`` for a dir_file_fuzz config.
+
+	ffuf is on unless ``run_ffuf`` is explicitly false; dirsearch and feroxbuster are
+	opt-in. A singular tool run of dir_file_fuzz always runs ffuf: its CLI arguments
+	are validated against ffuf's schema (``tool_args.PIPELINE_BINARIES``) and
+	appended to the ffuf command, whatever the engine says.
+	"""
+	ffuf_value = config.get(RUN_FFUF)
+	run_ffuf = True if ffuf_value is None else bool(ffuf_value)
+	if (ctx or {}).get('singular_tool_run'):
+		run_ffuf = True
+	return run_ffuf, bool(config.get(RUN_DIRSEARCH, False)), bool(config.get(RUN_FEROXBUSTER, False))
+
+
 def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_only=None):
-	"""Perform directory and file fuzzing using FFUF and Dirsearch.
+	"""Perform directory and file fuzzing with ffuf, dirsearch and/or feroxbuster.
 
 	This wrapper ensures that any endpoints are crawled first by delegating to
-	ensure_endpoints_crawled_and_execute.
+	ensure_endpoints_crawled_and_execute. When the engine turns all three tools
+	off the step is a no-op and returns an empty result.
 
 	Args:
 		ctx (dict, optional): Task context containing scan information.
 		description (str, optional): Task description shown in UI.
 
 	Returns:
-		list: List of URLs/lines discovered during fuzzing.
+		list: ffuf result lines discovered during fuzzing.
 	"""
 	if ctx is None:
 		ctx = {}
+
+	if not any(selected_fuzzers(self.yaml_configuration.get(DIR_FILE_FUZZ) or {}, ctx)):
+		logger.warning(
+			'Directory fuzzing skipped for scan %s: run_ffuf, run_dirsearch and run_feroxbuster are all off',
+			getattr(self, 'scan_id', None),
+		)
+		if prepare_only:
+			return {
+				"urls": [],
+				"ffuf_base_cmd": None,
+				"dirsearch_base_cmd": None,
+				"ferox_base_cmd": None,
+				"enable_http_crawl": False,
+			}
+		return []
 
 	def _execute_dir_file_fuzz(ctx, description, prepare_only=False, parse_only=None):
 		"""Inner execution logic for FFUF and Dirsearch fuzzing."""
@@ -373,6 +552,11 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 		extensions = config.get(EXTENSIONS, DEFAULT_DIR_FILE_FUZZ_EXTENSIONS)
 
 		extensions = [ext if ext.startswith('.') else f'.{ext}' for ext in extensions]
+		# ffuf replays the whole wordlist once per extension, so a duplicate costs a full pass.
+		unique_extensions = {}
+		for ext in extensions:
+			unique_extensions.setdefault(ext.lower(), ext)
+		extensions = list(unique_extensions.values())
 		extensions_str = ','.join(map(str, extensions))
 		follow_redirect = config.get(FOLLOW_REDIRECT, False)
 		max_time = config.get(MAX_TIME, 0)
@@ -386,8 +570,7 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 		auto_calibration = config.get(AUTO_CALIBRATION, True)
 		delay = rate_limit / (threads * 100) if threads else 0
 		custom_headers = config.get(CUSTOM_HEADERS) or config.get(CUSTOM_HEADER) or []
-		run_dirsearch = config.get(RUN_DIRSEARCH, True)
-		run_feroxbuster = config.get(RUN_FEROXBUSTER, False)
+		run_ffuf, run_dirsearch, run_feroxbuster = selected_fuzzers(config, ctx)
 
 		custom_headers_list = parse_custom_header_to_list(custom_headers)
 
@@ -402,34 +585,49 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 		from reNgine.tasks.api import resolve_wordlist_path
 		wordlist_path = resolve_wordlist_path(config, wordlist_path)
 
+		# dirsearch expands %EXT% itself; ffuf and feroxbuster get a pre-expanded copy instead of -e.
+		if run_ffuf or run_feroxbuster:
+			ffuf_wordlist_path, wordlist_expanded = expand_ext_wordlist(wordlist_path, extensions, self.results_dir)
+		else:
+			ffuf_wordlist_path, wordlist_expanded = wordlist_path, False
+		append_extensions = bool(extensions) and not wordlist_expanded
+
 		input_path = f'{self.results_dir}/input_endpoints_dir_file_fuzz.txt'
 
-		ffuf_base_cmd = 'ffuf'
-		ffuf_base_cmd += f' -w {wordlist_path}'
-		ffuf_base_cmd += f' -e {extensions_str}' if extensions else ''
-		ffuf_base_cmd += f' -maxtime {max_time}' if max_time > 0 else ''
-		ffuf_base_cmd += f' -rate {rate_limit}' if rate_limit > 0 else ''
-		if recursive_level > 0:
-			ffuf_base_cmd += f' -recursion -recursion-depth {recursive_level}'
-			if max_time > 0:
-				job_time = max(30, max_time // (recursive_level + 1))
-				ffuf_base_cmd += f' -maxtime-job {job_time}'
-		ffuf_base_cmd += f' -t {threads}' if threads and threads > 0 else ''
-		ffuf_base_cmd += f' -timeout {timeout}' if timeout and timeout > 0 else ''
-		ffuf_base_cmd += ' -se' if stop_on_error else ''
-		ffuf_base_cmd += ' -r' if follow_redirect else ''
-		ffuf_base_cmd += ' -ac' if auto_calibration else ''
-		if not auto_calibration and mc:
-			ffuf_base_cmd += f' -mc {mc}'
-
 		has_ua = any('user-agent' in h.lower() for h in custom_headers_list)
-		if not has_ua:
-			ffuf_base_cmd += " -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'"
 
-		for header in custom_headers_list:
-			ffuf_base_cmd += f" -H '{header}'"
-			if 'cookie' in header.lower() or 'authorization' in header.lower():
-				logger.warning('Authenticated FFUF fuzzing enabled via header: %s', header)
+		ffuf_base_cmd = None
+		if run_ffuf:
+			ffuf_base_cmd = 'ffuf'
+			ffuf_base_cmd += f' -w {ffuf_wordlist_path}'
+			ffuf_base_cmd += f' -e {extensions_str}' if append_extensions else ''
+			ffuf_base_cmd += f' -maxtime {max_time}' if max_time > 0 else ''
+			ffuf_base_cmd += f' -rate {rate_limit}' if rate_limit > 0 else ''
+			if recursive_level > 0:
+				ffuf_base_cmd += f' -recursion -recursion-depth {recursive_level}'
+				if max_time > 0:
+					job_time = max(30, max_time // (recursive_level + 1))
+					ffuf_base_cmd += f' -maxtime-job {job_time}'
+			ffuf_base_cmd += f' -t {threads}' if threads and threads > 0 else ''
+			ffuf_base_cmd += f' -timeout {timeout}' if timeout and timeout > 0 else ''
+			ffuf_base_cmd += ' -se' if stop_on_error else ''
+			ffuf_base_cmd += ' -r' if follow_redirect else ''
+			ffuf_base_cmd += ' -ac' if auto_calibration else ''
+			if not auto_calibration and mc:
+				ffuf_base_cmd += f' -mc {mc}'
+			if ctx and ctx.get('singular_tool_run') and ctx.get('extra_cli_args'):
+				from reNgine.tool_args import append_extra_cli_args
+				ffuf_base_cmd = append_extra_cli_args(ffuf_base_cmd, ctx.get('extra_cli_args') or [])
+
+			if not has_ua:
+				ffuf_base_cmd += " -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'"
+
+			for header in custom_headers_list:
+				ffuf_base_cmd += f" -H '{header}'"
+				if 'cookie' in header.lower() or 'authorization' in header.lower():
+					logger.warning('Authenticated FFUF fuzzing enabled via header: %s', header)
+		else:
+			logger.info('ffuf disabled (run_ffuf is off).')
 
 		dirsearch_base_cmd = None
 		if run_dirsearch:
@@ -454,13 +652,13 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 				if 'cookie' in header.lower() or 'authorization' in header.lower():
 					logger.warning('Authenticated Dirsearch fuzzing enabled via header: %s', header)
 		else:
-			logger.info('Dirsearch disabled via run_dirsearch config key. Only ffuf will run.')
+			logger.info('Dirsearch disabled (run_dirsearch is off).')
 
 		ferox_base_cmd = None
 		if run_feroxbuster:
 			ferox_base_cmd = 'feroxbuster --no-state --silent --json'
-			ferox_base_cmd += f' --wordlist {wordlist_path}'
-			if extensions:
+			ferox_base_cmd += f' --wordlist {ffuf_wordlist_path}'
+			if append_extensions:
 				ferox_base_cmd += f' --extensions {extensions_str}'
 			if threads and threads > 0:
 				ferox_base_cmd += f' --threads {threads}'
@@ -526,12 +724,17 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 				"enable_http_crawl": enable_http_crawl,
 			}
 
+		from reNgine.temporal.activities.core import task_is_stopping
+
 		results = []
 		redis_client = Redis.from_url(os.environ.get('REDIS_URL', 'redis://redis:6379/0'))
 		opsec = get_opsec_manager()
 		scan = ScanHistory.objects.filter(pk=ctx.get('scan_history_id')).first()
 
 		for target_url in urls:
+			if task_is_stopping():
+				logger.warning('Fuzzing stopped (abort or time limit); %s and later targets left for a retry', target_url)
+				break
 			done_marker = _fuzz_target_marker(self.results_dir, target_url)
 			if parse_only is None and os.path.exists(done_marker):
 				logger.info('Skipping already-fuzzed target (marker present): %s', target_url)
@@ -550,8 +753,10 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 				if not any(proxy.startswith(s) for s in ['http://', 'https://', 'socks4://', 'socks5://']):
 					proxy = 'http://' + proxy
 
-			lock_key = f"fuzz_execution_lock_{self.scan_id}_{hashlib.md5(target_url.encode()).hexdigest()}"
-			with redis_client.lock(lock_key, timeout=1800):
+			lock_key = f"fuzz_execution_lock_{self.scan_id}_{hashlib.md5(target_url.encode(), usedforsecurity=False).hexdigest()}"
+			# One worker per target: a retry waits for a still-running attempt, and a
+			# dead attempt's lock frees itself within a few minutes.
+			with renewed_lock(redis_client, lock_key):
 				ffuf_results_local = []
 				ffuf_exc = [None]
 				ds_exc = [None]
@@ -559,24 +764,9 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 				def _run_ffuf():
 					try:
 						_fuzz_url = target_url if target_url.endswith('/') else target_url + '/'
-						fcmd = ffuf_base_cmd + f' -u {_fuzz_url}FUZZ -json'
-						
-						ffuf_proxy = proxy
-						if ffuf_proxy and ffuf_proxy.startswith('socks4'):
-							for _ in range(25):
-								new_proxy = get_random_proxy()
-								if not new_proxy:
-									ffuf_proxy = None
-									break
-								if not new_proxy.startswith('http') and not new_proxy.startswith('socks'):
-									new_proxy = 'http://' + new_proxy
-								if new_proxy.startswith('http') or new_proxy.startswith('socks5'):
-									ffuf_proxy = new_proxy
-									break
-							else:
-								ffuf_proxy = None
-								logger.warning('ffuf proxy requirement: failed to find an http/s or socks5 proxy after 25 retries (socks4 not supported), bypassing proxy for ffuf')
-							
+						fcmd = ffuf_base_cmd + f' -u {shlex.quote(_fuzz_url + "FUZZ")} -json'
+
+						ffuf_proxy = resolve_httpx_compatible_proxy(proxy, tool_name='ffuf')
 						fcmd += f' -x {ffuf_proxy}' if ffuf_proxy else ''
 						fcmd = opsec.apply_stealth('ffuf', fcmd, proxy=ffuf_proxy)
 
@@ -599,10 +789,11 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 									continue
 								try:
 									parsed = json.loads(raw_line)
-									batch.append(parsed)
-									ffuf_results_local.append(parsed)
-								except Exception:
-									pass
+								except json.JSONDecodeError:
+									# ffuf interleaves progress and banner lines with results.
+									continue
+								batch.append(parsed)
+								ffuf_results_local.append(parsed)
 								if len(batch) >= _FUZZ_BATCH_SIZE:
 									subdomain_id = subdomain.id if subdomain else 0
 									_flush_ffuf_batch(batch, dirscan, ctx, scan, subdomain_id=subdomain_id, max_repeat=max_repeat)
@@ -644,12 +835,18 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 						target_url_stripped = target_url.rstrip('/')
 
 						def _build_dcmd(p):
-							cmd = f'{dirsearch_base_cmd} -u {target_url_stripped} --format=json -o {dirsearch_output} --no-color'
-							if p:
-								cmd += f' --proxy {p}'
+							cmd = build_dirsearch_run_cmd(
+								dirsearch_base_cmd,
+								target_url_stripped,
+								dirsearch_output,
+								proxy=p,
+							)
 							return opsec.apply_stealth('dirsearch', cmd, proxy=p)
 
-						current_proxy = proxy
+						# dirsearch 0.5 / httpx rejects socks4:// schemes
+						current_proxy = resolve_httpx_compatible_proxy(
+							proxy, tool_name='dirsearch'
+						)
 						dcmd = _build_dcmd(current_proxy)
 
 						dirscan_ds = DirectoryScan.objects.create(
@@ -663,7 +860,10 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 						logger.warning('dirsearch command: %s', dcmd)
 
 						if parse_only is None:
-							_PROXY_ERROR = 'Error with the proxy:'
+							_PROXY_ERRORS = (
+								'Error with the proxy:',
+								'Unknown scheme for proxy URL',
+							)
 							_max_proxy_retries = 2
 							_attempt = 0
 							while True:
@@ -674,16 +874,13 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 									scan_id=self.scan_id,
 									activity_id=self.activity_id
 								)
-								if _PROXY_ERROR not in ds_output:
+								if not any(err in ds_output for err in _PROXY_ERRORS):
 									break
 								if _attempt < _max_proxy_retries:
 									_attempt += 1
-									current_proxy = get_random_proxy()
-									if current_proxy and not any(
-										current_proxy.startswith(s)
-										for s in ['http://', 'https://', 'socks4://', 'socks5://']
-									):
-										current_proxy = 'http://' + current_proxy
+									current_proxy = resolve_httpx_compatible_proxy(
+										get_random_proxy(), tool_name='dirsearch'
+									)
 									logger.warning(
 										'dirsearch proxy error (attempt %d/%d), retrying with new proxy',
 										_attempt, _max_proxy_retries
@@ -737,8 +934,8 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 				def _run_feroxbuster():
 					if not run_feroxbuster or not ferox_base_cmd:
 						return
-					ferox_output = f'{self.results_dir}/feroxbuster_{hashlib.md5(target_url.encode()).hexdigest()[:8]}.json'
-					fcmd = f'{ferox_base_cmd} --url {target_url} --output {ferox_output}'
+					ferox_output = f'{self.results_dir}/feroxbuster_{hashlib.md5(target_url.encode(), usedforsecurity=False).hexdigest()[:8]}.json'
+					fcmd = f'{ferox_base_cmd} --url {shlex.quote(target_url)} --output {shlex.quote(ferox_output)}'
 					ferox_proxy = proxy
 					if ferox_proxy:
 						if ferox_proxy.startswith('socks'):
@@ -762,12 +959,9 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 							raw_line = raw_line.strip()
 							if not raw_line:
 								continue
-							try:
-								entry = json.loads(raw_line)
-								if entry.get('type') == 'response':
-									ferox_batch.append(entry)
-							except Exception:
-								pass
+							entry = _parse_ferox_response_line(raw_line)
+							if entry is not None:
+								ferox_batch.append(entry)
 						subdomain_id = subdomain.id if subdomain else 0
 						_flush_ferox_batch(ferox_batch, dirscan_ferox, ctx, scan, subdomain_id=subdomain_id, max_repeat=max_repeat)
 					else:
@@ -786,18 +980,16 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 										raw_line = raw_line.strip()
 										if not raw_line:
 											continue
-										try:
-											entry = json.loads(raw_line)
-											if entry.get('type') == 'response':
-												ferox_batch.append(entry)
-												ferox_total += 1
-												if len(ferox_batch) >= _FUZZ_BATCH_SIZE:
-													subdomain_id = subdomain.id if subdomain else 0
-													_flush_ferox_batch(ferox_batch, dirscan_ferox, ctx, scan, subdomain_id=subdomain_id, max_repeat=max_repeat)
-													activity_heartbeat_safe(f'feroxbuster {target_url} {ferox_total} hits')
-													ferox_batch = []
-										except Exception:
-											pass
+										entry = _parse_ferox_response_line(raw_line)
+										if entry is None:
+											continue
+										ferox_batch.append(entry)
+										ferox_total += 1
+										if len(ferox_batch) >= _FUZZ_BATCH_SIZE:
+											subdomain_id = subdomain.id if subdomain else 0
+											_flush_ferox_batch(ferox_batch, dirscan_ferox, ctx, scan, subdomain_id=subdomain_id, max_repeat=max_repeat)
+											activity_heartbeat_safe(f'feroxbuster {target_url} {ferox_total} hits')
+											ferox_batch = []
 								if ferox_batch:
 									subdomain_id = subdomain.id if subdomain else 0
 									_flush_ferox_batch(ferox_batch, dirscan_ferox, ctx, scan, subdomain_id=subdomain_id, max_repeat=max_repeat)
@@ -818,14 +1010,16 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 							dirscan_ferox.dir_subscan_ids.add(self.subscan)
 					dirscan_ferox.save()
 
-				# Run ffuf first
-				logger.info('Starting sequential execution: ffuf first, then dirsearch for %s', target_url)
-				_run_ffuf()
+				logger.info(
+					'Fuzzing %s sequentially: ffuf=%s dirsearch=%s feroxbuster=%s',
+					target_url, run_ffuf, run_dirsearch, run_feroxbuster,
+				)
+				if run_ffuf and ffuf_base_cmd:
+					_run_ffuf()
 
 				if ffuf_exc[0]:
 					raise ffuf_exc[0]
 
-				# Run dirsearch after ffuf completes
 				if run_dirsearch and dirsearch_base_cmd:
 					_run_dirsearch()
 
@@ -837,11 +1031,12 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 
 				results.extend(ffuf_results_local)
 
-			if parse_only is None:
+			# A target whose tools were killed mid-run is not done: a retry must fuzz it again.
+			if parse_only is None and not task_is_stopping():
 				with open(done_marker, 'w', encoding='utf-8') as marker:
 					marker.write('ok')
 
-		if enable_http_crawl:
+		if enable_http_crawl and not ctx.get('skip_post_crawl') and not task_is_stopping():
 			ctx['track'] = True
 			http_crawl(self, urls, ctx=ctx)
 
@@ -853,3 +1048,18 @@ def dir_file_fuzz(self, ctx=None, description=None, prepare_only=False, parse_on
 		ctx,
 		description
 	)
+
+
+def _parse_ferox_response_line(raw_line: str) -> Optional[dict]:
+	"""A feroxbuster --json line if it is a response record, else None.
+
+	The output also holds statistics and configuration records, and a line cut
+	short when the tool is killed.
+	"""
+	try:
+		entry = json.loads(raw_line)
+	except json.JSONDecodeError:
+		return None
+	if isinstance(entry, dict) and entry.get('type') == 'response':
+		return entry
+	return None

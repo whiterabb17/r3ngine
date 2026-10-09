@@ -15,11 +15,12 @@ import {
 } from '@mui/material';
 import { ExternalLink, X } from 'lucide-react';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import type { EmailBreach } from '../types';
 
 interface BreachDetailsModalProps {
   open: boolean;
   onClose: () => void;
-  breaches: any[] | null;
+  breaches: EmailBreach[] | null;
 }
 
 export const BreachDetailsModal: React.FC<BreachDetailsModalProps> = ({ open, onClose, breaches }) => {
@@ -56,7 +57,7 @@ export const BreachDetailsModal: React.FC<BreachDetailsModalProps> = ({ open, on
       </DialogTitle>
       <DialogContent dividers sx={{ borderColor: tokens.border.subtle }}>
         <Grid container spacing={2}>
-          {breaches.map((breach: any) => (
+          {breaches.map((breach) => (
             <Grid size={{ xs: 12, sm: 6 }} key={breach.id}>
               <Card sx={{ bgcolor: 'background.paper', border: `1px solid ${tokens.border.subtle}`, borderRadius: 1 }}>
                 <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
@@ -71,7 +72,7 @@ export const BreachDetailsModal: React.FC<BreachDetailsModalProps> = ({ open, on
                   <Box sx={{ mb: 2 }}>
                     <Typography sx={{ fontSize: '10px', fontWeight: 800, color: 'text.primary', mb: 0.5, letterSpacing: 0.5 }}>COMPROMISED DATA:</Typography>
                     <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-                      {breach.compromised_data?.map((dataClass: string) => (
+                      {breach.compromised_data?.map((dataClass) => (
                         <Chip 
                           key={dataClass} 
                           label={dataClass.toUpperCase()} 

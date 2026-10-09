@@ -107,19 +107,19 @@ def _process_monitor_spiderfoot_batch(batch, domain, scan_history, ctx, new_disc
 								content={'name': sub_name, 'source': 'SpiderFoot'},
 								scan_history=scan_history
 							)
-		logger.info(f"Processed monitoring batch of {len(batch)} SpiderFoot findings.")
+		logger.info("Processed monitoring batch of %s SpiderFoot findings.", len(batch))
 	except Exception as e:
-		logger.error(f"Error processing SpiderFoot monitoring batch: {str(e)}")
+		logger.error("Error processing SpiderFoot monitoring batch: %s", str(e))
 
 
 def monitor_target_task(domain_id):
 	try:
 		domain = Domain.objects.get(pk=domain_id)
 	except Domain.DoesNotExist:
-		logger.error(f"Domain with ID {domain_id} does not exist.")
+		logger.error("Domain with ID %s does not exist.", domain_id)
 		return
 
-	logger.info(f"Starting monitoring for {domain.name}")
+	logger.info("Starting monitoring for %s", domain.name)
 
 	# 1. Setup Scan History
 	engine = domain.monitor_engine
@@ -218,7 +218,7 @@ def monitor_target_task(domain_id):
 		
 		# Initiate 24/7 Monitoring if not already running
 		if not is_reconx_running(pid_file):
-			logger.info(f"Initiating 24/7 ReconX monitoring for {domain.name}")
+			logger.info("Initiating 24/7 ReconX monitoring for %s", domain.name)
 			# Start reconx run in the background
 			try:
 				# Use nohup or setsid to ensure it stays alive. 
@@ -231,11 +231,11 @@ def monitor_target_task(domain_id):
 				)
 				with open(pid_file, 'w') as f:
 					f.write(str(process.pid))
-				logger.info(f"ReconX started with PID {process.pid} for {domain.name}")
+				logger.info("ReconX started with PID %s for %s", process.pid, domain.name)
 			except Exception as e:
-				logger.error(f"Failed to start ReconX for {domain.name}: {str(e)}")
+				logger.error("Failed to start ReconX for %s: %s", domain.name, str(e))
 		else:
-			logger.info(f"ReconX is already running for {domain.name}")
+			logger.info("ReconX is already running for %s", domain.name)
 		
 		# Parse findings from the domain-specific findings directory
 		if os.path.exists(findings_dir):
@@ -265,7 +265,7 @@ def monitor_target_task(domain_id):
 						# Optionally move or delete processed findings to avoid re-parsing
 						# os.rename(file_path, file_path + ".processed")
 					except Exception as e:
-						logger.error(f"Error parsing ReconX findings for {domain.name}: {str(e)}")
+						logger.error("Error parsing ReconX findings for %s: %s", domain.name, str(e))
 
 		# 5. Attack Surface Intelligence (SpiderFoot)
 		if 'spiderfoot_scan' in scan_history.tasks:
@@ -307,7 +307,7 @@ def monitor_target_task(domain_id):
 					_process_monitor_spiderfoot_batch(batch, domain, scan_history, ctx, new_discoveries, existing_subs)
 					
 			except Exception as e:
-				logger.error(f"SpiderFoot monitoring failed: {e}")
+				logger.error("SpiderFoot monitoring failed: %s", e)
 
 
 		# 5. Notifications
@@ -344,7 +344,7 @@ def monitor_target_task(domain_id):
 							imported_subdomains=new_subs
 						)
 					except Exception as e:
-						logger.warning(f"Failed to start targeted recovery scan for {domain.name}: {e}")
+						logger.warning("Failed to start targeted recovery scan for %s: %s", domain.name, e)
 			elif domain.monitor_scan_scope == 'full':
 				try:
 					initiate_scan_temporal(
@@ -354,7 +354,7 @@ def monitor_target_task(domain_id):
 						scan_type=SCHEDULED_SCAN
 					)
 				except Exception as e:
-					logger.warning(f"Failed to start full recovery scan for {domain.name}: {e}")
+					logger.warning("Failed to start full recovery scan for %s: %s", domain.name, e)
 
 		scan_history.scan_status = SUCCESS_TASK
 		scan_history.stop_scan_date = timezone.now()
@@ -365,7 +365,7 @@ def monitor_target_task(domain_id):
 		domain.save()
 
 	except Exception as e:
-		logger.error(f"Error in monitoring task for {domain.name}: {str(e)}")
+		logger.error("Error in monitoring task for %s: %s", domain.name, str(e))
 		scan_history.scan_status = FAILED_TASK
 		scan_history.error_message = str(e)
 		scan_history.save()

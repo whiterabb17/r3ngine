@@ -8,6 +8,7 @@ so they appear in the existing OSINT staging UI without requiring new model fiel
 """
 import json
 import logging
+import os
 
 from reNgine.utils.task import run_command
 from startScan.models import OsintStaging
@@ -20,6 +21,10 @@ logger = logging.getLogger(__name__)
 # Spoofy install paths — uv creates .venv
 _SPOOFY_PYTHON = '/usr/src/github/Spoofy/.venv/bin/python3'
 _SPOOFY_DIR = '/usr/src/github/Spoofy'
+
+
+def _spoofy_installed() -> bool:
+    return os.path.exists(_SPOOFY_PYTHON)
 
 
 def run_spoofcheck(self, host: str, scan_history, results_dir: str) -> None:
@@ -37,9 +42,7 @@ def run_spoofcheck(self, host: str, scan_history, results_dir: str) -> None:
         results_dir: Path to the scan results directory (unused by Spoofy; kept
                      for API consistency).
     """
-    import os as _os
-
-    if not _os.path.exists(_SPOOFY_PYTHON):
+    if not _spoofy_installed():
         logger.error(
             "Spoofy not found at %s — skipping domain security check for %s",
             _SPOOFY_PYTHON,

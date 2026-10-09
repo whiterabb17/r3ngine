@@ -23,6 +23,7 @@ import { EmailImportModal } from './EmailImportModal';
 import { EmailDiscoveryModal } from './EmailDiscoveryModal';
 import { TacticalPanel } from '../../../../components/TacticalPanel';
 import { BreachDetailsModal } from '../BreachDetailsModal';
+import type { EmailBreach } from '../../types';
 
 interface EmailSectionProps {
   emails: EmailRecord[];
@@ -37,6 +38,7 @@ const SOURCE_LABELS: Record<string, { label: string; color: 'warning' | 'default
   phonebook: { label: 'PHONEBOOK', color: 'default' },
   pattern:   { label: 'PATTERN',   color: 'default' },
   crawled:   { label: 'CRAWLED',   color: 'default' },
+  mailbox_verify: { label: 'VERIFIED', color: 'default' },
 };
 
 export const EmailSection: React.FC<EmailSectionProps> = ({ emails, scanId, refetchEmails }) => {
@@ -45,7 +47,7 @@ export const EmailSection: React.FC<EmailSectionProps> = ({ emails, scanId, refe
   const [importOpen, setImportOpen] = useState(false);
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [selectedBreaches, setSelectedBreaches] = useState<any[] | null>(null);
+  const [selectedBreaches, setSelectedBreaches] = useState<EmailBreach[] | null>(null);
   const running = useEmailDiscoveryStore((s) => s.running);
   const { data: emailBreaches } = useEmailBreaches(scanId);
 
@@ -111,7 +113,7 @@ export const EmailSection: React.FC<EmailSectionProps> = ({ emails, scanId, refe
                 {emails.map((email) => {
                   const srcInfo = SOURCE_LABELS[email.source] ?? null;
                   const holehe = (email.metadata?.holehe as string[] | undefined) ?? [];
-                  const matchedBreaches = emailBreaches?.filter((b: any) => b.email_address === email.address) || [];
+                  const matchedBreaches = emailBreaches?.filter((b) => b.email_address === email.address) || [];
 
                   return (
                     <TableRow key={email.id} hover>

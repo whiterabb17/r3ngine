@@ -25,7 +25,8 @@ export interface SearchResponse {
     subdomains: SearchResultSubdomain[];
     endpoints: SearchResultEndpoint[];
     vulnerabilities: SearchResultVulnerability[];
-    others: any[];
+    /** Reserved by `SearchView`; always `{}` today. */
+    others: Record<string, unknown>;
   };
 }
 

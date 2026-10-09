@@ -1,9 +1,26 @@
-import openai
+import os
 import re
 import logging
-import requests
 
 _logger = logging.getLogger(__name__)
+
+# Master switch for every LLM call. Operators toggle this in Settings → AI Hub.
+# Off by default: with no active LLMConfig the generators used to fall back to
+# Ollama, but no `ollama` service exists in docker/docker-compose.yml, so each
+# call burned its retry budget on "Failed to resolve 'ollama'".
+LLM_DISABLED_MESSAGE = (
+    "Error: LLM features are disabled "
+    "(enable LLM in Settings → AI Hub and activate a provider)"
+)
+
+
+def llm_enabled():
+    """True when the operator has enabled LLM features in Settings → AI Hub."""
+    from dashboard.models import LLMSettings
+    return bool(LLMSettings.get_solo().enabled)
+
+
+llm_env_enabled = llm_enabled
 
 _PROMPT_INJECTION_RE = re.compile(
     r'(ignore\s+(previous|all|above|prior)\s+(instructions?|prompts?|context)|'
@@ -33,11 +50,20 @@ from reNgine.definitions import (
     VULNERABILITY_DESCRIPTION_SYSTEM_MESSAGE, 
     ATTACK_SUGGESTION_GPT_SYSTEM_PROMPT, 
     OLLAMA_INSTANCE,
-    OLLAMA, OPENAI, ANTHROPIC, GEMINI
+    OLLAMA, OPENAI, OPENAI_COMPATIBLE, ANTHROPIC, GEMINI
 )
 from langchain_community.llms import Ollama
 from dashboard.models import LLMConfig
+from reNgine import llm_client
 from reNgine.privacy import PIIGate
+
+NO_QUESTIONS_SYSTEM_SUFFIX = (
+    "\n\nCRITICAL SYSTEM REQUIREMENT FOR ALL GENERATIONS: "
+    "Do NOT include any conversational follow-up questions, closing queries, "
+    "or offers for further assistance (such as 'Would you like to include a longer brief?', "
+    "'Let me know if you need more details', or 'Should I expand on this?'). "
+    "Output ONLY the requested report content or structured response directly."
+)
 
 class LLMBaseGenerator:
     def __init__(self, logger):
@@ -45,18 +71,39 @@ class LLMBaseGenerator:
         self.gate = PIIGate()
         self.config = LLMConfig.objects.filter(is_active=True).first()
         if not self.config:
-            self.logger.warning("No active LLM configuration found. Defaulting to Ollama/llama3.")
-            # Fallback or create a dummy config if needed
-            self.model_name = 'llama3'
-            self.provider = OLLAMA
+            # Deliberately no Ollama fallback here — see LLM_DISABLED_MESSAGE.
+            self.model_name = None
+            self.provider = None
             self.api_key = None
+            self.base_url = None
         else:
             self.model_name = self.config.selected_model
             self.provider = self.config.provider
             self.api_key = self.config.api_key
+            self.base_url = self.config.base_url
+        settings_on = llm_enabled()
+        self.enabled = settings_on and self.config is not None
+        if not self.enabled:
+            self.logger.info(
+                "LLM features disabled (settings enabled=%s, active config=%s)",
+                settings_on, bool(self.config),
+            )
 
-    def _call_llm(self, system_message, user_message):
-        """Unified method to call the configured LLM provider with PII protection."""
+    def _call_llm(self, system_message, user_message, max_tokens=None):
+        """Unified method to call the configured LLM provider with PII protection.
+
+        Args:
+            system_message (str): System prompt context for the LLM.
+            user_message (str): User query/input prompt.
+            max_tokens (int, optional): Maximum token limit for output generation.
+        """
+        if not self.enabled:
+            return LLM_DISABLED_MESSAGE
+
+        # Ensure universal requirement against conversational follow-ups/questions is present
+        if "CRITICAL SYSTEM REQUIREMENT FOR ALL GENERATIONS" not in system_message:
+            system_message = f"{system_message}{NO_QUESTIONS_SYSTEM_SUFFIX}"
+
         # Anonymize inputs
         masked_system = self.gate.anonymize(system_message)
         masked_user = self.gate.anonymize(user_message)
@@ -65,11 +112,13 @@ class LLMBaseGenerator:
         if self.provider == OLLAMA:
             response = self._call_ollama(masked_system, masked_user)
         elif self.provider == OPENAI:
-            response = self._call_openai(masked_system, masked_user)
+            response = self._call_openai(masked_system, masked_user, max_tokens=max_tokens)
+        elif self.provider == OPENAI_COMPATIBLE:
+            response = self._call_openai_compatible(masked_system, masked_user, max_tokens=max_tokens)
         elif self.provider == ANTHROPIC:
-            response = self._call_anthropic(masked_system, masked_user)
+            response = self._call_anthropic(masked_system, masked_user, max_tokens=max_tokens)
         elif self.provider == GEMINI:
-            response = self._call_gemini(masked_system, masked_user)
+            response = self._call_gemini(masked_system, masked_user, max_tokens=max_tokens)
         else:
             return "Error: Unsupported LLM Provider"
             
@@ -80,88 +129,42 @@ class LLMBaseGenerator:
         try:
             prompt = system_message + "\nUser: " + user_message
             prompt = re.sub(r'\t', '', prompt)
-            llm = Ollama(base_url=OLLAMA_INSTANCE, model=self.model_name)
+            llm = Ollama(base_url=OLLAMA_INSTANCE, model=self.model_name, timeout=120)
             return llm.invoke(prompt)
         except Exception as e:
-            self.logger.error(f"Ollama Error: {str(e)}")
+            self.logger.error("Ollama Error: %s", str(e))
             return f"Error: {str(e)}"
 
-    def _call_openai(self, system_message, user_message):
+    def _call_openai(self, system_message, user_message, max_tokens=None):
+        return self._call_cloud(OPENAI, 'OpenAI', system_message, user_message, max_tokens)
+
+    def _call_openai_compatible(self, system_message, user_message, max_tokens=None):
+        if not self.base_url:
+            return "Error: OpenAI-compatible base URL not set"
+        return self._call_cloud(OPENAI_COMPATIBLE, 'OpenAI-compatible', system_message, user_message, max_tokens)
+
+    def _call_anthropic(self, system_message, user_message, max_tokens=None):
+        return self._call_cloud(ANTHROPIC, 'Anthropic', system_message, user_message, max_tokens)
+
+    def _call_gemini(self, system_message, user_message, max_tokens=None):
+        return self._call_cloud(GEMINI, 'Gemini', system_message, user_message, max_tokens)
+
+    def _call_cloud(self, provider, label, system_message, user_message, max_tokens=None):
+        """One request through reNgine.llm_client; failures come back as an "Error: ..." string."""
         if not self.api_key:
-            return "Error: OpenAI API Key not set"
+            return f"Error: {label} API Key not set"
         try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            data = {
-                "model": self.model_name,
-                "messages": [
-                    {"role": "system", "content": system_message},
-                    {"role": "user", "content": user_message}
-                ]
-            }
-            response = requests.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=60
+            return llm_client.complete(
+                provider,
+                api_key=self.api_key,
+                model=self.model_name,
+                system=system_message,
+                user=user_message,
+                max_tokens=max_tokens,
+                base_url=self.base_url,
             )
-            response.raise_for_status()
-            return response.json()['choices'][0]['message']['content']
         except Exception as e:
-            self.logger.error(f"OpenAI Error: {str(e)}")
-            return f"Error: {str(e)}"
-
-    def _call_anthropic(self, system_message, user_message):
-        if not self.api_key:
-            return "Error: Anthropic API Key not set"
-        try:
-            headers = {
-                "x-api-key": self.api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json"
-            }
-            data = {
-                "model": self.model_name,
-                "max_tokens": 1024,
-                "system": system_message,
-                "messages": [{"role": "user", "content": user_message}]
-            }
-            response = requests.post(
-                "https://api.anthropic.com/v1/messages",
-                headers=headers,
-                json=data,
-                timeout=60
-            )
-            response.raise_for_status()
-            block = response.json()['content'][0]
-            if block.get('type') != 'text':
-                raise ValueError(f"Unexpected Anthropic response content type: {block.get('type')}")
-            return block['text']
-        except Exception as e:
-            self.logger.error(f"Anthropic Error: {str(e)}")
-            return f"Error: {str(e)}"
-
-    def _call_gemini(self, system_message, user_message):
-        if not self.api_key:
-            return "Error: Gemini API Key not set"
-        try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
-            headers = {
-                "x-goog-api-key": self.api_key,
-                "Content-Type": "application/json"
-            }
-            data = {
-                "contents": [{
-                    "parts": [{"text": f"{system_message}\n\n{user_message}"}]
-                }]
-            }
-            response = requests.post(url, headers=headers, json=data, timeout=60)
-            response.raise_for_status()
-            return response.json()['candidates'][0]['content']['parts'][0]['text']
-        except Exception as e:
-            self.logger.error(f"Gemini Error: {str(e)}")
+            self.logger.error("%s Error: %s", label, str(e))
             return f"Error: {str(e)}"
 
 class LLMVulnerabilityReportGenerator(LLMBaseGenerator):
@@ -272,3 +275,51 @@ class LLMAttackPathExplainer(LLMBaseGenerator):
         )
         user_message = f"Attack Path ID: {path_id}\n\nPath Details:\n{path_details_str}"
         return self._call_llm(system_message, user_message)
+
+
+class LLMSeverityValidator(LLMBaseGenerator):
+    """Generates an AI-powered severity assessment and validation for a vulnerability finding."""
+
+    def validate_severity(self, vulnerability_context: str) -> dict:
+        import json
+        from reNgine.definitions import LLM_VULNERABILITY_SEVERITY_VALIDATION_SYSTEM_PROMPT
+        
+        try:
+            vulnerability_context = _sanitize_for_prompt(vulnerability_context)
+        except ValueError as e:
+            return {'status': False, 'error': str(e)}
+
+        raw_response = self._call_llm(LLM_VULNERABILITY_SEVERITY_VALIDATION_SYSTEM_PROMPT, vulnerability_context)
+
+        if raw_response.startswith("Error:"):
+            return {'status': False, 'error': raw_response}
+
+        # Clean JSON block if model returned markdown code blocks
+        clean_json = raw_response.strip()
+        if clean_json.startswith("```"):
+            clean_json = re.sub(r'^```(?:json)?\n?', '', clean_json)
+            clean_json = re.sub(r'\n?```$', '', clean_json)
+        clean_json = clean_json.strip()
+
+        try:
+            parsed = json.loads(clean_json)
+            return {
+                'status': True,
+                'suggested_severity': str(parsed.get('suggested_severity', 'info')).lower(),
+                'suggested_cvss_score': parsed.get('suggested_cvss_score'),
+                'confidence': parsed.get('confidence', 'High'),
+                'reasoning': parsed.get('reasoning', ''),
+                'key_factors': parsed.get('key_factors', []),
+                'raw_response': raw_response,
+            }
+        except Exception as e:
+            self.logger.warning("Failed to parse LLM severity validation JSON: %s. Fallback raw string returned.", str(e))
+            return {
+                'status': True,
+                'suggested_severity': 'info',
+                'suggested_cvss_score': None,
+                'confidence': 'Low',
+                'reasoning': raw_response,
+                'key_factors': [],
+                'raw_response': raw_response,
+            }

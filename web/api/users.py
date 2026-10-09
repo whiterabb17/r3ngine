@@ -1,8 +1,10 @@
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from rolepermissions.exceptions import RoleDoesNotExist
 from rolepermissions.roles import assign_role, clear_roles
 from api.serializers import UserSerializer
 from api.permissions import IsSysAdmin
@@ -62,15 +64,16 @@ class UserManageViewSet(viewsets.ModelViewSet):
 			return Response({'error': 'Username and password are required'}, status=status.HTTP_400_BAD_REQUEST)
 		
 		try:
-			# Create the user using Django's standard helper which handles password hashing
-			user = User.objects.create_user(username=username, password=password)
-			# Assign the system permission role to the newly created user
-			assign_role(user, role)
-			serializer = self.get_serializer(user)
-			return Response(serializer.data, status=status.HTTP_201_CREATED)
-		except Exception as e:
-			# Catch database integrity errors or invalid role names and return bad request
-			return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+			# One transaction, so a bad role does not leave a user without one.
+			with transaction.atomic():
+				user = User.objects.create_user(username=username, password=password)
+				assign_role(user, role)
+		except IntegrityError:
+			return Response({'error': 'A user with that username already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+		except RoleDoesNotExist:
+			return Response({'error': 'Unknown role.'}, status=status.HTTP_400_BAD_REQUEST)
+		serializer = self.get_serializer(user)
+		return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 	@action(detail=True, methods=['post'])
 	def toggle_status(self, request, pk=None):

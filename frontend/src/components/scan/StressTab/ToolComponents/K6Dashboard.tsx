@@ -10,7 +10,7 @@ export interface K6TelemetryPoint {
   throughput_rps?: number;
   avg_latency?: number;
   error_rate?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface K6DashboardProps {

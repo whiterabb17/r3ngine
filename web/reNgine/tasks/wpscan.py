@@ -302,7 +302,7 @@ def wpscan_scan(self, urls=[], ctx={}, description=None):
     from django.db.models import Q
     _WP_PATH_RE = r'(wp-login|wp-admin|wp-content|wp-json|xmlrpc\.php)'
 
-    if self.subscan and self.subdomain:
+    if getattr(self, 'subdomain', None):
         _sub_qs = Subdomain.objects.filter(pk=self.subdomain.id)
         _ep_qs = EndPoint.objects.filter(
             scan_history=self.scan,
@@ -332,7 +332,7 @@ def wpscan_scan(self, urls=[], ctx={}, description=None):
 
     # Determine targets — narrow to only WordPress-positive subdomains.
     targets = []
-    if self.subscan and self.subdomain:
+    if getattr(self, 'subdomain', None):
         targets.append((f"https://{self.subdomain.name}/", self.subdomain))
     elif urls:
         # Targeted scan on specific URLs
@@ -408,8 +408,8 @@ def wpscan_scan(self, urls=[], ctx={}, description=None):
             if os.path.exists(output_file):
                 try:
                     os.remove(output_file)
-                except Exception:
-                    pass
+                except OSError:
+                    logger.warning("Could not remove stale WPScan output %s", output_file, exc_info=True)
 
             # Execute tool — stream_command is a generator; must be consumed to run the subprocess.
             for _ in stream_command(cmd, scan_id=self.scan_id, activity_id=self.activity_id):
@@ -457,8 +457,8 @@ def wpscan_scan(self, urls=[], ctx={}, description=None):
                     if os.path.exists(output_file):
                         try:
                             os.remove(output_file)
-                        except Exception:
-                            pass
+                        except OSError:
+                            logger.warning("Could not remove aborted WPScan output %s", output_file, exc_info=True)
                     break
             else:
                 # Execution succeeded or failed with different error

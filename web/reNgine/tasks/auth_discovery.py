@@ -1,10 +1,12 @@
+import time
+
 import requests
 from urllib.parse import urlparse, urljoin, urldefrag
 from bs4 import BeautifulSoup
 
 from startScan.models import EndPoint, AuthCandidate
 from reNgine.utilities import save_auth_candidate
-from reNgine.common_func import get_proxy_list, get_random_proxy, get_random_user_agent
+from reNgine.common_func import _failed_proxy_cache, get_proxy_list, get_random_proxy, get_random_user_agent
 
 import logging
 logger = logging.getLogger(__name__)
@@ -59,12 +61,7 @@ def _fetch_with_proxy_retry(url: str, proxy_list: list, timeout: int = 10):
             last_exc = exc
             if proxy_url:
                 logger.warning("Proxy %s failed for %s: %s", proxy_url, url, type(exc).__name__)
-                try:
-                    from reNgine.common_func import _failed_proxy_cache
-                    import time
-                    _failed_proxy_cache[proxy_url] = time.time()
-                except Exception:
-                    pass
+                _failed_proxy_cache[proxy_url] = time.time()
             else:
                 logger.warning("Direct connection failed for %s: %s", url, type(exc).__name__)
 

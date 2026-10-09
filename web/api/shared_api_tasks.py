@@ -32,7 +32,8 @@ def import_hackerone_programs_task(handles, project_slug, is_sync = False):
 		response = requests.get(
 			url,
 			headers=headers,
-			auth=(username, api_key)
+			auth=(username, api_key),
+			timeout=30
 		)
 
 		if response.status_code == 401:
@@ -154,7 +155,8 @@ def sync_bookmarked_programs_task(project_slug):
 			response = requests.get(
 				url,
 				headers=headers,
-				auth=(username, api_key)
+				auth=(username, api_key),
+				timeout=30
 			)
 
 			if response.status_code == 401:

@@ -7,6 +7,8 @@
 | [Architecture Overview](architecture-overview.md) | System architecture, containers, and components |
 | [Temporal System](temporal-system.md) | Temporal workflows, activities, task queues, and worker configuration |
 | [Scan Pipeline](scan-pipeline.md) | The 7-tier MasterScanWorkflow pipeline in detail |
+| [Mailbox Verification](email-verification.md) | Reacher mailbox confirmation (replaces smtp-user-enum) |
+| [MCP Access](mcp.md) | Agent/IDE MCP server, keys, sessions, singular tools / `tool_args`, follow-ups, `/mcp` sidecar |
 | [Task Cancellation](task-cancellation.md) | How scan and subscan cancellation works |
 | [Task Recovery](task-recovery.md) | Crash recovery and scan resumption via Temporal |
 | [Plugin System](plugin-system.md) | Plugin architecture, installation, and Temporal integration |
@@ -19,6 +21,8 @@
 | [Neo4j Integration](neo4j-integration.md) | Graph database integration and APME |
 | [Configuration](configuration.md) | Environment variables and engine YAML configuration |
 | [Docker Setup](docker-setup.md) | Container architecture and service definitions |
+| [Upgrading Infrastructure](upgrading-infrastructure.md) | Pinned Redis/Neo4j/Temporal/nginx images, and how to move an existing install onto them |
+| [Open work](TODO.md) | Deferred issues, decisions taken and known follow-ups |
 
 ---
 
@@ -34,7 +38,7 @@ web/
 │   ├── temporal_client.py      # Temporal connection provider
 │   ├── temporal_schedule_utils.py  # Schedule creation helpers
 │   ├── definitions.py          # Global constants and tool definitions
-│   ├── common_func.py          # Shared utility functions
+│   ├── common_func/            # Shared utility package (db_queries, proxy_pool, url_utils, notify, …); __init__ re-exports everything
 │   ├── correlation.py          # Vulnerability correlation engine
 │   ├── consumers.py            # WebSocket consumers (Django Channels)
 │   ├── llm.py                  # LLM/AI integration

@@ -17,6 +17,7 @@ import { X, RefreshCw, ExternalLink, ShieldCheck, AlertCircle } from 'lucide-rea
 import { useRengineUpdateCheck } from '../api';
 import type { RengineUpdateResponse } from '../api';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import { getSafeUrl } from '../../../utils/securityUtils';
 
 interface CheckForUpdateModalProps {
   open: boolean;
@@ -202,7 +203,7 @@ export const CheckForUpdateModal: React.FC<CheckForUpdateModalProps> = ({ open, 
           <Button
             variant="contained"
             startIcon={<ExternalLink size={18} />}
-            href={result.redirect_link}
+            href={getSafeUrl(result.redirect_link) ?? '#'}
             target="_blank"
             sx={{
               bgcolor: tokens.accent.primary,

@@ -25,6 +25,9 @@ import {
 import { X, FileText, Shield, FileSearch, Download, MessageSquare, ChevronDown, ChevronUp, Sliders, Briefcase, Terminal } from 'lucide-react';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 import { getDialogPaperSx, getFieldSx } from '../../../theme/semanticColors';
+import { createScanReport, fetchScanReportStatus } from '../api/reports';
+import { getSafeUrl } from '../../../utils/securityUtils';
+import type { ResolvedThemeTokens } from '../../../theme/tokens';
 
 const SectionTitle = ({ title, icon }: { title: string, icon?: React.ReactNode }) => {
   const { tokens } = useThemeTokens();
@@ -127,21 +130,17 @@ export const ScanReportModal: React.FC<ScanReportModalProps> = ({ open, onClose,
     
     const checkStatus = async () => {
       try {
-        const response = await fetch(`/scan/report/status/${reportId}`, {
-          credentials: 'include'
-        });
-        if (!response.ok) throw new Error('Failed to check status');
-        
-        const data = await response.json();
+        const data = await fetchScanReportStatus(reportId);
         
         if (data.status === 2) { // Success
           setIsGenerating(false);
           setGenerationStatus('Report successfully generated!');
-          setReportUrl(data.report_url);
+          const safeReportUrl = getSafeUrl(data.report_url) ?? null;
+          setReportUrl(safeReportUrl);
           
           // Try to auto-open only if it's the first time reaching success
-          if (data.report_url) {
-            const win = window.open(data.report_url, '_blank');
+          if (safeReportUrl) {
+            const win = window.open(safeReportUrl, '_blank');
             if (!win) {
               setGenerationStatus('Report ready! Please click the download button below (Popup was blocked).');
             }
@@ -190,13 +189,7 @@ export const ScanReportModal: React.FC<ScanReportModalProps> = ({ open, onClose,
         comments: comments
       });
       
-      const response = await fetch(`/scan/create_report/${scanId}?${params.toString()}`, {
-        credentials: 'include'
-      });
-      
-      if (!response.ok) throw new Error('Failed to initiate report');
-      
-      const data = await response.json();
+      const data = await createScanReport(scanId, params);
       if (data.status && data.report_id) {
         pollReportStatus(data.report_id);
       } else {
@@ -211,7 +204,7 @@ export const ScanReportModal: React.FC<ScanReportModalProps> = ({ open, onClose,
   const handleDownload = () => initiateReport(true);
   const handlePreview = () => initiateReport(false);
 
-  const getFieldStyles = (isLight: boolean, tokens: any) => ({
+  const getFieldStyles = (isLight: boolean, tokens: ResolvedThemeTokens) => ({
     ...getFieldSx(isLight, tokens),
     '& .MuiOutlinedInput-root': {
       ...getFieldSx(isLight, tokens)['& .MuiOutlinedInput-root'],

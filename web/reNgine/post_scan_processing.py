@@ -19,6 +19,7 @@ thread pool to keep wall-clock time reasonable even with many candidate URLs.
 """
 
 import logging
+import shlex
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -26,6 +27,8 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 import urllib3
+
+from reNgine.common_func import GRAPHQL_ENDPOINT_URL_REGEX
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -53,8 +56,9 @@ _SWAGGER_URL_RE = re.compile(
 # Patterns used to identify OpenAPI/Swagger candidate URLs in the DB
 _SWAGGER_URL_IREGEX = r'swagger|openapi|api-docs|/docs|/redoc'
 
-# GraphQL endpoint iregex (mirrors has_graphql_endpoint DB check)
-_GRAPHQL_URL_IREGEX = r'/graphi?ql'
+# GraphQL endpoint iregex — one definition, shared with has_graphql_endpoint and
+# with graphql-cop's target selection so the three cannot disagree.
+_GRAPHQL_URL_IREGEX = GRAPHQL_ENDPOINT_URL_REGEX
 
 _REQUEST_TIMEOUT = 15  # seconds
 _THREAD_WORKERS = 8
@@ -96,7 +100,9 @@ def _fetch_and_parse_spec(candidate_url: str, proxy: str | None) -> list[dict]:
     Returns:
         List of parameter finding dicts (CPDE format), possibly empty.
     """
-    from reNgine.cpde.openapi_discoverer import _parse_spec
+    import yaml
+
+    from reNgine.cpde.openapi_discoverer import SPEC_PARSE_ERRORS, _parse_spec
 
     proxies = {'http': proxy, 'https': proxy} if proxy else None
     session = requests.Session()
@@ -124,15 +130,14 @@ def _fetch_and_parse_spec(candidate_url: str, proxy: str | None) -> list[dict]:
     if 'json' in content_type:
         try:
             spec = resp.json()
-        except Exception:
+        except SPEC_PARSE_ERRORS:
             pass
 
     # ── Case 2: Raw YAML spec ────────────────────────────────────────────────
     elif 'yaml' in content_type:
         try:
-            import yaml
             spec = yaml.safe_load(resp.text)
-        except Exception:
+        except SPEC_PARSE_ERRORS:
             pass
 
     # ── Case 3: HTML — Swagger UI page; extract embedded spec URL ───────────
@@ -149,11 +154,10 @@ def _fetch_and_parse_spec(candidate_url: str, proxy: str | None) -> list[dict]:
     else:
         try:
             spec = resp.json()
-        except Exception:
+        except SPEC_PARSE_ERRORS:
             try:
-                import yaml
                 spec = yaml.safe_load(resp.text)
-            except Exception:
+            except SPEC_PARSE_ERRORS:
                 # Last resort: check if it looks like HTML (Swagger UI page)
                 if '<html' in resp.text[:500].lower():
                     spec_url = _extract_spec_url_from_swagger_ui(resp.text, candidate_url)
@@ -366,9 +370,9 @@ def post_scan_processing(self, ctx: dict = {}, description: str = None):
             logger.info('[POST_SCAN] Pass 3 — running InQL on new GraphQL endpoint: %s', ep.http_url)
 
             inql_output = f'{results_dir}/post_scan/inql_{subdomain.name}'
-            cmd = f'inql -t {ep.http_url} -o {inql_output}'
+            cmd = f'inql -t {shlex.quote(ep.http_url)} -o {shlex.quote(inql_output)}'
             if proxy:
-                cmd += f' -p {proxy}'
+                cmd += f' -p {shlex.quote(proxy)}'
             try:
                 run_command(cmd, shell=True, scan_id=scan_id, activity_id=self.activity_id)
                 if os.path.exists(inql_output):

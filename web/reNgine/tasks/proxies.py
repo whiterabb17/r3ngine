@@ -23,11 +23,15 @@ def fetch_proxies_task(limit=1000, job_id=None):
     Returns:
         str: Newline-separated list of validated live proxies.
     """
-    from reNgine.common_func import check_proxy_robust, is_proxy_recently_used
+    from reNgine.common_func import (
+        check_proxy_robust,
+        is_proxy_recently_used,
+        proxy_has_credentials,
+    )
     from reNgine.job_tracker import update_job as _update_job
     from scanEngine.models import Proxy
 
-    logger.info(f"Starting automated proxy fetch and verification task (limit={limit}).")
+    logger.info("Starting automated proxy fetch and verification task (limit=%s).", limit)
     if job_id:
         _update_job(job_id, 'RUNNING', 10, 'Downloading new proxies')
 
@@ -102,7 +106,7 @@ def fetch_proxies_task(limit=1000, job_id=None):
         if 'github.com' in url and '/blob/' in url:
             url = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
 
-        logger.info(f"Downloading proxy list from: {url}")
+        logger.info("Downloading proxy list from: %s", url)
         try:
             response = requests.get(url, timeout=10)
             if response.status_code == 200:
@@ -123,15 +127,15 @@ def fetch_proxies_task(limit=1000, job_id=None):
                             all_proxies.add(token)
                             added_this_url += 1
 
-                logger.info(f"Successfully added {added_this_url} raw proxies from {url}")
+                logger.info("Successfully added %s raw proxies from %s", added_this_url, url)
             else:
-                logger.warning(f"Failed to download proxy list from {url}. Status code: {response.status_code}")
+                logger.warning("Failed to download proxy list from %s. Status code: %s", url, response.status_code)
         except Exception as e:
-            logger.error(f"Error fetching proxies from {url}: {str(e)}")
+            logger.error("Error fetching proxies from %s: %s", url, str(e))
 
     unique_proxies = list(all_proxies)[:limit]
     total = len(unique_proxies)
-    logger.info(f"Total unique raw proxies fetched: {total} (capped at {limit})")
+    logger.info("Total unique raw proxies fetched: %s (capped at %s)", total, limit)
 
     if job_id:
         _update_job(job_id, 'RUNNING', 30, f'Verifying {total} proxies')
@@ -159,7 +163,7 @@ def fetch_proxies_task(limit=1000, job_id=None):
                 completed_count[0] += 1
                 done = completed_count[0]
             if done % 50 == 0 or done == total:
-                logger.info(f"Verification progress: {done}/{total} - Found {len(live_proxies)} live proxies so far.")
+                logger.info("Verification progress: %s/%s - Found %s live proxies so far.", done, total, len(live_proxies))
                 progress = 30 + int((done / total) * 65)
                 if _job_id:
                     _update_job(
@@ -167,7 +171,7 @@ def fetch_proxies_task(limit=1000, job_id=None):
                         f'Checking proxies: {done}/{total} ({len(live_proxies)} live)',
                     )
 
-    logger.info(f"Proxy verification complete. Found {len(live_proxies)} live proxies out of {total} tested.")
+    logger.info("Proxy verification complete. Found %s live proxies out of %s tested.", len(live_proxies), total)
     if job_id:
         _update_job(job_id, 'RUNNING', 95, 'Formatting live proxies')
 
@@ -188,13 +192,28 @@ def fetch_proxies_task(limit=1000, job_id=None):
             final_list = final_list + preserved
             proxy_str = "\n".join(final_list)
 
-        proxy_obj.proxies = proxy_str
+        # Credentialed entries are hand-typed paid endpoints, never scraped ones.
+        # The field used to be overwritten wholesale, so one press of "fetch
+        # proxies" silently replaced them with free ones. They are kept out of
+        # proxy_str on purpose: that string is echoed back in the job result and
+        # would carry the credentials into the UI payload.
+        credentialed = [
+            p for p in existing_proxies
+            if proxy_has_credentials(p) and p not in final_list
+        ]
+        if credentialed:
+            logger.info(
+                'Preserving %d credentialed proxy entries during pool refresh.',
+                len(credentialed),
+            )
+
+        proxy_obj.proxies = "\n".join(credentialed + final_list)
         proxy_obj.use_proxy = True
         proxy_obj.proxies_verified_at = _dj_tz.now()
         proxy_obj.save()
         logger.info("Automatically saved live proxies to database (verified_at=%s).", proxy_obj.proxies_verified_at)
     except Exception as e:
-        logger.error(f"Failed to auto-save proxies: {e}")
+        logger.error("Failed to auto-save proxies: %s", e)
 
     if job_id:
         _update_job(job_id, 'SUCCESS', 100, 'Proxy list updated and saved automatically', result={"count": len(final_list), "proxies": proxy_str})

@@ -1,8 +1,9 @@
 import React from 'react';
 import { useStressStore } from '../../../store/stressStore';
+import type { EndpointStressMetrics } from '../../../types/stressTesting';
 
 interface EndpointTableProps {
-  data: any[];
+  data: Pick<EndpointStressMetrics, 'endpoint' | 'total_requests' | 'avg_latency' | 'p95_latency' | 'error_rate' | 'throughput_rps'>[];
 }
 
 export const EndpointTable: React.FC<EndpointTableProps> = ({ data }) => {

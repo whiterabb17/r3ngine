@@ -26,6 +26,7 @@ from temporalio.client import (
     ScheduleSpec,
     ScheduleState,
 )
+from temporalio.service import RPCError, RPCStatusCode
 from reNgine.temporal_client import TemporalClientProvider
 
 logger = logging.getLogger(__name__)
@@ -113,7 +114,7 @@ def _create_periodic_temporal_schedule(
         is_active=True,
         domain=domain,
     )
-    logger.info(f"[ScheduleUtils] Created periodic schedule '{schedule_id}' every {interval_seconds}s")
+    logger.info("[ScheduleUtils] Created periodic schedule '%s' every %ss", schedule_id, interval_seconds)
     return record
 
 
@@ -203,19 +204,30 @@ def _create_clocked_temporal_schedule(
         is_active=True,
         domain=domain,
     )
-    logger.info(f"[ScheduleUtils] Created clocked schedule '{schedule_id}' at {clocked_dt}")
+    logger.info("[ScheduleUtils] Created clocked schedule '%s' at %s", schedule_id, clocked_dt)
     return record
 
 
+async def delete_schedule_if_exists(client, schedule_id: str) -> bool:
+    """Delete a Temporal Schedule; return False if it did not exist.
+
+    Only not-found is ignored. Anything else (Temporal unreachable, permission
+    denied) is raised, since a schedule that survives keeps starting workflows.
+    """
+    try:
+        await client.get_schedule_handle(schedule_id).delete()
+    except RPCError as exc:
+        if exc.status == RPCStatusCode.NOT_FOUND:
+            return False
+        raise
+    return True
+
+
 def _delete_temporal_schedule_by_id(schedule_id: str) -> None:
-    """Delete a Temporal Schedule by ID. Silently ignores not-found errors."""
+    """Delete a Temporal Schedule by ID. Ignores not-found, raises other errors."""
     async def _delete():
         client = await TemporalClientProvider.get_client()
-        try:
-            handle = client.get_schedule_handle(schedule_id)
-            await handle.delete()
-        except Exception:
-            pass
+        await delete_schedule_if_exists(client, schedule_id)
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -223,7 +235,7 @@ def _delete_temporal_schedule_by_id(schedule_id: str) -> None:
         loop.run_until_complete(_delete())
     finally:
         loop.close()
-    logger.info(f"[ScheduleUtils] Deleted schedule '{schedule_id}'")
+    logger.info("[ScheduleUtils] Deleted schedule '%s'", schedule_id)
 
 
 def _pause_temporal_schedule(schedule_id: str) -> None:
@@ -239,7 +251,7 @@ def _pause_temporal_schedule(schedule_id: str) -> None:
         loop.run_until_complete(_pause())
     finally:
         loop.close()
-    logger.info(f"[ScheduleUtils] Paused schedule '{schedule_id}'")
+    logger.info("[ScheduleUtils] Paused schedule '%s'", schedule_id)
 
 
 def _unpause_temporal_schedule(schedule_id: str) -> None:
@@ -255,7 +267,7 @@ def _unpause_temporal_schedule(schedule_id: str) -> None:
         loop.run_until_complete(_unpause())
     finally:
         loop.close()
-    logger.info(f"[ScheduleUtils] Unpaused schedule '{schedule_id}'")
+    logger.info("[ScheduleUtils] Unpaused schedule '%s'", schedule_id)
 
 
 _MONITORING_FREQUENCY_SECONDS = {
@@ -290,11 +302,7 @@ def _upsert_monitoring_temporal_schedule(domain) -> object:
     async def _recreate():
         client = await TemporalClientProvider.get_client()
         # Delete stale schedule if present (frequency may have changed)
-        try:
-            handle = client.get_schedule_handle(schedule_id)
-            await handle.delete()
-        except Exception:
-            pass
+        await delete_schedule_if_exists(client, schedule_id)
         await client.create_schedule(
             schedule_id,
             Schedule(
@@ -334,8 +342,7 @@ def _upsert_monitoring_temporal_schedule(domain) -> object:
         ),
     )
     logger.info(
-        f"[ScheduleUtils] Upserted monitoring schedule '{schedule_id}' "
-        f"every {interval_seconds}s for domain={domain.name}"
+        "[ScheduleUtils] Upserted monitoring schedule '%s' every %ss for domain=%s", schedule_id, interval_seconds, domain.name
     )
     return record
 
@@ -352,18 +359,18 @@ def _delete_monitoring_temporal_schedule(domain) -> None:
 
     async def _delete():
         client = await TemporalClientProvider.get_client()
-        try:
-            handle = client.get_schedule_handle(schedule_id)
-            await handle.delete()
-        except Exception:
-            pass  # Already deleted or never existed
+        await delete_schedule_if_exists(client, schedule_id)
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
         loop.run_until_complete(_delete())
+    except Exception:
+        # Monitoring is being switched off either way; the schedule left behind
+        # keeps firing MonitoringWorkflow until it is removed in the Temporal UI.
+        logger.exception("Could not delete monitoring schedule %s; remove it in Temporal", schedule_id)
     finally:
         loop.close()
 
     TemporalSchedule.objects.filter(schedule_id=schedule_id).delete()
-    logger.info(f"[ScheduleUtils] Deleted monitoring schedule '{schedule_id}' for domain={domain.name}")
+    logger.info("[ScheduleUtils] Deleted monitoring schedule '%s' for domain=%s", schedule_id, domain.name)

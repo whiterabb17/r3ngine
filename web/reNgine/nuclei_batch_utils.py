@@ -36,8 +36,8 @@ def get_template_counts_for_tags(tags: list, template_dirs: list) -> dict:
                                         if t in requested_tags:
                                             tag_counts[t] += 1
                                     break  # Only parse the first tags line in info block
-                    except Exception:
-                        pass
+                    except OSError:
+                        pass  # unreadable template: skip it in the count
     return tag_counts
 
 def count_templates_for_tag(tag: str, template_dirs: list) -> int:

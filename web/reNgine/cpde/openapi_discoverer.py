@@ -19,10 +19,15 @@ from urllib.parse import urljoin
 
 import requests
 import urllib3
+import yaml
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
+
+# Spec bodies come from scanned targets, so malformed (or hostile, deeply
+# nested) documents are expected. JSON decode errors are ValueErrors.
+SPEC_PARSE_ERRORS = (ValueError, RecursionError, yaml.YAMLError)
 
 # Ordered list of common paths to probe for API spec files.
 # Ordered by likelihood — most applications serve one of the first few.
@@ -185,24 +190,22 @@ def discover(base_urls: list[str], proxy: str | None = None) -> list[dict]:
                 if 'json' in content_type or probe_path.endswith('.json'):
                     try:
                         spec = resp.json()
-                    except Exception:
+                    except SPEC_PARSE_ERRORS:
                         continue
                 # Try YAML
                 elif 'yaml' in content_type or probe_path.endswith('.yaml'):
                     try:
-                        import yaml  # type: ignore
                         spec = yaml.safe_load(resp.text)
-                    except Exception:
+                    except SPEC_PARSE_ERRORS:
                         continue
                 else:
                     # Attempt JSON first, then YAML
                     try:
                         spec = resp.json()
-                    except Exception:
+                    except SPEC_PARSE_ERRORS:
                         try:
-                            import yaml  # type: ignore
                             spec = yaml.safe_load(resp.text)
-                        except Exception:
+                        except SPEC_PARSE_ERRORS:
                             continue
 
                 # Validate it looks like an OpenAPI/Swagger spec

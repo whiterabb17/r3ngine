@@ -1,0 +1,20 @@
+{
+    "flags": "-iE",
+    "patterns": [
+        "/graphql",
+        "/graphiql",
+        "/graphql/console",
+        "/api/graphql",
+        "/v1/graphql",
+        "/v2/graphql",
+        "query=",
+        "mutation=",
+        "subscription=",
+        "operationName=",
+        "variables=",
+        "extensions=",
+        "__schema",
+        "__type",
+        "introspection"
+    ]
+}

@@ -59,6 +59,42 @@ class CVEEnrichmentServiceTestCase(TestCase):
         self.assertEqual(result.name, "NOT-A-CVE")
 
     @patch('requests.get')
+    def test_enrich_cve_skips_on_local_enriched_at_not_nvd_last_modified(self, mock_get):
+        """NVD lastModified can be weeks old; skip must use last_enriched_at."""
+        stale_nvd = timezone.now() - timedelta(days=60)
+        CveId.objects.create(
+            name='CVE-2024-99990',
+            cvss_v31_base_score=7.5,
+            last_modified_date=stale_nvd,
+            last_enriched_at=timezone.now() - timedelta(days=1),
+        )
+
+        result = self.service.enrich_cve('CVE-2024-99990')
+
+        self.assertEqual(result.cvss_v31_base_score, 7.5)
+        mock_get.assert_not_called()
+
+    def test_enrich_cve_force_bypasses_skip(self):
+        """force=True must re-hit external sources even when recently enriched."""
+        CveId.objects.create(
+            name='CVE-2024-99991',
+            cvss_v31_base_score=9.8,
+            last_enriched_at=timezone.now(),
+            ai_risk_assessment='already have ai',
+        )
+
+        with patch.object(self.service, '_enrich_from_nvd') as mock_nvd, \
+             patch.object(self.service, '_enrich_from_epss'), \
+             patch.object(self.service, '_enrich_from_vulnx'), \
+             patch.object(self.service, '_enrich_from_sploitscan'), \
+             patch.object(self.service, '_generate_cve_ai_analysis'):
+            self.service.enrich_cve('CVE-2024-99991', force=True)
+
+        mock_nvd.assert_called_once()
+        refreshed = CveId.objects.get(name='CVE-2024-99991')
+        self.assertIsNotNone(refreshed.last_enriched_at)
+
+    @patch('requests.get')
     def test_enrich_cve_from_nvd(self, mock_get):
         """
         Verify that NVD API responses are correctly parsed and applied to CveId objects.

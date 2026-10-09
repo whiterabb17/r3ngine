@@ -138,7 +138,7 @@ class DiscoveryWorkflow:
         Returns:
             bool: True on success, raises on failure.
         """
-        workflow.logger.info(f"[DiscoveryWorkflow] Starting for assessment {input.assessment_id}")
+        workflow.logger.info("[DiscoveryWorkflow] Starting for assessment %s", input.assessment_id)
 
         # Build ScanContext — creates Domain + ScanHistory linked to Assessment
         ctx = await _prepare_ctx(input)
@@ -198,7 +198,7 @@ class DiscoveryWorkflow:
             workflow.execute_activity(
                 "RunVigoliumHarvestActivity",
                 ctx,
-                start_to_close_timeout=timedelta(hours=2),
+                start_to_close_timeout=timedelta(hours=6),
                 retry_policy=_long_retry,
                 task_queue=_TASK_QUEUE,
             )
@@ -208,7 +208,7 @@ class DiscoveryWorkflow:
             try:
                 await asyncio.gather(*discovery_futures, return_exceptions=True)
             except Exception as e:
-                workflow.logger.warning(f"[DiscoveryWorkflow] Some discovery activities failed (non-fatal): {e}")
+                workflow.logger.warning("[DiscoveryWorkflow] Some discovery activities failed (non-fatal): %s", e)
 
         # Parse and persist discovery results
         await workflow.execute_activity(
@@ -219,7 +219,7 @@ class DiscoveryWorkflow:
             task_queue=_TASK_QUEUE,
         )
 
-        workflow.logger.info(f"[DiscoveryWorkflow] Completed for assessment {input.assessment_id}")
+        workflow.logger.info("[DiscoveryWorkflow] Completed for assessment %s", input.assessment_id)
         return True
 
 
@@ -245,7 +245,7 @@ class EnumerationWorkflow:
         Returns:
             bool: True on success, raises on failure.
         """
-        workflow.logger.info(f"[EnumerationWorkflow] Starting for assessment {input.assessment_id}")
+        workflow.logger.info("[EnumerationWorkflow] Starting for assessment %s", input.assessment_id)
 
         ctx = await _prepare_ctx(input)
         tasks = ctx.get("tasks", [])
@@ -310,7 +310,7 @@ class EnumerationWorkflow:
             try:
                 await asyncio.gather(*tier2_futures, return_exceptions=True)
             except Exception as e:
-                workflow.logger.warning(f"[EnumerationWorkflow] Tier 2 partial failure (non-fatal): {e}")
+                workflow.logger.warning("[EnumerationWorkflow] Tier 2 partial failure (non-fatal): %s", e)
 
         # ------------------------------------------------------------------ #
         # Tier 3: Fetch URLs (passive)
@@ -361,7 +361,7 @@ class EnumerationWorkflow:
             task_queue=_TASK_QUEUE,
         )
 
-        workflow.logger.info(f"[EnumerationWorkflow] Completed for assessment {input.assessment_id}")
+        workflow.logger.info("[EnumerationWorkflow] Completed for assessment %s", input.assessment_id)
         return True
 
 
@@ -387,7 +387,7 @@ class AnalysisWorkflow:
         Returns:
             bool: True on success, raises on failure.
         """
-        workflow.logger.info(f"[AnalysisWorkflow] Starting for assessment {input.assessment_id}")
+        workflow.logger.info("[AnalysisWorkflow] Starting for assessment %s", input.assessment_id)
 
         ctx = await _prepare_ctx(input)
         tasks = ctx.get("tasks", [])
@@ -434,7 +434,7 @@ class AnalysisWorkflow:
             try:
                 await asyncio.gather(*tier5_futures, return_exceptions=True)
             except Exception as e:
-                workflow.logger.warning(f"[AnalysisWorkflow] Tier 5 partial failure (non-fatal): {e}")
+                workflow.logger.warning("[AnalysisWorkflow] Tier 5 partial failure (non-fatal): %s", e)
 
             await workflow.execute_activity(
                 "ParseAnalysisResultsActivity",
@@ -448,7 +448,7 @@ class AnalysisWorkflow:
         # Tier 6: Nuclei vulnerability scanning (via NucleiPlannerWorkflow child)
         # ------------------------------------------------------------------ #
         if "vulnerability_scan" in tasks:
-            workflow.logger.info(f"[AnalysisWorkflow] Launching NucleiPlannerWorkflow child")
+            workflow.logger.info("[AnalysisWorkflow] Launching NucleiPlannerWorkflow child")
             try:
                 await workflow.execute_child_workflow(
                     "NucleiPlannerWorkflow",
@@ -460,7 +460,7 @@ class AnalysisWorkflow:
                 )
             except Exception as nuclei_err:
                 # Nuclei failure is non-fatal — log and continue
-                workflow.logger.error(f"[AnalysisWorkflow] NucleiPlannerWorkflow error: {nuclei_err}")
+                workflow.logger.error("[AnalysisWorkflow] NucleiPlannerWorkflow error: %s", nuclei_err)
 
             await workflow.execute_activity(
                 "ParseAssessmentResultsActivity",
@@ -470,7 +470,7 @@ class AnalysisWorkflow:
                 task_queue=_TASK_QUEUE,
             )
 
-        workflow.logger.info(f"[AnalysisWorkflow] Completed for assessment {input.assessment_id}")
+        workflow.logger.info("[AnalysisWorkflow] Completed for assessment %s", input.assessment_id)
         return True
 
 
@@ -507,7 +507,7 @@ class ValidationWorkflow:
             bool: True when approved, False if timed out.
         """
         workflow.logger.info(
-            f"[ValidationWorkflow] Waiting for analyst approval for assessment {input.assessment_id}"
+            "[ValidationWorkflow] Waiting for analyst approval for assessment %s", input.assessment_id
         )
 
         # Run auto-validation activity first
@@ -525,11 +525,11 @@ class ValidationWorkflow:
                 lambda: self._approved,
                 timeout=timedelta(days=30),
             )
-            workflow.logger.info(f"[ValidationWorkflow] Approved for assessment {input.assessment_id}")
+            workflow.logger.info("[ValidationWorkflow] Approved for assessment %s", input.assessment_id)
             return True
         except asyncio.TimeoutError:
             workflow.logger.warning(
-                f"[ValidationWorkflow] Timed out waiting for approval for assessment {input.assessment_id}"
+                "[ValidationWorkflow] Timed out waiting for approval for assessment %s", input.assessment_id
             )
             return False
 
@@ -556,7 +556,7 @@ class ReportingWorkflow:
         Returns:
             bool: True on success, raises on failure.
         """
-        workflow.logger.info(f"[ReportingWorkflow] Starting for assessment {input.assessment_id}")
+        workflow.logger.info("[ReportingWorkflow] Starting for assessment %s", input.assessment_id)
 
         ctx = await _prepare_ctx(input)
         tasks = ctx.get("tasks", [])
@@ -628,7 +628,7 @@ class ReportingWorkflow:
             task_queue=_TASK_QUEUE,
         )
 
-        workflow.logger.info(f"[ReportingWorkflow] Completed for assessment {input.assessment_id}")
+        workflow.logger.info("[ReportingWorkflow] Completed for assessment %s", input.assessment_id)
         return True
 
 
@@ -664,25 +664,25 @@ class AssessmentWorkflow:
     @workflow.signal
     def pause_assessment(self) -> None:
         """Pause the assessment between phase transitions."""
-        workflow.logger.info(f"[AssessmentWorkflow] Pause signal received")
+        workflow.logger.info("[AssessmentWorkflow] Pause signal received")
         self._is_paused = True
 
     @workflow.signal
     def resume_assessment(self) -> None:
         """Resume a paused assessment."""
-        workflow.logger.info(f"[AssessmentWorkflow] Resume signal received")
+        workflow.logger.info("[AssessmentWorkflow] Resume signal received")
         self._is_paused = False
 
     @workflow.signal
     def cancel_assessment(self) -> None:
         """Cancel the assessment at the next phase transition checkpoint."""
-        workflow.logger.info(f"[AssessmentWorkflow] Cancel signal received")
+        workflow.logger.info("[AssessmentWorkflow] Cancel signal received")
         self._is_cancelled = True
 
     @workflow.signal
     def update_scope(self, scope_data: Dict[str, Any]) -> None:
         """Update assessment scope (logged; scope changes take effect on next phase)."""
-        workflow.logger.info(f"[AssessmentWorkflow] Scope updated: {scope_data}")
+        workflow.logger.info("[AssessmentWorkflow] Scope updated: %s", scope_data)
 
     # ------------------------------------------------------------------ #
     # Query handlers
@@ -766,7 +766,7 @@ class AssessmentWorkflow:
             ApplicationError: If the assessment is cancelled or a phase raises.
         """
         self._assessment_id = input.assessment_id
-        workflow.logger.info(f"[AssessmentWorkflow] Starting for assessment {self._assessment_id}")
+        workflow.logger.info("[AssessmentWorkflow] Starting for assessment %s", self._assessment_id)
 
         child_opts = {
             "task_queue": _TASK_QUEUE,
@@ -911,5 +911,5 @@ class AssessmentWorkflow:
             raise
         except Exception as e:
             await self._update_state("Failed")
-            workflow.logger.error(f"[AssessmentWorkflow] Fatal error: {e}")
+            workflow.logger.error("[AssessmentWorkflow] Fatal error: %s", e)
             raise

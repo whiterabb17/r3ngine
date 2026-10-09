@@ -1,23 +1,26 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Box, CircularProgress, Typography, Switch, FormControlLabel, IconButton, Tooltip, Paper } from '@mui/material';
-import { Download, Maximize2, Minimize2, ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
+import { Download, Maximize2, RefreshCw } from 'lucide-react';
 import * as d3 from 'd3';
-import axios from 'axios';
 import { TacticalPanel } from '../../../components/TacticalPanel';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import { fetchScanVisualisation, type ScanVisualisationNode } from '../api/scanResults';
 
-interface VisualizationNode {
-  description: string;
-  title?: string;
-  http_status?: number;
-  children?: VisualizationNode[];
-  _children?: VisualizationNode[]; // For collapsed state
-  x?: number;
-  y?: number;
+/**
+ * A laid-out tree node with the collapsible-tree bookkeeping d3 leaves to the caller:
+ * `_children` holds hidden children, `x0`/`y0` the previous position for transitions.
+ */
+type VizNode = d3.HierarchyPointNode<ScanVisualisationNode> & {
+  _children?: VizNode[];
   x0?: number;
   y0?: number;
-  depth?: number;
-  id?: number;
+  /** Stable data-join key; d3's own `id` is read-only. */
+  vizId?: number;
+};
+
+interface VizLink {
+  source: VizNode;
+  target: VizNode;
 }
 
 interface VisualizationTabProps {
@@ -26,14 +29,14 @@ interface VisualizationTabProps {
   targetId?: number;
 }
 
-const VisualizationTab: React.FC<VisualizationTabProps> = ({ projectSlug, scanId, targetId }) => {
+const VisualizationTab: React.FC<VisualizationTabProps> = ({ scanId, targetId }) => {
   const { tokens } = useThemeTokens();
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandAll, setExpandAll] = useState(false);
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<ScanVisualisationNode | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -42,15 +45,9 @@ const VisualizationTab: React.FC<VisualizationTabProps> = ({ projectSlug, scanId
   const fetchData = async () => {
     setLoading(true);
     try {
-      let url = `/api/queryAllScanResultVisualise/?format=json`;
-      if (scanId) {
-        url += `&scan_id=${scanId}`;
-      } else if (targetId) {
-        url += `&target_id=${targetId}`;
-      }
-      const response = await axios.get(url);
-      if (response.data && response.data.length > 0) {
-        setData(response.data[0]);
+      const trees = await fetchScanVisualisation({ scanId, targetId });
+      if (trees && trees.length > 0) {
+        setData(trees[0]);
       } else {
         setError('No visualization data found.');
       }
@@ -65,16 +62,19 @@ const VisualizationTab: React.FC<VisualizationTabProps> = ({ projectSlug, scanId
   useEffect(() => {
     if (!data || !svgRef.current) return;
 
-    renderChart();
+    renderChart(data);
   }, [data, expandAll]);
 
-  const renderChart = () => {
+  const renderChart = (treeData: ScanVisualisationNode) => {
+    const svgElement = svgRef.current;
+    if (!svgElement) return;
+
     const width = containerRef.current?.clientWidth || 1200;
     const height = 800;
     const margin = { top: 20, right: 120, bottom: 20, left: 120 };
 
     // Clear previous SVG content
-    const svg = d3.select(svgRef.current);
+    const svg = d3.select(svgElement);
     svg.selectAll("*").remove();
 
     const g = svg.append("g")
@@ -83,22 +83,23 @@ const VisualizationTab: React.FC<VisualizationTabProps> = ({ projectSlug, scanId
     // Zoom behavior
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 3])
-      .on("zoom", (event) => {
-        g.attr("transform", event.transform);
+      .on("zoom", (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
+        g.attr("transform", event.transform.toString());
       });
 
-    svg.call(zoom as any);
+    svg.call(zoom);
 
-    const tree = d3.tree<VisualizationNode>()
+    const tree = d3.tree<ScanVisualisationNode>()
       .nodeSize([30, 200]); // [height, width] per node
 
-    const root = d3.hierarchy<VisualizationNode>(data);
-    
+    // The tree layout assigns x/y in place on every update() below, before any position is read.
+    const root = d3.hierarchy<ScanVisualisationNode>(treeData) as VizNode;
+
     // Initial expansion/collapse
     if (!expandAll) {
-      root.descendants().forEach((d, i) => {
+      root.descendants().forEach((d) => {
         if (d.depth > 1) {
-          (d as any)._children = d.children;
+          d._children = d.children;
           d.children = undefined;
         }
       });
@@ -107,119 +108,124 @@ const VisualizationTab: React.FC<VisualizationTabProps> = ({ projectSlug, scanId
     let i = 0;
     const duration = 750;
 
-    const update = (source: any) => {
+    const update = (source: VizNode) => {
       const nodes = root.descendants().reverse();
-      const links = root.links();
+      // links() is typed with plain point nodes, but it returns the same objects as descendants().
+      const links = root.links() as VizLink[];
+      // Where entering elements start and exiting ones collapse to, as [y, x] for a horizontal tree.
+      const enterOrigin: [number, number] = [source.y0 ?? 0, source.x0 ?? 0];
 
-      tree(root as any);
+      tree(root);
 
       let left = root;
       let right = root;
       root.eachBefore(node => {
-        if (node.x! < left.x!) left = node;
-        if (node.x! > right.x!) right = node;
+        if (node.x < left.x) left = node;
+        if (node.x > right.x) right = node;
       });
 
-      const height = right.x! - left.x! + margin.top + margin.bottom;
+      const height = right.x - left.x + margin.top + margin.bottom;
 
-      const transition = svg.transition()
+      // Typed as BaseType so the node and link selections can inherit its timing via .transition(t).
+      const transition = d3.select<d3.BaseType, unknown>(svgElement).transition()
         .duration(duration)
-        .attr("viewBox", [-margin.left, left.x! - margin.top, width, height] as any)
-        .tween("resize", (window.ResizeObserver ? null : () => () => svg.dispatch("toggle")) as any);
+        .attr("viewBox", [-margin.left, left.x - margin.top, width, height].join(","));
+      if (typeof window.ResizeObserver === 'undefined') {
+        transition.tween("resize", () => () => {
+          svg.dispatch("toggle");
+        });
+      }
 
       // Update nodes
-      const node = g.selectAll("g.node")
-        .data(nodes, (d: any) => d.id || (d.id = ++i));
+      const node = g.selectAll<SVGGElement, VizNode>("g.node")
+        .data(nodes, (d) => d.vizId || (d.vizId = ++i));
 
       const nodeEnter = node.enter().append("g")
         .attr("class", "node")
-        .attr("transform", d => `translate(${source.y0},${source.x0})`)
+        .attr("transform", () => `translate(${source.y0},${source.x0})`)
         .attr("fill-opacity", 0)
         .attr("stroke-opacity", 0)
-        .on("click", (event, d) => {
+        .on("click", (_event: MouseEvent, d) => {
           if (d.children) {
-            (d as any)._children = d.children;
+            d._children = d.children;
             d.children = undefined;
           } else {
-            d.children = (d as any)._children;
-            (d as any)._children = undefined;
+            d.children = d._children;
+            d._children = undefined;
           }
           update(d);
         });
 
       nodeEnter.append("circle")
         .attr("r", 6)
-        .attr("fill", (d: any) => d._children ? tokens.accent.primary : "rgba(255,255,255,0.2)")
+        .attr("fill", (d) => d._children ? tokens.accent.primary : "rgba(255,255,255,0.2)")
         .attr("stroke", tokens.accent.primary)
         .attr("stroke-width", 1.5)
         .style("cursor", "pointer");
 
       nodeEnter.append("text")
         .attr("dy", "0.31em")
-        .attr("x", (d: any) => d._children || d.children ? -10 : 10)
-        .attr("text-anchor", (d: any) => d._children || d.children ? "end" : "start")
-        .attr("fill", (d: any) => {
-          const data = d.data;
-          if (data.http_status >= 400 || data.title === 'Interesting') return "#ff003c";
-          if (data.http_status === 200) return "#00ff62";
+        .attr("x", (d) => d._children || d.children ? -10 : 10)
+        .attr("text-anchor", (d) => d._children || d.children ? "end" : "start")
+        .attr("fill", (d) => {
+          const nodeData = d.data;
+          if ((nodeData.http_status ?? 0) >= 400 || nodeData.title === 'Interesting') return "#ff003c";
+          if (nodeData.http_status === 200) return "#00ff62";
           return "rgba(255,255,255,0.8)";
         })
         .attr("font-family", "Orbitron, sans-serif")
         .attr("font-size", "0.7rem")
-        .text((d: any) => (d.data.title === 'Interesting' ? `(★) ${d.data.description}` : d.data.description))
+        .text((d) => (d.data.title === 'Interesting' ? `(★) ${d.data.description}` : d.data.description))
         .clone(true).lower()
         .attr("stroke-linejoin", "round")
         .attr("stroke-width", 3)
         .attr("stroke", "rgba(10,10,15,0.8)");
 
-      const nodeUpdate = node.merge(nodeEnter as any).transition(transition as any)
+      const nodeUpdate = node.merge(nodeEnter).transition(transition)
         .attr("transform", d => `translate(${d.y},${d.x})`)
         .attr("fill-opacity", 1)
         .attr("stroke-opacity", 1);
 
       nodeUpdate.select("circle")
-        .attr("fill", (d: any) => d._children ? tokens.accent.primary : "rgba(10,10,15,0.8)");
+        .attr("fill", (d) => d._children ? tokens.accent.primary : "rgba(10,10,15,0.8)");
 
-      const nodeExit = node.exit().transition(transition as any).remove()
-        .attr("transform", d => `translate(${source.y},${source.x})`)
+      node.exit<VizNode>().transition(transition).remove()
+        .attr("transform", () => `translate(${source.y},${source.x})`)
         .attr("fill-opacity", 0)
         .attr("stroke-opacity", 0);
 
       // Update links
-      const link = g.selectAll("path.link")
-        .data(links, (d: any) => d.target.id);
+      const link = g.selectAll<SVGPathElement, VizLink>("path.link")
+        .data(links, (d) => d.target.vizId ?? '');
 
       const linkEnter = link.enter().append("path")
         .attr("class", "link")
-        .attr("d", (d: any) => {
-          const o = { x: source.x0, y: source.y0 };
-          return d3.linkHorizontal()({ source: [o.y, o.x], target: [o.y, o.x] } as any);
-        })
+        .attr("d", () => d3.linkHorizontal()({ source: enterOrigin, target: enterOrigin }))
         .attr("fill", "none")
         .attr("stroke", "rgba(0,243,255,0.15)")
         .attr("stroke-width", 1.5);
 
-      link.merge(linkEnter as any).transition(transition as any)
-        .attr("d", d3.linkHorizontal()
-          .x((d: any) => d.y)
-          .y((d: any) => d.x) as any
+      link.merge(linkEnter).transition(transition)
+        .attr("d", d3.linkHorizontal<VizLink, VizNode>()
+          .x((d) => d.y)
+          .y((d) => d.x)
         );
 
-      link.exit().transition(transition as any).remove()
-        .attr("d", (d: any) => {
-          const o = { x: source.x, y: source.y };
-          return d3.linkHorizontal()({ source: [o.y, o.x], target: [o.y, o.x] } as any);
+      link.exit<VizLink>().transition(transition).remove()
+        .attr("d", () => {
+          const exitTarget: [number, number] = [source.y, source.x];
+          return d3.linkHorizontal()({ source: exitTarget, target: exitTarget });
         });
 
       // Stash the old positions for transition
       root.eachBefore(d => {
-        (d as any).x0 = d.x;
-        (d as any).y0 = d.y;
+        d.x0 = d.x;
+        d.y0 = d.y;
       });
     };
 
-    (root as any).x0 = height / 2;
-    (root as any).y0 = 0;
+    root.x0 = height / 2;
+    root.y0 = 0;
 
     update(root);
   };
@@ -281,7 +287,7 @@ const VisualizationTab: React.FC<VisualizationTabProps> = ({ projectSlug, scanId
                 }}
               />
             }
-            label={<Typography sx={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.6)', fontWeight: 900, fontFamily: 'Orbitron' }}>EXPAND ALL</Typography>}
+            label={<Typography sx={{ fontSize: '0.65rem', color: 'text.secondary', fontWeight: 900, fontFamily: 'Orbitron' }}>EXPAND ALL</Typography>}
           />
           <Tooltip title="Download as PNG">
             <IconButton size="small" onClick={handleDownload} sx={{ color: tokens.accent.primary }}>

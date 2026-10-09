@@ -63,7 +63,7 @@ class AttackTreeBuilder:
                 tree["children"].append(and_node)
                 
         except Exception as e:
-            logger.error(f"Failed to build attack tree for {target_id}: {e}")
+            logger.error("Failed to build attack tree for %s: %s", target_id, e)
             return None
             
         return tree

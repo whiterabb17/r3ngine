@@ -2,7 +2,7 @@
 
 ## Overview
 
-r3ngine uses a two-worker architecture for running security tools. Heavy CLI tool execution (Nuclei, Nmap, Ffuf, Httpx, Aquatone, etc.) is delegated to a dedicated **Go Executor** service that runs on the `go-executor-queue` Temporal task queue.
+r3ngine uses a two-worker architecture for running security tools. Heavy CLI tool execution (Nuclei, Nmap, Ffuf, Httpx, Aquatone, etc.) is delegated to a dedicated **Go Executor** service that runs on the `go-executor-queue` Temporal task queue (on the master; a remote worker's executor has its own queue, see [Queue names per host](#queue-names-per-host)).
 
 This separation allows:
 - **Performance**: Go's goroutine-based concurrency handles many concurrent subprocess calls efficiently.
@@ -14,38 +14,77 @@ This separation allows:
 ## Architecture
 
 ```
-MasterScanWorkflow (Python)
-        │
-        ▼  task_queue="go-executor-queue"
-GoExecutorTaskWorkflow
-        │
-        ▼
+activity on the Python orchestrator (e.g. nuclei_scan)
+        │  stream_command() / run_command()  — reNgine/utils/task.py
+        │  tool in ROUTED_TOOLS → client.start_workflow(...)
+        ▼  task_queue=python_orchestrator_queue()
+GoExecutorTaskWorkflow (Python, thin)
+        │  input_data["executor_task_queue"] = go_executor_queue()
+        ▼  task_queue=<that value>
 RunToolSubprocessActivity (Go Worker)
         │
         ▼
 subprocess: nuclei / nmap / ffuf / httpx / ...
         │
         ▼
-stdout/stderr → PostgreSQL CommandResult table
+stdout/stderr → Redis log stream + Command row; files under /usr/src/scan_results
 ```
+
+The caller (an activity in the Python orchestrator) decides both queues with
+the helpers in `web/reNgine/utils/task_queues.py`; the workflow only forwards
+the executor queue it was given, so it stays deterministic and never reads the
+environment.
+
+---
+
+## Queue names per host
+
+Tool output is written to the `scan_results` volume of the host that ran the
+tool, and the Python task that started the tool parses those files from its own
+volume. A remote worker therefore needs its own executor, and its tool runs
+must never land on the master's executor (or vice versa). Both processes on a
+host read `WORKER_NAME` (set in `docker/docker-compose.worker.yml`; the
+`--worker-name` flag takes precedence on both) and derive:
+
+| Process | Master (`WORKER_NAME` unset) | Worker `w1` |
+|---|---|---|
+| Python orchestrator queue | `python-orchestrator-queue` | `w1` |
+| Go executor queue | `go-executor-queue` | `go-executor-queue-w1` |
+
+- Python: `reNgine.utils.task_queues.python_orchestrator_queue()` and
+  `go_executor_queue()`; `run_temporal_orchestrator --worker-name` exports the
+  name to `WORKER_NAME` so the activities it hosts route to the same host.
+- Go: `executorTaskQueue()` in `web/executor/queue.go`; an invalid name makes
+  the executor exit at startup with a clear error.
+- A worker name is 1–100 characters of `A-Z a-z 0-9 . _ -`, starting with a
+  letter or digit. `ScanWorkerSerializer` enforces the same charset when a
+  worker is registered, since the name becomes these queue names.
+
+The master's names are exactly the historical ones, so a single-host
+deployment is unchanged. Inputs recorded before `executor_task_queue` existed
+replay on `go-executor-queue`.
 
 ---
 
 ## `GoExecutorTaskWorkflow`
 
-**File:** `web/reNgine/temporal_workflows.py`
+**File:** `web/reNgine/temporal/workflows/jobs.py`
 
 ```python
 @workflow.defn(name="GoExecutorTaskWorkflow")
 class GoExecutorTaskWorkflow:
     @workflow.run
     async def run(self, input_data: dict) -> dict:
+        timeout_sec = input_data.get("timeout_seconds") or 43200
+        executor_queue = input_data.get("executor_task_queue") or "go-executor-queue"
         return await workflow.execute_activity(
             "RunToolSubprocessActivity",
             input_data,
-            start_to_close_timeout=timedelta(hours=2),
-            heartbeat_timeout=timedelta(minutes=5),
-            task_queue="go-executor-queue"
+            start_to_close_timeout=timedelta(seconds=timeout_sec),
+            schedule_to_close_timeout=timedelta(seconds=int(timeout_sec * 2.2)),
+            heartbeat_timeout=timedelta(minutes=10),
+            retry_policy=_RETRY_LONG_SCAN,
+            task_queue=executor_queue,
         )
 ```
 
@@ -53,17 +92,23 @@ class GoExecutorTaskWorkflow:
 
 ```python
 {
-    "command": ["nuclei", "-u", "https://target.example.com", "-t", "cves/"],
+    "command": ["nuclei -u https://target.example.com -t cves/"],
     "scan_id": 42,
-    "command_id": 17
+    "command_id": 17,
+    "working_dir": "/usr/src/scan_results/example.com_1",
+    "timeout_seconds": 43200,
+    "executor_task_queue": "go-executor-queue",
 }
 ```
 
 | Key | Type | Description |
 |---|---|---|
-| `command` | `list[str]` | The binary and its arguments |
-| `scan_id` | `int` | ScanHistory ID for logging |
+| `command` | `list[str]` | One element: the full shell command (run via `bash -c`); several elements: binary + arguments |
+| `scan_id` | `int` | ScanHistory ID for logging and the `scan_stop_<id>` kill switch |
 | `command_id` | `int` | `Command` DB record ID to log stdout/stderr to |
+| `working_dir` | `str` | Working directory for the subprocess (optional) |
+| `timeout_seconds` | `int` | Per-attempt timeout (optional, default 12 h) |
+| `executor_task_queue` | `str` | Go executor queue of the host that started the workflow (`go_executor_queue()`); optional, defaults to `go-executor-queue` |
 
 ### Output
 
@@ -79,9 +124,9 @@ class GoExecutorTaskWorkflow:
 
 ## Go Executor Service
 
-**Source:** `web/executor/main.go`  
+**Source:** `web/executor/main.go` (queue derivation and worker-name validation in `queue.go`)  
 **Container:** `temporal-go-executor`  
-**Task Queue:** `go-executor-queue`
+**Task Queue:** `go-executor-queue`, or `go-executor-queue-<WORKER_NAME>` on a remote worker (`--worker-name` flag or `WORKER_NAME` env, flag wins)
 
 ### Responsibilities
 
