@@ -19,6 +19,7 @@ from mcp.safe_poc import (
     update_attempt,
 )
 from mcp.views.base import McpDataView
+from reNgine.definitions import INTERNAL_ERROR_MESSAGE
 
 logger = logging.getLogger(__name__)
 
@@ -40,16 +41,24 @@ class McpProposeSafePocView(McpDataView):
                 agent_id=data.get('agent_id') or '',
                 user=request.user,
             )
-        except (SafePocError, TypeError, ValueError) as exc:
-            status = getattr(exc, 'status', 400)
+        except SafePocError as exc:
             logger.warning(
                 'safe_poc propose failed status=%s err=%s vuln=%s template=%s',
-                status,
+                exc.status,
                 exc,
                 data.get('vulnerability_id'),
                 data.get('template_id'),
             )
-            return Response({'error': str(exc)}, status=status)
+            return Response({'error': str(exc)}, status=exc.status)
+        except (TypeError, ValueError) as exc:
+            # TypeError must not leak; ValueError messages stay generic here too.
+            logger.warning(
+                'safe_poc propose bad input err=%s vuln=%s template=%s',
+                exc,
+                data.get('vulnerability_id'),
+                data.get('template_id'),
+            )
+            return Response({'error': INTERNAL_ERROR_MESSAGE}, status=400)
         logger.info(
             'safe_poc proposed id=%s vuln=%s template=%s user=%s',
             attempt.id,

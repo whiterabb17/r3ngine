@@ -31,7 +31,7 @@ VIEW_MODULE_GLOBS = (
 USER_FACING_EXCEPTIONS = frozenset({
     'ValueError', 'ValidationError', 'ToolArgsError', 'ToolRunError', 'HTTPError',
     # Domain exceptions whose message/detail is intentionally returned to the client.
-    'AttackPathProposalError', 'McpPluginUnavailable', 'AdAssessmentNotFound',
+    'AttackPathProposalError', 'SafePocError', 'McpPluginUnavailable', 'AdAssessmentNotFound',
 })
 
 
