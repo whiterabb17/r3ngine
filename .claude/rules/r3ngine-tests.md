@@ -44,14 +44,14 @@ class TestMyActivity(TestCase):
 
 - Test activity functions directly (call the Python function) — do not spin up a Temporal worker in unit tests.
 - Mock subprocess calls and external tool invocations using `unittest.mock.patch`.
-- For integration tests that require a real Temporal worker, tag them clearly and exclude from the standard `python manage.py test` run.
+- For integration tests that require a real Temporal worker, live network, installed tool binaries or the docker stack, mark them `@tag('integration')` (from `django.test`). CI runs `manage.py test --exclude-tag=integration`.
 
 ```python
 from unittest.mock import patch
 from reNgine.temporal.activities import run_port_scan_activity
 
 class TestPortScanActivity(TestCase):
-    # Patch at the module where the function is defined (temporal/activities/__init__.py)
+    # Patch where the name is looked up: the activity's own module, not the package __init__
     @patch('reNgine.temporal.activities.subprocess.run')
     def test_port_scan_parses_output(self, mock_run):
         mock_run.return_value.stdout = b'...'

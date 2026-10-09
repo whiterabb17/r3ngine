@@ -58,3 +58,56 @@ export const useOnboarding = () => {
     },
   });
 };
+
+export interface CurrentUser {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+}
+
+/** Body of `/api/users/me/`; callers treat an explicit `status: false` as signed out. */
+export type CurrentUserResponse = CurrentUser & { status?: boolean };
+
+export const fetchCurrentUser = async (): Promise<CurrentUserResponse | null> => {
+  const response = await axios.get<CurrentUserResponse | null>('/api/users/me/', {
+    headers: { 'Accept': 'application/json' }
+  });
+  return response.data;
+};
+
+export const logoutSession = async (): Promise<void> => {
+  await axios.post('/logout/', {}, {
+    headers: {
+      'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1]
+    }
+  });
+};
+
+export interface PasswordChangeData {
+  old_password: string;
+  new_password1: string;
+  new_password2: string;
+}
+
+/** Posts to the Django password-change form view; resolves to whether it accepted the change. */
+export const changePassword = async (projectSlug: string, data: PasswordChangeData): Promise<boolean> => {
+  const form = new FormData();
+  form.append('old_password', data.old_password);
+  form.append('new_password1', data.new_password1);
+  form.append('new_password2', data.new_password2);
+
+  const csrfToken = document.cookie
+    .split('; ')
+    .find(row => row.startsWith('csrftoken='))
+    ?.split('=')[1];
+
+  const response = await fetch(`/${projectSlug}/profile/`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': csrfToken || '',
+    },
+    body: form,
+  });
+  return response.ok;
+};

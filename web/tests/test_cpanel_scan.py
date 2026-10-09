@@ -8,6 +8,8 @@ These are unit tests; they call the task function directly with a mock
 self-proxy and patch run_command to prevent real subprocess execution.
 """
 
+import shutil
+import tempfile
 from unittest.mock import MagicMock, patch
 from django.test import TestCase
 from django.utils import timezone
@@ -38,11 +40,15 @@ class TestCpanelScanGating(TestCase):
     def setUp(self):
         self.domain = Domain.objects.create(name='cpanel-gate.example.com')
         self.engine = EngineType.objects.create(engine_name='CPanel Gate Test Engine')
+        # cpanel_scan writes under scan.results_dir; an empty one means '/'.
+        results_dir = tempfile.mkdtemp(prefix='rengine_test_cpanel_')
+        self.addCleanup(shutil.rmtree, results_dir, ignore_errors=True)
         self.scan = ScanHistory.objects.create(
             domain=self.domain,
             scan_status=1,
             start_scan_date=timezone.now(),
             scan_type=self.engine,
+            results_dir=results_dir,
         )
 
     def _make_subdomain(self, name):

@@ -34,14 +34,14 @@ def get_vulnerability_gpt_report(vuln, vulnerability_id=None):
 	path = vuln[1]
 	if not path:
 		path = '/'
-	logger.info(f'Getting GPT Report for {title}, PATH: {path}')
+	logger.info("Getting GPT Report for %s, PATH: %s", title, path)
 
 	# 1. Check if the specific vulnerability already has GPT info
 	if vulnerability_id:
 		try:
 			lookup_vulnerability = Vulnerability.objects.get(id=vulnerability_id)
 			if lookup_vulnerability.is_gpt_used and lookup_vulnerability.description and lookup_vulnerability.impact and lookup_vulnerability.remediation:
-				logger.info(f'Returning existing GPT report from Vulnerability ID {vulnerability_id}')
+				logger.info("Returning existing GPT report from Vulnerability ID %s", vulnerability_id)
 				return {
 					'status': True,
 					'description': lookup_vulnerability.description,
@@ -58,7 +58,7 @@ def get_vulnerability_gpt_report(vuln, vulnerability_id=None):
 	).first()
 
 	if stored and stored.description and stored.impact and stored.remediation:
-		logger.info(f'Found GPT Report in global cache for {title}')
+		logger.info("Found GPT Report in global cache for %s", title)
 		response = {
 			'status': True,
 			'description': stored.description,
@@ -115,7 +115,7 @@ def get_vulnerability_gpt_report(vuln, vulnerability_id=None):
 
 
 def add_gpt_description_db(title, path, description, impact, remediation, references):
-	logger.info(f'Adding GPT Report to DB for {title}, PATH: {path}')
+	logger.info("Adding GPT Report to DB for %s, PATH: %s", title, path)
 	if not path:
 		path = '/'
 

@@ -29,7 +29,11 @@ NC='\033[0m'
 NAMESPACE="default"
 DRY_RUN=false
 AUTO_YES=false
-TEMPORAL_CONTAINER="r3ngine-temporal-1"
+TEMPORAL_CONTAINER="${TEMPORAL_CONTAINER:-r3ngine-temporal-1}"
+TEMPORAL_NETWORK="${TEMPORAL_NETWORK:-r3ngine_r3ngine_network}"
+# temporalio/server ships no CLI, so it runs from the admin-tools image the
+# compose file already uses for the Temporal schema and namespace jobs.
+ADMIN_TOOLS_IMAGE="${ADMIN_TOOLS_IMAGE:-temporalio/admin-tools:1.31.3}"
 
 # ── Argument parsing ─────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -70,9 +74,9 @@ fi
 
 # Helper: run a temporal CLI command inside the container
 temporal_exec() {
-    docker exec "${TEMPORAL_CONTAINER}" temporal "$@" \
+    docker run --rm --network "${TEMPORAL_NETWORK}" "${ADMIN_TOOLS_IMAGE}" temporal "$@" \
         --namespace "${NAMESPACE}" \
-        --address "localhost:7233"
+        --address "temporal:7233"
 }
 
 # ── Count workflows ───────────────────────────────────
@@ -84,11 +88,11 @@ echo "Counting workflow executions..."
 
 RUNNING_COUNT=$(temporal_exec workflow list \
     --query "ExecutionStatus='Running'" \
-    --output json --no-pager 2>/dev/null \
+    --output json 2>/dev/null \
     | python3 -c "import sys,json; data=sys.stdin.read().strip(); print(len(json.loads(data)) if data and data!='null' else 0)" 2>/dev/null || echo "0")
 
 ALL_COUNT=$(temporal_exec workflow list \
-    --output json --no-pager 2>/dev/null \
+    --output json 2>/dev/null \
     | python3 -c "import sys,json; data=sys.stdin.read().strip(); print(len(json.loads(data)) if data and data!='null' else 0)" 2>/dev/null || echo "0")
 
 echo -e "  Running workflows  : ${YELLOW}${RUNNING_COUNT}${NC}"

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -199,6 +200,23 @@ func (a *Activities) SubprocessActivity(ctx context.Context, input ToolExecution
 }
 
 func main() {
+	workerNameFlag := flag.String("worker-name", "", "remote worker name; polls go-executor-queue-<name> instead of go-executor-queue (overrides WORKER_NAME)")
+	flag.Parse()
+
+	// Resolve the queue before anything else so a misconfigured worker exits
+	// with a clear message instead of silently serving the master's queue.
+	workerName := resolveWorkerName(*workerNameFlag, os.Getenv(workerNameEnv))
+	taskQueue, err := executorTaskQueue(workerName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "r3ngine-executor: %v\n", err)
+		os.Exit(2)
+	}
+	if workerName == "" {
+		fmt.Printf("[GO-EXECUTOR] No worker name (master): serving task queue %s\n", taskQueue)
+	} else {
+		fmt.Printf("[GO-EXECUTOR] Worker %q: serving task queue %s\n", workerName, taskQueue)
+	}
+
 	temporalHost := os.Getenv("TEMPORAL_HOST")
 	if temporalHost == "" {
 		temporalHost = "temporal:7233"
@@ -248,7 +266,7 @@ func main() {
 	}
 	defer c.Close()
 
-	w := worker.New(c, "go-executor-queue", worker.Options{})
+	w := worker.New(c, taskQueue, worker.Options{})
 
 	activities := &Activities{rdb: rdb}
 

@@ -1,0 +1,28 @@
+---
+description: Never restart infrastructure and never change DB schema outside migrations
+alwaysApply: true
+---
+
+# Infrastructure and database safety
+
+## No infrastructure restarts
+
+NEVER restart, stop, recreate, or otherwise disrupt running infrastructure unless the user explicitly directs it in the current message.
+
+Forbidden without explicit user direction:
+- `docker restart`, `docker stop`, `docker compose restart/down/up` (or equivalents)
+- Restarting Temporal workers, orchestrators, go-executor, web, db, redis, neo4j, proxy, MCP, or any other stack service
+- Killing processes that belong to the running stack
+- Any “to pick up the change” restart of containers/services
+
+Code/file edits on mounted volumes are fine. If a restart is needed for a change to take effect, tell the user — do not perform it.
+
+## No manual database schema changes
+
+NEVER alter the database schema manually (raw SQL DDL, `psql`, Django shell hacks, direct table/column edits, etc.) unless the user explicitly says otherwise in the current message.
+
+Schema changes MUST go through Django migrations:
+- Create/update migration files
+- Apply with `migrate` (only when the user asks you to run migrations)
+
+Do not use `migrate --run-syncdb`, fake-apply, or hand-edit live schema as a shortcut.

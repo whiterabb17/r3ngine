@@ -26,6 +26,14 @@ urlpatterns = [
         'report/status/<int:id>',
         views.get_report_status,
         name='get_report_status'),
+    path(
+        'target/create_report/<int:domain_id>/',
+        views.create_target_report,
+        name='create_target_report'),
+    path(
+        'target/report/status/<int:report_id>/',
+        views.get_target_report_status,
+        name='get_target_report_status'),
 
     path(
         '<slug:slug>/all/subdomains',

@@ -174,14 +174,14 @@ export const ProfileManager: React.FC = () => {
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                 sx={{
                   '& .MuiOutlinedInput-root': {
-                    color: '#fff',
+                    color: 'text.primary',
                     '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
                     '&:hover fieldset': { borderColor: 'rgba(0, 255, 98, 0.3)' },
                     '&.Mui-focused fieldset': { borderColor: '#00ff62' },
                     bgcolor: 'rgba(255,255,255,0.03)',
                   },
                   '& .MuiInputLabel-root': {
-                    color: 'rgba(255,255,255,0.4)',
+                    color: 'text.secondary',
                     '&.Mui-focused': { color: '#00ff62' },
                   },
                 }}
@@ -194,14 +194,14 @@ export const ProfileManager: React.FC = () => {
                 onChange={e => setForm(f => ({ ...f, rate_limit: e.target.value ? +e.target.value : undefined }))}
                 sx={{
                   '& .MuiOutlinedInput-root': {
-                    color: '#fff',
+                    color: 'text.primary',
                     '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
                     '&:hover fieldset': { borderColor: 'rgba(0, 255, 98, 0.3)' },
                     '&.Mui-focused fieldset': { borderColor: '#00ff62' },
                     bgcolor: 'rgba(255,255,255,0.03)',
                   },
                   '& .MuiInputLabel-root': {
-                    color: 'rgba(255,255,255,0.4)',
+                    color: 'text.secondary',
                     '&.Mui-focused': { color: '#00ff62' },
                   },
                 }}
@@ -214,14 +214,14 @@ export const ProfileManager: React.FC = () => {
                 onChange={e => setForm(f => ({ ...f, threads: e.target.value ? +e.target.value : undefined }))}
                 sx={{
                   '& .MuiOutlinedInput-root': {
-                    color: '#fff',
+                    color: 'text.primary',
                     '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
                     '&:hover fieldset': { borderColor: 'rgba(0, 255, 98, 0.3)' },
                     '&.Mui-focused fieldset': { borderColor: '#00ff62' },
                     bgcolor: 'rgba(255,255,255,0.03)',
                   },
                   '& .MuiInputLabel-root': {
-                    color: 'rgba(255,255,255,0.4)',
+                    color: 'text.secondary',
                     '&.Mui-focused': { color: '#00ff62' },
                   },
                 }}
@@ -237,13 +237,13 @@ export const ProfileManager: React.FC = () => {
                       checked={!!form[flag]}
                       onChange={e => setForm(f => ({ ...f, [flag]: e.target.checked }))}
                       sx={{
-                        color: 'rgba(255,255,255,0.3)',
+                        color: 'text.secondary',
                         '&.Mui-checked': { color: '#00ff62' },
                       }}
                     />
                   }
                   label={
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                       {flag.replace(/_/g, ' ')}
                     </Typography>
                   }
@@ -307,12 +307,12 @@ export const ProfileManager: React.FC = () => {
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography
                     variant="body2"
-                    sx={{ fontWeight: 600, color: '#fff', fontFamily: 'monospace', fontSize: '0.82rem' }}
+                    sx={{ fontWeight: 600, color: 'text.primary', fontFamily: 'monospace', fontSize: '0.82rem' }}
                   >
                     {p.name}
                   </Typography>
                   {p.description && (
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                       {p.description}
                     </Typography>
                   )}
@@ -323,7 +323,7 @@ export const ProfileManager: React.FC = () => {
                       label={`${p.rate_limit} r/s`}
                       size="small"
                       variant="outlined"
-                      sx={{ borderColor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem' }}
+                      sx={{ borderColor: 'rgba(255,255,255,0.15)', color: 'text.secondary', fontSize: '0.65rem' }}
                     />
                   )}
                   {p.threads != null && (
@@ -331,7 +331,7 @@ export const ProfileManager: React.FC = () => {
                       label={`${p.threads}t`}
                       size="small"
                       variant="outlined"
-                      sx={{ borderColor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)', fontSize: '0.65rem' }}
+                      sx={{ borderColor: 'rgba(255,255,255,0.15)', color: 'text.secondary', fontSize: '0.65rem' }}
                     />
                   )}
                   {p.passive && (
@@ -359,7 +359,7 @@ export const ProfileManager: React.FC = () => {
                     <Chip
                       label="built-in"
                       size="small"
-                      sx={{ bgcolor: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)', fontSize: '0.65rem' }}
+                      sx={{ bgcolor: 'rgba(255,255,255,0.06)', color: 'text.secondary', fontSize: '0.65rem' }}
                     />
                   )}
                 </Box>
@@ -372,7 +372,7 @@ export const ProfileManager: React.FC = () => {
                       sx={{
                         color: 'rgba(255, 0, 85, 0.5)',
                         '&:hover': { color: '#ff0055', bgcolor: 'rgba(255, 0, 85, 0.1)' },
-                        '&.Mui-disabled': { color: 'rgba(255,255,255,0.1)' },
+                        '&.Mui-disabled': { color: 'text.disabled' },
                       }}
                     >
                       <DeleteIcon fontSize="small" />
@@ -387,7 +387,7 @@ export const ProfileManager: React.FC = () => {
 
       {profiles.length === 0 && (
         <Box sx={{ textAlign: 'center', py: 6 }}>
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.3)', fontFamily: 'Orbitron', fontSize: '0.75rem' }}>
+          <Typography variant="body2" sx={{ color: 'text.disabled', fontFamily: 'Orbitron', fontSize: '0.75rem' }}>
             NO PROFILES CONFIGURED
           </Typography>
         </Box>

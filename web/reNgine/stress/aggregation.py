@@ -24,7 +24,7 @@ def aggregate_stress_telemetry(stress_result_id):
         stress_result = StressTestResult.objects.get(id=stress_result_id)
         scan_id = stress_result.scan_history_id
 
-        logger.info(f"Starting telemetry aggregation for stress result {stress_result_id}")
+        logger.info("Starting telemetry aggregation for stress result %s", stress_result_id)
 
         # Connect to Redis
         try:
@@ -36,7 +36,7 @@ def aggregate_stress_telemetry(stress_result_id):
                 decode_responses=True
             )
         except Exception as e:
-            logger.error(f"Failed to connect to Redis: {e}")
+            logger.error("Failed to connect to Redis: %s", e)
             return {"status": "failed", "error": "Redis connection failed"}
 
         stream_key = f"stress:telemetry:{scan_id}"
@@ -45,11 +45,11 @@ def aggregate_stress_telemetry(stress_result_id):
         try:
             stream_data = redis_client.xrange(stream_key)
         except Exception as e:
-            logger.error(f"Failed to read Redis stream {stream_key}: {e}")
+            logger.error("Failed to read Redis stream %s: %s", stream_key, e)
             return {"status": "failed", "error": "Failed to read stream"}
 
         if not stream_data:
-            logger.warning(f"No telemetry data found in stream for scan {scan_id}")
+            logger.warning("No telemetry data found in stream for scan %s", scan_id)
             return {"status": "success", "message": "No telemetry data to aggregate"}
 
         # Parse and persist telemetry points
@@ -112,10 +112,10 @@ def aggregate_stress_telemetry(stress_result_id):
                             error_breakdown[error_type] = error_breakdown.get(error_type, 0) + count
 
             except json.JSONDecodeError as e:
-                logger.warning(f"Failed to parse telemetry data: {e}")
+                logger.warning("Failed to parse telemetry data: %s", e)
                 continue
             except Exception as e:
-                logger.warning(f"Failed to create telemetry point: {e}")
+                logger.warning("Failed to create telemetry point: %s", e)
                 continue
 
         # Calculate percentiles
@@ -173,14 +173,14 @@ def aggregate_stress_telemetry(stress_result_id):
 
         stress_result.save()
 
-        logger.info(f"Aggregation complete: {telemetry_points_created} points created")
+        logger.info("Aggregation complete: %s points created", telemetry_points_created)
 
         # Clean up Redis stream
         try:
             redis_client.delete(stream_key)
-            logger.info(f"Cleaned up Redis stream {stream_key}")
+            logger.info("Cleaned up Redis stream %s", stream_key)
         except Exception as e:
-            logger.warning(f"Failed to clean Redis stream: {e}")
+            logger.warning("Failed to clean Redis stream: %s", e)
 
         return {
             "status": "success",
@@ -189,10 +189,10 @@ def aggregate_stress_telemetry(stress_result_id):
         }
 
     except StressTestResult.DoesNotExist:
-        logger.error(f"StressTestResult {stress_result_id} not found")
+        logger.error("StressTestResult %s not found", stress_result_id)
         return {"status": "failed", "error": "Stress result not found"}
     except Exception as e:
-        logger.error(f"Aggregation failed: {e}", exc_info=True)
+        logger.error("Aggregation failed: %s", e, exc_info=True)
         return {"status": "failed", "error": str(e)}
 
 
@@ -260,7 +260,7 @@ def generate_findings(stress_result):
                     )
 
     except Exception as e:
-        logger.warning(f"Error generating findings: {e}")
+        logger.warning("Error generating findings: %s", e)
 
     return " | ".join(findings) if findings else "Stress test completed. No anomalies detected."
 
@@ -315,6 +315,6 @@ def generate_recommendations(stress_result):
             )
 
     except Exception as e:
-        logger.warning(f"Error generating recommendations: {e}")
+        logger.warning("Error generating recommendations: %s", e)
 
     return " | ".join(recommendations) if recommendations else "Review test results for optimization opportunities."

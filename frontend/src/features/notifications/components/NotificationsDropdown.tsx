@@ -15,7 +15,7 @@ import {
 } from '@mui/material';
 import { Bell, Check, Trash2, Info, AlertCircle, XCircle, BellOff } from 'lucide-react';
 // import { formatDistanceToNow } from 'date-fns';
-import { useNotifications, useUnreadCount, useMarkAllRead, useClearAll, useMarkRead } from '../api';
+import { useNotifications, useUnreadCount, useMarkAllRead, useClearAll, useMarkRead, type InAppNotification } from '../api';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 
 interface NotificationsDropdownProps {
@@ -37,8 +37,8 @@ export const NotificationsDropdown: React.FC<NotificationsDropdownProps> = ({
 
   const open = Boolean(anchorEl);
 
-  const getIcon = (type: string) => {
-    switch (type) {
+  const getIcon = (status: InAppNotification['status']) => {
+    switch (status) {
       case 'info': return <Info size={16} color={tokens.accent.primary} />;
       case 'warning': return <AlertCircle size={16} color={tokens.accent.warning} />;
       case 'error': return <XCircle size={16} color={tokens.accent.error} />;
@@ -98,7 +98,7 @@ export const NotificationsDropdown: React.FC<NotificationsDropdownProps> = ({
             <CircularProgress size={20} sx={{ color: tokens.accent.primary }} />
           </Box>
         ) : (Array.isArray(notifications) && notifications.length > 0) ? (
-          notifications.map((notif: any) => (
+          notifications.map((notif) => (
             <ListItem
               key={notif.id}
               onClick={() => markRead.mutate(notif.id)}
@@ -111,7 +111,7 @@ export const NotificationsDropdown: React.FC<NotificationsDropdownProps> = ({
               }}
             >
               <ListItemIcon sx={{ minWidth: 36 }}>
-                {getIcon(notif.notification_type)}
+                {getIcon(notif.status)}
               </ListItemIcon>
               <ListItemText
                 primary={notif.title}

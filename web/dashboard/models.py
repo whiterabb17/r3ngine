@@ -126,13 +126,33 @@ class UserPreferences(models.Model):
 
 
 class LLMConfig(models.Model):
-	provider = models.CharField(max_length=50) # ollama, openai, anthropic, gemini
+	provider = models.CharField(max_length=50) # ollama, openai, openai_compatible, anthropic, gemini
 	api_key = models.CharField(max_length=500, blank=True, null=True)
+	# API root of an openai_compatible provider, e.g. https://gateway.example/v1.
+	base_url = models.CharField(max_length=500, blank=True, null=True)
 	selected_model = models.CharField(max_length=500)
 	is_active = models.BooleanField(default=True)
 
 	def __str__(self):
 		return f"{self.provider} - {self.selected_model}"
+
+
+class LLMSettings(models.Model):
+	"""Singleton operator switch for all LLM features (impact assessment, reports, ...)."""
+	enabled = models.BooleanField(default=False)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		verbose_name = 'LLM settings'
+		verbose_name_plural = 'LLM settings'
+
+	def __str__(self):
+		return 'enabled' if self.enabled else 'disabled'
+
+	@classmethod
+	def get_solo(cls):
+		obj, _ = cls.objects.get_or_create(pk=1, defaults={'enabled': False})
+		return obj
 
 
 class SpiderfootAPIKey(models.Model):
@@ -162,6 +182,34 @@ class AcunetixAPIKey(models.Model):
 		return self.server_url
 
 
+class AcunetixTargetSubmission(models.Model):
+	"""One row per host ever pushed to Acunetix, used to avoid re-submitting it.
+
+	Acunetix reuses an existing target for a known address, but a scan that
+	discovers the same live subdomain every day would still re-register and
+	re-scan it. This table answers "did we already send this host recently?"
+	without a round trip per host.
+	"""
+	id = models.AutoField(primary_key=True)
+	host = models.CharField(max_length=500, unique=True)
+	target_url = models.CharField(max_length=1000, blank=True, default='')
+	acunetix_target_id = models.CharField(max_length=100, blank=True, default='')
+	last_submitted_at = models.DateTimeField()
+	submission_count = models.PositiveIntegerField(default=1)
+	last_scan_history = models.ForeignKey(
+		'startScan.ScanHistory', on_delete=models.SET_NULL, null=True, blank=True,
+		related_name='acunetix_submissions',
+	)
+
+	class Meta:
+		# Named explicitly: an unnamed Index gets a hash-derived name that only
+		# makemigrations can compute, which a hand-written migration cannot match.
+		indexes = [models.Index(fields=['last_submitted_at'], name='acu_submission_sent_idx')]
+
+	def __str__(self):
+		return f"{self.host} -> {self.acunetix_target_id or 'unregistered'}"
+
+
 class LinkedInCredentials(models.Model):
 	id = models.AutoField(primary_key=True)
 	username = models.CharField(max_length=500, blank=True, default='')
@@ -175,6 +223,14 @@ class LinkedInCredentials(models.Model):
 
 
 class HunterIOAPIKey(models.Model):
+	id = models.AutoField(primary_key=True)
+	key = models.CharField(max_length=500)
+
+	def __str__(self):
+		return self.key
+
+
+class SecurityTrailsAPIKey(models.Model):
 	id = models.AutoField(primary_key=True)
 	key = models.CharField(max_length=500)
 

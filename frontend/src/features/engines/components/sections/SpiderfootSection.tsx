@@ -5,6 +5,12 @@ import { SectionCard } from '../shared/SectionCard';
 import { getFieldSx } from '../../../../theme/semanticColors';
 import { useThemeTokens } from '../../../../theme/useThemeTokens';
 
+const INTENSITY_OPTIONS: ReadonlyArray<{ value: SpiderfootConfig['intensity']; label: string }> = [
+  { value: 'fast', label: 'Fast (footprint)' },
+  { value: 'normal', label: 'Normal (investigate)' },
+  { value: 'deep', label: 'Deep (all, slow)' },
+];
+
 interface Props {
   config: SpiderfootConfig;
   enabled: boolean;
@@ -43,10 +49,11 @@ export const SpiderfootSection: React.FC<Props> = ({ config, enabled, onToggle, 
             fullWidth
             value={config.intensity}
             onChange={(e) => onChange({ intensity: e.target.value as SpiderfootConfig['intensity'] })}
+            helperText="Ignored when modules are listed"
             sx={fieldSx}
           >
-            {['normal', 'aggressive', 'light'].map((o) => (
-              <MenuItem key={o} value={o}>{o}</MenuItem>
+            {INTENSITY_OPTIONS.map(({ value, label }) => (
+              <MenuItem key={value} value={value}>{label}</MenuItem>
             ))}
           </TextField>
         </Grid>

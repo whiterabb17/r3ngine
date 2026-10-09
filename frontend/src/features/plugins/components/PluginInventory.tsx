@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Box, Typography, Divider, IconButton, Tooltip, Stack, Grid } from '@mui/material';
 import { Refresh as RefreshIcon, Store as StoreIcon, Inventory as InventoryIcon } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
@@ -23,6 +23,13 @@ const PluginInventory: React.FC<Props> = ({
   onInstallStarted,
 }) => {
   const { tokens } = useThemeTokens();
+  const marketplaceBySlug = useMemo(() => {
+    const map = new Map<string, MarketplacePlugin>();
+    for (const item of marketplacePlugins) {
+      map.set(item.slug, item);
+    }
+    return map;
+  }, [marketplacePlugins]);
 
   return (
     <Box>
@@ -44,7 +51,7 @@ const PluginInventory: React.FC<Props> = ({
         <Grid container spacing={3} sx={{ mb: 8 }}>
           {plugins.map((plugin) => (
             <Grid size={{ xs: 12, md: 6, lg: 4 }} key={plugin.slug}>
-              <PluginCard plugin={plugin} />
+              <PluginCard plugin={plugin} marketplacePlugin={marketplaceBySlug.get(plugin.slug)} />
             </Grid>
           ))}
         </Grid>

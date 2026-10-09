@@ -42,7 +42,7 @@ import { useThemeTokens } from '../../../theme/useThemeTokens';
 
 export const ScanList: React.FC = () => {
   const { tokens, isLight, theme } = useThemeTokens();
-  const { projectSlug = 'default' } = useParams({ strict: false }) as any;
+  const { projectSlug = 'default' } = useParams({ strict: false });
   const { data: scans, isLoading } = useScans(projectSlug);
   const [isStartScanModalOpen, setIsStartScanModalOpen] = React.useState(false);
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);

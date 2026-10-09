@@ -4,11 +4,17 @@ include .env
 # Credits: https://github.com/sherifabdlnaby/elastdocker/
 
 # This for future release of Compose that will use Docker Buildkit, which is much efficient.
-COMPOSE_PREFIX_CMD := DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1
+# COMPOSE_BAKE=false: Compose v5's bake backend hits "tls: bad record MAC" on
+# Docker Desktop for Windows while hashing large build contexts.
+COMPOSE_PREFIX_CMD := DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 COMPOSE_BAKE=false
 
 COMPOSE_ALL_FILES := --env-file .env -f docker/docker-compose.yml
 COMPOSE_DEV_FILES := --env-file .env -f docker/docker-compose.dev.yml
-SERVICES          := db web proxy redis neo4j temporal temporal-python-orchestrator temporal-go-executor
+# Optional services sit behind compose profiles. COMPOSE_PROFILES=tor,ollama
+# (in .env, or in the environment) adds them to every target that names
+# services; `make up-tor` / `make up-ollama` start one without touching .env.
+PROFILE_SERVICES  := $(foreach s,tor ollama,$(if $(findstring $(s),$(COMPOSE_PROFILES)),$(s)))
+SERVICES          := db web proxy redis neo4j temporal temporal-python-orchestrator temporal-go-executor $(PROFILE_SERVICES)
 PG_VOLUME         := $(COMPOSE_PROJECT_NAME)_postgres_data
 
 # Check if 'docker compose' command is available, otherwise use 'docker-compose'
@@ -17,13 +23,19 @@ $(info Using: $(shell echo "$(DOCKER_COMPOSE)"))
 
 # --------------------------
 
-.PHONY: setup certs up devup build username pull down stop restart rm logs fullupgrade erase
+.PHONY: setup certs up devup build username pull down stop restart rm logs fullupgrade erase install-mcp update-mcp backup restore up-tor stop-tor up-ollama stop-ollama
 
 certs:		    ## Generate certificates.
 	@${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} --env-file .env -f docker/docker-compose.setup.yml run --rm certs
 
 setup:			## Generate certificates.
 	@make certs
+
+install-mcp:		## Clone r3ngine-mcp (if needed) and run its Node setup script.
+	node scripts/install-mcp.mjs $(MCP_INSTALL_ARGS)
+
+update-mcp:		## Pull latest r3ngine-mcp and re-run setup (--update).
+	node scripts/install-mcp.mjs --update $(MCP_INSTALL_ARGS)
 
 up:				## Build and start all services in production mode.
 	DEBUG=0 ${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} up -d --build ${SERVICES}
@@ -33,6 +45,18 @@ up-worker:		## Build and start the remote worker.
 
 down-worker:	## Stop the remote worker.
 	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} --env-file .env -f docker/docker-compose.worker.yml down
+
+up-tor:			## Build and start the optional Tor service (TOR Mode in Settings -> Proxy).
+	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} up -d --build tor
+
+stop-tor:		## Stop the optional Tor service.
+	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} stop tor
+
+up-ollama:		## Build and start the optional Ollama service (LLM Toolkit local models).
+	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} up -d --build ollama
+
+stop-ollama:		## Stop the optional Ollama service.
+	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} stop ollama
 
 devup:				## Build and start all services in development mode.
 	DEBUG=1 ${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_DEV_FILES} up -d --build ${SERVICES}
@@ -59,12 +83,14 @@ endif
 changepassword:	## Change password for user
 	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} exec web python3 manage.py changepassword
 
+temporal-upgrade:	## Step the Temporal database through each server release (stop temporal and the workers first).
+	@COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) bash scripts/temporal_upgrade.sh
+
 migrate:		## Apply migrations
 	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} exec web python3 manage.py migrate
 
-pull:			## Pull Docker images.
-	docker login docker.pkg.github.com
-	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} pull
+pull:			## Pull third-party Docker images (the app image is built locally, or set R3NGINE_IMAGE).
+	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} pull --ignore-buildable
 
 down:			## Down all services.
 	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} down
@@ -216,6 +242,9 @@ fullupgrade:		## Upgrade to Django 5.2 + PostgreSQL 16 + Gunicorn (includes auto
 	    printf "."; sleep 2; \
 	  done; echo " ready."
 	@echo ""
+	@echo "  Stepping the Temporal database to the server release in docker-compose.yml (no-op when current)..."
+	@COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) bash scripts/temporal_upgrade.sh
+	@echo ""
 	@echo "[6/8] Applying database migrations..."
 	@${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} run --rm \
 	  -e DEBUG=0 web python3 manage.py migrate --noinput; \
@@ -254,6 +283,25 @@ fullupgrade:		## Upgrade to Django 5.2 + PostgreSQL 16 + Gunicorn (includes auto
 	@echo "  Database backup: ./backups/"
 	@echo "============================================================"
 	@echo ""
+
+backup:			## Full backup: PostgreSQL dump + compressed scan_results -> ./backups/full_<timestamp>/
+	@echo ""
+	@POSTGRES_USER=${POSTGRES_USER} \
+	  POSTGRES_DB=${POSTGRES_DB} \
+	  DOCKER_COMPOSE_CMD="${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES}" \
+	  SCAN_RESULTS_VOLUME=r3ngine_scan_results \
+	  bash scripts/full_backup.sh
+
+restore:		## Restore a full backup. Usage: make restore BACKUP=./backups/full_YYYYMMDD_HHMMSS
+ifndef BACKUP
+	$(error BACKUP is required. Example: make restore BACKUP=./backups/full_20260327_120000)
+endif
+	@POSTGRES_USER=${POSTGRES_USER} \
+	  POSTGRES_DB=${POSTGRES_DB} \
+	  DOCKER_COMPOSE_CMD="${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES}" \
+	  SCAN_RESULTS_VOLUME=r3ngine_scan_results \
+	  BACKUP="$(BACKUP)" \
+	  bash scripts/full_restore.sh
 
 help:			## Show this help.
 	@echo "Make application Docker images and manage containers using Docker Compose files."

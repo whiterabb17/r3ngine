@@ -7,8 +7,8 @@ import { useThemeTokens } from '../../../../theme/useThemeTokens';
 const BOOL_FIELDS = [
   ['gitleaks', 'Gitleaks — scan JS files for secrets'],
   ['trufflehog', 'TruffleHog — scan JS files for secrets'],
-  ['leaklookup', 'LeakLookup — query leak-lookup.com API for domain leaks'],
-] as const;
+  ['betterleaks', 'Betterleaks — scan JS files for secrets'],
+] as const satisfies ReadonlyArray<readonly [keyof LeaksSecretsConfig, string]>;
 
 interface Props {
   config: LeaksSecretsConfig;
@@ -24,7 +24,7 @@ export const LeaksSecretsSection: React.FC<Props> = ({ config, enabled, onToggle
   return (
     <SectionCard
       title="Leaks & Secrets"
-      description="Secret scanning on discovered JS files and domain leak lookups (Tier 5)."
+      description="Secret scanning on discovered JS files (Tier 5). Breach lookups are configured under OSINT."
       enabled={enabled}
       onToggle={onToggle}
     >

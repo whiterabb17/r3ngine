@@ -91,9 +91,11 @@ class FindingLifecycleTest(TransactionTestCase):
             validation_confidence=0.1
         )
 
-    def test_report_generation_filters_verified_only(self):
+    def test_report_generation_excludes_dismissed_findings(self):
         """
-        Verify that report context generation ONLY includes findings with 'verified' status.
+        Reports keep every finding that has not been dismissed: new, needs_review
+        and verified stay in; false_positive (like accepted_risk and resolved) is
+        dropped. Filtering to verified-only hid findings nobody had triaged yet.
         """
         # Create report settings to prevent context generation failures
         VulnerabilityReportSetting.objects.get_or_create(
@@ -101,19 +103,17 @@ class FindingLifecycleTest(TransactionTestCase):
             show_executive_summary=True
         )
 
-        # Build context for this scan history
         context = build_vuln_context(self.scan, ignore_info=False)
 
-        # Check all_vulnerabilities contains ONLY verified findings
         all_vulns = context['all_vulnerabilities']
-        self.assertEqual(all_vulns.count(), 1)
-        self.assertEqual(all_vulns[0].name, "Verified Vulnerability")
-        self.assertEqual(all_vulns[0].validation_status, "verified")
+        self.assertCountEqual(
+            all_vulns.values_list('validation_status', flat=True),
+            ['new', 'needs_review', 'verified'],
+        )
 
-        # Check unique_vulnerabilities list has only the verified finding
-        unique_vulns = context['unique_vulnerabilities']
-        self.assertEqual(len(unique_vulns), 1)
-        self.assertEqual(unique_vulns[0]['name'], "Verified Vulnerability")
+        unique_names = {v['name'] for v in context['unique_vulnerabilities']}
+        self.assertNotIn("False Positive Vulnerability", unique_names)
+        self.assertIn("Verified Vulnerability", unique_names)
 
     def test_triage_queue_endpoint(self):
         """

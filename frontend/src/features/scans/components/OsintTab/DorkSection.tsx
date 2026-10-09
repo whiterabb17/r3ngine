@@ -12,12 +12,8 @@ import {
 } from '@mui/material';
 import { Search, ExternalLink, Globe } from 'lucide-react';
 import { TacticalPanel } from '../../../../components/TacticalPanel';
-
-interface Dork {
-  id: number;
-  type: string;
-  url: string;
-}
+import { getSafeUrl } from '../../../../utils/securityUtils';
+import type { Dork } from '../../types';
 
 interface DorkSectionProps {
   dorks: Dork[];
@@ -38,7 +34,7 @@ export const DorkSection: React.FC<DorkSectionProps> = ({ dorks }) => {
                   <IconButton 
                     edge="end" 
                     component="a" 
-                    href={dork.url} 
+                    href={getSafeUrl(dork.url) ?? '#'} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     sx={{ color: 'primary.main' }}
@@ -55,7 +51,7 @@ export const DorkSection: React.FC<DorkSectionProps> = ({ dorks }) => {
               <ListItemText
                 primary={
                   <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.light' }}>
-                    {dork.type.toUpperCase().replace(/_/g, ' ')}
+                    {(dork.type ?? '').toUpperCase().replace(/_/g, ' ')}
                   </Typography>
                 }
                 secondary={

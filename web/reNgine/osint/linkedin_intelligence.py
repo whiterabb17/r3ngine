@@ -64,7 +64,8 @@ class LinkedInScraper:
                 try:
                     resource.close() if hasattr(resource, "close") else resource.stop()
                 except Exception:
-                    pass
+                    # Cleanup must not mask the exception that ended the with-block.
+                    logger.debug("LinkedIn browser resource close failed", exc_info=True)
 
     # ------------------------------------------------------------------
     # Authentication
@@ -159,7 +160,7 @@ class LinkedInScraper:
             try:
                 self._context.close()
             except Exception:
-                pass
+                logger.debug("LinkedIn browser context close failed", exc_info=True)
             self._context = None
         self._page = None
 

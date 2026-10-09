@@ -1,16 +1,18 @@
 import { createRootRouteWithContext, createRoute, createRouter, Outlet, Link, redirect, lazyRouteComponent, useParams } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { isStaleBuildError, reloadOnceForStaleBuild } from "./utils/staleBuild";
 import { Shell } from "./components/Shell";
 // Lazy loaded components below
 
 import { Box, Typography, Button, CircularProgress } from "@mui/material";
 import PluginPageLoader from './features/plugins/components/PluginPageLoader';
-import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
+import { usePluginRegistry } from './features/plugins/api/pluginsApi';
 import { AlertCircle, Home, RefreshCw } from "lucide-react";
 import { useRouterState } from "@tanstack/react-router";
 import { LoginPage } from "./features/auth/components/LoginPage";
 import { LogoutPage } from "./features/auth/components/LogoutPage";
 import { OnboardingPage } from "./features/auth/components/OnboardingPage";
+import type { CurrentUser } from "./features/auth/api";
 
 // Lazy Routes
 const DashboardPage = lazyRouteComponent(() => import("./features/dashboard").then(m => ({ default: m.DashboardPage })));
@@ -51,13 +53,14 @@ const NotificationSettingsPage = lazyRouteComponent(() => import("./features/set
 const ProfileSettingsPage = lazyRouteComponent(() => import("./features/settings").then(m => ({ default: m.ProfileSettingsPage })));
 const AdminSettingsPage = lazyRouteComponent(() => import("./features/settings").then(m => ({ default: m.AdminSettingsPage })));
 const RemoteWorkersPage = lazyRouteComponent(() => import("./features/settings").then(m => ({ default: m.RemoteWorkersPage })));
+const McpAccessPage = lazyRouteComponent(() => import("./features/settings").then(m => ({ default: m.McpAccessPage })));
 const StressTestingPage = lazyRouteComponent(() => import("./pages/StressTestingPage").then(m => ({ default: m.StressTestingPage })));
 
 interface RouterContext {
   auth: {
     isAuthenticated: boolean;
     isLoading: boolean;
-    user: any;
+    user: CurrentUser | null;
   };
 }
 
@@ -214,7 +217,7 @@ const subScansRoute = createRoute({
         textAlign: 'center'
       }}>
         ACCESSING TACTICAL REGISTRY... <br />
-        <span style={{ fontSize: '10px', opacity: 0.5, color: '#fff' }}>RETRIEVING SUB SCANS... PLEASE WAIT</span>
+        <Box component="span" sx={{ fontSize: '10px', opacity: 0.5, color: 'text.primary' }}>RETRIEVING SUB SCANS... PLEASE WAIT</Box>
       </Typography>
       <style>
         {`
@@ -259,7 +262,7 @@ const scheduledScansRoute = createRoute({
         textAlign: 'center'
       }}>
         ACCESSING TACTICAL REGISTRY... <br />
-        <span style={{ fontSize: '10px', opacity: 0.5, color: '#fff' }}>RETRIEVING SCHEDULED OPERATIONS... PLEASE WAIT</span>
+        <Box component="span" sx={{ fontSize: '10px', opacity: 0.5, color: 'text.primary' }}>RETRIEVING SCHEDULED OPERATIONS... PLEASE WAIT</Box>
       </Typography>
       {/* <style>
         {`
@@ -307,7 +310,7 @@ const subdomainsRoute = createRoute({
         textAlign: 'center'
       }}>
         INITIALIZING TACTICAL DATA... <br />
-        <span style={{ fontSize: '10px', opacity: 0.5, color: '#fff' }}>FETCHING SUBDOMAINS... PLEASE WAIT</span>
+        <Box component="span" sx={{ fontSize: '10px', opacity: 0.5, color: 'text.primary' }}>FETCHING SUBDOMAINS... PLEASE WAIT</Box>
       </Typography>
       {/* <style>
         {`
@@ -408,6 +411,12 @@ const remoteWorkersRoute = createRoute({
   component: RemoteWorkersPage,
 });
 
+const mcpAccessRoute = createRoute({
+  getParentRoute: () => projectRoute,
+  path: "settings/mcp",
+  component: McpAccessPage,
+});
+
 
 
 
@@ -444,7 +453,7 @@ const vulnsRoute = createRoute({
         textAlign: 'center'
       }}>
         INITIALIZING TACTICAL DATA... <br />
-        <span style={{ fontSize: '10px', opacity: 0.5, color: '#fff' }}>FETCHING VULNERABILITIES... PLEASE WAIT</span>
+        <Box component="span" sx={{ fontSize: '10px', opacity: 0.5, color: 'text.primary' }}>FETCHING VULNERABILITIES... PLEASE WAIT</Box>
       </Typography>
     </Box>
   )
@@ -516,13 +525,7 @@ const pluginMainRoute = createRoute({
       );
     }
 
-    const { data: pluginsRegistry, isLoading, error } = useQuery<any[]>({
-      queryKey: ['pluginsRegistry'],
-      queryFn: async () => {
-        const res = await axios.get('/api/plugins/registry/');
-        return res.data;
-      }
-    });
+    const { data: pluginsRegistry, isLoading, error } = usePluginRegistry();
 
     if (isLoading) {
       return (
@@ -622,6 +625,7 @@ const routeTree = rootRoute.addChildren([
     notificationSettingsRoute,
     adminSettingsRoute,
     remoteWorkersRoute,
+    mcpAccessRoute,
     bountyHubRoute,
     searchRoute,
     pluginsRoute,
@@ -683,7 +687,7 @@ function NotFound() {
         fontSize: { xs: '3rem', md: '5rem' },
         letterSpacing: 8,
         mb: 2,
-        color: '#fff',
+        color: 'text.primary',
         textShadow: '0 0 20px rgba(255, 0, 60, 0.5)'
       }}>
         SIGNAL LOST
@@ -699,7 +703,7 @@ function NotFound() {
         NOT FOUND
       </Typography>
 
-      <Typography variant="body1" sx={{ color: 'rgba(255, 255, 255, 0.6)', maxWidth: 500, mb: 6, lineHeight: 1.8 }}>
+      <Typography variant="body1" sx={{ color: 'text.secondary', maxWidth: 500, mb: 6, lineHeight: 1.8 }}>
         This page has not yet been migrated to the new interface.
       </Typography>
 
@@ -711,7 +715,7 @@ function NotFound() {
           startIcon={<Home size={18} />}
           sx={{
             borderColor: 'rgba(255, 255, 255, 0.2)',
-            color: '#fff',
+            color: 'text.primary',
             px: 4,
             py: 1.5,
             '&:hover': { borderColor: 'primary.main', bgcolor: 'rgba(0, 243, 255, 0.05)' }
@@ -739,6 +743,12 @@ function NotFound() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+  const staleBuild = isStaleBuildError(error);
+  useEffect(() => {
+    // The page goes away at once; if the guard refuses, the hint below stays.
+    if (staleBuild) reloadOnceForStaleBuild();
+  }, [staleBuild]);
+
   return (
     <Box
       sx={{
@@ -752,10 +762,11 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
       }}
     >
       <AlertCircle size={80} color="#ff003c" style={{ marginBottom: 20 }} />
-      <Typography variant="h3" sx={{ fontFamily: 'Orbitron', mb: 2, color: '#fff' }}>SYSTEM_CRASH</Typography>
-      <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.7)', mb: 4, maxWidth: 600 }}>
+      <Typography variant="h3" sx={{ fontFamily: 'Orbitron', mb: 2, color: 'text.primary' }}>SYSTEM_CRASH</Typography>
+      <Typography variant="body1" sx={{ color: 'text.secondary', mb: 4, maxWidth: 600 }}>
         An unexpected error occurred in the tactical interface.
         Error: {error.message}
+        {staleBuild && ' This tab is running an older version of the interface; reload the page (Ctrl+F5).'}
       </Typography>
       <Button
         variant="contained"

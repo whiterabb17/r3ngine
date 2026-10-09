@@ -35,6 +35,12 @@ def screenshot(self, ctx={}, description=None):
 		.exclude(http_url='')
 		.select_related('subdomain')
 	)
+	# Singular / subscan runs must stay on the requested host.
+	subdomain_id = ctx.get('subdomain_id')
+	if subdomain_id:
+		endpoints = endpoints.filter(subdomain_id=subdomain_id)
+	elif ctx.get('singular_tool_run') and ctx.get('urls'):
+		endpoints = endpoints.filter(http_url__in=list(ctx.get('urls') or []))
 
 	# No http_status filter: is_default endpoints are created before http_crawl probes them,
 	# so they always have http_status=0. Playwright handles unreachable URLs gracefully.

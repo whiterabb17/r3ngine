@@ -5,6 +5,7 @@ import {
   Cpu, AlertTriangle, Cloud, Network, Database, Bitcoin,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useThemeTokens } from '../../../../theme/useThemeTokens';
 
 interface BadgeConfig {
   color: string;
@@ -29,8 +30,7 @@ const BADGE_CONFIG: Record<string, BadgeConfig> = {
   Subdomain: { color: '#00f3ff', icon: Network,       label: 'Subdomain' },
 };
 
-const DEFAULT_CONFIG: BadgeConfig = {
-  color: 'rgba(255,255,255,0.3)',
+const DEFAULT_CONFIG: Omit<BadgeConfig, 'color'> = {
   icon: Database,
   label: 'Other',
 };
@@ -40,7 +40,8 @@ interface StagingTypeBadgeProps {
 }
 
 export const StagingTypeBadge: React.FC<StagingTypeBadgeProps> = ({ osintType }) => {
-  const config = BADGE_CONFIG[osintType] ?? DEFAULT_CONFIG;
+  const { tokens } = useThemeTokens();
+  const config = BADGE_CONFIG[osintType] ?? { ...DEFAULT_CONFIG, color: tokens.text.secondary };
   const Icon = config.icon;
 
   return (

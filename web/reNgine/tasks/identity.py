@@ -15,7 +15,10 @@ which increases the confidence_score.
 
 import logging
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from startScan.models import IdentityInfraDiscovery
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +77,7 @@ def classify_url(url: str) -> Optional[Tuple[str, float]]:
     import urllib.parse
     try:
         parsed = urllib.parse.urlparse(url)
-    except Exception:
+    except ValueError:
         return None
 
     # LDAP scheme — direct scheme check per Rule 3.1

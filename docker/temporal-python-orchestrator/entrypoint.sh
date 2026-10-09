@@ -1,6 +1,19 @@
 #!/bin/bash
+# Sync GF patterns from bind-mount or staged image into volume
+echo "Syncing GF patterns..."
+mkdir -p /root/.gf
+if [ -d "/usr/src/app/gf-patterns" ]; then
+  cp -f /usr/src/app/gf-patterns/*.json /root/.gf/
+elif [ -d "/usr/src/gf-patterns" ]; then
+  cp -f /usr/src/gf-patterns/*.json /root/.gf/
+else
+  echo "Warning: no GF patterns directory found!"
+fi
+echo "GF patterns synced: $(ls /root/.gf/*.json | wc -l) patterns installed"
+
 # Entrypoint for the Temporal Python Orchestrator container.
 # Handles one-time setup (wordlists, templates, tools) then starts the Temporal worker.
+
 
 # ---------------------------------------------------------------------------
 # Start deferred tool installer in the background so normal setup tasks
@@ -12,8 +25,34 @@
 # /usr/src/internal_tools.sh &
 # INTERNAL_TOOLS_PID=$!
 
+# ---------------------------------------------------------------------------
+# Tool updates (pip upgrades, whatportis, vulnx, template repo pulls) are
+# network-bound and take minutes, so running them on every start made a PyPI or
+# GitHub outage enough to block the worker from coming up at all. Run them at
+# most once a week, tracked by a sentinel on the persistent tool_config volume.
+# A first-ever start has no sentinel and therefore updates as before.
+# ---------------------------------------------------------------------------
+TOOL_UPDATE_STAMP="/root/.config/r3ngine/python-orchestrator-tool-update.stamp"
+TOOL_UPDATE_MAX_AGE_DAYS=7
+TOOL_UPDATE_RC=0
+
+mkdir -p "$(dirname "$TOOL_UPDATE_STAMP")"
+
+if [ ! -f "$TOOL_UPDATE_STAMP" ]; then
+  RUN_TOOL_UPDATES=1
+  echo "[entrypoint] No tool-update sentinel found - running tool updates."
+elif [ -n "$(find "$TOOL_UPDATE_STAMP" -mtime +"$TOOL_UPDATE_MAX_AGE_DAYS" 2>/dev/null)" ]; then
+  RUN_TOOL_UPDATES=1
+  echo "[entrypoint] Tool updates older than ${TOOL_UPDATE_MAX_AGE_DAYS} days - refreshing."
+else
+  RUN_TOOL_UPDATES=0
+  echo "[entrypoint] Tool updates ran within ${TOOL_UPDATE_MAX_AGE_DAYS} days - skipping."
+fi
+
 # Ensure OpenSSL compatibility
-pip3 install --upgrade --no-cache-dir pyOpenSSL==24.0.0 tenacity==8.2.2
+if [ "$RUN_TOOL_UPDATES" = "1" ]; then
+  pip3 install --upgrade --no-cache-dir pyOpenSSL==24.0.0 tenacity==8.2.2 || TOOL_UPDATE_RC=1
+fi
 
 
 
@@ -110,7 +149,9 @@ fi
 
 
 # update whatportis
-yes | whatportis --update
+if [ "$RUN_TOOL_UPDATES" = "1" ]; then
+  yes | whatportis --update || TOOL_UPDATE_RC=1
+fi
 
 # clone dirsearch default wordlist
 if [ ! -d "/usr/src/wordlist" ]; then
@@ -166,37 +207,29 @@ if [ ! -f '/usr/local/bin/kr' ]; then
   cd /usr/src/app
 fi
 
-if [ ! -d '/usr/src/wordlist/kr' ]; then
-  mkdir -p /usr/src/wordlist/kr
-  cd /usr/src/wordlist/kr
-  wget https://wordlists-cdn.assetnote.io/data/kiterunner/routes-large.kite.tar.gz -O routes-large.kite.tar.gz
-  tar -xvf routes-large.kite.tar.gz
-  rm -rf routes-large.kite.tar.gz
-  wget https://wordlists-cdn.assetnote.io/data/kiterunner/routes-small.kite.tar.gz -O routes-small.kite.tar.gz
-  tar -xvf routes-small.kite.tar.gz
-  rm -rf routes-small.kite.tar.gz
-  cp routes-large.kite routes-large.kr
-  cp routes-small.kite routes-small.kr
-  cd /usr/src/app
-fi
+# Each wordlist is fetched on its own and only moved into place once fully
+# extracted, so a failed or partial download is retried on the next start.
+mkdir -p /usr/src/wordlist/kr
+for kite in routes-small routes-large; do
+  if [ ! -s "/usr/src/wordlist/kr/${kite}.kite" ]; then
+    kr_tmp=$(mktemp -d)
+    if wget -q "https://wordlists-cdn.assetnote.io/data/kiterunner/${kite}.kite.tar.gz" -O "${kr_tmp}/${kite}.tar.gz" \
+      && tar -xzf "${kr_tmp}/${kite}.tar.gz" -C "${kr_tmp}" \
+      && [ -s "${kr_tmp}/${kite}.kite" ]; then
+      cp "${kr_tmp}/${kite}.kite" "/usr/src/wordlist/kr/${kite}.kr"
+      mv "${kr_tmp}/${kite}.kite" "/usr/src/wordlist/kr/${kite}.kite"
+    else
+      echo "WARNING: could not fetch the kiterunner ${kite} wordlist; kiterunner skips it until the next start"
+    fi
+    rm -rf "${kr_tmp}"
+  fi
+done
 
 if [ ! -f '/usr/src/wordlist/cpanel_users.txt' ]; then
   echo "Fetching cPanel2Shell wordlist"
   mkdir -p /usr/src/wordlist
   wget -qO- https://raw.githubusercontent.com/danielmiessler/SecLists/master/Usernames/top-usernames-shortlist.txt >> /usr/src/wordlist/cpanel_users.txt
   sort -u /usr/src/wordlist/cpanel_users.txt -o /usr/src/wordlist/cpanel_users.txt
-fi
-
-# Clone Exploit-DB for Searchsploit if not already present
-if [ ! -d "/usr/src/exploitdb/.git" ]; then
-  echo "Cloning Exploit-DB for searchsploit..."
-  rm -rf /usr/src/exploitdb/* /usr/src/exploitdb/.* 2>/dev/null || true
-  git clone --depth 1 https://gitlab.com/exploit-database/exploitdb /usr/src/exploitdb
-fi
-
-# Ensure searchsploit RC file is copied to root home directory
-if [ -f "/usr/src/exploitdb/.searchsploit_rc" ]; then
-  cp /usr/src/exploitdb/.searchsploit_rc /root/.searchsploit_rc
 fi
 
 cd /usr/src/app
@@ -273,32 +306,45 @@ if [ ! -d "/root/nuclei-templates/wordfence/.git" ]; then
   echo "Installing Wordfence nuclei templates"
   git clone --depth 1 https://github.com/topscoder/nuclei-wordfence-cve.git \
     /root/nuclei-templates/wordfence
-else
+elif [ "$RUN_TOOL_UPDATES" = "1" ]; then
   echo "Updating Wordfence nuclei templates"
-  git -C /root/nuclei-templates/wordfence pull --quiet || true
+  git -C /root/nuclei-templates/wordfence pull --ff-only --quiet || TOOL_UPDATE_RC=1
 fi
+# Install repo dependencies
+if [ "$RUN_TOOL_UPDATES" = "1" ]; then
+  pip3 install -q -r /root/nuclei-templates/wordfence/requirements.txt || TOOL_UPDATE_RC=1
+fi
+# Merge wordfence nuclei-templates/ into the main templates directory so nuclei
+# picks them up directly under /root/nuclei-templates without extra nesting.
+cp -ru /root/nuclei-templates/wordfence/nuclei-templates/. /root/nuclei-templates/
 
 # httpx alias
 echo 'alias httpx="/usr/local/bin/httpx"' >> ~/.bashrc
 
 # Install spiderfoot packages
-if [ -d '/usr/src/github/spiderfoot' ]; then
+if [ -d '/usr/src/github/spiderfoot' ] && [ "$RUN_TOOL_UPDATES" = "1" ]; then
   echo "Installing Spiderfoot dependencies..."
-  pip3 install -r /usr/src/github/spiderfoot/requirements.txt
+  pip3 install -r /usr/src/github/spiderfoot/requirements.txt || TOOL_UPDATE_RC=1
   # Python 3.12 removed the 'imp' module. SpiderFoot's sfp_whois uses python-whois
   # which depends on the 'future' package — old versions of future still import imp.
   # Upgrade future and python-whois to Python 3.12-compatible releases.
-  pip3 install 'future>=1.0.0' 'python-whois>=0.9.4' --upgrade
+  pip3 install 'future>=1.0.0' 'python-whois>=0.9.4' --upgrade || TOOL_UPDATE_RC=1
 fi
 
-vulnx update
+if [ "$RUN_TOOL_UPDATES" = "1" ]; then
+  vulnx update || TOOL_UPDATE_RC=1
 
-# Configure vigolium to scan all severity levels for known issues
-vigolium config set known_issue_scan.severities "critical,high,medium,low,info" || true
+  if [ "$TOOL_UPDATE_RC" = "0" ]; then
+    touch "$TOOL_UPDATE_STAMP"
+    echo "[entrypoint] Tool updates completed; sentinel refreshed."
+  else
+    echo "[entrypoint] Some tool updates failed; sentinel left stale so the next start retries."
+  fi
+fi
 
 # Split oversized nuclei tags
-echo "[entrypoint] Running Nuclei tag splitter..."
-python3 /usr/src/scripts/nuclei_tag_splitter.py &
+# echo "[entrypoint] Running Nuclei tag splitter..."
+# python3 /usr/src/scripts/nuclei_tag_splitter.py
 
 # wait $INTERNAL_TOOLS_PID
 echo "[entrypoint] Starting Temporal Python Orchestrator..."

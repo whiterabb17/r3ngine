@@ -15,6 +15,22 @@ class ThrottledTokenObtainPairView(TokenObtainPairView):
     throttle_classes = [AuthRateThrottle]
 
 from .views import *
+# Not re-exported by api.views (which lists its scan-view imports explicitly).
+from .views.scan import ScanTierRetryAPIView
+from .views.followups import (
+    ListCapabilitiesAPIView,
+    EngineDetailAPIView,
+    ToolRunAPIView,
+    ToolArgsAPIView,
+    FollowupProposeAPIView,
+    FollowupPlanDetailAPIView,
+    FollowupUpdateAPIView,
+    FollowupApproveAPIView,
+    FollowupAbortAPIView,
+    FollowupRetryAPIView,
+    FollowupListAPIView,
+    FollowupMetricsAPIView,
+)
 from .dashboard_views import DashboardAPIView, CWEInfoAPIView
 from .target_summary_views import TargetSummaryAPIView
 from .scan_summary_views import ScanSummaryAPIView, ScanAiExportAPIView
@@ -109,6 +125,7 @@ router.register(r'workers', ScanWorkerViewSet, basename='workers')
 
 
 urlpatterns = [
+    path('mcp/', include('mcp.urls')),
     re_path(r'^', include(router.urls)),
     path('settings/workers/heartbeat/', WorkerHeartbeatAPIView.as_view(), name='worker_heartbeat'),
     path(
@@ -370,10 +387,6 @@ urlpatterns = [
         DeleteSubdomain.as_view(),
         name='delete_subdomain'),
     path(
-        'action/subdomain/<int:pk>/searchsploit/',
-        RunSearchsploitAction.as_view(),
-        name='run_searchsploit'),
-    path(
         'action/vulnerability/delete/',
         DeleteVulnerability.as_view(),
         name='delete_vulnerability'),
@@ -418,6 +431,58 @@ urlpatterns = [
         ScanActivityRetryAPIView.as_view(),
         name='retry_task'),
     path(
+        'action/tool/run/',
+        ToolRunAPIView.as_view(),
+        name='tool_run'),
+    path(
+        'action/tool/<str:tool>/args/',
+        ToolArgsAPIView.as_view(),
+        name='tool_args'),
+    path(
+        'action/capabilities/',
+        ListCapabilitiesAPIView.as_view(),
+        name='list_capabilities'),
+    path(
+        'action/engines/<int:pk>/',
+        EngineDetailAPIView.as_view(),
+        name='engine_detail'),
+    path(
+        'action/followups/',
+        FollowupListAPIView.as_view(),
+        name='followup_list'),
+    path(
+        'action/followups/propose/',
+        FollowupProposeAPIView.as_view(),
+        name='followup_propose'),
+    path(
+        'action/followups/metrics/',
+        FollowupMetricsAPIView.as_view(),
+        name='followup_metrics'),
+    path(
+        'action/followups/<int:pk>/',
+        FollowupPlanDetailAPIView.as_view(),
+        name='followup_detail'),
+    path(
+        'action/followups/<int:pk>/update/',
+        FollowupUpdateAPIView.as_view(),
+        name='followup_update'),
+    path(
+        'action/followups/<int:pk>/approve/',
+        FollowupApproveAPIView.as_view(),
+        name='followup_approve'),
+    path(
+        'action/followups/<int:pk>/abort/',
+        FollowupAbortAPIView.as_view(),
+        name='followup_abort'),
+    path(
+        'action/followups/<int:pk>/retry/',
+        FollowupRetryAPIView.as_view(),
+        name='followup_retry'),
+    path(
+        'action/retry/tier/<int:scan_id>/<int:tier>/',
+        ScanTierRetryAPIView.as_view(),
+        name='retry_tier'),
+    path(
         'action/initiate/scan/',
         InitiateScan.as_view(),
         name='initiate_scan'),
@@ -437,6 +502,10 @@ urlpatterns = [
         'action/unpause/scan/',
         UnpauseScan.as_view(),
         name='unpause_scan'),
+    path(
+        'action/scan/<int:scan_id>/hardware-profile/',
+        SetScanHardwareProfile.as_view(),
+        name='set_scan_hardware_profile'),
     path(
         'fetch/results/subscan/',
         FetchSubscanResults.as_view(),
@@ -718,4 +787,4 @@ if _os.path.exists(_plugins_data_dir):
         except Exception as _e:
             import logging as _logging
             _logging.getLogger(__name__).warning(
-                f"Failed to load plugin URLs for {_plugin_slug}: {_e}")
+                "Failed to load plugin URLs for %s: %s", _plugin_slug, _e)

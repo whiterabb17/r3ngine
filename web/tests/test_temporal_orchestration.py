@@ -10,6 +10,8 @@ django.setup()
 from startScan.models import ScanHistory, EngineType, SubScan, Subdomain
 from targetApp.models import Domain
 from django.utils import timezone
+import shutil
+import tempfile
 import yaml
 
 class TestTemporalOrchestration(TestCase):
@@ -31,11 +33,15 @@ class TestTemporalOrchestration(TestCase):
                 }
             })
         )
+        # Subscans create their directory under scan.results_dir.
+        results_dir = tempfile.mkdtemp(prefix='rengine_test_orchestration_')
+        self.addCleanup(shutil.rmtree, results_dir, ignore_errors=True)
         self.scan = ScanHistory.objects.create(
             domain=self.domain,
             scan_type=self.engine,
             start_scan_date=timezone.now(),
-            tasks=[]
+            tasks=[],
+            results_dir=results_dir,
         )
 
     def tearDown(self):
@@ -348,8 +354,10 @@ class TestTemporalOrchestration(TestCase):
 
         # Assert both the stuck running scan and the failed scan are resumed (dead workflows)
         self.assertEqual(mock_resume_scan.call_count, 2)
-        mock_resume_scan.assert_any_call(scan_running_stuck.id)
-        mock_resume_scan.assert_any_call(scan_failed.id)
+        # auto=True marks these as budget-consuming auto-recoveries, unlike a
+        # manual resume from the UI.
+        mock_resume_scan.assert_any_call(scan_running_stuck.id, auto=True)
+        mock_resume_scan.assert_any_call(scan_failed.id, auto=True)
 
         # Clean up database records
         scan_running_stuck.delete()
@@ -357,6 +365,186 @@ class TestTemporalOrchestration(TestCase):
         scan_failed.delete()
         scan_aborted.delete()
         scan_stopped.delete()
+
+    @patch('reNgine.tasks.scan_init.retry_failed_tasks_temporal')
+    @patch('reNgine.tasks.scan_init.resume_scan_temporal')
+    @patch('reNgine.temporal_client.TemporalClientProvider.get_client', new_callable=AsyncMock)
+    def test_recover_stuck_scans_retries_failed_tasks_when_workflow_completed(
+        self, mock_get_client, mock_resume_scan, mock_retry_failed
+    ):
+        """A FAILED scan whose master workflow completed must not start a new MasterScanWorkflow."""
+        from reNgine.tasks import recover_stuck_scans
+        from reNgine.definitions import FAILED_TASK, RUNNING_TASK
+        from temporalio.client import WorkflowExecutionStatus
+        from django.utils import timezone
+
+        ScanHistory.objects.filter(scan_status__in=[RUNNING_TASK, FAILED_TASK]).delete()
+        scan_failed = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_type=self.engine,
+            start_scan_date=timezone.now(),
+            scan_status=FAILED_TASK,
+            recovery_count=0,
+            workflow_ids=["completed-workflow"]
+        )
+        mock_retry_failed.return_value = ['generate_impact_assessment']
+
+        mock_client = MagicMock()
+
+        def mock_get_handle(_workflow_id):
+            h = MagicMock()
+
+            async def mock_describe():
+                mock_desc = MagicMock()
+                mock_desc.status = WorkflowExecutionStatus.COMPLETED
+                return mock_desc
+
+            h.describe = mock_describe
+            return h
+
+        mock_client.get_workflow_handle.side_effect = mock_get_handle
+        mock_get_client.return_value = mock_client
+
+        recover_stuck_scans()
+
+        mock_resume_scan.assert_not_called()
+        mock_retry_failed.assert_called_once()
+        self.assertEqual(mock_retry_failed.call_args.args[0].id, scan_failed.id)
+        self.assertTrue(mock_retry_failed.call_args.kwargs.get('auto'))
+        scan_failed.delete()
+
+    def test_resolve_scan_id_for_workflow_conventions(self):
+        """Workflow id conventions used by tool/child workflows map back to ScanHistory."""
+        from reNgine.tasks.scan_init import _resolve_scan_id_for_workflow
+        from reNgine.definitions import SUCCESS_TASK
+        from startScan.models import Command, SubScan
+        from django.utils import timezone
+
+        scan = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_type=self.engine,
+            start_scan_date=timezone.now(),
+            scan_status=SUCCESS_TASK,
+        )
+        cmd = Command.objects.create(
+            scan_history=scan,
+            command='vigolium scan --only discovery',
+            time=timezone.now(),
+        )
+        subdomain = Subdomain.objects.create(name='sub.temporal-test.local', target_domain=self.domain, scan_history=scan)
+        subscan = SubScan.objects.create(
+            scan_history=scan,
+            subdomain=subdomain,
+            type='vulnerability_scan',
+            status=SUCCESS_TASK,
+            start_scan_date=timezone.now(),
+        )
+
+        self.assertEqual(_resolve_scan_id_for_workflow(f'go-exec-vigolium-{cmd.id}'), scan.id)
+        self.assertEqual(_resolve_scan_id_for_workflow(f'go-exec-ike-scan-{cmd.id}'), scan.id)
+        self.assertEqual(_resolve_scan_id_for_workflow(f'master-scan-{scan.id}-run-2'), scan.id)
+        self.assertEqual(_resolve_scan_id_for_workflow(f'scan-{scan.id}-deadbeef'), scan.id)
+        self.assertEqual(_resolve_scan_id_for_workflow(f'subscan-{subscan.id}-abcdef12'), scan.id)
+        self.assertIsNone(_resolve_scan_id_for_workflow('temporal-sys-scheduler:startup-sync-recover-stuck-scans'))
+        self.assertIsNone(_resolve_scan_id_for_workflow('startup-sync-recover-stuck-scans-20260924'))
+        scan.delete()
+
+    @patch('reNgine.utils.scan_cancellation.set_scan_stop_kill_switch')
+    @patch('reNgine.temporal_client.TemporalClientProvider.cancel_workflow')
+    @patch('reNgine.temporal_client.TemporalClientProvider.get_client', new_callable=AsyncMock)
+    def test_cleanup_cancels_go_exec_for_success_scan(
+        self, mock_get_client, mock_cancel_workflow, mock_kill_switch
+    ):
+        """Orphan go-exec workflows for SUCCESS scans are cancelled and kill-switched."""
+        from reNgine.tasks.scan_init import cleanup_orphan_workflows_for_completed_scans
+        from reNgine.definitions import RUNNING_TASK, SUCCESS_TASK
+        from startScan.models import Command
+        from django.utils import timezone
+
+        done = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_type=self.engine,
+            start_scan_date=timezone.now(),
+            scan_status=SUCCESS_TASK,
+        )
+        live = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_type=self.engine,
+            start_scan_date=timezone.now(),
+            scan_status=RUNNING_TASK,
+        )
+        cmd_done = Command.objects.create(
+            scan_history=done, command='vigolium', time=timezone.now(),
+        )
+        cmd_live = Command.objects.create(
+            scan_history=live, command='vigolium', time=timezone.now(),
+        )
+
+        orphan_id = f'go-exec-vigolium-{cmd_done.id}'
+        live_id = f'go-exec-vigolium-{cmd_live.id}'
+
+        class _Wf:
+            def __init__(self, wid):
+                self.id = wid
+
+        async def _list(_query=None):
+            for wid in (orphan_id, live_id, 'temporal-sys-scheduler:x'):
+                yield _Wf(wid)
+
+        mock_client = MagicMock()
+        mock_client.list_workflows = _list
+        mock_get_client.return_value = mock_client
+
+        cancelled = cleanup_orphan_workflows_for_completed_scans()
+
+        mock_cancel_workflow.assert_called_once_with(orphan_id)
+        self.assertEqual(len(cancelled), 1)
+        self.assertEqual(cancelled[0][0], orphan_id)
+        mock_kill_switch.assert_called_once_with(done.id, enabled=True)
+
+        done.delete()
+        live.delete()
+
+    @patch('reNgine.tasks.scan_init.cleanup_orphan_workflows_for_completed_scans')
+    @patch('reNgine.tasks.scan_init.resume_scan_temporal')
+    @patch('reNgine.temporal_client.TemporalClientProvider.get_client', new_callable=AsyncMock)
+    def test_recover_stuck_scans_runs_orphan_cleanup_first(
+        self, mock_get_client, mock_resume_scan, mock_cleanup
+    ):
+        """Startup recovery always sweeps orphan workflows before resuming stuck scans."""
+        from reNgine.tasks import recover_stuck_scans
+        from reNgine.definitions import RUNNING_TASK, FAILED_TASK
+        from temporalio.service import RPCError, RPCStatusCode
+        from django.utils import timezone
+
+        ScanHistory.objects.filter(scan_status__in=[RUNNING_TASK, FAILED_TASK]).delete()
+        ScanHistory.objects.create(
+            domain=self.domain,
+            scan_type=self.engine,
+            start_scan_date=timezone.now(),
+            scan_status=RUNNING_TASK,
+            recovery_count=0,
+            workflow_ids=['stuck-for-cleanup-order'],
+        )
+
+        mock_client = MagicMock()
+
+        def mock_get_handle(_workflow_id):
+            h = MagicMock()
+
+            async def mock_describe():
+                raise RPCError("Workflow not found", RPCStatusCode.NOT_FOUND, "details")
+
+            h.describe = mock_describe
+            return h
+
+        mock_client.get_workflow_handle.side_effect = mock_get_handle
+        mock_get_client.return_value = mock_client
+
+        recover_stuck_scans()
+
+        mock_cleanup.assert_called_once()
+        mock_resume_scan.assert_called_once()
 
 
 class TestWorkflowStructuralInvariants(TestCase):
@@ -371,11 +559,13 @@ class TestWorkflowStructuralInvariants(TestCase):
     No Temporal server or Django ORM is required — they inspect source only.
     """
 
-    _SOURCE_PATH = "reNgine/temporal/workflows/__init__.py"
+    # MasterScanWorkflow and SubScanWorkflow live in separate flat modules.
+    _MASTER_SOURCE_PATH = "reNgine/temporal/workflows/master_scan.py"
+    _SUBSCAN_SOURCE_PATH = "reNgine/temporal/workflows/subscan.py"
 
-    @classmethod
-    def _source(cls):
-        with open(cls._SOURCE_PATH) as f:
+    @staticmethod
+    def _source(path):
+        with open(path) as f:
             return f.read()
 
     def test_masterscan_vulnerability_scan_not_in_assessment_futures(self):
@@ -387,7 +577,7 @@ class TestWorkflowStructuralInvariants(TestCase):
         child workflow, causing it to run unmanaged (orphaned).
         """
         import ast
-        source = self._source()
+        source = self._source(self._MASTER_SOURCE_PATH)
         tree = ast.parse(source)
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef) and node.name == "MasterScanWorkflow":
@@ -402,14 +592,14 @@ class TestWorkflowStructuralInvariants(TestCase):
                             "before the concurrent gather of other T6 activities."
                         )
                         return
-        self.fail("MasterScanWorkflow.run() not found in temporal/workflows/__init__.py")
+        self.fail("MasterScanWorkflow.run() not found in temporal/workflows/master_scan.py")
 
     def test_subscan_nuclei_future_variable_present(self):
         """SubScanWorkflow tier loop must declare 'nuclei_future' to separate
         vulnerability_scan from the concurrent tier_futures gather."""
         self.assertIn(
             "nuclei_future",
-            self._source(),
+            self._source(self._SUBSCAN_SOURCE_PATH),
             "SubScanWorkflow Tier 6 fix must introduce 'nuclei_future' variable "
             "to hold the vulnerability_scan coroutine separately from tier_futures."
         )
@@ -420,11 +610,11 @@ class TestWorkflowStructuralInvariants(TestCase):
         This ordering guarantees NucleiPlannerWorkflow completes before any
         concurrent T6 activity can raise — preventing the orphaned-child scenario.
         """
-        source = self._source()
+        source = self._source(self._SUBSCAN_SOURCE_PATH)
         nuclei_idx = source.find("await nuclei_future")
         gather_idx = source.find("await asyncio.gather(*tier_futures)")
         self.assertGreater(nuclei_idx, 0,
-                           "'await nuclei_future' not found in temporal/workflows/__init__.py")
+                           "'await nuclei_future' not found in temporal/workflows/subscan.py")
         self.assertGreater(gather_idx, 0,
                            "'await asyncio.gather(*tier_futures)' not found")
         self.assertLess(
@@ -436,7 +626,7 @@ class TestWorkflowStructuralInvariants(TestCase):
     def test_masterscan_has_success_flag(self):
         """MasterScanWorkflow.run() must declare 'success' and set it True/False."""
         import ast
-        source = self._source()
+        source = self._source(self._MASTER_SOURCE_PATH)
         tree = ast.parse(source)
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef) and node.name == "MasterScanWorkflow":
@@ -448,13 +638,13 @@ class TestWorkflowStructuralInvariants(TestCase):
                         self.assertIn("success = False", method_src,
                                       "MasterScanWorkflow.run() must initialise 'success = False'")
                         return
-        self.fail("MasterScanWorkflow.run() not found in temporal/workflows/__init__.py")
+        self.fail("MasterScanWorkflow.run() not found in temporal/workflows/master_scan.py")
 
     def test_masterscan_correlate_activity_in_finally_block(self):
         """CorrelateVulnerabilitiesActivity must appear inside a finally: block
         in MasterScanWorkflow.run(), not inline in the try: body."""
         import ast
-        source = self._source()
+        source = self._source(self._MASTER_SOURCE_PATH)
         tree = ast.parse(source)
 
         for node in ast.walk(tree):
@@ -478,19 +668,19 @@ class TestWorkflowStructuralInvariants(TestCase):
                         "in MasterScanWorkflow.run(), not inline in the try: body. "
                         "It must be guarded by 'if success:' so it only runs on clean completion."
                     )
-        self.fail("MasterScanWorkflow.run() not found in temporal/workflows/__init__.py")
+        self.fail("MasterScanWorkflow.run() not found in temporal/workflows/master_scan.py")
 
     def test_masterscan_nuclei_failure_does_not_raise(self):
         """NucleiPlannerWorkflow failure must be caught so Tier 7 still runs.
 
-        Reads temporal/workflows/__init__.py source and asserts the execute_child_workflow
+        Reads temporal/workflows/master_scan.py source and asserts the execute_child_workflow
         call for NucleiPlannerWorkflow is wrapped in a try-except block,
         confirming Tier 7 correlation/risk/Neo4j activities are not gated on it.
         """
         import ast
 
         src_path = os.path.join(
-            os.path.dirname(__file__), '..', 'reNgine', 'temporal', 'workflows', '__init__.py'
+            os.path.dirname(__file__), '..', 'reNgine', 'temporal', 'workflows', 'master_scan.py'
         )
         with open(src_path) as f:
             source = f.read()

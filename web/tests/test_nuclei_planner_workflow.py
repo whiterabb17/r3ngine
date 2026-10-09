@@ -1,14 +1,14 @@
 """
-Tests for NucleiPlannerWorkflow — sequential severity scanning and tag batching.
+Tests for NucleiPlannerWorkflow — tag-batch scanning with a single severity flag.
 
 Uses WorkflowEnvironment (time-skipping) from temporalio.testing to execute
 the workflow against mocked activities and verify:
 
-  1. GatherNucleiTagsActivity is called once before the severity loop.
-  2. Each severity × tag-batch combination triggers its own RunNucleiActivity call.
-  3. Calls are sequential and in the correct (severity, batch) order.
+  1. GatherNucleiTagsActivity is called once before the nuclei loop.
+  2. All configured severities are passed in one -severity flag per tag batch.
+  3. Calls are sequential and in tag-batch order.
   4. NUCLEI_DEFAULT_SEVERITIES applies when no severity list is configured.
-  5. No tags → single pass per severity with tag_batch=None (no -tags flag).
+  5. No tags → one unfiltered pass with tag_batch=None (no -tags flag).
   6. run_nuclei=False suppresses all RunNucleiActivity calls.
   7. MarkVulnerabilityScanCompleteActivity fires exactly once on every run.
 """
@@ -50,6 +50,16 @@ async def _mock_create_proxy_list(ctx: Dict[str, Any]) -> str:
 @activity.defn(name="CleanupProxyListActivity")
 async def _mock_cleanup_proxy_list(file_path: str) -> bool:
     return True
+
+
+@activity.defn(name="GetProxyPolicyActivity")
+async def _mock_get_proxy_policy(ctx: Dict[str, Any]) -> dict:
+    return {'use_proxy': False, 'only_after_ban': False}
+
+
+@activity.defn(name="CheckTargetBlockingActivity")
+async def _mock_check_target_blocking(ctx: Dict[str, Any]) -> bool:
+    return False
 
 @activity.defn(name="GatherNucleiTagsActivity")
 async def _mock_gather_tags(ctx: Dict[str, Any]) -> Dict[str, Any]:
@@ -116,6 +126,8 @@ _NOOP_SUPPORT_ACTIVITIES = [
     _mock_check_scan_alive,
     _mock_create_proxy_list,
     _mock_cleanup_proxy_list,
+    _mock_get_proxy_policy,
+    _mock_check_target_blocking,
     _mock_gather_tags,
     _mock_crlfuzz,
     _mock_dalfox,
@@ -163,7 +175,7 @@ def _ctx(severities=None, run_nuclei: bool = True) -> Dict[str, Any]:
 
 
 class TestNucleiPlannerWorkflowSequential(IsolatedAsyncioTestCase):
-    """Verify per-severity sequential execution in NucleiPlannerWorkflow."""
+    """Verify collapsed-severity sequential execution in NucleiPlannerWorkflow."""
 
     async def _run_workflow(self, ctx, nuclei_activity, wf_id, extra_activities=None):
         """Spin up a time-skipping WorkflowEnvironment and execute the workflow."""
@@ -190,8 +202,8 @@ class TestNucleiPlannerWorkflowSequential(IsolatedAsyncioTestCase):
                     task_queue="python-orchestrator-queue",
                 )
 
-    async def test_each_severity_gets_own_activity_call_in_order(self):
-        """With no tags, RunNucleiActivity is called once per severity in order."""
+    async def test_all_severities_go_in_one_activity_call(self):
+        """With no tags, RunNucleiActivity is called once with every severity in one flag."""
         call_log: List[str] = []
 
         @activity.defn(name="RunNucleiActivity")
@@ -208,8 +220,8 @@ class TestNucleiPlannerWorkflowSequential(IsolatedAsyncioTestCase):
         self.assertEqual(result, {"status": "SUCCESS"})
         self.assertEqual(
             call_log,
-            ["critical", "high", "medium"],
-            msg=f"Expected severities in order ['critical','high','medium']; got {call_log}",
+            ["critical,high,medium"],
+            msg=f"Expected a single combined severity flag; got {call_log}",
         )
 
     async def test_default_severities_applied_when_none_configured(self):
@@ -230,8 +242,8 @@ class TestNucleiPlannerWorkflowSequential(IsolatedAsyncioTestCase):
         self.assertEqual(result, {"status": "SUCCESS"})
         self.assertEqual(
             call_log,
-            list(NUCLEI_DEFAULT_SEVERITIES),
-            msg=f"Expected default severities {list(NUCLEI_DEFAULT_SEVERITIES)}; got {call_log}",
+            [','.join(NUCLEI_DEFAULT_SEVERITIES)],
+            msg=f"Expected default severities as one flag {','.join(NUCLEI_DEFAULT_SEVERITIES)}; got {call_log}",
         )
 
     async def test_run_nuclei_false_skips_all_nuclei_activity_calls(self):
@@ -349,30 +361,27 @@ class TestNucleiPlannerTagBatching(IsolatedAsyncioTestCase):
 
         return call_log
 
-    async def test_no_batches_produces_one_unfiltered_call_per_severity(self):
-        """Empty batches from activity → one RunNucleiActivity call per severity with tag_batch=None."""
+    async def test_no_batches_produces_one_unfiltered_call(self):
+        """Empty batches from activity → one RunNucleiActivity call with tag_batch=None."""
         call_log = await self._run_with_batches(
             severities=["critical", "high"],
             batches=[],
             wf_id="test-no-batches",
         )
-        self.assertEqual(call_log, [("critical", None), ("high", None)])
+        self.assertEqual(call_log, [("critical,high", None)])
 
-    async def test_single_batch_fires_once_per_severity(self):
-        """One batch → one RunNucleiActivity call per severity with that batch."""
+    async def test_single_batch_fires_once(self):
+        """One batch → one RunNucleiActivity call with every severity in one flag."""
         batch = ["wordpress", "wp-plugin", "wp-theme"]
         call_log = await self._run_with_batches(
             severities=["critical", "high"],
             batches=[batch],
             wf_id="test-single-batch",
         )
-        self.assertEqual(call_log, [
-            ("critical", batch),
-            ("high", batch),
-        ])
+        self.assertEqual(call_log, [("critical,high", batch)])
 
-    async def test_two_batches_fire_in_order_per_severity(self):
-        """Two batches → two calls per severity, severity-first ordering preserved."""
+    async def test_two_batches_fire_in_order(self):
+        """Two batches → two calls, batch order preserved, severities combined."""
         batch_a = ["wordpress"]
         batch_b = ["wp-plugin", "wp-theme"]
         call_log = await self._run_with_batches(
@@ -381,10 +390,8 @@ class TestNucleiPlannerTagBatching(IsolatedAsyncioTestCase):
             wf_id="test-two-batches",
         )
         expected = [
-            ("critical", batch_a),
-            ("critical", batch_b),
-            ("high",     batch_a),
-            ("high",     batch_b),
+            ("critical,high", batch_a),
+            ("critical,high", batch_b),
         ]
         self.assertEqual(call_log, expected)
 

@@ -7,6 +7,7 @@ import {
 import { ShieldCheck, ShieldAlert, Download, Archive, X, Plus } from 'lucide-react';
 import { useVerifyEvidence, useAddAnnotation } from '../api';
 import type { Evidence } from '../types';
+import { openSafeUrl } from '../../../utils/securityUtils';
 
 export function EvidenceDetailDialog({
   item,
@@ -201,7 +202,7 @@ export function EvidenceDetailDialog({
           <Button
             size="small"
             startIcon={<Download size={12} />}
-            onClick={() => window.open(item.download_url, '_blank')}
+            onClick={() => openSafeUrl(item.download_url)}
             sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.7rem' }}
           >
             Download

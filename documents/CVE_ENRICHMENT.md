@@ -8,11 +8,10 @@ The CVE enrichment system automatically fetches and updates vulnerability metada
 - **FIRST EPSS API**: Exploit prediction scores
 - **CISA KEV Catalog**: Known exploited vulnerabilities
 - **SploitScan**: Public exploit evidence (ExploitDB, Metasploit, GitHub PoCs), HackerOne stats, and Patching Priority
-- **SearchSploit**: ExploitDB searches now automatically attribute to their targets (`http_url`) and fetch LLM summaries.
 - **Internal LLM Engine**: Automated, context-aware risk assessments and mitigation strategies
 
 The enriched metadata is stored in the `CveId` model and is consumed by the
-`VulnerabilityCorrelationEngine` to produce more accurate correlation and risk scores. For non-CVE searchsploit exploits, the exploit Title acts as the cached `CveId` key.
+`VulnerabilityCorrelationEngine` to produce more accurate correlation and risk scores.
 
 ---
 
@@ -91,17 +90,12 @@ python manage.py sync_cve_data --all --limit 500
 0 2 * * * cd /app && python manage.py sync_cve_data --all
 ```
 
-### Celery Task Usage (If Configured)
+### Background Sync
 
-```python
-from reNgine.celery_tasks import sync_cve_data_task
-
-# Enrich new CVEs in background
-sync_cve_data_task.delay(sync_type='unenriched', limit=100)
-
-# Sync KEV catalog
-sync_cve_data_task.delay(sync_type='kev')
-```
+There is no Celery task any more. The Python orchestrator runs `sync_cve_data` as a one-shot
+startup sync about five minutes after it starts (see `_STARTUP_SYNC_TASKS` in
+`web/scanEngine/management/commands/run_temporal_orchestrator.py`), and scans enrich their own
+CVEs through `enrich_scan_cves_activity`. For anything else, use the management command above.
 
 ---
 

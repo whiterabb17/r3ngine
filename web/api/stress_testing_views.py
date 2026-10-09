@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -7,6 +9,8 @@ from rest_framework.permissions import IsAuthenticated
 
 
 from api.serializers import ScanHistorySerializer
+
+logger = logging.getLogger(__name__)
 
 
 class StressTestingAPIView(APIView):
@@ -39,9 +43,9 @@ class StressTestingHistoryAPIView(APIView):
                 result = session.run(query)
                 for record in result:
                     scan_ids.append(record["scan_id"])
-        except Exception as e:
-            # Fallback if Neo4j is down or empty
-            pass
+        except Exception:
+            # Neo4j down: fall back to an empty history instead of a 500.
+            logger.warning("Could not read stress test history from Neo4j", exc_info=True)
         neo4j.close()
         
         scans = ScanHistory.objects.filter(id__in=scan_ids).order_by('-id')

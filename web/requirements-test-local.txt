@@ -1,0 +1,80 @@
+﻿# Minimal deps to run Django unit tests from a host venv against the running
+# dockerized Postgres (r3ngine-db-1 on 127.0.0.1:5432). Redis/Neo4j optional —
+# settings_test_local uses locmem cache/channels. Full runtime stack remains in
+# requirements.txt (container image).
+#
+# Usage (from repo root, after: python -m venv .venv && .venv\Scripts\activate):
+#   pip install -r web/requirements-test-local.txt
+#   set DJANGO_SETTINGS_MODULE=reNgine.settings_test_local
+#   set PYTHONPATH=web
+#   python web\manage.py test tests.test_failure_reasons -v 2
+#
+# Windows note: psycopg2-binary instead of psycopg2. Heavy packages that the
+# URLconf would otherwise require (langchain, weasyprint) are stubbed in
+# reNgine.settings_test_local so they are not listed here.
+
+Django==5.2.3
+django-environ==0.11.2
+django-ace==1.44.0
+django-role-permissions==3.2.0
+django-mathfilters==1.0.0
+django-timezone-field==7.2.1
+django-redis==7.0.0
+django-cors-headers==4.3.1
+djangorestframework==3.15.2
+djangorestframework-datatables==0.7.0
+djangorestframework-simplejwt==5.3.1
+drf-yasg==1.21.15
+channels==4.2.2
+channels-redis==4.2.0
+daphne==4.1.2
+redis==5.0.3
+PyYAML==6.0.1
+requests==2.32.3
+urllib3>=1.26.0,<3.0.0
+charset-normalizer>=3.0.0,<4.0.0
+chardet>=5.0.0,<6.0.0
+validators==0.18.2
+netaddr==0.8.0
+tldextract==3.5.0
+beautifulsoup4==4.9.3
+humanize==4.3.0
+Markdown==3.7
+dotted-dict==1.1.3
+temporalio==1.30.0
+tenacity==8.2.2
+typing_extensions>=4.0.0
+cryptography==46.0.5
+pyOpenSSL>=24.0.0
+neo4j==5.23.1
+setuptools==70.0.0
+psycopg2-binary==2.9.10
+psutil
+whatportis
+PySocks==1.7.1
+python-dateutil
+packaging
+xmltodict==0.13.0
+discord-webhook==1.3.0
+pycvesearch==1.0
+metafinder==1.2
+netlas==0.5.1
+wafw00f==2.2.0
+sqlalchemy==1.4.52
+plotly==5.23.0
+shodan==1.31.0
+censys-platform>=0.13.5
+docker>=7.1.0
+esprima==4.0.1
+stem>=1.8.0
+h2
+priority
+service_identity
+icmplib==3.0.4
+aiodns==3.0.0
+argh==0.26.2
+gunicorn==22.0.0
+uvicorn[standard]==0.32.1
+watchdog==4.0.0
+uro==1.0.0
+Pillow

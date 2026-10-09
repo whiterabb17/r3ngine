@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Box,
   Stack,
@@ -43,6 +43,7 @@ import { Bot, Brain } from 'lucide-react';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 import { getSeverityColor } from '../../../theme/semanticColors';
 import { AttackTreeViewer } from './AttackTreeViewer';
+import { VulnerabilityDetailModal } from '../../vulnerabilities/components/VulnerabilityDetailModal';
 
 const RISK_LABEL: Record<string, string> = {
   critical: 'CRITICAL',
@@ -144,7 +145,7 @@ const MitreBadge: React.FC<MitreBadgeProps> = ({
 };
 
 // ─── Enriched Node Rendering ──────────────────────────────────────────────────
-const RenderNode: React.FC<{ node: EnrichedNode | undefined; rawId: string; projectSlug?: string }> = ({ node, rawId, projectSlug }) => {
+const RenderNode: React.FC<{ node: EnrichedNode | undefined; rawId: string; projectSlug?: string; onViewVuln?: (vulnId: number) => void }> = ({ node, rawId, projectSlug, onViewVuln }) => {
   const { tokens, isLight } = useThemeTokens();
   const theme = useTheme();
   const type = node?.type ?? (rawId.startsWith('vuln::') ? 'Vulnerability' : rawId.startsWith('goal::capability::') ? 'Capability' : rawId.startsWith('goal::privilege::') ? 'Privilege' : 'Asset');
@@ -270,11 +271,13 @@ const RenderNode: React.FC<{ node: EnrichedNode | undefined; rawId: string; proj
           {name}
         </Typography>
       </Box>
-      {type === 'Vulnerability' && node?.vuln_id && projectSlug && (
+      {type === 'Vulnerability' && (node?.vuln_id || !isNaN(Number(subtype))) && (
         <Button
           size="small"
-          component={Link}
-          to={`/${projectSlug}/vulns`}
+          onClick={() => {
+            const targetId = node?.vuln_id ?? (rawId.startsWith('vuln::') ? Number(subtype) : null);
+            if (targetId && onViewVuln) onViewVuln(targetId);
+          }}
           sx={{
             fontSize: '0.55rem',
             color: color,
@@ -371,7 +374,7 @@ const TimelineConnector: React.FC<{ step: AttackStep }> = ({ step }) => {
 };
 
 // ─── Timeline Assembler ───────────────────────────────────────────────────────
-const AttackPathTimeline: React.FC<{ steps: AttackStep[]; projectSlug?: string }> = ({ steps, projectSlug }) => {
+const AttackPathTimeline: React.FC<{ steps: AttackStep[]; projectSlug?: string; onViewVuln?: (vulnId: number) => void }> = ({ steps, projectSlug, onViewVuln }) => {
   const { tokens } = useThemeTokens();
   if (!steps || steps.length === 0) return null;
 
@@ -381,10 +384,10 @@ const AttackPathTimeline: React.FC<{ steps: AttackStep[]; projectSlug?: string }
         const isLast = i === steps.length - 1;
         return (
           <React.Fragment key={i}>
-            <RenderNode node={step.from_node} rawId={step.from} projectSlug={projectSlug} />
+            <RenderNode node={step.from_node} rawId={step.from} projectSlug={projectSlug} onViewVuln={onViewVuln} />
             <TimelineConnector step={step} />
             {isLast && (
-              <RenderNode node={step.to_node} rawId={step.to} projectSlug={projectSlug} />
+              <RenderNode node={step.to_node} rawId={step.to} projectSlug={projectSlug} onViewVuln={onViewVuln} />
             )}
           </React.Fragment>
         );
@@ -398,9 +401,10 @@ interface AttackPathCardProps {
   path: AttackPath;
   rank: number;
   projectSlug?: string;
+  onViewVuln?: (vulnId: number) => void;
 }
 
-const AttackPathCard: React.FC<AttackPathCardProps> = ({ path, rank, projectSlug }) => {
+const AttackPathCard: React.FC<AttackPathCardProps> = ({ path, rank, projectSlug, onViewVuln }) => {
   const { tokens, isLight } = useThemeTokens();
   const [expanded, setExpanded] = useState(rank === 0);
   const riskColor = getSeverityColor(path.risk, tokens);
@@ -586,8 +590,9 @@ const AttackPathCard: React.FC<AttackPathCardProps> = ({ path, rank, projectSlug
         </Box>
       )}
 
-      {/* Expanded steps */}
-      <Collapse in={expanded}>
+      {/* Expanded steps. unmountOnExit keeps collapsed cards from mounting AttackTreeViewer,
+          whose useAttackTree query would otherwise fire one request per path on tab open. */}
+      <Collapse in={expanded} unmountOnExit>
         <Divider sx={{ borderColor: `${riskColor}20`, my: 0.5 }} />
         <Box sx={{ px: 2.5, pb: 2.5, pt: 1.5 }}>
           {/* Executive Narrative */}
@@ -704,9 +709,9 @@ const AttackPathCard: React.FC<AttackPathCardProps> = ({ path, rank, projectSlug
             COMPROMISE CHAIN TIMELINE
           </Typography>
           
-          <AttackPathTimeline steps={path.steps} projectSlug={projectSlug} />
+          <AttackPathTimeline steps={path.steps} projectSlug={projectSlug} onViewVuln={onViewVuln} />
           
-          {path.steps.length > 0 && scanId && (
+          {expanded && path.steps.length > 0 && scanId && (
             <AttackTreeViewer scanId={scanId} targetId={path.steps[path.steps.length - 1].to} />
           )}
         </Box>
@@ -718,10 +723,13 @@ const AttackPathCard: React.FC<AttackPathCardProps> = ({ path, rank, projectSlug
 // ─── Risk Summary Bar ─────────────────────────────────────────────────────────
 const RiskSummaryBar: React.FC<{ paths: AttackPath[] }> = ({ paths }) => {
   const { tokens } = useThemeTokens();
-  const counts = { critical: 0, high: 0, medium: 0, low: 0 };
-  paths.forEach((p) => {
-    if (p.risk in counts) counts[p.risk as keyof typeof counts]++;
-  });
+  const counts = useMemo(() => {
+    const acc = { critical: 0, high: 0, medium: 0, low: 0 };
+    paths.forEach((p) => {
+      if (p.risk in acc) acc[p.risk as keyof typeof acc]++;
+    });
+    return acc;
+  }, [paths]);
   const items = [
     { label: 'CRITICAL', count: counts.critical, color: tokens.accent.error },
     { label: 'HIGH',     count: counts.high,     color: '#f97316' },
@@ -792,7 +800,7 @@ const PriorityBadge: React.FC<{ priority: number }> = ({ priority }) => {
 };
 
 // ─── Speculative paths section ────────────────────────────────────────────────
-const SpeculativePathsSection: React.FC<{ paths: AttackPath[]; projectSlug?: string }> = ({ paths, projectSlug }) => {
+const SpeculativePathsSection: React.FC<{ paths: AttackPath[]; projectSlug?: string; onViewVuln?: (vulnId: number) => void }> = ({ paths, projectSlug, onViewVuln }) => {
   const { tokens } = useThemeTokens();
   const [open, setOpen] = useState(false);
   if (!paths || paths.length === 0) return null;
@@ -838,7 +846,7 @@ const SpeculativePathsSection: React.FC<{ paths: AttackPath[]; projectSlug?: str
         <Box sx={{ p: 2 }}>
           <Stack spacing={1.5}>
             {paths.map((path, i) => (
-              <AttackPathCard key={path.path_id} path={path} rank={i} projectSlug={projectSlug} />
+              <AttackPathCard key={path.path_id} path={path} rank={i} projectSlug={projectSlug} onViewVuln={onViewVuln} />
             ))}
           </Stack>
         </Box>
@@ -887,6 +895,7 @@ export const AttackPathsTab: React.FC<AttackPathsTabProps> = ({ scanId }) => {
   const triggerAi = useTriggerAttackPathModeling();
   const recalculatePaths = useRecalculateAttackPaths();
   const { projectSlug } = useParams({ strict: false });
+  const [selectedVulnId, setSelectedVulnId] = useState<number | null>(null);
 
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
     open: false,
@@ -1058,11 +1067,11 @@ export const AttackPathsTab: React.FC<AttackPathsTabProps> = ({ scanId }) => {
               <RiskSummaryBar paths={data.paths} />
               <Stack spacing={1.5}>
                 {data.paths.map((path, i) => (
-                  <AttackPathCard key={path.path_id} path={path} rank={i} projectSlug={projectSlug} />
+                  <AttackPathCard key={path.path_id} path={path} rank={i} projectSlug={projectSlug} onViewVuln={setSelectedVulnId} />
                 ))}
               </Stack>
               {data.speculative_paths && data.speculative_paths.length > 0 && (
-                <SpeculativePathsSection paths={data.speculative_paths} projectSlug={projectSlug} />
+                <SpeculativePathsSection paths={data.speculative_paths} projectSlug={projectSlug} onViewVuln={setSelectedVulnId} />
               )}
             </>
           )
@@ -1093,6 +1102,13 @@ export const AttackPathsTab: React.FC<AttackPathsTabProps> = ({ scanId }) => {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      <VulnerabilityDetailModal
+        open={selectedVulnId !== null}
+        onClose={() => setSelectedVulnId(null)}
+        vulnId={selectedVulnId}
+        projectSlug={projectSlug}
+      />
     </TacticalPanel>
   );
 };

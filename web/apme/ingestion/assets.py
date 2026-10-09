@@ -118,7 +118,7 @@ def ingest_subdomains(target_id: int) -> Tuple[List[Node], List[Edge]]:
                     confidence=1.0,
                 ))
             except ValueError as exc:
-                logger.warning(f"APME Ingestion: {exc}")
+                logger.warning("APME Ingestion: %s", exc)
 
             # Port/Service nodes + HOSTS edges
             for port in ip_obj.ports.all():
@@ -145,11 +145,10 @@ def ingest_subdomains(target_id: int) -> Tuple[List[Node], List[Edge]]:
                         confidence=1.0,
                     ))
                 except ValueError as exc:
-                    logger.warning(f"APME Ingestion: {exc}")
+                    logger.warning("APME Ingestion: %s", exc)
 
     logger.info(
-        f"APME Ingestion [assets]: {len(nodes)} nodes, {len(edges)} edges "
-        f"(target_id={target_id})"
+        "APME Ingestion [assets]: %s nodes, %s edges (target_id=%s)", len(nodes), len(edges), target_id
     )
     
     correlator = ExposureCorrelator()
@@ -194,10 +193,10 @@ def ingest_endpoints(target_id: int) -> Tuple[List[Node], List[Edge]]:
                     confidence=1.0,
                 ))
             except ValueError as exc:
-                logger.warning(f"APME Ingestion: {exc}")
+                logger.warning("APME Ingestion: %s", exc)
 
     logger.info(
-        f"APME Ingestion [endpoints]: {len(nodes)} nodes, {len(edges)} edges"
+        "APME Ingestion [endpoints]: %s nodes, %s edges", len(nodes), len(edges)
     )
     
     correlator = ExposureCorrelator()

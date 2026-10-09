@@ -12,14 +12,31 @@ r3ngine integrates Large Language Models for automated security intelligence gen
 
 r3ngine supports multiple LLM providers, configured via the admin UI:
 
-| Provider | Models |
-|---|---|
-| OpenAI | GPT-4, GPT-4o, GPT-3.5-turbo |
-| Anthropic | Claude 3 Opus, Claude 3 Sonnet, Claude 3 Haiku |
-| Google | Gemini 1.5 Pro, Gemini 1.5 Flash |
-| Ollama | Any locally-hosted model |
+| Provider (`provider`) | Endpoint | Models |
+|---|---|---|
+| OpenAI (`openai`) | `https://api.openai.com/v1` | the account's `gpt-*` models |
+| OpenAI-compatible (`openai_compatible`) | the configured **Base URL** | whatever the server serves |
+| Anthropic (`anthropic`) | `https://api.anthropic.com/v1/messages` | Claude models |
+| Google Gemini (`gemini`) | `generativelanguage.googleapis.com/v1beta` | models with `generateContent` |
+| Ollama (`ollama`) | the `ollama` compose service | any locally pulled model |
 
-The active provider and model are stored in the `LLMConfig` database model.
+The active provider and model are stored in the `LLMConfig` database model. The
+cloud providers are called over plain HTTP (`requests`) from
+`web/reNgine/llm_client.py`, which the report generators and the AI Hub
+connection test share; Ollama goes through `langchain_community`.
+
+Requests that hit a rate limit (429), an overloaded provider (Anthropic's 529),
+a 5xx or a failed connection are retried twice, honouring `Retry-After` up to
+20 s per wait; the AI Hub connection test does not retry. Anthropic calls ask for
+up to 4096 output tokens unless the caller sets `max_tokens`.
+
+**OpenAI-compatible** covers any server that implements `POST <base>/chat/completions`
+(and, for the model picker, `GET <base>/models`): gateways such as OpenRouter,
+and local servers such as vLLM, LM Studio or llama.cpp. The Base URL is the API
+root, usually ending in `/v1`; it must be `http(s)://` with no credentials, query
+or fragment. The model field accepts ids the server does not list. Vigolium's AI
+audit agents only support the `anthropic` and `openai` providers and fall back to
+`piolium` for this one.
 
 ---
 
@@ -49,6 +66,21 @@ Evidence: {evidence_snippet}
 Write a concise (2-3 sentence) impact statement explaining what this vulnerability means 
 for the business and what an attacker could achieve.
 ```
+
+---
+
+## Feature: Vulnerability Severity Validation (`LLMSeverityValidator`)
+
+### Purpose
+
+Re-evaluates scanner findings (especially those misclassified as `Info` or `Low` by tools like WPScan or Nuclei due to missing CVSS metadata) using configured LLM providers. Analyzes vulnerability type, URL, CVE, CWE, description, and evidence against CVSS v3.1 / OWASP standards.
+
+### Workflow
+
+1. Triggered via `POST /api/listVulnerability/{id}/validate_severity/` from row context menu or expanded row detail view in the Vulnerability Table.
+2. `LLMSeverityValidator` in `web/reNgine/llm.py` queries active `LLMConfig`.
+3. Returns JSON containing `suggested_severity`, `suggested_cvss_score`, `confidence`, `reasoning`, and `key_factors`.
+4. Frontend presents a comparison UI allowing the user to review, fine-tune, and accept the reclassified severity via `POST /api/listVulnerability/{id}/update_severity/`.
 
 ---
 
@@ -129,16 +161,15 @@ Computes a composite risk score for each `Vulnerability` based on the calculated
 
 | Field | Description |
 |---|---|
-| `provider` | `openai`, `anthropic`, `google`, `ollama` |
-| `model` | Model identifier (e.g., `gpt-4o`) |
-| `api_key` | API key (encrypted at rest) |
-| `ollama_url` | Base URL for Ollama (default: `http://ollama:11434`) |
-| `max_tokens` | Max token output per LLM call |
-| `temperature` | Sampling temperature (0.0–1.0) |
+| `provider` | `ollama`, `openai`, `openai_compatible`, `anthropic`, `gemini` (one row per provider) |
+| `selected_model` | Model identifier (e.g., `gpt-4o`) |
+| `api_key` | API key, stored in plain text; for Ollama the form uses it for the host URL |
+| `base_url` | API root of an `openai_compatible` provider; unused by the others |
+| `is_active` | The one provider LLM features use |
 
 ### Enabling LLM Features
 
-1. Navigate to **Settings > LLM Configuration** in the r3ngine admin UI.
+1. Navigate to **Settings > AI Hub** in the r3ngine UI.
 2. Select the provider and enter the API key.
 3. Enable the desired features: Impact Assessment, APME, Summaries.
 4. The next scan will use LLM features automatically (Tier 7 runs regardless of task selection).

@@ -1,6 +1,7 @@
 import logging
 import os
 import subprocess
+import sys
 from typing import TYPE_CHECKING
 
 from django.conf import settings
@@ -16,7 +17,8 @@ logger = logging.getLogger(__name__)
 
 _RESULTS_BASE = os.path.realpath(getattr(settings, 'RENGINE_RESULTS', '/usr/src/scan_results'))
 
-_WHATBREACH_PYTHON = '/usr/src/github/WhatBreach/.venv/bin/python3'
+_WHATBREACH_VENV = '/usr/src/github/WhatBreach/.venv/bin/python3'
+_WHATBREACH_PYTHON = _WHATBREACH_VENV if os.path.exists(_WHATBREACH_VENV) else sys.executable
 _WHATBREACH_SCRIPT = '/usr/src/github/WhatBreach/whatbreach.py'
 _WHATBREACH_HOME = os.path.expanduser('~/.whatbreach_home')
 _TOKENS_PATH = os.path.join(_WHATBREACH_HOME, 'tokens')

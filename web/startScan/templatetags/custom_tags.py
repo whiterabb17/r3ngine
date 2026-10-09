@@ -79,3 +79,12 @@ def get_item(dictionary, key):
     if not isinstance(dictionary, dict):
         return None
     return dictionary.get(key)
+
+
+@register.filter(name='list_item')
+def list_item(some_list, index):
+    """Access a list element by zero-based index: {{ my_list|list_item:forloop.counter0 }}"""
+    try:
+        return some_list[int(index)]
+    except (IndexError, TypeError, ValueError):
+        return None

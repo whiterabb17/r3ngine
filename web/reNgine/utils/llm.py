@@ -1,7 +1,8 @@
 import requests
 import json
 import logging
-from reNgine.definitions import OLLAMA_INSTANCE, SUGGESTED_OLLAMA_MODELS, OLLAMA, OPENAI, ANTHROPIC, GEMINI
+from reNgine import llm_client
+from reNgine.definitions import OLLAMA_INSTANCE, SUGGESTED_OLLAMA_MODELS, OLLAMA, OPENAI, OPENAI_COMPATIBLE, ANTHROPIC, GEMINI
 
 logger = logging.getLogger(__name__)
 
@@ -9,12 +10,14 @@ class LLMModelManager:
     def __init__(self):
         self.timeout = 10
 
-    def get_models(self, provider, api_key=None):
+    def get_models(self, provider, api_key=None, base_url=None):
         """Routes to specific provider fetchers."""
         if provider == OLLAMA:
             return self.fetch_ollama_models(api_key)
         elif provider == OPENAI:
             return self.fetch_openai_models(api_key)
+        elif provider == OPENAI_COMPATIBLE:
+            return self.fetch_openai_compatible_models(base_url, api_key)
         elif provider == ANTHROPIC:
             return self.fetch_anthropic_models(api_key)
         elif provider == GEMINI:
@@ -54,7 +57,7 @@ class LLMModelManager:
             
             return all_models
         except Exception as e:
-            logger.error(f"Error fetching Ollama models: {str(e)}")
+            logger.error("Error fetching Ollama models: %s", str(e))
             return SUGGESTED_OLLAMA_MODELS # Return suggestions even if Ollama is down
 
     def fetch_openai_models(self, api_key):
@@ -73,8 +76,19 @@ class LLMModelManager:
                 chat_models = [m['id'] for m in models if 'gpt' in m['id']]
                 return [{'name': m, 'is_local': True, 'expertise': 'Summarization & Analysis'} for m in sorted(chat_models)]
         except Exception as e:
-            logger.error(f"Error fetching OpenAI models: {str(e)}")
+            logger.error("Error fetching OpenAI models: %s", str(e))
         return []
+
+    def fetch_openai_compatible_models(self, base_url, api_key):
+        """Every model the gateway lists; unlike OpenAI's own list, not only gpt-* ids."""
+        if not base_url:
+            return []
+        try:
+            names = llm_client.list_openai_compatible_models(base_url, api_key, timeout=self.timeout)
+        except Exception as e:
+            logger.error("Error fetching OpenAI-compatible models: %s", str(e))
+            return []
+        return [{'name': m, 'is_local': False, 'expertise': 'OpenAI-compatible'} for m in names]
 
     def fetch_anthropic_models(self, api_key):
         """Lists models via Anthropic API (Hardcoded for now as Anthropic doesn't have a public 'list models' endpoint like OpenAI)."""
@@ -103,5 +117,5 @@ class LLMModelManager:
                 gemini_models = [m['name'].replace('models/', '') for m in models if 'generateContent' in m.get('supportedGenerationMethods', [])]
                 return [{'name': m, 'is_local': True, 'expertise': 'Multimodal Analysis'} for m in sorted(gemini_models)]
         except Exception as e:
-            logger.error(f"Error fetching Gemini models: {str(e)}")
+            logger.error("Error fetching Gemini models: %s", str(e))
         return []

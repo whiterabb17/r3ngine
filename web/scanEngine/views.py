@@ -23,11 +23,12 @@ from reNgine.common_func import *
 from reNgine.tasks import (run_command, send_discord_message, send_slack_message,send_lark_message, send_telegram_message, fetch_proxies_task)
 from django.core.cache import cache
 from reNgine.utils.llm import LLMModelManager
-from dashboard.models import LLMConfig
+from dashboard.models import LLMConfig, LLMSettings
 from scanEngine.forms import *
 from scanEngine.forms import ConfigurationForm
 from scanEngine.models import *
-from dashboard.models import SpiderfootAPIKey, LinkedInCredentials, HunterIOAPIKey, WpScanAPIKey, ProjectDiscoveryAPIKey
+from dashboard.models import SpiderfootAPIKey, LinkedInCredentials, HunterIOAPIKey, WpScanAPIKey, ProjectDiscoveryAPIKey, SecurityTrailsAPIKey
+from reNgine.definitions import INTERNAL_ERROR_MESSAGE
 
 
 def index(request, slug):
@@ -276,8 +277,8 @@ def tool_specific_settings(request, slug):
     gf_list = []
     try:
         gf_list = (subprocess.check_output(['gf', '-list'])).decode("utf-8").split('\n')
-    except:
-        pass
+    except (OSError, subprocess.CalledProcessError):
+        logger.warning("Could not list gf patterns", exc_info=True)
     _tpl_base = "/root/nuclei-templates"
     nuclei_custom_pattern = sorted(
         os.path.relpath(f, _tpl_base)
@@ -390,28 +391,14 @@ def proxy_settings(request, slug):
             else:
                 message = 'Proxies updated.'
             proxy_instance.save()
-            # TOR container lifecycle — start or stop on change
-            new_use_tor = proxy_instance.use_tor
-            if new_use_tor != old_use_tor:
-                from reNgine.tor_manager import TorManager, TorStartError, TorUnavailableError
-                tor = TorManager()
-                try:
-                    if new_use_tor:
-                        tor.start()
-                    else:
-                        tor.stop()
-                except TorStartError as e:
+            # TOR Mode needs the optional `tor` compose service; the app cannot
+            # start it, so refuse the toggle with the enable hint when it is down.
+            if proxy_instance.use_tor and not old_use_tor:
+                from reNgine.tor_manager import TorManager
+                if not TorManager().is_running():
                     proxy_instance.use_tor = False
                     proxy_instance.save(update_fields=['use_tor'])
-                    err_msg = f'TOR failed to start: {e}'
-                    if request.headers.get('Accept') == 'application/json':
-                        return http.JsonResponse({'status': 'error', 'message': err_msg}, status=500)
-                    messages.add_message(request, messages.ERROR, err_msg)
-                    return http.HttpResponseRedirect(reverse('proxy_settings', kwargs={'slug': slug}))
-                except TorUnavailableError as e:
-                    proxy_instance.use_tor = False
-                    proxy_instance.save(update_fields=['use_tor'])
-                    err_msg = f'Docker socket not available: {e}'
+                    err_msg = TorManager.enable_hint()
                     if request.headers.get('Accept') == 'application/json':
                         return http.JsonResponse({'status': 'error', 'message': err_msg}, status=503)
                     messages.add_message(request, messages.ERROR, err_msg)
@@ -433,6 +420,9 @@ def proxy_settings(request, slug):
             'proxies': proxy.proxies if proxy else "",
             'use_proxychains': proxy.use_proxychains if proxy else False,
             'use_tor': proxy.use_tor if proxy else False,
+            'priority_proxies': (proxy.priority_proxies or "") if proxy else "",
+            'use_priority_proxies': proxy.use_priority_proxies if proxy else True,
+            'proxy_only_after_ban': proxy.proxy_only_after_ban if proxy else False,
         })
 
     context['settings_nav_active'] = 'active'
@@ -508,7 +498,8 @@ def test_hackerone(request, slug):
         r = requests.get(
             'https://api.hackerone.com/v1/hackers/payments/balance',
             auth=(body['username'], body['api_key']),
-            headers = headers
+            headers = headers,
+            timeout=30
         )
         if r.status_code == 200:
             return http.JsonResponse({"status": 200})
@@ -612,8 +603,9 @@ def fetch_proxies(request, slug):
                 daemon=True,
             ).start()
             return http.JsonResponse({'task_id': job_id})
-        except Exception as e:
-            return http.JsonResponse({'error': str(e)}, status=500)
+        except Exception:
+            logger.exception('Failed to start background job')
+            return http.JsonResponse({'error': INTERNAL_ERROR_MESSAGE}, status=500)
     return http.JsonResponse({'error': 'Invalid request method. POST required.'}, status=405)
 
 
@@ -745,6 +737,8 @@ def llm_toolkit_section(request, slug):
     active_config = configs.filter(is_active=True).first()
     context['active_provider'] = active_config.provider if active_config else 'ollama'
     context['active_config'] = active_config
+    llm_enabled = LLMSettings.get_solo().enabled
+    context['llm_enabled'] = llm_enabled
     
     if request.headers.get('Accept') == 'application/json':
         return http.JsonResponse({
@@ -752,11 +746,13 @@ def llm_toolkit_section(request, slug):
                 {
                     'provider': c.provider,
                     'api_key': c.api_key,
+                    'base_url': c.base_url or '',
                     'selected_model': c.selected_model,
                     'is_active': c.is_active
                 } for c in configs
             ],
-            'active_provider': context['active_provider']
+            'active_provider': context['active_provider'],
+            'llm_enabled': llm_enabled,
         })
 
     return render(request, 'dashboard/v3_index.html', context)
@@ -764,39 +760,71 @@ def llm_toolkit_section(request, slug):
 
 @has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
 def update_llm_settings(request, slug):
-    if request.method == "POST":
-        provider = request.POST.get('provider')
-        api_key = request.POST.get('api_key')
-        selected_model = request.POST.get('selected_model')
-        is_active = request.POST.get('is_active') == 'true'
-        action = request.POST.get('action') # 'save' or 'pull'
-        
-        config, created = LLMConfig.objects.get_or_create(provider=provider)
-        config.api_key = api_key
-        config.selected_model = selected_model
-        
-        if is_active:
-            # Deactivate others
-            LLMConfig.objects.exclude(id=config.id).update(is_active=False)
-            config.is_active = True
-        
-        config.save()
-        
-        if action == 'pull' and provider == 'ollama':
-            from reNgine.tasks import pull_ollama_model
-            threading.Thread(target=pull_ollama_model, args=(selected_model,), daemon=True).start()
-            return http.JsonResponse({'status': 'pulling', 'message': f'Started pulling {selected_model}'})
-            
-        return http.JsonResponse({'status': 'success', 'message': 'Settings updated successfully'})
-    return http.JsonResponse({'status': 'error', 'message': 'Invalid request'}, status=400)
+    if request.method != "POST":
+        return http.JsonResponse({'status': 'error', 'message': 'Invalid request'}, status=400)
+
+    action = request.POST.get('action') # 'save', 'pull', or 'toggle_enabled'
+
+    if action == 'toggle_enabled':
+        llm_enabled_raw = request.POST.get('llm_enabled')
+        if llm_enabled_raw is None:
+            return http.JsonResponse({'status': 'error', 'message': 'llm_enabled is required'}, status=400)
+        settings_row = LLMSettings.get_solo()
+        settings_row.enabled = llm_enabled_raw == 'true'
+        settings_row.save(update_fields=['enabled'])
+        enabled = settings_row.enabled
+        return http.JsonResponse({
+            'status': 'success',
+            'message': 'LLM features enabled.' if enabled else 'LLM features disabled.',
+            'llm_enabled': enabled,
+        })
+
+    from reNgine.definitions import OLLAMA, OPENAI_COMPATIBLE
+    from reNgine.llm_client import CLOUD_PROVIDERS, INVALID_BASE_URL_MESSAGE, normalize_base_url
+
+    provider = request.POST.get('provider')
+    api_key = request.POST.get('api_key')
+    selected_model = request.POST.get('selected_model')
+    is_active = request.POST.get('is_active') == 'true'
+
+    if provider != OLLAMA and provider not in CLOUD_PROVIDERS:
+        return http.JsonResponse({'status': 'error', 'message': 'Unknown LLM provider.'}, status=400)
+
+    base_url = None
+    if provider == OPENAI_COMPATIBLE:
+        try:
+            base_url = normalize_base_url(request.POST.get('base_url'))
+        except ValueError:
+            return http.JsonResponse({'status': 'error', 'message': INVALID_BASE_URL_MESSAGE}, status=400)
+
+    config, created = LLMConfig.objects.get_or_create(provider=provider)
+    config.api_key = api_key
+    config.selected_model = selected_model
+    if provider == OPENAI_COMPATIBLE:
+        config.base_url = base_url
+
+    if is_active:
+        # Deactivate others
+        LLMConfig.objects.exclude(id=config.id).update(is_active=False)
+        config.is_active = True
+
+    config.save()
+
+    if action == 'pull' and provider == 'ollama':
+        from reNgine.tasks import pull_ollama_model
+        threading.Thread(target=pull_ollama_model, args=(selected_model,), daemon=True).start()
+        return http.JsonResponse({'status': 'pulling', 'message': f'Started pulling {selected_model}'})
+
+    return http.JsonResponse({'status': 'success', 'message': 'Settings updated successfully'})
 
 @has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
 def fetch_llm_models(request, slug):
     provider = request.GET.get('provider')
     api_key = request.GET.get('api_key')
-    
+    base_url = request.GET.get('base_url')
+
     manager = LLMModelManager()
-    models = manager.get_models(provider, api_key)
+    models = manager.get_models(provider, api_key, base_url=base_url)
     
     return http.JsonResponse({'status': 'success', 'models': models})
 
@@ -813,36 +841,32 @@ def get_ollama_pull_status(request, slug):
 
 @has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
 def get_ollama_service_status(request, slug):
-    from reNgine.ollama_manager import OllamaManager, OllamaUnavailableError
-    manager = OllamaManager()
-    is_running = manager.is_running()
-    return http.JsonResponse({'status': 'success', 'running': is_running})
+    from reNgine.ollama_manager import OllamaManager
+    return http.JsonResponse({'status': 'success', **OllamaManager().status()})
 
 @has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
 def start_ollama_service(request, slug):
+    """Ollama is a compose service the app cannot start; answer with the status and how to enable it."""
     if request.method != 'POST':
         return http.JsonResponse({'status': 'error', 'message': 'POST required'}, status=400)
-    
-    from reNgine.ollama_manager import OllamaManager, OllamaStartError
+
+    from reNgine.ollama_manager import OllamaManager
     manager = OllamaManager()
-    try:
-        manager.start()
-        return http.JsonResponse({'status': 'success', 'message': 'Ollama service started.'})
-    except OllamaStartError as e:
-        return http.JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    if manager.is_running():
+        return http.JsonResponse({'status': 'success', 'message': 'Ollama is already running.'})
+    return http.JsonResponse({'status': 'error', 'message': manager.enable_hint()}, status=503)
 
 @has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
 def stop_ollama_service(request, slug):
+    """Ollama is a compose service the app cannot stop; answer with how to do it from the host."""
     if request.method != 'POST':
         return http.JsonResponse({'status': 'error', 'message': 'POST required'}, status=400)
-    
+
     from reNgine.ollama_manager import OllamaManager
-    manager = OllamaManager()
-    manager.stop()
-    return http.JsonResponse({'status': 'success', 'message': 'Ollama service stopped.'})
+    return http.JsonResponse({'status': 'error', 'message': OllamaManager.stop_hint()}, status=501)
 
 
-def _test_llm_provider(provider: str, api_key: str, model: str) -> dict:
+def _test_llm_provider(provider: str, api_key: str, model: str, base_url: str = '') -> dict:
     """Send a minimal prompt to the given provider and return a result dict.
 
     Returns {'status': 'success'|'error', 'message': str, 'response': str}.
@@ -850,7 +874,8 @@ def _test_llm_provider(provider: str, api_key: str, model: str) -> dict:
     """
     import requests as req_lib
     from urllib.parse import urlparse
-    from reNgine.definitions import OLLAMA, OPENAI, ANTHROPIC, GEMINI, OLLAMA_INSTANCE
+    from reNgine import llm_client
+    from reNgine.definitions import OLLAMA, OPENAI, OPENAI_COMPATIBLE, ANTHROPIC, GEMINI, OLLAMA_INSTANCE
 
     TEST_SYSTEM = "You are a connectivity test assistant."
     TEST_PROMPT = "Reply with exactly the word: CONNECTED"
@@ -911,90 +936,49 @@ def _test_llm_provider(provider: str, api_key: str, model: str) -> dict:
             logger.exception("Unexpected error during Ollama connection test")
             return {'status': 'error', 'message': 'Unexpected error during Ollama connection test.', 'response': ''}
 
-    elif provider == OPENAI:
+    labels = {
+        OPENAI: 'OpenAI',
+        OPENAI_COMPATIBLE: 'OpenAI-compatible',
+        ANTHROPIC: 'Anthropic',
+        GEMINI: 'Gemini',
+    }
+    label = labels.get(provider)
+    if label:
         if not api_key:
-            return {'status': 'error', 'message': 'OpenAI API key is required.', 'response': ''}
-        use_model = model or 'gpt-3.5-turbo'
+            return {'status': 'error', 'message': f'{label} API key is required.', 'response': ''}
+        if not model:
+            return {'status': 'error', 'message': 'Select a model to test.', 'response': ''}
+        if provider == OPENAI_COMPATIBLE:
+            try:
+                base_url = llm_client.normalize_base_url(base_url)
+            except ValueError:
+                return {'status': 'error', 'message': llm_client.INVALID_BASE_URL_MESSAGE, 'response': ''}
         try:
-            resp = req_lib.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json={
-                    "model": use_model,
-                    "messages": [
-                        {"role": "system", "content": TEST_SYSTEM},
-                        {"role": "user", "content": TEST_PROMPT},
-                    ],
-                    "max_tokens": 20,
-                },
+            response_text = llm_client.complete(
+                provider,
+                api_key=api_key,
+                model=model,
+                system=TEST_SYSTEM,
+                user=TEST_PROMPT,
+                max_tokens=20,
+                base_url=base_url,
                 timeout=30,
+                # Someone is waiting on the result; report a rate limit instead of sitting it out.
+                retries=0,
             )
-            resp.raise_for_status()
-            response_text = resp.json()['choices'][0]['message']['content'].strip()
-            return {'status': 'success', 'message': 'OpenAI connection successful.', 'response': response_text}
+            return {'status': 'success', 'message': f'{label} connection successful.', 'response': response_text.strip()}
         except req_lib.exceptions.HTTPError as exc:
             return {'status': 'error', 'message': _parse_http_error(exc), 'response': ''}
         except req_lib.exceptions.Timeout:
-            return {'status': 'error', 'message': 'OpenAI request timed out.', 'response': ''}
+            return {'status': 'error', 'message': f'{label} request timed out.', 'response': ''}
+        except req_lib.exceptions.ConnectionError:
+            return {'status': 'error', 'message': f'Cannot reach the {label} API — check the URL and network access.', 'response': ''}
+        except llm_client.LLMResponseError:
+            logger.warning("%s connection test got a reply without text", label, exc_info=True)
+            return {'status': 'error', 'message': f'{label} answered, but not with text — check the model id.', 'response': ''}
         except Exception:
-            logger.exception("Unexpected error during OpenAI connection test")
-            return {'status': 'error', 'message': 'Unexpected error during OpenAI connection test.', 'response': ''}
-
-    elif provider == ANTHROPIC:
-        if not api_key:
-            return {'status': 'error', 'message': 'Anthropic API key is required.', 'response': ''}
-        use_model = model or 'claude-3-haiku-20240307'
-        try:
-            resp = req_lib.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": use_model,
-                    "max_tokens": 20,
-                    "system": TEST_SYSTEM,
-                    "messages": [{"role": "user", "content": TEST_PROMPT}],
-                },
-                timeout=30,
-            )
-            resp.raise_for_status()
-            block = resp.json()['content'][0]
-            if block.get('type') != 'text':
-                return {'status': 'error', 'message': f"Unexpected response type from Anthropic: {block.get('type')}", 'response': ''}
-            return {'status': 'success', 'message': 'Anthropic connection successful.', 'response': block['text'].strip()}
-        except req_lib.exceptions.HTTPError as exc:
-            return {'status': 'error', 'message': _parse_http_error(exc), 'response': ''}
-        except req_lib.exceptions.Timeout:
-            return {'status': 'error', 'message': 'Anthropic request timed out.', 'response': ''}
-        except Exception:
-            logger.exception("Unexpected error during Anthropic connection test")
-            return {'status': 'error', 'message': 'Unexpected error during Anthropic connection test.', 'response': ''}
-
-    elif provider == GEMINI:
-        if not api_key:
-            return {'status': 'error', 'message': 'Google Gemini API key is required.', 'response': ''}
-        use_model = model or 'gemini-1.5-flash'
-        try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{use_model}:generateContent"
-            resp = req_lib.post(
-                url,
-                headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
-                json={"contents": [{"parts": [{"text": f"{TEST_SYSTEM}\n\n{TEST_PROMPT}"}]}]},
-                timeout=30,
-            )
-            resp.raise_for_status()
-            response_text = resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-            return {'status': 'success', 'message': 'Gemini connection successful.', 'response': response_text}
-        except req_lib.exceptions.HTTPError as exc:
-            return {'status': 'error', 'message': _parse_http_error(exc), 'response': ''}
-        except req_lib.exceptions.Timeout:
-            return {'status': 'error', 'message': 'Gemini request timed out.', 'response': ''}
-        except Exception:
-            logger.exception("Unexpected error during Gemini connection test")
-            return {'status': 'error', 'message': 'Unexpected error during Gemini connection test.', 'response': ''}
+            logger.exception("Unexpected error during %s connection test", label)
+            return {'status': 'error', 'message': f'Unexpected error during {label} connection test.', 'response': ''}
 
     return {'status': 'error', 'message': f"Unknown provider: {provider}", 'response': ''}
 
@@ -1007,18 +991,19 @@ def test_llm_connection(request, slug):
     provider = request.POST.get('provider', '').strip()
     api_key = request.POST.get('api_key', '').strip()
     model = request.POST.get('model', '').strip()
+    base_url = request.POST.get('base_url', '').strip()
 
     if not provider:
         return http.JsonResponse({'status': 'error', 'message': 'Provider is required.'}, status=400)
 
-    result = _test_llm_provider(provider, api_key, model)
+    result = _test_llm_provider(provider, api_key, model, base_url)
     status_code = 200 if result['status'] == 'success' else 400
     return http.JsonResponse(result, status=status_code)
 
 
 @has_permission_decorator(PERM_MODIFY_SYSTEM_CONFIGURATIONS, redirect_url=FOUR_OH_FOUR_URL)
 def api_vault(request, slug):
-    logger.info(f"api_vault view hit! Method: {request.method}, Slug: {slug}, User: {request.user}")
+    logger.info("api_vault view hit! Method: %s, Slug: %s, User: %s", request.method, slug, request.user)
     context = {}
     if request.method == "POST":
         
@@ -1056,6 +1041,7 @@ def api_vault(request, slug):
         linkedin_username = _pick('linkedin_username', 'linkedin_username')
         key_wpscan = _pick('key_wpscan', 'wpscan_key')
         key_projectdiscovery = _pick('key_projectdiscovery', 'projectdiscovery_key')
+        key_securitytrails = _pick('key_securitytrails', 'securitytrails_key')
 
         # Treat empty strings as "clear value" (fixes: unsetting defaults to last value).
         if key_openai is not None:
@@ -1159,6 +1145,12 @@ def api_vault(request, slug):
                 defaults={'key': key_projectdiscovery or ""}
             )
 
+        if key_securitytrails is not None:
+            SecurityTrailsAPIKey.objects.update_or_create(
+                id=1,
+                defaults={'key': key_securitytrails or ""}
+            )
+
         if linkedin_username is not None:
             LinkedInCredentials.objects.update_or_create(
                 id=1,
@@ -1210,6 +1202,7 @@ def api_vault(request, slug):
             'linkedin_username': LinkedInCredentials.objects.first().username if LinkedInCredentials.objects.exists() else "",
             'wpscan_key': WpScanAPIKey.objects.first().key if WpScanAPIKey.objects.exists() else "",
             'projectdiscovery_key': ProjectDiscoveryAPIKey.objects.first().key if ProjectDiscoveryAPIKey.objects.exists() else "",
+            'securitytrails_key': get_securitytrails_key(),
         })
 
     return render(request, 'dashboard/v3_index.html', context)
@@ -1328,8 +1321,9 @@ def get_full_yaml_config(request, slug):
             content = config_obj.content
             
         return http.JsonResponse({'status': 'success', 'content': content})
-    except Exception as e:
-        return http.JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    except Exception:
+        logger.exception('Failed to read file content')
+        return http.JsonResponse({'status': 'error', 'message': INTERNAL_ERROR_MESSAGE}, status=500)
 
 
 @login_required

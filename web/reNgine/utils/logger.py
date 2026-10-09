@@ -109,8 +109,7 @@ class BaseLogger(ABC):
         prefix_colored = self._colorize(prefix, self._get_prefix_color(prefix))
         action_colored = self._colorize("STRUCTURE", self.COLOR_VIOLET)
         self._logger.debug(
-            f"{prefix_colored} {action_colored} | Full {data_type} structure:\n"
-            f"{json.dumps(data, indent=2, default=str)}"
+            "%s %s | Full %s structure:\n%s", prefix_colored, action_colored, data_type, json.dumps(data, indent=2, default=str)
         )
 
 

@@ -27,8 +27,8 @@ class SubdomainHasIpFilterTest(TestCase):
         mock_qs.order_by.return_value = mock_qs
         view.queryset = mock_qs
 
-        with patch('api.views.Subdomain') as mock_subdomain_cls, \
-             patch('api.views.SubdomainDatatableViewSet._latest_subdomain_rows_by_name', return_value=mock_qs):
+        with patch('api.views.subdomains.Subdomain') as mock_subdomain_cls, \
+             patch('api.views.subdomains.SubdomainDatatableViewSet._latest_subdomain_rows_by_name', return_value=mock_qs):
             mock_subdomain_cls.objects.filter.return_value = mock_qs
             mock_subdomain_cls.objects.all.return_value = mock_qs
             view.get_queryset()
@@ -58,8 +58,10 @@ class LoggerFstringTest(TestCase):
 
     def test_no_fstring_in_run_single_subscan(self):
         import ast, inspect
-        from api import views as api_views
-        source = inspect.getsource(api_views)
+        # _run_single_subscan lives in the scan submodule; getsource on the
+        # package would only return __init__.py and make this check vacuous.
+        from api.views import scan as api_views_scan
+        source = inspect.getsource(api_views_scan)
         tree = ast.parse(source)
 
         violations = []
@@ -87,8 +89,10 @@ class ProxyTimeoutConsistencyTest(TestCase):
 
     def test_uses_constant_not_hardcoded_10(self):
         import ast, inspect
-        from reNgine import common_func
-        source = inspect.getsource(common_func)
+        # get_random_proxy lives in the proxy_pool submodule; getsource on the
+        # package would only return __init__.py and make this check vacuous.
+        from reNgine.common_func import proxy_pool
+        source = inspect.getsource(proxy_pool)
         tree = ast.parse(source)
 
         # Find calls to check_proxy_robust that pass a literal integer for timeout

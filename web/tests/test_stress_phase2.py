@@ -3,8 +3,10 @@ Integration tests for Phase 2 - Enhanced Stress Report Generation.
 Tests report builder, chart generation, and full PDF report pipeline.
 """
 import os
+import base64
 import json
 from datetime import timedelta
+from unittest.mock import patch
 from django.test import TestCase, Client
 from django.utils import timezone
 from django.contrib.auth.models import User
@@ -20,6 +22,7 @@ from reNgine.charts import (
     generate_stress_error_breakdown_chart,
     generate_stress_endpoint_heatmap
 )
+from tests.chart_stubs import MINIMAL_PNG, patch_chart_render, rendered_figure
 
 
 class StressReportBuilderTestCase(TestCase):
@@ -236,38 +239,73 @@ class StressChartGenerationTestCase(TestCase):
             test_status='success'
         )
 
-    def test_latency_distribution_chart_generation(self):
-        """Test that latency distribution chart generates base64 PNG."""
-        chart_base64 = generate_stress_latency_distribution_chart(self.stress_result)
-        self.assertIsNotNone(chart_base64)
+    def assertIsStubPng(self, chart_base64):
+        """The helper returns the renderer's PNG bytes, base64-encoded for the template."""
         self.assertIsInstance(chart_base64, str)
         self.assertTrue(chart_base64.startswith('iVBOR'))  # PNG magic number in base64
+        self.assertEqual(base64.b64decode(chart_base64), MINIMAL_PNG)
 
-    def test_response_code_chart_generation(self):
-        """Test that response code chart generates base64 PNG."""
+    @patch_chart_render()
+    def test_latency_distribution_chart_generation(self, mock_to_image):
+        """Latency distribution: one bar per percentile, rendered as PNG."""
+        chart_base64 = generate_stress_latency_distribution_chart(self.stress_result)
+
+        self.assertIsStubPng(chart_base64)
+        mock_to_image.assert_called_once()
+        self.assertEqual(mock_to_image.call_args.kwargs, {'format': 'png'})
+        fig = rendered_figure(mock_to_image)
+        self.assertEqual(len(fig.data), 1)
+        bar = fig.data[0]
+        self.assertEqual(bar.type, 'bar')
+        self.assertEqual(list(bar.x), ['P50', 'P75', 'P90', 'P95', 'P99', 'P999', 'Avg'])
+        self.assertEqual(list(bar.y), [100.0, 120.0, 180.0, 250.0, 500.0, 750.0, 150.0])
+        self.assertEqual(fig.layout.title.text, 'Latency Distribution (ms)')
+
+    @patch_chart_render()
+    def test_response_code_chart_generation(self, mock_to_image):
+        """Response codes: pie sorted by count, with count and share in the labels."""
         chart_base64 = generate_stress_response_code_chart(self.stress_result.response_code_distribution)
-        self.assertIsNotNone(chart_base64)
-        self.assertIsInstance(chart_base64, str)
-        self.assertTrue(chart_base64.startswith('iVBOR'))
 
-    def test_error_breakdown_chart_generation(self):
-        """Test that error breakdown chart generates base64 PNG."""
+        self.assertIsStubPng(chart_base64)
+        fig = rendered_figure(mock_to_image)
+        pie = fig.data[0]
+        self.assertEqual(pie.type, 'pie')
+        self.assertEqual(list(pie.labels), ['200', '404', '301', '500'])
+        self.assertEqual(list(pie.values), [8000, 1000, 500, 200])
+        self.assertEqual(pie.text[0], '200<br>8000<br>(82.5%)')
+        self.assertEqual(fig.layout.title.text, 'Response Code Distribution')
+
+    @patch_chart_render()
+    def test_error_breakdown_chart_generation(self, mock_to_image):
+        """Error breakdown: one bar per error type, coloured by type."""
         chart_base64 = generate_stress_error_breakdown_chart(self.stress_result.error_breakdown)
-        self.assertIsNotNone(chart_base64)
-        self.assertIsInstance(chart_base64, str)
-        self.assertTrue(chart_base64.startswith('iVBOR'))
 
-    def test_endpoint_heatmap_generation(self):
-        """Test that endpoint heatmap generates base64 PNG."""
+        self.assertIsStubPng(chart_base64)
+        bar = rendered_figure(mock_to_image).data[0]
+        self.assertEqual(list(bar.x), ['timeout', 'connection_refused'])
+        self.assertEqual(list(bar.y), [100, 50])
+        self.assertEqual(list(bar.marker.color), ['#FF4D6A', '#FF9F43'])
+
+    @patch_chart_render()
+    def test_endpoint_heatmap_generation(self, mock_to_image):
+        """Endpoint heatmap: one row per endpoint, columns are status classes."""
         chart_base64 = generate_stress_endpoint_heatmap(
             self.stress_result.endpoints_tested,
             self.stress_result.response_code_distribution
         )
-        self.assertIsNotNone(chart_base64)
-        self.assertIsInstance(chart_base64, str)
-        self.assertTrue(chart_base64.startswith('iVBOR'))
 
-    def test_chart_with_empty_data(self):
+        self.assertIsStubPng(chart_base64)
+        heatmap = rendered_figure(mock_to_image).data[0]
+        self.assertEqual(heatmap.type, 'heatmap')
+        self.assertEqual(list(heatmap.y), ['http://example.com/'])
+        self.assertEqual(
+            list(heatmap.x),
+            ['2xx Success', '3xx Redirect', '4xx Client Error', '5xx Server Error'],
+        )
+        self.assertEqual([list(row) for row in heatmap.z], [[8000, 500, 1000, 200]])
+
+    @patch_chart_render()
+    def test_chart_with_empty_data(self, mock_to_image):
         """Test chart generation with empty data returns None gracefully."""
         result = generate_stress_response_code_chart({})
         self.assertIsNone(result)
@@ -277,6 +315,7 @@ class StressChartGenerationTestCase(TestCase):
 
         result = generate_stress_endpoint_heatmap([], {})
         self.assertIsNone(result)
+        mock_to_image.assert_not_called()
 
 
 class StressReportGenerationAPITestCase(TestCase):
@@ -318,8 +357,11 @@ class StressReportGenerationAPITestCase(TestCase):
             test_status='success'
         )
 
-    def test_stress_report_api_initiation(self):
+    @patch('reNgine.stress.views.threading.Thread')
+    def test_stress_report_api_initiation(self, mock_thread):
         """Test that report generation API initiates correctly."""
+        from reNgine.tasks.report import generate_report_task
+
         self.client.force_login(self.user)
 
         response = self.client.post(
@@ -336,6 +378,12 @@ class StressReportGenerationAPITestCase(TestCase):
         data = json.loads(response.content)
         self.assertTrue(data['status'])
         self.assertIn('report_id', data)
+        # Rendering (PDF + kaleido charts) runs in the background thread; the
+        # API only has to hand it the new report.
+        mock_thread.assert_called_once_with(
+            target=generate_report_task, args=(data['report_id'],), daemon=True,
+        )
+        mock_thread.return_value.start.assert_called_once_with()
 
     def test_stress_report_api_status_check(self):
         """Test that report status can be checked."""

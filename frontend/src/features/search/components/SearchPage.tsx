@@ -34,9 +34,10 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { useSearch, useSearchHistory } from '../api';
-import { escapeRegExp } from '../../../utils/securityUtils';
+import { escapeRegExp, getSafeUrl } from '../../../utils/securityUtils';
 import { useParams, useNavigate, useSearch as useUrlSearch } from '@tanstack/react-router';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import type { ResolvedThemeTokens } from '../../../theme/tokens';
 
 const SEVERITY_COLORS: Record<number, string> = {
   4: '#ff1744', // Critical
@@ -47,7 +48,7 @@ const SEVERITY_COLORS: Record<number, string> = {
   [-1]: '#9e9e9e' // Unknown
 };
 
-const getTabStyle = (tokens: any) => ({
+const getTabStyle = (tokens: ResolvedThemeTokens) => ({
   fontFamily: 'Orbitron',
   fontWeight: 700,
   fontSize: '0.75rem',
@@ -59,7 +60,7 @@ export const SearchPage: React.FC = () => {
   const { tokens } = useThemeTokens();
   const { projectSlug } = useParams({ strict: false });
   const urlSearch = useUrlSearch({ strict: false }) as { query?: string };
-  const navigate = useNavigate();
+  const navigate = useNavigate({ from: '/$projectSlug/search' });
   const [query, setQuery] = useState(urlSearch.query || '');
   const [activeTab, setActiveTab] = useState(0);
 
@@ -69,7 +70,7 @@ export const SearchPage: React.FC = () => {
   const handleSearch = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (query.trim()) {
-      navigate({ search: { query } as any });
+      navigate({ search: { query } });
     }
   };
 
@@ -161,7 +162,7 @@ export const SearchPage: React.FC = () => {
                 label={item.query}
                 onClick={() => {
                   setQuery(item.query);
-                  navigate({ search: { query: item.query } as any });
+                  navigate({ search: { query: item.query } });
                 }}
                 sx={{ 
                   bgcolor: 'action.hover', 
@@ -197,7 +198,7 @@ export const SearchPage: React.FC = () => {
               <Tab label={`SUBDOMAINS (${searchResults.results.subdomains.length})`} sx={getTabStyle(tokens)} />
               <Tab label={`ENDPOINTS (${searchResults.results.endpoints.length})`} sx={getTabStyle(tokens)} />
               <Tab label={`VULNERABILITIES (${searchResults.results.vulnerabilities.length})`} sx={getTabStyle(tokens)} />
-              <Tab label={`OTHERS (${searchResults.results.others.length})`} sx={getTabStyle(tokens)} />
+              <Tab label={`OTHERS (${Object.keys(searchResults.results.others ?? {}).length})`} sx={getTabStyle(tokens)} />
             </Tabs>
 
             <Box sx={{ minHeight: 400 }}>
@@ -232,7 +233,7 @@ export const SearchPage: React.FC = () => {
                               </Typography>
                             </Box>
                           </Stack>
-                          <IconButton component={Link} href={s.http_url} target="_blank" sx={{ color: 'text.disabled' }}>
+                          <IconButton component={Link} href={getSafeUrl(s.http_url) ?? '#'} target="_blank" sx={{ color: 'text.disabled' }}>
                             <ExternalLink size={18} />
                           </IconButton>
                         </CardContent>
@@ -262,7 +263,7 @@ export const SearchPage: React.FC = () => {
                               </Typography>
                             </Box>
                           </Stack>
-                          <IconButton component={Link} href={e.http_url} target="_blank" sx={{ color: 'text.disabled' }}>
+                          <IconButton component={Link} href={getSafeUrl(e.http_url) ?? '#'} target="_blank" sx={{ color: 'text.disabled' }}>
                             <ExternalLink size={18} />
                           </IconButton>
                         </CardContent>

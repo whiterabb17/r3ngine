@@ -395,7 +395,7 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
                 <MenuItem value="">
                   <em>None</em>
                 </MenuItem>
-                {organizations?.map((org: any) => (
+                {organizations?.map((org) => (
                   <MenuItem key={org.id} value={org.name}>
                     {org.name}
                   </MenuItem>
@@ -582,7 +582,7 @@ export const AddTargetModal: React.FC<AddTargetModalProps> = ({ open, onClose, p
                       }
                     }}
                   >
-                    {engines?.map((engine: any) => (
+                    {engines?.map((engine) => (
                       <MenuItem key={engine.id} value={engine.id}>
                         {engine.engine_name}
                       </MenuItem>

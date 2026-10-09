@@ -1,0 +1,17 @@
+---
+description: Commit messages must not include author or tool trailers
+alwaysApply: true
+---
+
+# Git commits
+
+Never add author tags or trailers to commits in this repo.
+
+Do not include:
+- `Co-authored-by:`
+- `Signed-off-by:`
+- `Made-with:` / `Made with`
+- `Generated-by:` / `Generated with`
+- Cursor, Claude, or other tool attribution in the message body or trailers
+
+The commit message is the subject and a short why-focused body only.

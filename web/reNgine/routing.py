@@ -41,7 +41,7 @@ if _os.path.exists(_plugins_data_dir):
         except Exception as _e:
             import logging as _logging
             _logging.getLogger(__name__).warning(
-                f"Failed to load plugin WebSocket consumers for {_plugin_slug}: {_e}")
+                "Failed to load plugin WebSocket consumers for %s: %s", _plugin_slug, _e)
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,

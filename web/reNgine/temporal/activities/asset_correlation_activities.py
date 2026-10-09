@@ -4,7 +4,10 @@ Feature-flag-gated by settings.ASSESSMENT_ASSET_CORRELATION_ENABLED.
 """
 from django.conf import settings
 from temporalio import activity
-from asgiref.sync import sync_to_async
+# channels' wrapper, not asgiref's: it refreshes the thread's database connection
+# around each call. The plain one left a dead cached connection in place for
+# good — see check_scan_queue_status_activity for the incident.
+from channels.db import database_sync_to_async
 
 from reNgine.utils.logger import get_module_logger, format_exception_for_log
 from reNgine.asset_correlation import AssetCorrelationService
@@ -24,7 +27,7 @@ async def run_asset_correlation_activity(assessment_id: str) -> dict:
 
     logger.log_line("[CORRELATION]", "START", "assessment %s" % assessment_id)
     try:
-        result = await sync_to_async(_run_sync, thread_sensitive=True)(assessment_id)
+        result = await database_sync_to_async(_run_sync)(assessment_id)
     except Exception as exc:
         logger.log_line(
             "[CORRELATION]", "ERROR", format_exception_for_log(exc),
@@ -44,7 +47,7 @@ async def run_asset_correlation_activity(assessment_id: str) -> dict:
 
 
 def _run_sync(assessment_id: str) -> dict:
-    """Synchronous inner — runs in a thread via sync_to_async."""
+    """Synchronous inner — runs in a thread via database_sync_to_async."""
     from engagements.models import Assessment, AssessmentEvent
 
     assessment = Assessment.objects.get(uuid=assessment_id)

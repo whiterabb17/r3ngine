@@ -1,4 +1,4 @@
-"""Tests for collect_all_scan_urls() in common_func.py."""
+"""Tests for collect_all_scan_urls() in reNgine/common_func/db_queries.py."""
 import os
 import tempfile
 
@@ -23,7 +23,7 @@ class CollectAllScanUrlsTests(TestCase):
     # ------------------------------------------------------------------
     # Test 1: Only DB endpoints, no result files
     # ------------------------------------------------------------------
-    @patch('reNgine.common_func.get_http_urls')
+    @patch('reNgine.common_func.db_queries.get_http_urls')
     def test_returns_db_urls_when_no_files(self, mock_get_http):
         mock_get_http.return_value = [
             'https://example.com/page1',
@@ -41,7 +41,7 @@ class CollectAllScanUrlsTests(TestCase):
     # ------------------------------------------------------------------
     # Test 2: Only file URLs, no DB endpoints
     # ------------------------------------------------------------------
-    @patch('reNgine.common_func.get_http_urls')
+    @patch('reNgine.common_func.db_queries.get_http_urls')
     def test_returns_file_urls_when_no_db(self, mock_get_http):
         mock_get_http.return_value = []
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -60,7 +60,7 @@ class CollectAllScanUrlsTests(TestCase):
     # ------------------------------------------------------------------
     # Test 3: Deduplication — same URL in DB and file appears once
     # ------------------------------------------------------------------
-    @patch('reNgine.common_func.get_http_urls')
+    @patch('reNgine.common_func.db_queries.get_http_urls')
     def test_deduplicates_across_sources(self, mock_get_http):
         mock_get_http.return_value = ['https://example.com/dup']
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -79,7 +79,7 @@ class CollectAllScanUrlsTests(TestCase):
     # ------------------------------------------------------------------
     # Test 4: Reads urls_*.txt wildcard files and deduplicates across them
     # ------------------------------------------------------------------
-    @patch('reNgine.common_func.get_http_urls')
+    @patch('reNgine.common_func.db_queries.get_http_urls')
     def test_reads_urls_wildcard_files(self, mock_get_http):
         mock_get_http.return_value = []
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -99,7 +99,7 @@ class CollectAllScanUrlsTests(TestCase):
     # ------------------------------------------------------------------
     # Test 5: Invalid / non-HTTP URLs are excluded
     # ------------------------------------------------------------------
-    @patch('reNgine.common_func.get_http_urls')
+    @patch('reNgine.common_func.db_queries.get_http_urls')
     def test_excludes_invalid_urls(self, mock_get_http):
         mock_get_http.return_value = []
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -119,7 +119,7 @@ class CollectAllScanUrlsTests(TestCase):
     # ------------------------------------------------------------------
     # Test 6: Unreadable file is skipped gracefully (no exception raised)
     # ------------------------------------------------------------------
-    @patch('reNgine.common_func.get_http_urls')
+    @patch('reNgine.common_func.db_queries.get_http_urls')
     def test_gracefully_skips_unreadable_file(self, mock_get_http):
         mock_get_http.return_value = ['https://example.com/db']
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -140,7 +140,7 @@ class CollectAllScanUrlsTests(TestCase):
     # ------------------------------------------------------------------
     # Test 7: Result is always sorted
     # ------------------------------------------------------------------
-    @patch('reNgine.common_func.get_http_urls')
+    @patch('reNgine.common_func.db_queries.get_http_urls')
     def test_result_is_sorted(self, mock_get_http):
         mock_get_http.return_value = ['https://example.com/z', 'https://example.com/a']
         with tempfile.TemporaryDirectory() as tmpdir:

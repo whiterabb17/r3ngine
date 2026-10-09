@@ -87,6 +87,8 @@ from reNgine.tasks.acunetix import (
     _start_acunetix_scan_direct,
     _fetch_acunetix_vulnerabilities,
     acunetix_scan,
+    acunetix_submit_live_subdomains,
+    get_live_subdomains_for_submission,
 )
 from reNgine.tasks.geo import (
     geo_localize,
@@ -153,6 +155,7 @@ from reNgine.tasks.subdomain import (
 from reNgine.tasks.scan_init import (
     SCAN_PIPELINE_DEFINITION,
     sync_all_scans_to_graph,
+    cleanup_orphan_workflows_for_completed_scans,
     finish_osint,
     finish_osint_discovery,
     initiate_scan_temporal,
@@ -160,6 +163,7 @@ from reNgine.tasks.scan_init import (
     recover_stuck_scans,
     report,
     resume_scan_temporal,
+    retry_failed_tasks_temporal,
 )
 
 """
@@ -289,8 +293,23 @@ def generate_impact_assessment(self, scan_history_id=None, vulnerability_id=None
 	"""
 	logger.warning("[TIER7][IMPACT] Starting AI impact assessment | scan_id=%s vuln_id=%s", scan_history_id, vulnerability_id)
 
-	from reNgine.llm import LLMImpactGenerator
+	from reNgine.llm import LLMImpactGenerator, llm_env_enabled
 	from reNgine.privacy import PIIGate
+
+	# Bail out before the per-vulnerability loop rather than inside it. Every
+	# iteration makes up to two provider calls, so with the provider unreachable
+	# this task used to spend its whole retry budget failing 100 times over.
+	# Return None (not False): `_run_task` treats False as a hard Temporal
+	# failure, which retried this skip 3 times and marked the whole scan failed.
+	if not llm_env_enabled():
+		logger.warning(
+			"[TIER7][IMPACT] LLM disabled in Settings — skipping | scan_id=%s",
+			scan_history_id,
+		)
+		# Return None, not False: a disabled feature is a skip, not a failure.
+		# _run_task raises on False, which would fail the activity, exhaust its
+		# retries and mark the whole scan FAILED. run_apme skips the same way.
+		return
 
 	# Cap the per-run vuln limit so the activity stays well inside start_to_close_timeout.
 	# Single-vuln calls from the dashboard UI bypass this via vulnerability_id.
@@ -319,6 +338,7 @@ def generate_impact_assessment(self, scan_history_id=None, vulnerability_id=None
 		)
 	else:
 		logger.error("[TIER7][IMPACT] Neither scan_history_id nor vulnerability_id provided — aborting.")
+		self.error = "Neither scan_history_id nor vulnerability_id was provided."
 		return False
 
 	# Check if there are other scanning tasks still running

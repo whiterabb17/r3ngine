@@ -1,5 +1,8 @@
 from unittest import TestCase
 from unittest.mock import patch, MagicMock
+
+from django.test import TestCase as DjangoTestCase
+
 from reNgine.nuclei_batch_utils import count_templates_for_tag, build_tag_batches
 
 
@@ -137,7 +140,9 @@ class TestCountTemplatesForTag(TestCase):
         mock_run.assert_not_called()
 
 
-class TestGatherNucleiTagsActivity(TestCase):
+class TestGatherNucleiTagsActivity(DjangoTestCase):
+    """The activity reads ScanHistory, so it needs the test database."""
+
     @patch('reNgine.nuclei_batch_utils.subprocess.run')
     def test_returns_dict_with_tags_and_batches(self, mock_run):
         mock_run.return_value.returncode = 0
@@ -145,7 +150,7 @@ class TestGatherNucleiTagsActivity(TestCase):
             [f'/root/nuclei-templates/wp-{i}.yaml' for i in range(50)]
         )
 
-        with patch('reNgine.temporal_activities.Subdomain') as mock_sub:
+        with patch('reNgine.temporal.activities.vuln_scan.Subdomain') as mock_sub:
             mock_qs = MagicMock()
             mock_qs.__iter__ = MagicMock(return_value=iter([]))
             mock_sub.objects.filter.return_value = mock_qs
@@ -175,7 +180,7 @@ class TestGatherNucleiTagsActivity(TestCase):
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = ''
 
-        with patch('reNgine.temporal_activities.Subdomain') as mock_sub:
+        with patch('reNgine.temporal.activities.vuln_scan.Subdomain') as mock_sub:
             mock_qs = MagicMock()
             mock_qs.__iter__ = MagicMock(return_value=iter([]))
             mock_sub.objects.filter.return_value = mock_qs
@@ -193,7 +198,7 @@ class TestGatherNucleiTagsActivity(TestCase):
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = ''
 
-        with patch('reNgine.temporal_activities.Subdomain') as mock_sub:
+        with patch('reNgine.temporal.activities.vuln_scan.Subdomain') as mock_sub:
             mock_qs = MagicMock()
             mock_qs.__iter__ = MagicMock(return_value=iter([]))
             mock_sub.objects.filter.return_value = mock_qs
@@ -215,13 +220,18 @@ class TestGatherNucleiTagsActivity(TestCase):
         self.assertIsInstance(result, dict)
         self.assertIn('batches', result)
 
+    @patch.dict('os.environ', {'NUCLEI_MAX_TAGS_PER_BATCH': '3'})
     @patch('reNgine.nuclei_batch_utils.subprocess.run')
     def test_batches_never_exceed_three_tags(self, mock_run):
-        """GatherNucleiTagsActivity must never produce a batch with more than 3 tags."""
+        """Batches honour the NUCLEI_MAX_TAGS_PER_BATCH ceiling.
+
+        Without template counts every tag looks free, so the tag ceiling is the
+        only bound left; here it is set to 3.
+        """
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = ''
 
-        with patch('reNgine.temporal_activities.Subdomain') as mock_sub:
+        with patch('reNgine.temporal.activities.vuln_scan.Subdomain') as mock_sub:
             mock_qs = MagicMock()
             mock_qs.__iter__ = MagicMock(return_value=iter([]))
             mock_sub.objects.filter.return_value = mock_qs

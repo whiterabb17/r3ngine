@@ -3,6 +3,7 @@ import { Box, Typography, Chip, IconButton, Tooltip, Button } from '@mui/materia
 import { Copy, ExternalLink, Check } from 'lucide-react';
 import type { OsintStaging } from '../../types';
 import { useThemeTokens } from '../../../../theme/useThemeTokens';
+import { getSafeUrl } from '../../../../utils/securityUtils';
 
 interface StagingMetadataPanelProps {
   item: OsintStaging;
@@ -25,7 +26,7 @@ const MonoValue: React.FC<{ value: string; copyable?: boolean }> = ({ value, cop
   const handleCopy = () => navigator.clipboard.writeText(value);
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-      <Typography sx={{ fontFamily: 'monospace', fontSize: '0.72rem', color: 'rgba(255,255,255,0.8)' }}>
+      <Typography sx={{ fontFamily: 'monospace', fontSize: '0.72rem', color: 'text.secondary' }}>
         {value}
       </Typography>
       {copyable && (
@@ -84,7 +85,7 @@ const TypedContent: React.FC<{
 
     case 'Social': {
       const profileUrl = String(meta.profile_url || item.content);
-      const isSafe = /^https?:\/\//i.test(profileUrl);
+      const safeProfileUrl = getSafeUrl(profileUrl);
       return (
         <>
           {meta.platform && (
@@ -95,12 +96,12 @@ const TypedContent: React.FC<{
           )}
           <FieldRow label="Profile URL" value={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Typography sx={{ fontFamily: 'monospace', fontSize: '0.72rem', color: 'rgba(255,255,255,0.8)' }}>
+              <Typography sx={{ fontFamily: 'monospace', fontSize: '0.72rem', color: 'text.secondary' }}>
                 {profileUrl}
               </Typography>
-              {isSafe && (
+              {safeProfileUrl && (
                 <Tooltip title="Open profile">
-                  <IconButton size="small" component="a" href={profileUrl}
+                  <IconButton size="small" component="a" href={safeProfileUrl}
                     target="_blank" rel="noopener noreferrer"
                     sx={{ p: 0.25, opacity: 0.5, '&:hover': { opacity: 1 } }}>
                     <ExternalLink size={11} />
@@ -149,7 +150,7 @@ const TypedContent: React.FC<{
       return (
         <Typography sx={{
           fontFamily: 'monospace', fontSize: '0.7rem',
-          color: 'rgba(255,255,255,0.6)', whiteSpace: 'pre-wrap',
+          color: 'text.secondary', whiteSpace: 'pre-wrap',
         }}>
           {JSON.stringify(meta, null, 2)}
         </Typography>

@@ -32,7 +32,7 @@ export function EvidencePage({ assessmentUuid }: { assessmentUuid?: string }) {
     return (
       <Box sx={{ py: 4, textAlign: 'center' }}>
         <CircularProgress size={24} sx={{ color: '#00f3ff' }} />
-        <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'rgba(255,255,255,0.4)', fontFamily: 'Orbitron', fontSize: '0.65rem', letterSpacing: 1 }}>
+        <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary', fontFamily: 'Orbitron', fontSize: '0.65rem', letterSpacing: 1 }}>
           LOADING EVIDENCE VAULT…
         </Typography>
       </Box>
@@ -56,10 +56,10 @@ export function EvidencePage({ assessmentUuid }: { assessmentUuid?: string }) {
         borderRadius: 2,
       }}>
         <Shield size={48} color="rgba(255,255,255,0.08)" style={{ marginBottom: 16 }} />
-        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.3)', fontFamily: 'Orbitron', fontSize: '0.75rem', letterSpacing: 1 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', fontFamily: 'Orbitron', fontSize: '0.75rem', letterSpacing: 1 }}>
           NO EVIDENCE COLLECTIONS
         </Typography>
-        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', display: 'block', mt: 0.5 }}>
+        <Typography variant="caption" sx={{ color: 'text.disabled', display: 'block', mt: 0.5 }}>
           Evidence collections are created automatically when an assessment runs.
         </Typography>
       </Box>
@@ -93,7 +93,7 @@ export function EvidencePage({ assessmentUuid }: { assessmentUuid?: string }) {
                     />
                   </Stack>
                 }
-                sx={{ minHeight: 36, py: 0, color: 'rgba(255,255,255,0.4)', '&.Mui-selected': { color: '#00f3ff' } }}
+                sx={{ minHeight: 36, py: 0, color: 'text.secondary', '&.Mui-selected': { color: '#00f3ff' } }}
               />
             ))}
           </Tabs>

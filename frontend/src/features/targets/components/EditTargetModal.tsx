@@ -347,7 +347,7 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                     <MenuItem value="">
                       <em>None</em>
                     </MenuItem>
-                    {organizations?.map((org: any) => (
+                    {organizations?.map((org) => (
                       <MenuItem key={org.id} value={org.name}>
                         {org.name}
                       </MenuItem>
@@ -585,7 +585,7 @@ export const EditTargetModal: React.FC<EditTargetModalProps> = ({
                       }
                     }}
                   >
-                    {engines?.map((engine: any) => (
+                    {engines?.map((engine) => (
                       <MenuItem key={engine.id} value={engine.id}>
                         {engine.engine_name}
                       </MenuItem>

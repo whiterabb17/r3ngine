@@ -1,0 +1,25 @@
+{
+    "flags": "-iE",
+    "patterns": [
+        "\\$where=",
+        "\\$gt=",
+        "\\$lt=",
+        "\\$ne=",
+        "\\$in=",
+        "\\$nin=",
+        "\\$or=",
+        "\\$and=",
+        "\\$not=",
+        "\\$exists=",
+        "\\$regex=",
+        "\\$elemMatch=",
+        "%24where=",
+        "%24gt=",
+        "%24ne=",
+        "nosql=",
+        "mongodb=",
+        "filter=",
+        "match=",
+        "aggregate="
+    ]
+}

@@ -4,7 +4,7 @@ import PluginComponentLoader from './PluginComponentLoader';
 
 interface PluginSlotProps {
   name: string;
-  context?: any;
+  context?: Record<string, unknown>;
 }
 
 /**
@@ -21,9 +21,9 @@ export const PluginSlot: React.FC<PluginSlotProps> = ({ name, context }) => {
       {plugins
         .filter(p => p.is_enabled && Array.isArray(p.manifest?.ui?.components))
         .map(plugin => (
-          (plugin.manifest.ui.components as any[])
-            .filter((c: any) => c.type === name)
-            .map((comp: any, cidx: number) => (
+          (plugin.manifest.ui?.components ?? [])
+            .filter((c) => c.type === name)
+            .map((comp, cidx) => (
               <PluginComponentLoader 
                 key={`${plugin.slug}-${comp.name || cidx}`}
                 pluginSlug={plugin.slug}

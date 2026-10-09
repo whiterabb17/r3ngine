@@ -20,7 +20,6 @@ Markdown==3.7
 metafinder==1.2
 netaddr==0.8.0
 netlas==0.5.1
-openai==0.28.0
 PyYAML==6.0.1
 PySocks==1.7.1
 psycopg2==2.9.10
@@ -48,7 +47,6 @@ neo4j==5.23.1
 cryptography==46.0.5
 pyOpenSSL>=24.0.0
 locust==2.32.8
-docker>=7.1.0
 esprima==4.0.1
 stem>=1.8.0
 setuptools==70.0.0

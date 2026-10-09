@@ -1346,3 +1346,93 @@ class EnricherFanOutCapTests(_unittest.TestCase):
         total_edges_added = sum(len(call[0][0]) for call in calls)
         self.assertLessEqual(total_edges_added, 12,
                              f"Expected ≤12 edges after fan-out cap, got {total_edges_added}")
+
+
+class AttackPathDeduplicationTests(TestCase):
+    """Verify that attack path modeling engine deduplicates paths properly."""
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from django.utils import timezone
+        from startScan.models import ScanHistory
+        from targetApp.models import Domain
+        from dashboard.models import Project
+        from scanEngine.models import EngineType
+
+        self.user = User.objects.create_user('tester_dedup', password='x')
+        self.project = Project.objects.create(name='p_dedup', slug='p_dedup', insert_date=timezone.now())
+        self.domain = Domain.objects.create(name='dedup.test', project=self.project)
+        self.engine = EngineType.objects.create(engine_name='dedup-engine', yaml_configuration='')
+        self.scan = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_type=self.engine,
+            scan_status=2,
+            start_scan_date='2026-07-09T00:00:00Z',
+        )
+
+    def test_algorithmic_path_deduplication(self):
+        """APMEOrchestrator._persist_paths updates existing record on fingerprint match."""
+        from apme.orchestrator import APMEOrchestrator
+        from apme.models.path import AttackPath, PathStep
+        from startScan.models import ImpactAssessment
+
+        # Create two paths with different random IDs but the same steps (i.e. same fingerprint)
+        path1 = AttackPath(
+            id="APT-AAAAAA",
+            start="vuln::1",
+            end="goal::capability::rce_execution",
+            steps=[PathStep(from_id="vuln::1", to_id="goal::capability::rce_execution", action="exploit", edge_type="LEADS_TO")]
+        )
+        path2 = AttackPath(
+            id="APT-BBBBBB",
+            start="vuln::1",
+            end="goal::capability::rce_execution",
+            steps=[PathStep(from_id="vuln::1", to_id="goal::capability::rce_execution", action="exploit", edge_type="LEADS_TO")]
+        )
+
+        orch = APMEOrchestrator()
+        node_index = {}
+
+        # Persist path1 first
+        orch._persist_paths([path1], self.scan.id, node_index)
+        self.assertEqual(ImpactAssessment.objects.filter(scan_history=self.scan).count(), 1)
+
+        # Persist path2 (with different ID but same fingerprint). Should NOT create a new row, but update it.
+        orch._persist_paths([path2], self.scan.id, node_index)
+        self.assertEqual(ImpactAssessment.objects.filter(scan_history=self.scan).count(), 1)
+
+        # Verify that the apme_path_id in potential_attack_chain got updated to path2's ID
+        assessment = ImpactAssessment.objects.filter(scan_history=self.scan).first()
+        self.assertEqual(assessment.potential_attack_chain["apme_path_id"], "APT-BBBBBB")
+
+    def test_llm_path_deduplication(self):
+        """LLMPathOrchestrator._persist_to_db updates existing record on fingerprint match."""
+        from apme.llm_orchestrator import LLMPathOrchestrator
+        from apme.models.path import AttackPath, PathStep
+        from startScan.models import ImpactAssessment
+
+        path1 = AttackPath(
+            id="APT-LLMAAA",
+            start="vuln::1",
+            end="goal::capability::rce_execution",
+            steps=[PathStep(from_id="vuln::1", to_id="goal::capability::rce_execution", action="exploit", edge_type="LEADS_TO")]
+        )
+        path2 = AttackPath(
+            id="APT-LLMBBB",
+            start="vuln::1",
+            end="goal::capability::rce_execution",
+            steps=[PathStep(from_id="vuln::1", to_id="goal::capability::rce_execution", action="exploit", edge_type="LEADS_TO")]
+        )
+
+        orch = LLMPathOrchestrator()
+
+        # Persist path1 first
+        orch._persist_to_db(path1, self.scan)
+        self.assertEqual(ImpactAssessment.objects.filter(scan_history=self.scan).count(), 1)
+
+        # Persist path2 (same fingerprint). Should update existing.
+        orch._persist_to_db(path2, self.scan)
+        self.assertEqual(ImpactAssessment.objects.filter(scan_history=self.scan).count(), 1)
+
+        assessment = ImpactAssessment.objects.filter(scan_history=self.scan).first()
+        self.assertEqual(assessment.potential_attack_chain["apme_path_id"], "APT-LLMBBB")

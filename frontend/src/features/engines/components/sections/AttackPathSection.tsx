@@ -19,7 +19,7 @@ export const AttackPathSection: React.FC<Props> = ({ config, enabled, onToggle, 
   return (
     <SectionCard
       title="Attack Path Modeling"
-      description="Builds attack paths from scan results using Neo4j graph analysis (Tier 7)."
+      description="Builds attack paths from scan results using Neo4j graph analysis (Tier 7). On by default; switch off to skip attack path modeling."
       enabled={enabled}
       onToggle={onToggle}
     >

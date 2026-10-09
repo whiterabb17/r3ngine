@@ -1,9 +1,28 @@
 import { useSuspenseQuery, useQuery, useMutation } from '@tanstack/react-query';
 import axios from 'axios';
+import type { NodeData } from '../../../store/useGraphStore';
+
+/**
+ * Cytoscape node served by `/<slug>/api/graph/{scan,target}/<id>/data/`
+ * (`Neo4jManager._fetch_graph_data`). `parent` is only set client-side for compound nodes.
+ */
+export interface GraphNodeElement {
+  data: NodeData & { parent?: string };
+}
+
+/** Cytoscape edge; `label` is the Neo4j relationship type (e.g. `HAS_SUBDOMAIN`). */
+export interface GraphEdgeElement {
+  data: {
+    source: string;
+    target: string;
+    label: string;
+    scan_ids: number[];
+  };
+}
 
 export interface GraphData {
-  nodes: any[];
-  edges: any[];
+  nodes: GraphNodeElement[];
+  edges: GraphEdgeElement[];
 }
 
 export const useGraphData = (projectSlug: string, scanId?: number, targetId?: number) => {
@@ -37,8 +56,9 @@ export const useGraphNodeDetails = (projectSlug: string, nodeId: string | null) 
   });
 };
 
+/** Downstream subgraph of a node (`Neo4jManager.get_blast_radius`, same shape as the graph data). */
 export const useGraphBlastRadius = (projectSlug: string, nodeId: string | null) => {
-  return useQuery({
+  return useQuery<GraphData>({
     queryKey: ['graph-blast-radius', projectSlug, nodeId],
     queryFn: async () => {
       const response = await fetch(`/${projectSlug}/api/graph/blast-radius/${nodeId}/`, { credentials: 'include' });

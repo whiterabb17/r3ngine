@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { getSeverityColor as getSemanticSeverityColor, getSeverityLabel } from '../../../theme/semanticColors';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import type { ResolvedThemeTokens } from '../../../theme/tokens';
+import type { ApiErrorLike } from '../../../types/errors';
 import { useParams, Link as RouterLink } from '@tanstack/react-router';
 import {
   Box,
@@ -39,8 +41,12 @@ import {
   Backdrop,
   DialogActions,
   Link,
-  Alert
+  Alert,
+  Snackbar
 } from '@mui/material';
+import type { Theme } from '@mui/material';
+import type { SystemStyleObject } from '@mui/system';
+import type { ApexOptions } from 'apexcharts';
 import {
   Activity,
   Globe,
@@ -49,6 +55,7 @@ import {
   Zap,
   Terminal,
   AlertTriangle,
+  Play,
   Target,
   Map as MapIcon,
   ChevronRight,
@@ -79,12 +86,19 @@ import {
   Key,
   X,
   Copy,
+  Square,
   RefreshCw,
   GitBranch,
   Brain
 } from 'lucide-react';
-import { useScanSummary, useActivityLogs, useScanLogs, useFetchWhois, useStopScan, useRetryScanTask } from '../api';
-import type { Command, SubScan, Vulnerability, ScanActivity, Subdomain, ScanSummaryResponse, TodoNote } from '../types';
+import type { LucideIcon } from 'lucide-react';
+import { useScanSummary, useActivityLogs, useScanLogs, useFetchWhois, useStopScan, useStopSubScan, useRetryScanTask, useRetryScanTier, useResumeScan } from '../api';
+import { isResumableScanStatus } from '../utils/scanStatus';
+import { getFailureCategoryLabel, isNotRunActivity, summariseTier } from '../utils/failureCategories';
+import { TimelineTierHeader } from './TimelineTierHeader';
+import { ScanHardwareProfileControl } from './ScanHardwareProfileControl';
+import type { Command, SubScan, ScanActivity, Subdomain, ScanSummaryResponse, TodoNote, DiscoveredPort, DiscoveredTechnology, SummaryVulnerability, SummaryVulnerabilityBase, SummaryVulnerabilityHighlight } from '../types';
+import type { Plugin } from '../../plugins/api/pluginsApi';
 import Chart from 'react-apexcharts';
 import { GeoMap } from '../../dashboard/components/GeoMap';
 import { KpiCard } from '../../../components/KpiCard';
@@ -93,8 +107,9 @@ import { DirectoriesTab } from './DirectoriesTab';
 import { EndpointsTab } from './EndpointsTab';
 import { ParametersTab } from './ParametersTab';
 import { TacticalPanel } from '../../../components/TacticalPanel';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { VulnerabilityTable } from '../../vulnerabilities/components/VulnerabilityTable';
-import { useGptVulnerabilityDetails } from '../../vulnerabilities/api';
+import { useGptVulnerabilityDetails, useVulnerability } from '../../vulnerabilities/api';
 import { SecretLeaksTab } from './SecretLeaksTab';
 import { AttackSurfaceTab } from './AttackSurfaceTab';
 import VisualizationTab from './VisualizationTab';
@@ -104,11 +119,15 @@ import { StartScanModal } from './StartScanModal';
 import { OsintTab } from './OsintTab';
 import { AttackPathsTab } from './AttackPathsTab';
 import { AiExportModal } from './AiExportModal';
+import { ExploitsTab } from './ExploitsTab';
 import { ExposureList } from '../../exposures/components/ExposureList';
 import { usePlugins } from '../../plugins/api/pluginsApi';
 import PluginComponent from '../../plugins/components/PluginComponent';
 import PluginComponentLoader from '../../plugins/components/PluginComponentLoader';
 import PluginCardSlot from '../../plugins/components/PluginCardSlot';
+import { getSafeUrl } from '../../../utils/securityUtils';
+import { formatYesNo } from '../../../utils/displayFormat';
+import { WhoisPanel } from './WhoisPanel';
 
 const SeverityBadge: React.FC<{ severity: number }> = ({ severity }) => {
   const { tokens } = useThemeTokens();
@@ -131,44 +150,58 @@ const SeverityBadge: React.FC<{ severity: number }> = ({ severity }) => {
   );
 };
 
+/** AI analysis text shown instead of the stored fields for the vulnerability the modal is keyed to. */
+interface GptOverride {
+  description?: string;
+  impact?: string;
+  remediation?: string;
+  references: string[];
+}
+
+/**
+ * Opens from a scan summary row, which carries only the text fields. The CVSS, source,
+ * tags and references come from the full record, loaded while the modal is open; the
+ * severity stays the row's numeric one (the full record sends a label).
+ * The parent keys it by vulnerability id, so the AI override resets per vulnerability.
+ */
 const VulnerabilityInfoModal: React.FC<{
   open: boolean;
   onClose: () => void;
-  vulnerability: any;
-}> = ({ open, onClose, vulnerability }) => {
+  vulnerability: SummaryVulnerabilityBase;
+  projectSlug: string;
+}> = ({ open, onClose, vulnerability, projectSlug }) => {
   const { tokens, isLight } = useThemeTokens();
   const gptMutation = useGptVulnerabilityDetails();
-  const [localVuln, setLocalVuln] = useState<any>(null);
+  const { data: detail } = useVulnerability(open ? vulnerability.id : null, projectSlug);
+  const [gptOverride, setGptOverride] = useState<GptOverride | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    setLocalVuln(vulnerability);
-    setError(null);
-  }, [vulnerability]);
-
-  if (!localVuln) return null;
-
-  const severityColor = getSemanticSeverityColor(String(localVuln.severity ?? 'info'), tokens);
+  const severityColor = getSemanticSeverityColor(vulnerability.severity, tokens);
+  const description = gptOverride?.description ?? detail?.description ?? vulnerability.description;
+  const impact = gptOverride?.impact ?? detail?.impact ?? vulnerability.impact;
+  const remediation = gptOverride?.remediation ?? detail?.remediation ?? vulnerability.remediation;
+  const referenceUrls = gptOverride?.references.length
+    ? gptOverride.references
+    : (detail?.references ?? []).map((ref) => ref.url);
 
   const handleFetchGpt = async () => {
-    if (!localVuln) return;
     setError(null);
     try {
-      const result = await gptMutation.mutateAsync({ id: localVuln.id!, name: localVuln.name });
+      const result = await gptMutation.mutateAsync({ id: vulnerability.id, name: vulnerability.name });
       if (result.status) {
-        setLocalVuln((prev: any) => ({
-          ...prev,
+        setGptOverride({
           description: result.description,
           impact: result.impact,
           remediation: result.remediation,
-          references: result.references?.join('\n') || prev.references || ''
-        }));
+          references: result.references ?? [],
+        });
       } else {
         setError(result.error || 'Failed to generate GPT description');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err?.response?.data?.error || err?.message || 'Something went wrong while generating GPT description');
+      const apiError = err as ApiErrorLike;
+      setError(apiError?.response?.data?.error || apiError?.message || 'Something went wrong while generating GPT description');
     }
   };
 
@@ -198,9 +231,9 @@ const VulnerabilityInfoModal: React.FC<{
           <Bug size={24} color={severityColor} />
           <Box>
             <Typography sx={{ color: 'text.primary', fontWeight: 900, fontSize: '1.1rem', letterSpacing: 1, fontFamily: 'Orbitron' }}>
-              {localVuln.name}
+              {vulnerability.name}
             </Typography>
-            <SeverityBadge severity={Number(localVuln.severity)} />
+            <SeverityBadge severity={vulnerability.severity} />
           </Box>
         </Stack>
         <IconButton onClick={onClose} sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary', bgcolor: 'action.hover' } }}>
@@ -222,20 +255,20 @@ const VulnerabilityInfoModal: React.FC<{
             <Grid container spacing={2}>
               <Grid size={{ xs: 6, md: 3 }}>
                 <Typography sx={{ color: 'text.secondary', fontSize: '0.7rem', fontWeight: 700, mb: 0.5 }}>CVSS SCORE</Typography>
-                <Typography sx={{ color: 'text.primary', fontSize: '0.9rem', fontWeight: 900 }}>{localVuln.cvss_score || 'N/A'}</Typography>
+                <Typography sx={{ color: 'text.primary', fontSize: '0.9rem', fontWeight: 900 }}>{detail?.cvss_score ?? 'N/A'}</Typography>
               </Grid>
               <Grid size={{ xs: 6, md: 3 }}>
                 <Typography sx={{ color: 'text.secondary', fontSize: '0.7rem', fontWeight: 700, mb: 0.5 }}>CVSS METRICS</Typography>
-                <Typography sx={{ color: 'text.primary', fontSize: '0.8rem', fontWeight: 600, fontFamily: 'monospace' }}>{localVuln.cvss_metrics || 'N/A'}</Typography>
+                <Typography sx={{ color: 'text.primary', fontSize: '0.8rem', fontWeight: 600, fontFamily: 'monospace' }}>{detail?.cvss_metrics || 'N/A'}</Typography>
               </Grid>
               <Grid size={{ xs: 6, md: 3 }}>
                 <Typography sx={{ color: 'text.secondary', fontSize: '0.7rem', fontWeight: 700, mb: 0.5 }}>SOURCE</Typography>
-                <Typography sx={{ color: 'text.primary', fontSize: '0.9rem', fontWeight: 700 }}>{localVuln.source || 'N/A'}</Typography>
+                <Typography sx={{ color: 'text.primary', fontSize: '0.9rem', fontWeight: 700 }}>{detail?.source || 'N/A'}</Typography>
               </Grid>
               <Grid size={{ xs: 6, md: 3 }}>
                 <Typography sx={{ color: 'text.secondary', fontSize: '0.7rem', fontWeight: 700, mb: 0.5 }}>TAGS</Typography>
                 <Stack direction="row" sx={{ spacing: 0.5, flexWrap: "wrap" }}>
-                  {localVuln.tags?.map((tag: any, i: number) => (
+                  {detail?.tags?.map((tag, i: number) => (
                     <Chip
                       key={i}
                       label={tag.name}
@@ -260,45 +293,45 @@ const VulnerabilityInfoModal: React.FC<{
               Description
             </Typography>
             <Typography sx={{ color: 'text.primary', fontSize: '0.9rem', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-              {localVuln.description || 'No description provided.'}
+              {description || 'No description provided.'}
             </Typography>
           </Box>
 
           {/* Impact Section */}
-          {localVuln.impact && (
+          {impact && (
             <Box>
               <Typography sx={{ color: isLight ? tokens.accent.error : '#ff003c', fontSize: '0.7rem', fontWeight: 900, mb: 1.5, letterSpacing: 1, textTransform: 'uppercase' }}>
                 Impact
               </Typography>
               <Typography sx={{ color: 'text.primary', fontSize: '0.9rem', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                {localVuln.impact}
+                {impact}
               </Typography>
             </Box>
           )}
 
           {/* Remediation Section */}
-          {localVuln.remediation && (
+          {remediation && (
             <Box>
               <Typography sx={{ color: isLight ? tokens.accent.success : '#00ff62', fontSize: '0.7rem', fontWeight: 900, mb: 1.5, letterSpacing: 1, textTransform: 'uppercase' }}>
                 Remediation
               </Typography>
               <Typography sx={{ color: 'text.primary', fontSize: '0.9rem', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                {localVuln.remediation}
+                {remediation}
               </Typography>
             </Box>
           )}
 
           {/* References Section */}
-          {localVuln.references && (
+          {referenceUrls.length > 0 && (
             <Box>
               <Typography sx={{ color: tokens.accent.primary, fontSize: '0.7rem', fontWeight: 900, mb: 1.5, letterSpacing: 1, textTransform: 'uppercase' }}>
                 References
               </Typography>
               <Stack spacing={1}>
-                {localVuln.references.split('\n').filter(Boolean).map((ref: string, i: number) => (
+                {referenceUrls.map((ref: string, i: number) => (
                   <Link
                     key={i}
-                    href={ref}
+                    href={getSafeUrl(ref) ?? '#'}
                     target="_blank"
                     sx={{
                       color: 'text.secondary',
@@ -367,6 +400,15 @@ const VulnerabilityInfoModal: React.FC<{
   );
 };
 
+interface ScanDetailTab {
+  label: string;
+  icon: LucideIcon;
+  show?: boolean;
+  isPlugin?: boolean;
+  pluginSlug?: string;
+  componentFile?: string;
+}
+
 const getFrontendEngineColor = (
   activityTitle: string,
   tokens: ReturnType<typeof useThemeTokens>['tokens']
@@ -403,11 +445,11 @@ const StatusBadge: React.FC<{ status: number, compact?: boolean, isSpiderFootRun
           fontFamily: 'Orbitron',
           animation: 'pulse-spider 2s infinite ease-in-out',
           textShadow: isLight ? 'none' : `0 0 10px ${tokens.accent.secondary}40`,
-          boxShadow: `inset 0 0 10px ${tokens.accent.secondary}10`,
+          boxShadow: `inset 0 0 10px ${tokens.accent.secondary}10, 0 0 8px ${tokens.accent.secondary}`,
           '@keyframes pulse-spider': {
-            '0%': { transform: 'scale(1)', filter: `drop-shadow(0 0 0px ${tokens.accent.secondary})` },
-            '50%': { transform: 'scale(1.05)', filter: `drop-shadow(0 0 8px ${tokens.accent.secondary})` },
-            '100%': { transform: 'scale(1)', filter: `drop-shadow(0 0 0px ${tokens.accent.secondary})` },
+            '0%': { transform: 'scale(1)', opacity: 1 },
+            '50%': { transform: 'scale(1.05)', opacity: 0.85 },
+            '100%': { transform: 'scale(1)', opacity: 1 },
           }
         }}>
           <Bug size={compact ? 12 : 18} />
@@ -416,7 +458,7 @@ const StatusBadge: React.FC<{ status: number, compact?: boolean, isSpiderFootRun
       </MuiTooltip>
     );
   }
-  const configs: any = {
+  const configs: Record<number, { label: string; color: string; icon: LucideIcon }> = {
     [-1]: { label: 'PENDING', color: tokens.accent.warning, icon: Clock },
     [0]: { label: 'FAILED', color: tokens.accent.error, icon: AlertTriangle },
     [1]: { label: 'RUNNING', color: tokens.accent.primary, icon: Activity },
@@ -477,7 +519,7 @@ const getCommandBinary = (cmd: string) => {
   return binary;
 };
 
-const getToolColor = (binary: string, tokens: any, isLight?: boolean) => {
+const getToolColor = (binary: string, tokens: ResolvedThemeTokens, isLight?: boolean) => {
   const b = binary.toLowerCase();
   if (b.includes('httpx')) return tokens.accent.primary;
   if (b.includes('nuclei')) return tokens.accent.error;
@@ -487,26 +529,200 @@ const getToolColor = (binary: string, tokens: any, isLight?: boolean) => {
   return tokens.accent.secondary;
 };
 
+const TIER_LABELS: Record<number, string> = {
+  0: 'Initialization',
+  1: 'Discovery',
+  2: 'Enumeration',
+  3: 'URL & Screenshots',
+  4: 'Fuzzing',
+  5: 'Analysis',
+  6: 'Security Assessment',
+  7: 'Post-Processing',
+};
+
+type ActivityStatusConfig = { color: string, label: string };
+
+const getActivityStatusConfig = (
+  status: ScanActivity['status'],
+  tokens: ReturnType<typeof useThemeTokens>['tokens'],
+  fallbackColor: string
+): ActivityStatusConfig => {
+  const statusConfig: Record<string, ActivityStatusConfig> = {
+    'SUCCESS': { color: tokens.accent.success, label: 'Completed' },
+    'RUNNING': { color: tokens.accent.primary, label: 'In Progress' },
+    'FAILED': { color: tokens.accent.error, label: 'Failed' },
+    'ABORTED': { color: tokens.accent.error, label: 'Aborted' },
+    'PENDING': { color: tokens.accent.warning, label: 'Pending' }
+  };
+  return statusConfig[status] || { color: fallbackColor, label: status };
+};
+
+const getActivityDurationSeconds = (activity: Pick<ScanActivity, 'time_started' | 'time_ended'>): number | null => {
+  if (!activity.time_started || !activity.time_ended) return null;
+  return Math.round((new Date(activity.time_ended).getTime() - new Date(activity.time_started).getTime()) / 1000);
+};
+
+const ActivityDetailField: React.FC<{ label: string; value: React.ReactNode; monospace?: boolean }> = ({ label, value, monospace }) => (
+  <Box sx={{ minWidth: 0 }}>
+    <Typography sx={{ fontSize: '0.55rem', color: 'text.disabled', fontWeight: 900, letterSpacing: 1, textTransform: 'uppercase' }}>
+      {label}
+    </Typography>
+    <Typography
+      component="div"
+      sx={{
+        fontSize: '0.7rem',
+        color: 'text.primary',
+        fontWeight: 600,
+        fontFamily: monospace ? 'monospace' : undefined,
+        wordBreak: 'break-all'
+      }}
+    >
+      {value}
+    </Typography>
+  </Box>
+);
+
+const ActivityDetailsPanel: React.FC<{ activity: ScanActivity }> = ({ activity }) => {
+  const { tokens, isLight, theme } = useThemeTokens();
+  const [showTraceback, setShowTraceback] = useState(false);
+  const config = getActivityStatusConfig(activity.status, tokens, theme.palette.text.primary);
+  const durationSeconds = getActivityDurationSeconds(activity);
+  const traceback = activity.traceback || '';
+  const isFailed = activity.status === 'FAILED' || activity.status === 'ABORTED';
+  const failureCategoryLabel = getFailureCategoryLabel(activity.failure_category);
+
+  return (
+    <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: { xs: 1.5, sm: 3 } }}>
+        <Box sx={{
+          alignSelf: 'center',
+          px: 1,
+          py: 0.2,
+          borderRadius: 1,
+          bgcolor: `${config.color}20`,
+          border: `1px solid ${config.color}40`,
+          color: config.color,
+          fontSize: '0.65rem',
+          fontWeight: 800,
+          whiteSpace: 'nowrap'
+        }}>
+          {config.label}
+        </Box>
+        {activity.target_host && (
+          <ActivityDetailField label="Target host" value={activity.target_host} monospace />
+        )}
+        {activity.tier !== null && activity.tier !== undefined && (
+          <ActivityDetailField label="Tier" value={`${activity.tier} — ${TIER_LABELS[activity.tier] ?? 'Unknown'}`} />
+        )}
+        <ActivityDetailField label="Started" value={activity.time_started ? new Date(activity.time_started).toLocaleString() : 'N/A'} />
+        <ActivityDetailField label="Ended" value={activity.time_ended ? new Date(activity.time_ended).toLocaleString() : 'N/A'} />
+        {durationSeconds !== null && (
+          <ActivityDetailField label="Duration" value={`${durationSeconds}s`} />
+        )}
+        {activity.execution_id && (
+          <ActivityDetailField label="Execution ID" value={activity.execution_id} monospace />
+        )}
+      </Box>
+
+      {isFailed && failureCategoryLabel && (
+        <Box sx={{
+          mt: 1.5,
+          p: 1,
+          bgcolor: `${tokens.accent.error}0D`,
+          border: `1px solid ${tokens.accent.error}33`,
+          borderLeft: `3px solid ${tokens.accent.error}`,
+          borderRadius: 0.5
+        }}>
+          <Typography sx={{ fontSize: '0.7rem', fontWeight: 900, color: tokens.accent.error, letterSpacing: 0.5 }}>
+            {failureCategoryLabel.toUpperCase()}
+          </Typography>
+          {activity.failure_hint && (
+            <Typography sx={{ mt: 0.3, fontSize: '0.7rem', fontWeight: 600, color: 'text.secondary', wordBreak: 'break-word' }}>
+              {activity.failure_hint}
+            </Typography>
+          )}
+        </Box>
+      )}
+
+      {isFailed && activity.error_message && (
+        <Typography sx={{
+          mt: 1.5,
+          p: 1,
+          fontSize: '0.7rem',
+          fontWeight: 700,
+          color: tokens.accent.error,
+          bgcolor: `${tokens.accent.error}15`,
+          border: `1px solid ${tokens.accent.error}33`,
+          borderRadius: 0.5,
+          wordBreak: 'break-word'
+        }}>
+          ERROR: {activity.error_message}
+        </Typography>
+      )}
+
+      {traceback && (
+        <Box sx={{ mt: 1.5 }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+            <Button
+              size="small"
+              startIcon={showTraceback ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              onClick={() => setShowTraceback((v) => !v)}
+              sx={{ color: 'text.secondary', fontSize: '0.6rem', border: 1, borderColor: 'divider', '&:hover': { color: 'text.primary', border: `1px solid ${tokens.accent.primary}` } }}
+            >
+              {showTraceback ? 'Hide traceback' : 'Show traceback'}
+            </Button>
+            <Button
+              size="small"
+              startIcon={<Copy size={12} />}
+              onClick={() => navigator.clipboard.writeText(traceback)}
+              sx={{ color: 'text.secondary', fontSize: '0.6rem', border: 1, borderColor: 'divider', '&:hover': { color: 'text.primary', border: `1px solid ${tokens.accent.primary}` } }}
+            >
+              Copy traceback
+            </Button>
+          </Stack>
+          {showTraceback && (
+            <Box sx={{
+              mt: 1,
+              p: 1.5,
+              maxHeight: '30vh',
+              overflow: 'auto',
+              bgcolor: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.5)',
+              border: 1, borderColor: 'divider',
+              borderLeft: `3px solid ${tokens.accent.error}`,
+              borderRadius: 1,
+              fontFamily: 'monospace',
+              fontSize: '0.7rem',
+              color: 'text.primary',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all'
+            }}>
+              {traceback}
+            </Box>
+          )}
+        </Box>
+      )}
+    </Box>
+  );
+};
+
 const TaskOverlay: React.FC<{
   open: boolean;
   onClose: () => void;
   activityId: number | null;
   scanId?: number | null;
   activityTitle: string;
-}> = ({ open, onClose, activityId, scanId, activityTitle }) => {
+  activity: ScanActivity | null;
+}> = ({ open, onClose, activityId, scanId, activityTitle, activity }) => {
   const { tokens, isLight, theme } = useThemeTokens();
   const { data: logs, isLoading } = useScanLogs(activityId, scanId ?? null);
 
-  const [selectedLog, setSelectedLog] = useState<Command | null>(null);
-
-  // Set first log as selected when logs load
-  React.useEffect(() => {
-    if (logs && logs.length > 0) {
-      if (!selectedLog || !logs.find((l: Command) => l.id === selectedLog.id)) {
-        setSelectedLog(logs[0]);
-      }
-    }
-  }, [logs]);
+  const [selectedLogId, setSelectedLogId] = useState<Command['id'] | null>(null);
+  const hasCommands = !!logs && logs.length > 0;
+  // Derived rather than synced via an effect: a selection that no longer exists
+  // (or belongs to a previously opened task) falls back to the first command.
+  const selectedLog: Command | null = hasCommands
+    ? (logs.find((l: Command) => l.id === selectedLogId) ?? logs[0])
+    : null;
 
   return (
     <Dialog
@@ -540,15 +756,26 @@ const TaskOverlay: React.FC<{
           <X size={20} />
         </IconButton>
       </DialogTitle>
-      <DialogContent sx={{ p: 0, overflow: 'hidden' }}>
-        <Grid container sx={{ height: '60vh' }}>
+      <DialogContent sx={{ p: 0, overflow: 'auto' }}>
+        {activity && <ActivityDetailsPanel activity={activity} />}
+        <Grid container sx={{ height: { xs: 'auto', md: '60vh' } }}>
           {/* Command List */}
-          <Grid size={{ xs: 4 }} sx={{ borderRight: 1, borderColor: 'divider', height: '100%', overflowY: 'auto' }}>
+          <Grid
+            size={{ xs: 12, md: 4 }}
+            sx={{
+              borderRight: { xs: 0, md: 1 },
+              borderBottom: { xs: 1, md: 0 },
+              borderColor: 'divider',
+              height: { xs: 'auto', md: '100%' },
+              maxHeight: { xs: '30vh', md: 'none' },
+              overflowY: 'auto'
+            }}
+          >
             {isLoading ? (
               <Box sx={{ p: 4, textAlign: 'center' }}>
                 <CircularProgress size={24} sx={{ color: tokens.accent.primary }} />
               </Box>
-            ) : logs && logs.length > 0 ? (
+            ) : hasCommands ? (
               <List sx={{ p: 0 }}>
                 {logs.map((log: Command) => {
                   const cmdStr = log.command || '';
@@ -561,7 +788,7 @@ const TaskOverlay: React.FC<{
                     <ListItem
                       key={log.id}
                       component="div"
-                      onClick={() => setSelectedLog(log)}
+                      onClick={() => setSelectedLogId(log.id)}
                       sx={{
                         cursor: 'pointer',
                         borderBottom: 1,
@@ -623,14 +850,25 @@ const TaskOverlay: React.FC<{
               </List>
             ) : (
               <Box sx={{ p: 4, textAlign: 'center' }}>
-                <Typography sx={{ color: 'text.disabled', fontSize: '0.8rem' }}>
-                  No commands found.
+                <Typography sx={{ color: 'text.secondary', fontSize: '0.8rem', fontWeight: 600 }}>
+                  This task records no shell commands (it runs via an HTTP API).
+                </Typography>
+                <Typography sx={{ color: 'text.disabled', fontSize: '0.7rem', mt: 1 }}>
+                  Use the status, error message and traceback above to diagnose it.
                 </Typography>
               </Box>
             )}
           </Grid>
           {/* Command Output */}
-          <Grid size={{ xs: 8 }} sx={{ height: '100%', overflowY: 'auto', bgcolor: isLight ? 'rgba(0,0,0,0.01)' : 'background.default' }}>
+          <Grid
+            size={{ xs: 12, md: 8 }}
+            sx={{
+              height: { xs: 'auto', md: '100%' },
+              minHeight: { xs: '30vh', md: 0 },
+              overflowY: 'auto',
+              bgcolor: isLight ? 'rgba(0,0,0,0.01)' : 'background.default'
+            }}
+          >
             {selectedLog ? (
               <Box sx={{ p: 2 }}>
                 {/* Clean Command Box Header */}
@@ -729,9 +967,11 @@ const TaskOverlay: React.FC<{
                 </Box>
               </Box>
             ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 2, opacity: 0.3 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 2, opacity: 0.3, p: 2, textAlign: 'center' }}>
                 <Terminal size={48} />
-                <Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>Select a command to view output</Typography>
+                <Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>
+                  {!isLoading && !hasCommands ? 'No command output to display' : 'Select a command to view output'}
+                </Typography>
               </Box>
             )}
           </Grid>
@@ -741,27 +981,15 @@ const TaskOverlay: React.FC<{
   );
 };
 
-const TIER_LABELS: Record<number, string> = {
-  0: 'Initialization',
-  1: 'Discovery',
-  2: 'Enumeration',
-  3: 'URL & Screenshots',
-  4: 'Fuzzing',
-  5: 'Analysis',
-  6: 'Security Assessment',
-  7: 'Post-Processing',
-};
-
-const TimelineItem: React.FC<{ activity: ScanActivity, onClick?: () => void, onRetry?: (activity: ScanActivity) => void, isTerminal?: boolean }> = ({ activity, onClick, onRetry, isTerminal }) => {
+const TimelineItem: React.FC<{ activity: ScanActivity, onClick?: () => void, onRetry?: (activity: ScanActivity) => void, isTerminal?: boolean, allowRetryAny?: boolean }> = ({ activity, onClick, onRetry, isTerminal, allowRetryAny }) => {
   const { theme, isLight, tokens } = useThemeTokens();
-  const statusConfig: Record<string, { color: string, label: string }> = {
-    'SUCCESS': { color: tokens.accent.success, label: 'Completed' },
-    'RUNNING': { color: tokens.accent.primary, label: 'In Progress' },
-    'FAILED': { color: tokens.accent.error, label: 'Failed' },
-    'ABORTED': { color: tokens.accent.error, label: 'Aborted' },
-    'PENDING': { color: tokens.accent.warning, label: 'Pending' }
-  };
-  const config = statusConfig[activity.status] || { color: theme.palette.text.primary, label: activity.status };
+  const config = getActivityStatusConfig(activity.status, tokens, theme.palette.text.primary);
+  const durationSeconds = getActivityDurationSeconds(activity);
+  // The finalizer stamps the scan's own error on rows it never reached; showing
+  // that as the task's failure ("Time limit exceeded") misleads.
+  const notRun = isNotRunActivity(activity);
+  const failureCategoryLabel = notRun ? null : getFailureCategoryLabel(activity.failure_category);
+  const chipColor = notRun ? theme.palette.text.disabled : config.color;
 
   return (
     <Box
@@ -825,19 +1053,19 @@ const TimelineItem: React.FC<{ activity: ScanActivity, onClick?: () => void, onR
               px: 1,
               py: 0.1,
               borderRadius: 1,
-              bgcolor: `${config.color}20`,
-              border: `1px solid ${config.color}40`,
-              color: config.color,
+              bgcolor: `${chipColor}20`,
+              border: `1px solid ${chipColor}40`,
+              color: chipColor,
               fontSize: '0.6rem',
               fontWeight: 800
             }}>
-              {config.label}
+              {notRun ? 'Did not run' : config.label}
             </Box>
             <Typography sx={{ fontSize: '0.6rem', color: isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.3)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.5 }}>
               • Click to view details <ChevronRight size={10} />
             </Typography>
           </Stack>
-          {isTerminal && activity.status === 'FAILED' && activity.name !== 'raw_scan_history' && onRetry && (
+          {isTerminal && (activity.status === 'FAILED' || activity.status === 'ABORTED' || allowRetryAny) && activity.name !== 'raw_scan_history' && onRetry && (
             <MuiTooltip title="Retry Task" placement="top">
               <IconButton 
                 size="small" 
@@ -849,6 +1077,23 @@ const TimelineItem: React.FC<{ activity: ScanActivity, onClick?: () => void, onR
             </MuiTooltip>
           )}
         </Stack>
+        {activity.target_host && (
+          <Typography
+            title={activity.target_host}
+            sx={{
+              fontSize: '0.7rem',
+              fontFamily: 'monospace',
+              fontWeight: 600,
+              color: 'text.secondary',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: '100%'
+            }}
+          >
+            {activity.target_host}
+          </Typography>
+        )}
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <Typography sx={{ fontSize: '0.7rem', color: isLight ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.3)', fontWeight: 600 }}>
             {activity.status === 'PENDING'
@@ -857,13 +1102,42 @@ const TimelineItem: React.FC<{ activity: ScanActivity, onClick?: () => void, onR
                 ? new Date(activity.time_started).toLocaleString()
                 : new Date(activity.time).toLocaleString()}
           </Typography>
-          {activity.time_started && activity.time_ended && (
+          {durationSeconds !== null && (
             <Typography sx={{ fontSize: '0.65rem', color: 'text.disabled', fontWeight: 600 }}>
-              ({Math.round((new Date(activity.time_ended).getTime() - new Date(activity.time_started).getTime()) / 1000)}s)
+              ({durationSeconds}s)
             </Typography>
           )}
         </Stack>
-        {activity.error_message && (
+        {failureCategoryLabel && (
+          <Box sx={{
+            alignSelf: 'flex-start',
+            mt: 0.5,
+            px: 0.8,
+            py: 0.1,
+            borderRadius: 0.5,
+            bgcolor: `${tokens.accent.error}20`,
+            border: `1px solid ${tokens.accent.error}40`,
+            color: tokens.accent.error,
+            fontSize: '0.55rem',
+            fontWeight: 900,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase'
+          }}>
+            {failureCategoryLabel}
+          </Box>
+        )}
+        {notRun && (
+          <Typography sx={{ fontSize: '0.65rem', color: 'text.secondary', mt: 1 }}>
+            The scan stopped before this task started{activity.error_message ? ` (scan error: ${activity.error_message})` : ''}.
+          </Typography>
+        )}
+        {activity.error_message && activity.status === 'SUCCESS' && (
+          // A completed task's note, e.g. that it stopped at its time limit.
+          <Typography sx={{ fontSize: '0.65rem', color: tokens.accent.warning, mt: 1 }}>
+            {activity.error_message}
+          </Typography>
+        )}
+        {activity.error_message && !notRun && activity.status !== 'SUCCESS' && (
           <Typography sx={{ fontSize: '0.65rem', color: isLight ? tokens.accent.error : '#ff003c', bgcolor: isLight ? `${tokens.accent.error}15` : 'rgba(255,0,60,0.1)', p: 1, borderRadius: 0.5, border: `1px solid ${isLight ? `${tokens.accent.error}33` : 'rgba(255,0,60,0.2)'}`, mt: 1 }}>
             ERROR: {activity.error_message}
           </Typography>
@@ -873,7 +1147,15 @@ const TimelineItem: React.FC<{ activity: ScanActivity, onClick?: () => void, onR
   );
 };
 
-const SubScanWidget: React.FC<{ subscans: SubScan[], targetName: string }> = ({ subscans, targetName }) => {
+const isStoppableSubScan = (status: number | undefined | null) =>
+  status === -1 || status === 1 || status === 5;
+
+const SubScanWidget: React.FC<{
+  subscans: SubScan[];
+  targetName: string;
+  onStop?: (id: number) => void;
+  stoppingId?: number | null;
+}> = ({ subscans, targetName, onStop, stoppingId }) => {
   const { tokens, isLight } = useThemeTokens();
   return (
     <Stack spacing={1.5}>
@@ -892,11 +1174,33 @@ const SubScanWidget: React.FC<{ subscans: SubScan[], targetName: string }> = ({ 
             <Typography sx={{ fontSize: '0.85rem', fontWeight: 900, color: tokens.accent.primary, textTransform: 'uppercase', letterSpacing: 1 }}>
               {sub.engine} ON {sub.subdomain_name}
             </Typography>
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', fontWeight: 600, maxWidth: '60%', lineHeight: 1.4 }}>
+            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+              <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', fontWeight: 600, maxWidth: '50%', lineHeight: 1.4 }}>
                 {sub.completed_ago} Took {sub.time_taken}
               </Typography>
-              <StatusBadge status={sub.status} compact />
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <StatusBadge status={sub.status} compact />
+                {onStop && isStoppableSubScan(sub.status) && sub.id != null && (
+                  <MuiTooltip title="Stop in-progress subscan">
+                    <span>
+                      <IconButton
+                        size="small"
+                        disabled={stoppingId === sub.id}
+                        onClick={() => onStop(sub.id!)}
+                        sx={{
+                          color: tokens.accent.error,
+                          border: `1px solid ${tokens.accent.error}4D`,
+                          borderRadius: 1,
+                          p: 0.5,
+                          '&:hover': { bgcolor: `${tokens.accent.error}15`, borderColor: tokens.accent.error },
+                        }}
+                      >
+                        {stoppingId === sub.id ? <CircularProgress size={12} color="inherit" /> : <Square size={12} fill="currentColor" />}
+                      </IconButton>
+                    </span>
+                  </MuiTooltip>
+                )}
+              </Stack>
             </Stack>
           </Stack>
         </Box>
@@ -908,25 +1212,81 @@ const SubScanWidget: React.FC<{ subscans: SubScan[], targetName: string }> = ({ 
   );
 };
 
-const VulnerabilityBreakdown: React.FC<{ counts: Record<string, number>, exploitable: number }> = ({ counts, exploitable }) => {
+const FULL_HEIGHT_SX = { height: '100%' } as const;
+const EMPTY_VULNERABILITIES: SummaryVulnerability[] = [];
+const EMPTY_SUBDOMAINS: Subdomain[] = [];
+const EMPTY_PARTIAL_SUBDOMAINS: Partial<Subdomain>[] = [];
+
+interface VulnerabilityCounts {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+  unknown: number;
+  total: number;
+}
+
+const VULN_BREAKDOWN_LABELS = ['Critical', 'High', 'Medium', 'Low', 'Info', 'Unknown', 'Exploitable'];
+
+// react-apexcharts deep-compares `options` on every render and treats any function
+// (the donut `formatter`) as changed, which triggers a full SVG rebuild. Memoising the
+// options object so it only changes with the data or the theme avoids that.
+const VulnerabilityBreakdown = React.memo(function VulnerabilityBreakdown({ counts, exploitable }: { counts: VulnerabilityCounts, exploitable: number }) {
   const { tokens, isLight } = useThemeTokens();
-  const series = [counts.critical, counts.high, counts.medium, counts.low, counts.info, counts.unknown, exploitable];
-  const labels = ['Critical', 'High', 'Medium', 'Low', 'Info', 'Unknown', 'Exploitable'];
-  const colors = [
-    isLight ? tokens.accent.error : '#ff003c',
+  const { critical, high, medium, low, info, unknown, total } = counts;
+  const series = useMemo(
+    () => [critical, high, medium, low, info, unknown, exploitable],
+    [critical, high, medium, low, info, unknown, exploitable]
+  );
+  const errorColor = tokens.accent.error;
+  const infoColor = tokens.accent.info;
+  const successColor = tokens.accent.success;
+  const disabledColor = tokens.text.disabled;
+  const secondaryTextColor = tokens.text.secondary;
+  const colors = useMemo(() => [
+    isLight ? errorColor : '#ff003c',
     isLight ? '#d97706' : '#ff5722',
     isLight ? '#b45309' : '#ff9800',
     isLight ? '#9a6700' : '#ffeb3b',
-    isLight ? tokens.accent.info : '#2196f3',
-    tokens.text.disabled,
-    isLight ? tokens.accent.success : '#00ff62'
-  ];
+    isLight ? infoColor : '#2196f3',
+    disabledColor,
+    isLight ? successColor : '#00ff62'
+  ], [isLight, errorColor, infoColor, disabledColor, successColor]);
+
+  const options = useMemo<ApexOptions>(() => ({
+    chart: { type: 'donut' as const, background: 'transparent' },
+    theme: { mode: isLight ? 'light' : 'dark' },
+    stroke: { show: false },
+    labels: VULN_BREAKDOWN_LABELS,
+    dataLabels: { enabled: false },
+    legend: { show: true, position: 'bottom' as const, fontSize: '10px', labels: { colors: isLight ? secondaryTextColor : 'rgba(255,255,255,0.7)' } },
+    colors,
+    plotOptions: {
+      pie: {
+        donut: {
+          size: '65%',
+          labels: {
+            show: true,
+            total: {
+              show: true,
+              label: 'Total',
+              color: 'text.secondary',
+              fontSize: '12px',
+              formatter: () => total.toString()
+            },
+            value: { color: 'text.primary', fontSize: '20px', fontWeight: 900 }
+          }
+        }
+      }
+    }
+  }), [isLight, secondaryTextColor, colors, total]);
 
   return (
     <TacticalPanel title="Vulnerability Breakdown" icon={<Bug size={14} color={isLight ? tokens.accent.error : '#ff003c'} />} sx={{ height: '100%', '& .MuiCardContent-root': { pb: '10px !important' } }}>
       <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3, textAlign: 'center', width: '100%', px: 1 }}>
-          {labels.map((l, i) => (
+          {VULN_BREAKDOWN_LABELS.map((l, i) => (
             <Box key={l} sx={{ flex: 1 }}>
               <Typography sx={{ fontSize: '0.6rem', color: colors[i], fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1 }}>{l.substring(0, 4)}</Typography>
               <Typography sx={{ fontSize: '0.85rem', fontWeight: 900, color: colors[i] }}>{series[i] || 0}</Typography>
@@ -935,33 +1295,7 @@ const VulnerabilityBreakdown: React.FC<{ counts: Record<string, number>, exploit
         </Box>
         <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Chart
-            options={{
-              chart: { type: 'donut', background: 'transparent' },
-              theme: { mode: isLight ? 'light' : 'dark' as any },
-              stroke: { show: false },
-              labels: labels,
-              dataLabels: { enabled: false },
-              legend: { show: true, position: 'bottom', fontSize: '10px', labels: { colors: isLight ? tokens.text.secondary : 'rgba(255,255,255,0.7)' } },
-              colors: colors,
-              plotOptions: {
-                pie: {
-                  donut: {
-                    size: '65%',
-                    labels: {
-                      show: true,
-                      total: {
-                        show: true,
-                        label: 'Total',
-                        color: 'text.secondary',
-                        fontSize: '12px',
-                        formatter: () => counts.total.toString()
-                      },
-                      value: { color: 'text.primary', fontSize: '20px', fontWeight: 900 }
-                    }
-                  }
-                }
-              }
-            }}
+            options={options}
             series={series}
             type="donut"
             width="100%"
@@ -971,9 +1305,9 @@ const VulnerabilityBreakdown: React.FC<{ counts: Record<string, number>, exploit
       </Box>
     </TacticalPanel>
   );
-};
+});
 
-const VulnHighlights: React.FC<{ highlights: Vulnerability[], onVulnClick: (v: any) => void }> = ({ highlights, onVulnClick }) => {
+const VulnHighlights = React.memo(function VulnHighlights({ highlights, onVulnClick }: { highlights: SummaryVulnerabilityHighlight[], onVulnClick: (v: SummaryVulnerabilityBase) => void }) {
   const { tokens, isLight } = useThemeTokens();
   return (
     <TacticalPanel title="Vulnerability Highlights" icon={<Bug size={14} color={tokens.accent.error} />} sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -988,7 +1322,7 @@ const VulnHighlights: React.FC<{ highlights: Vulnerability[], onVulnClick: (v: a
             </TableRow>
           </TableHead>
           <TableBody>
-            {(highlights || []).map((v: Vulnerability, idx: number) => (
+            {(highlights || []).map((v, idx: number) => (
               <TableRow
                 key={idx}
                 onClick={() => onVulnClick(v)}
@@ -1014,7 +1348,7 @@ const VulnHighlights: React.FC<{ highlights: Vulnerability[], onVulnClick: (v: a
                     display: 'inline-block',
                     textTransform: 'lowercase'
                   }}>
-                    {Number(v.severity) === 0 ? 'info' : 'vuln'}
+                    {v.severity === 0 ? 'info' : 'vuln'}
                   </Box>
                 </TableCell>
                 <TableCell>
@@ -1024,7 +1358,7 @@ const VulnHighlights: React.FC<{ highlights: Vulnerability[], onVulnClick: (v: a
                   </Typography>
                 </TableCell>
                 <TableCell>
-                  <SeverityBadge severity={Number(v.severity)} />
+                  <SeverityBadge severity={v.severity} />
                 </TableCell>
                 <TableCell>
                   <Typography sx={{
@@ -1048,7 +1382,7 @@ const VulnHighlights: React.FC<{ highlights: Vulnerability[], onVulnClick: (v: a
       </TableContainer>
     </TacticalPanel>
   );
-};
+});
 
 interface SubdomainVulnCounts {
   host: string;
@@ -1059,35 +1393,35 @@ interface SubdomainVulnCounts {
   total: number;
 }
 
-const MostVulnerableSubdomain: React.FC<{ vulnerabilities: Vulnerability[], sx?: any }> = ({ vulnerabilities = [], sx = {} }) => {
+const MostVulnerableSubdomain = React.memo(function MostVulnerableSubdomain({ vulnerabilities = EMPTY_VULNERABILITIES, sx = FULL_HEIGHT_SX }: { vulnerabilities: SummaryVulnerability[], sx?: SystemStyleObject<Theme> }) {
   const { tokens, isLight } = useThemeTokens();
   const [ignoreInfo, setIgnoreInfo] = useState(false);
 
-  const filteredVulns = ignoreInfo ? vulnerabilities.filter(v => Number(v.severity) > 0) : vulnerabilities;
-
-  const subdomainMap = filteredVulns.reduce(
-    (acc: Record<string, SubdomainVulnCounts>, v: Vulnerability) => {
-      try {
-        if (!v.http_url) return acc;
-        const normalizedUrl = v.http_url.match(/^https?:\/\//) ? v.http_url : `http://${v.http_url}`;
-        const host = new URL(normalizedUrl).hostname;
-        if (!host) return acc;
-        if (!acc[host]) acc[host] = { host, critical: 0, high: 0, medium: 0, low: 0, total: 0 };
-        const sev = Number(v.severity);
-        if (sev === 4) acc[host].critical += 1;
-        else if (sev === 3) acc[host].high += 1;
-        else if (sev === 2) acc[host].medium += 1;
-        else if (sev === 1) acc[host].low += 1;
-        acc[host].total += 1;
-      } catch {
-        // ignore invalid URLs
-      }
-      return acc;
-    },
-    {}
-  );
-
-  const rows = Object.values(subdomainMap).sort((a, b) => b.total - a.total);
+  const rows = useMemo(() => {
+    const filteredVulns = ignoreInfo ? vulnerabilities.filter(v => v.severity > 0) : vulnerabilities;
+    const subdomainMap = filteredVulns.reduce(
+      (acc: Record<string, SubdomainVulnCounts>, v: SummaryVulnerability) => {
+        try {
+          if (!v.http_url) return acc;
+          const normalizedUrl = v.http_url.match(/^https?:\/\//) ? v.http_url : `http://${v.http_url}`;
+          const host = new URL(normalizedUrl).hostname;
+          if (!host) return acc;
+          if (!acc[host]) acc[host] = { host, critical: 0, high: 0, medium: 0, low: 0, total: 0 };
+          const sev = v.severity;
+          if (sev === 4) acc[host].critical += 1;
+          else if (sev === 3) acc[host].high += 1;
+          else if (sev === 2) acc[host].medium += 1;
+          else if (sev === 1) acc[host].low += 1;
+          acc[host].total += 1;
+        } catch {
+          // ignore invalid URLs
+        }
+        return acc;
+      },
+      {}
+    );
+    return Object.values(subdomainMap).sort((a, b) => b.total - a.total);
+  }, [vulnerabilities, ignoreInfo]);
 
   const cellStyle = { borderBottom: 1, borderColor: 'divider', py: 0.75 };
 
@@ -1154,21 +1488,29 @@ const MostVulnerableSubdomain: React.FC<{ vulnerabilities: Vulnerability[], sx?:
       )}
     </TacticalPanel>
   );
-};
+});
 
-const MostCommonVulnsWidget: React.FC<{ vulnerabilities: Vulnerability[], onVulnClick: (v: any) => void, sx?: any }> = ({ vulnerabilities = [], onVulnClick, sx = {} }) => {
+interface CommonVulnerabilityRow {
+  name: string;
+  count: number;
+  severity: number;
+  vulnerability: SummaryVulnerability;
+}
+
+const MostCommonVulnsWidget = React.memo(function MostCommonVulnsWidget({ vulnerabilities = EMPTY_VULNERABILITIES, onVulnClick, sx = FULL_HEIGHT_SX }: { vulnerabilities: SummaryVulnerability[], onVulnClick: (v: SummaryVulnerabilityBase) => void, sx?: SystemStyleObject<Theme> }) {
   const { tokens, isLight } = useThemeTokens();
   const [ignoreInfo, setIgnoreInfo] = useState(false);
-  const filtered = ignoreInfo ? vulnerabilities.filter(v => Number(v.severity) !== 0) : vulnerabilities;
 
-  // Calculate common vulns from the full vulnerabilities list to ensure Info vulns are included
-  const commonMap = filtered.reduce((acc: Record<string, any>, v: Vulnerability) => {
-    acc[v.name] = acc[v.name] || { name: v.name, count: 0, severity: v.severity, vulnerability: v };
-    acc[v.name].count += 1;
-    return acc;
-  }, {});
-
-  const data = Object.values(commonMap).sort((a: { count: number }, b: { count: number }) => b.count - a.count).slice(0, 10);
+  const data = useMemo(() => {
+    const filtered = ignoreInfo ? vulnerabilities.filter(v => v.severity !== 0) : vulnerabilities;
+    // Calculate common vulns from the full vulnerabilities list to ensure Info vulns are included
+    const commonMap = filtered.reduce((acc: Record<string, CommonVulnerabilityRow>, v: SummaryVulnerability) => {
+      acc[v.name] = acc[v.name] || { name: v.name, count: 0, severity: v.severity, vulnerability: v };
+      acc[v.name].count += 1;
+      return acc;
+    }, {});
+    return Object.values(commonMap).sort((a: { count: number }, b: { count: number }) => b.count - a.count).slice(0, 10);
+  }, [vulnerabilities, ignoreInfo]);
 
   return (
     <TacticalPanel
@@ -1192,7 +1534,7 @@ const MostCommonVulnsWidget: React.FC<{ vulnerabilities: Vulnerability[], onVuln
             </TableRow>
           </TableHead>
           <TableBody>
-            {data.map((v: { name: string; count: number; severity: string | number; vulnerability: any }, i: number) => (
+            {data.map((v: CommonVulnerabilityRow, i: number) => (
               <TableRow
                 key={i}
                 onClick={() => onVulnClick(v.vulnerability)}
@@ -1213,7 +1555,7 @@ const MostCommonVulnsWidget: React.FC<{ vulnerabilities: Vulnerability[], onVuln
                   </Box>
                 </TableCell>
                 <TableCell align="right">
-                  <SeverityBadge severity={typeof v.severity === 'string' ? (v.severity === 'Critical' ? 4 : v.severity === 'High' ? 3 : v.severity === 'Medium' ? 2 : v.severity === 'Low' ? 1 : 0) : v.severity} />
+                  <SeverityBadge severity={v.severity} />
                 </TableCell>
               </TableRow>
             ))}
@@ -1227,9 +1569,9 @@ const MostCommonVulnsWidget: React.FC<{ vulnerabilities: Vulnerability[], onVuln
       </TableContainer>
     </TacticalPanel>
   );
-};
+});
 
-const ImportantSubdomainsWidget: React.FC<{ subdomains: Subdomain[], sx?: any }> = ({ subdomains = [], sx = {} }) => {
+const ImportantSubdomainsWidget = React.memo(function ImportantSubdomainsWidget({ subdomains = EMPTY_SUBDOMAINS, sx = FULL_HEIGHT_SX }: { subdomains: Subdomain[], sx?: SystemStyleObject<Theme> }) {
   const { tokens } = useThemeTokens();
   return (
     <TacticalPanel title="IMPORTANT SUBDOMAINS" icon={<Box sx={{ width: 14, height: 14, bgcolor: tokens.accent.secondary, borderRadius: 0.5, color: 'text.primary', fontSize: '8px', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{subdomains.length}</Box>} sx={{ height: '100%', ...sx }}>
@@ -1248,9 +1590,9 @@ const ImportantSubdomainsWidget: React.FC<{ subdomains: Subdomain[], sx?: any }>
       </Box>
     </TacticalPanel>
   );
-};
+});
 
-const ReconNotesWidget: React.FC<{ notes: any[], sx?: any }> = ({ notes = [], sx = {} }) => {
+const ReconNotesWidget: React.FC<{ notes: TodoNote[], sx?: SystemStyleObject<Theme> }> = ({ notes = [], sx = {} }) => {
   const { tokens, isLight } = useThemeTokens();
   return (
     <TacticalPanel
@@ -1283,9 +1625,12 @@ const ReconNotesWidget: React.FC<{ notes: any[], sx?: any }> = ({ notes = [], sx
   );
 };
 
-const IpAddressesWidget: React.FC<{ subdomains: Partial<Subdomain>[], sx?: any }> = ({ subdomains = [], sx = {} }) => {
+const IpAddressesWidget = React.memo(function IpAddressesWidget({ subdomains = EMPTY_PARTIAL_SUBDOMAINS, sx = FULL_HEIGHT_SX }: { subdomains: Partial<Subdomain>[], sx?: SystemStyleObject<Theme> }) {
   const { tokens, isLight } = useThemeTokens();
-  const ips = Array.from(new Set(subdomains.map(s => s.origin_ip).filter(ip => ip && ip !== '0.0.0.0')));
+  const ips = useMemo(
+    () => Array.from(new Set(subdomains.map(s => s.origin_ip).filter(ip => ip && ip !== '0.0.0.0'))),
+    [subdomains]
+  );
   return (
     <TacticalPanel title="IP ADDRESSES" icon={<Box sx={{ width: 14, height: 14, bgcolor: tokens.accent.secondary, borderRadius: 0.5, color: 'text.primary', fontSize: '8px', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{ips.length}</Box>} sx={{ height: '100%', ...sx }}>
       <Box sx={{ p: 2 }}>
@@ -1300,9 +1645,9 @@ const IpAddressesWidget: React.FC<{ subdomains: Partial<Subdomain>[], sx?: any }
       </Box>
     </TacticalPanel>
   );
-};
+});
 
-const DiscoveredPortsWidget: React.FC<{ ports: any[], sx?: any }> = ({ ports = [], sx = {} }) => {
+const DiscoveredPortsWidget: React.FC<{ ports: DiscoveredPort[], sx?: SystemStyleObject<Theme> }> = ({ ports = [], sx = {} }) => {
   const { tokens, isLight } = useThemeTokens();
   return (
     <TacticalPanel title="DISCOVERED PORTS" icon={<Box sx={{ width: 14, height: 14, bgcolor: tokens.accent.secondary, borderRadius: 0.5, color: 'text.primary', fontSize: '8px', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{ports.length}</Box>} sx={{ height: '100%', ...sx }}>
@@ -1320,7 +1665,7 @@ const DiscoveredPortsWidget: React.FC<{ ports: any[], sx?: any }> = ({ ports = [
   );
 };
 
-const DiscoveredTechWidget: React.FC<{ techs: any[], sx?: any }> = ({ techs = [], sx = {} }) => {
+const DiscoveredTechWidget: React.FC<{ techs: DiscoveredTechnology[], sx?: SystemStyleObject<Theme> }> = ({ techs = [], sx = {} }) => {
   const { tokens, isLight } = useThemeTokens();
   return (
     <TacticalPanel title="DISCOVERED TECHNOLOGIES" icon={<Box sx={{ width: 14, height: 14, bgcolor: tokens.accent.secondary, borderRadius: 0.5, color: 'text.primary', fontSize: '8px', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{techs.length}</Box>} sx={{ height: '100%', ...sx }}>
@@ -1341,9 +1686,12 @@ export const ScanDetailPage = () => {
   const { theme, isLight, tokens } = useThemeTokens();
   const { projectSlug, scanId } = useParams({ from: '/$projectSlug/scan/detail/$scanId' });
   const { data, isLoading } = useScanSummary(projectSlug, parseInt(scanId));
-  const fetchWhois = useFetchWhois(projectSlug, parseInt(scanId));
+  const fetchWhois = useFetchWhois(['scan-summary', projectSlug, parseInt(scanId)]);
   const stopScanMutation = useStopScan(projectSlug);
+  const resumeScanMutation = useResumeScan(projectSlug);
+  const stopSubScanMutation = useStopSubScan(projectSlug);
   const retryScanTaskMutation = useRetryScanTask(projectSlug, parseInt(scanId));
+  const retryScanTierMutation = useRetryScanTier(projectSlug, parseInt(scanId));
   const { data: plugins } = usePlugins();
   const [activeTab, setActiveTab] = useState(0);
   const [infoTab, setInfoTab] = useState(0);
@@ -1351,15 +1699,42 @@ export const ScanDetailPage = () => {
   const [aiExportModalOpen, setAiExportModalOpen] = useState(false);
   const [startScanTargets, setStartScanTargets] = useState<{ ids: number[]; names: string[] } | null>(null);
   const [taskOverlayOpen, setTaskOverlayOpen] = useState(false);
-  const [selectedActivity, setSelectedActivity] = useState<{ id: number; title: string } | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<ScanActivity | null>(null);
+  const [retryConfirmOpen, setRetryConfirmOpen] = useState(false);
+  const [pendingRetryActivity, setPendingRetryActivity] = useState<ScanActivity | null>(null);
+  const [pendingTierRetry, setPendingTierRetry] = useState<{ tier: number; label: string } | null>(null);
+  const [tierRetryNotice, setTierRetryNotice] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({ open: false, message: '', severity: 'success' });
 
-  const [selectedVulnForInfo, setSelectedVulnForInfo] = useState<any | null>(null);
+  const [selectedVulnForInfo, setSelectedVulnForInfo] = useState<SummaryVulnerabilityBase | null>(null);
   const [vulnInfoModalOpen, setVulnInfoModalOpen] = useState(false);
 
-  const handleVulnClick = (v: any) => {
+  // Stable identity so the memoised summary widgets do not re-render on every poll.
+  const handleVulnClick = useCallback((v: SummaryVulnerabilityBase) => {
     setSelectedVulnForInfo(v);
     setVulnInfoModalOpen(true);
-  };
+  }, []);
+
+  const vulnCounts = useMemo<VulnerabilityCounts>(() => ({
+    critical: data?.critical_count ?? 0,
+    high: data?.high_count ?? 0,
+    medium: data?.medium_count ?? 0,
+    low: data?.low_count ?? 0,
+    info: data?.info_count ?? 0,
+    unknown: data?.unknown_count ?? 0,
+    total: data?.vulnerability_count ?? 0
+  }), [
+    data?.critical_count,
+    data?.high_count,
+    data?.medium_count,
+    data?.low_count,
+    data?.info_count,
+    data?.unknown_count,
+    data?.vulnerability_count
+  ]);
 
 
   const [selectedScanId, setSelectedScanId] = useState<number | null>(null);
@@ -1370,36 +1745,54 @@ export const ScanDetailPage = () => {
       setSelectedActivity(null);
     } else {
       setSelectedScanId(null);
-      setSelectedActivity({
-        id: Number(activity.id),
-        title: activity.title
-      });
+      setSelectedActivity(activity);
     }
     setTaskOverlayOpen(true);
   };
 
   const handleRetryTask = (activity: ScanActivity) => {
-    if (confirm(`Are you sure you want to retry ${activity.title}?`)) {
-      retryScanTaskMutation.mutate(Number(activity.id));
-    }
+    setPendingRetryActivity(activity);
+    setRetryConfirmOpen(true);
+  };
+
+  const handleRetryTier = (tier: number, label: string) => setPendingTierRetry({ tier, label });
+
+  const confirmRetryTier = () => {
+    if (!pendingTierRetry) return;
+    const { tier } = pendingTierRetry;
+    setPendingTierRetry(null);
+    retryScanTierMutation.mutate(tier, {
+      onSuccess: (result) => setTierRetryNotice({
+        open: true,
+        message: result.message,
+        severity: result.queued_count > 0
+          ? (result.skipped_count > 0 ? 'warning' : 'success')
+          : 'info',
+      }),
+      onError: (error: Error) => setTierRetryNotice({
+        open: true,
+        message: error.message,
+        severity: 'error',
+      }),
+    });
   };
 
   const groupedTimeline = useMemo(() => {
     const timeline: ScanActivity[] = data?.timeline ?? [];
     
     // Build map of activity name to Plugin
-    const activityToPlugin = new Map<string, any>();
+    const activityToPlugin = new Map<string, Plugin>();
     if (Array.isArray(plugins)) {
       plugins.forEach(p => {
         const workflows = p.manifest?.temporal?.workflows || [];
         const activities = p.manifest?.temporal?.activities || [];
-        workflows.forEach((w: string) => activityToPlugin.set(w.split('.').pop()!, p));
-        activities.forEach((a: string) => activityToPlugin.set(a.split('.').pop()!, p));
+        workflows.forEach((w) => activityToPlugin.set(w.split('.').pop()!, p));
+        activities.forEach((a) => activityToPlugin.set(a.split('.').pop()!, p));
       });
     }
 
     const tierGroups = new Map<number, ScanActivity[]>();
-    const pluginGroups = new Map<string, { plugin: any, activities: ScanActivity[] }>();
+    const pluginGroups = new Map<string, { plugin: Plugin, activities: ScanActivity[] }>();
 
     timeline.forEach((act) => {
       const plugin = activityToPlugin.get(act.name);
@@ -1418,8 +1811,10 @@ export const ScanDetailPage = () => {
     const sortedTiers = Array.from(tierGroups.entries()).map(([tier, activities]) => ({
       id: `tier-${tier}`,
       sortOrder: tier,
+      tier,
       label: `Tier ${tier} — ${TIER_LABELS[tier] ?? 'Unknown'}`,
       activities,
+      summary: summariseTier(activities),
       type: 'tier' as const,
     }));
 
@@ -1435,8 +1830,10 @@ export const ScanDetailPage = () => {
       return {
         id: `plugin-${plugin.slug}`,
         sortOrder,
+        tier: null,
         label: `Plugin — ${plugin.name}`,
         activities,
+        summary: summariseTier(activities),
         type: 'plugin' as const,
       };
     });
@@ -1453,11 +1850,17 @@ export const ScanDetailPage = () => {
   }
 
   const scanStatus = data.scan_info.scan_status;
+  // Mirrors ScanTierRetryAPIView: a live scan owns its own activity rows.
+  const tierRetryBlockedReason = scanStatus === 1
+    ? 'Cannot retry a tier while the scan is running'
+    : scanStatus === 5
+      ? 'Cannot retry a tier while the scan is paused'
+      : null;
   const isTerminal = [0, 2, 3, 4].includes(scanStatus);
   const progressColor = scanStatus === 2 ? tokens.accent.success : (scanStatus === 3 || scanStatus === 0) ? tokens.accent.error : scanStatus === 4 ? tokens.accent.warning : tokens.accent.primary;
   const progressValue = isTerminal ? 100 : data.scan_info.progress;
 
-  const baseTabs = [
+  const baseTabs: ScanDetailTab[] = [
     { label: 'HOME', icon: Activity },
     { label: 'SUBDOMAINS', icon: Globe },
     { label: 'BUCKETS', icon: Database, show: data.buckets_count > 0 },
@@ -1477,11 +1880,11 @@ export const ScanDetailPage = () => {
   ].filter(t => t.show !== false);
 
   // Inject Plugin Tabs
-  const pluginTabs: any[] = [];
+  const pluginTabs: ScanDetailTab[] = [];
   if (Array.isArray(plugins)) {
     plugins.forEach(plugin => {
       if (plugin.is_enabled && plugin.manifest?.ui?.tabs && Array.isArray(plugin.manifest.ui.tabs)) {
-        plugin.manifest.ui.tabs.forEach((tab: any) => {
+        plugin.manifest.ui.tabs.forEach((tab) => {
           pluginTabs.push({
             label: tab.label,
             icon: Zap, // Default icon for plugins, could be dynamic
@@ -1591,19 +1994,22 @@ export const ScanDetailPage = () => {
             <Stack>
               {groupedTimeline.map((group) => (
                 <Box key={group.id}>
-                  <Typography sx={{
-                    display: 'block',
-                    fontSize: '0.55rem',
-                    fontWeight: 800,
-                    letterSpacing: '0.1em',
-                    textTransform: 'uppercase',
-                    color: group.type === 'plugin' ? tokens.accent.primary : 'text.secondary',
-                    mt: 1.5,
-                    mb: 0.5,
-                    px: 1,
-                  }}>
-                    {group.label}
-                  </Typography>
+                  <TimelineTierHeader
+                    label={group.label}
+                    summary={group.summary}
+                    isPlugin={group.type === 'plugin'}
+                    onRetryTier={
+                      group.tier !== null && tierRetryBlockedReason === null
+                        ? () => handleRetryTier(group.tier as number, group.label)
+                        : undefined
+                    }
+                    retryBlockedReason={
+                      group.tier === null
+                        ? 'Only tier groups can be re-run as a whole'
+                        : tierRetryBlockedReason ?? undefined
+                    }
+                    isRetrying={retryScanTierMutation.isPending && retryScanTierMutation.variables === group.tier}
+                  />
                   <Box sx={{ position: 'relative' }}>
                     {group.activities.map((activity) => (
                       <TimelineItem
@@ -1611,7 +2017,8 @@ export const ScanDetailPage = () => {
                         activity={activity}
                         onClick={() => handleTimelineItemClick(activity)}
                         onRetry={handleRetryTask}
-                        isTerminal={[0, 3].includes(data?.scan_info?.scan_status ?? -1)}
+                        isTerminal={[0, 2, 3].includes(data?.scan_info?.scan_status ?? -1)}
+                        allowRetryAny={data?.scan_info?.scan_status === 2}
                       />
                     ))}
                   </Box>
@@ -1653,7 +2060,7 @@ export const ScanDetailPage = () => {
       <TacticalPanel title="Recent Scans" icon={<Activity size={14} />}>
         <Box sx={{ p: 1 }}>
           <Stack spacing={1}>
-            {data.recent_scans?.map((scan: any) => (
+            {data.recent_scans?.map((scan) => (
               <Box
                 key={scan.id}
                 component={RouterLink}
@@ -1681,7 +2088,16 @@ export const ScanDetailPage = () => {
 
       <TacticalPanel title="Sub Scan History" icon={<Activity size={14} />}>
         <Box sx={{ p: 1 }}>
-          <SubScanWidget subscans={data.subscans} targetName={data.target_info.name} />
+          <SubScanWidget
+            subscans={data.subscans}
+            targetName={data.target_info.name}
+            onStop={(id) => {
+              if (window.confirm('Stop this in-progress subscan?')) {
+                stopSubScanMutation.mutate(id);
+              }
+            }}
+            stoppingId={stopSubScanMutation.isPending ? (stopSubScanMutation.variables ?? null) : null}
+          />
         </Box>
       </TacticalPanel>
     </Box>
@@ -1711,7 +2127,7 @@ export const ScanDetailPage = () => {
                       </Box>
                       <Box>
                         <Typography sx={{ fontSize: '0.65rem', color: 'text.disabled', mb: 0.2, textTransform: 'uppercase', letterSpacing: 1 }}>Dnssec</Typography>
-                        <Typography sx={{ fontSize: '0.8rem', fontWeight: 700, color: 'text.primary' }}>{data.domain_info?.dnssec || 'N/A'}</Typography>
+                        <Typography sx={{ fontSize: '0.8rem', fontWeight: 700, color: 'text.primary' }}>{formatYesNo(data.domain_info?.dnssec)}</Typography>
                       </Box>
                       <Box>
                         <Typography sx={{ fontSize: '0.65rem', color: 'text.disabled', mb: 0.2, textTransform: 'uppercase', letterSpacing: 1 }}>Geolocation</Typography>
@@ -1744,58 +2160,18 @@ export const ScanDetailPage = () => {
                 </Grid>
               )}
               {infoTab === 1 && (
-                <Box sx={{ maxHeight: 300, overflow: 'auto' }}>
-                  {!data.domain_info?.whois_data ? (
-                    <Box sx={{ p: 4, textAlign: 'center' }}>
-                      <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 2 }}>
-                        No WHOIS data available for this target.
-                      </Typography>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={fetchWhois.isPending ? <CircularProgress size={12} /> : <Search size={12} />}
-                        disabled={fetchWhois.isPending}
-                        onClick={() => fetchWhois.mutate(data.target_info.name)}
-                        sx={{
-                          color: tokens.accent.primary,
-                          borderColor: `${tokens.accent.primary}4D`,
-                          fontSize: '0.65rem',
-                          fontWeight: 900,
-                          '&:hover': {
-                            borderColor: tokens.accent.primary,
-                            bgcolor: `${tokens.accent.primary}0D`
-                          }
-                        }}
-                      >
-                        {fetchWhois.isPending ? 'FETCHING...' : 'FETCH WHOIS DATA'}
-                      </Button>
-                    </Box>
-                  ) : (
-                    <Box>
-                      <Stack direction="row" sx={{ justifyContent: 'flex-end', mb: 1 }}>
-                        <Button
-                          size="small"
-                          startIcon={fetchWhois.isPending ? <CircularProgress size={10} /> : <RefreshCw size={10} />}
-                          disabled={fetchWhois.isPending}
-                          onClick={() => fetchWhois.mutate(data.target_info.name)}
-                          sx={{ color: 'text.disabled', fontSize: '0.6rem', '&:hover': { color: tokens.accent.primary } }}
-                        >
-                          Refresh
-                        </Button>
-                      </Stack>
-                      <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
-                        {data.domain_info?.whois_data}
-                      </Typography>
-                    </Box>
-                  )}
-                </Box>
+                <WhoisPanel
+                  domainInfo={data.domain_info}
+                  onFetch={() => fetchWhois.mutate(data.target_info.name)}
+                  isFetching={fetchWhois.isPending}
+                />
               )}
               {infoTab === 2 && (
                 <Stack spacing={1}>
-                  {data.domain_info?.dns_records?.map((r: any, idx: number) => (
+                  {data.domain_info?.dns_records?.map((r, idx: number) => (
                     <Stack key={idx} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                       <Chip label={r.type?.toUpperCase() ?? 'DNS'} size="small" sx={{ height: 16, fontSize: '0.55rem', fontWeight: 900, bgcolor: `${tokens.accent.primary}15`, color: tokens.accent.primary }} />
-                      <Typography sx={{ fontSize: '0.7rem', color: 'text.primary' }}>{r.name} {"->"} {r.value}</Typography>
+                      <Typography sx={{ fontSize: '0.7rem', color: 'text.primary' }}>{r.name}</Typography>
                     </Stack>
                   ))}
                 </Stack>
@@ -1824,7 +2200,7 @@ export const ScanDetailPage = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {data.domain_info?.historical_ips?.map((ip: any, idx: number) => (
+                      {data.domain_info?.historical_ips?.map((ip, idx: number) => (
                         <TableRow key={idx}>
                           <TableCell sx={{ color: 'text.primary', fontSize: '0.7rem', borderBottom: 1, borderColor: 'divider' }}>{ip.ip}</TableCell>
                           <TableCell sx={{ color: 'text.primary', fontSize: '0.7rem', borderBottom: 1, borderColor: 'divider' }}>{ip.location}</TableCell>
@@ -1849,7 +2225,7 @@ export const ScanDetailPage = () => {
               <Chart
                 options={{
                   chart: { type: 'donut', background: 'transparent' },
-                  theme: { mode: isLight ? 'light' : 'dark' as any },
+                  theme: { mode: isLight ? 'light' : 'dark' },
                   labels: (data?.http_status_breakdown || []).slice().sort((a: { http_status: number }, b: { http_status: number }) => a.http_status - b.http_status).map((s: { http_status: number }) => `HTTP ${s.http_status}`),
                   colors: [
                     isLight ? tokens.accent.success : '#00ff62',
@@ -1871,7 +2247,7 @@ export const ScanDetailPage = () => {
                   },
                   plotOptions: { pie: { donut: { size: '70%' } } }
                 }}
-                series={(data?.http_status_breakdown || []).slice().sort((a: any, b: any) => a.http_status - b.http_status).map((s: any) => s.count)}
+                series={(data?.http_status_breakdown || []).slice().sort((a, b) => a.http_status - b.http_status).map((s) => s.count)}
                 type="donut"
                 width="100%"
                 height={300}
@@ -1890,41 +2266,34 @@ export const ScanDetailPage = () => {
 
       {/* Row 3: Vulnerability Distribution & Highlights */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 2, mb: 2, width: '100%' }}>
-        <VulnerabilityBreakdown
-          counts={{
-            critical: data.critical_count,
-            high: data.high_count,
-            medium: data.medium_count,
-            low: data.low_count,
-            info: data.info_count,
-            unknown: data.unknown_count,
-            total: data.vulnerability_count
-          }}
-          exploitable={data.exploitable_count}
-        />
+        <VulnerabilityBreakdown counts={vulnCounts} exploitable={data.exploitable_count} />
         <VulnHighlights highlights={data.vulnerability_highlights} onVulnClick={handleVulnClick} />
       </Box>
 
       {/* Row 4: Vulnerability Deep Dive */}
       <Grid container spacing={2} sx={{ mb: 2, width: '100%', m: 0 }}>
         <Grid size={{ xs: 12, md: 6 }}>
-          <MostVulnerableSubdomain vulnerabilities={data.vulnerabilities} sx={{ height: '100%' }} />
+          <MostVulnerableSubdomain vulnerabilities={data.vulnerabilities} sx={FULL_HEIGHT_SX} />
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
-          <MostCommonVulnsWidget vulnerabilities={data.vulnerabilities} onVulnClick={handleVulnClick} sx={{ height: '100%' }} />
+          <MostCommonVulnsWidget vulnerabilities={data.vulnerabilities} onVulnClick={handleVulnClick} sx={FULL_HEIGHT_SX} />
         </Grid>
       </Grid>
 
-      <VulnerabilityInfoModal
-        open={vulnInfoModalOpen}
-        onClose={() => setVulnInfoModalOpen(false)}
-        vulnerability={selectedVulnForInfo}
-      />
+      {selectedVulnForInfo && (
+        <VulnerabilityInfoModal
+          key={selectedVulnForInfo.id}
+          open={vulnInfoModalOpen}
+          onClose={() => setVulnInfoModalOpen(false)}
+          vulnerability={selectedVulnForInfo}
+          projectSlug={projectSlug}
+        />
+      )}
 
       {/* Row 5: Contextual Assets */}
       <Grid container spacing={2} sx={{ mb: 2, width: '100%', m: 0 }}>
         <Grid size={{ xs: 12, md: 6 }}>
-          <ImportantSubdomainsWidget subdomains={data.important_subdomains} sx={{ height: '100%' }} />
+          <ImportantSubdomainsWidget subdomains={data.important_subdomains} sx={FULL_HEIGHT_SX} />
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
           <ReconNotesWidget notes={data.todo_notes} sx={{ height: '100%' }} />
@@ -1934,7 +2303,7 @@ export const ScanDetailPage = () => {
       {/* Row 6: Infrastructure & Fingerprinting */}
       <Grid container spacing={2} sx={{ width: '100%', m: 0 }}>
         <Grid size={{ xs: 12, md: 4 }}>
-          <IpAddressesWidget subdomains={data.subdomains} sx={{ height: '100%' }} />
+          <IpAddressesWidget subdomains={data.subdomains} sx={FULL_HEIGHT_SX} />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <DiscoveredPortsWidget ports={data.discovered_ports} sx={{ height: '100%' }} />
@@ -1957,14 +2326,14 @@ export const ScanDetailPage = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {(data.buckets || []).map((b: any, idx: number) => (
+            {(data.buckets || []).map((b, idx: number) => (
               <TableRow key={idx}>
                 <TableCell sx={{ color: 'text.primary', fontWeight: 700 }}>{b.name}</TableCell>
                 <TableCell>
-                  <Chip label={b.public_read ? 'YES' : 'NO'} size="small" color={b.public_read ? 'error' : 'default'} />
+                  <Chip label={b.perm_all_users_read ? 'YES' : 'NO'} size="small" color={b.perm_all_users_read ? 'error' : 'default'} />
                 </TableCell>
                 <TableCell>
-                  <Chip label={b.public_write ? 'YES' : 'NO'} size="small" color={b.public_write ? 'error' : 'default'} />
+                  <Chip label={b.perm_all_users_write ? 'YES' : 'NO'} size="small" color={b.perm_all_users_write ? 'error' : 'default'} />
                 </TableCell>
               </TableRow>
             ))}
@@ -1997,24 +2366,11 @@ export const ScanDetailPage = () => {
   );
 
   const renderExploits = () => (
-    <TacticalPanel title="Potential Exploits & Payloads" icon={<Zap size={14} />}>
-      <TableContainer>
-        <Table size="small">
-          <TableHead sx={{ bgcolor: 'action.hover' }}>
-            <TableRow>
-              <TableCell sx={{ color: tokens.accent.primary, fontWeight: 900 }}>TARGET</TableCell>
-              <TableCell sx={{ color: tokens.accent.primary, fontWeight: 900 }}>EXPLOIT TYPE</TableCell>
-              <TableCell sx={{ color: tokens.accent.primary, fontWeight: 900 }}>PAYLOAD</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            <TableRow>
-              <TableCell colSpan={3} align="center" sx={{ py: 4, color: 'text.disabled' }}>NO POTENTIAL EXPLOITS IDENTIFIED</TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </TacticalPanel>
+    <ExploitsTab
+      projectSlug={projectSlug}
+      targetId={data.target_info?.id || 0}
+      scanId={parseInt(scanId)}
+    />
   );
 
   const renderSubdomains = () => (
@@ -2070,10 +2426,11 @@ export const ScanDetailPage = () => {
                     color: tokens.accent.primary,
                     '@keyframes spiderPulse': {
                       '0%': { transform: 'scale(1)', opacity: 0.6 },
-                      '50%': { transform: 'scale(1.15)', opacity: 1, filter: `drop-shadow(0 0 6px ${tokens.accent.primary})` },
+                      '50%': { transform: 'scale(1.15)', opacity: 1 },
                       '100%': { transform: 'scale(1)', opacity: 0.6 },
                     },
-                    animation: 'spiderPulse 2s infinite ease-in-out'
+                    animation: 'spiderPulse 2s infinite ease-in-out',
+                    filter: `drop-shadow(0 0 6px ${tokens.accent.primary})`,
                   }}>
                     <Bug size={20} />
                   </Box>
@@ -2164,6 +2521,38 @@ export const ScanDetailPage = () => {
               >
                 STOP
               </Button>
+              {isResumableScanStatus(scanStatus) && (
+                <Button
+                  variant="contained"
+                  startIcon={resumeScanMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <Play size={16} />}
+                  onClick={() => resumeScanMutation.mutate(parseInt(scanId), {
+                    onSuccess: (res) => setTierRetryNotice({
+                      open: true,
+                      severity: res.status ? 'success' : 'error',
+                      message: res.message || (res.status ? 'Scan resumed.' : 'Could not resume the scan.'),
+                    }),
+                    onError: () => setTierRetryNotice({ open: true, severity: 'error', message: 'Could not resume the scan.' }),
+                  })}
+                  disabled={resumeScanMutation.isPending}
+                  sx={{
+                    bgcolor: `${tokens.accent.primary}1A`,
+                    color: tokens.accent.primary,
+                    border: `1px solid ${tokens.accent.primary}4D`,
+                    fontFamily: 'Orbitron',
+                    fontSize: '0.65rem',
+                    fontWeight: 900,
+                    px: 2,
+                    '&:hover': { bgcolor: `${tokens.accent.primary}33` }
+                  }}
+                >
+                  RESUME
+                </Button>
+              )}
+              <ScanHardwareProfileControl
+                scanId={parseInt(scanId)}
+                scanStatus={scanStatus}
+                currentProfileId={data.scan_info.hardware_profile_id ?? null}
+              />
               <Button
                 variant="contained"
                 startIcon={<Brain size={16} />}
@@ -2402,9 +2791,10 @@ export const ScanDetailPage = () => {
       <TaskOverlay
         open={taskOverlayOpen}
         onClose={() => setTaskOverlayOpen(false)}
-        activityId={selectedActivity?.id || null}
+        activityId={selectedActivity ? Number(selectedActivity.id) : null}
         scanId={selectedScanId}
         activityTitle={selectedActivity?.title || (selectedScanId ? 'Raw Scan History' : '')}
+        activity={selectedActivity}
       />
 
       {startScanTargets && (
@@ -2416,6 +2806,64 @@ export const ScanDetailPage = () => {
           projectSlug={projectSlug}
         />
       )}
+
+      <ConfirmDialog
+        open={retryConfirmOpen}
+        onClose={() => { setRetryConfirmOpen(false); setPendingRetryActivity(null); }}
+        onConfirm={() => {
+          if (pendingRetryActivity) {
+            const title = pendingRetryActivity.title;
+            retryScanTaskMutation.mutate(Number(pendingRetryActivity.id), {
+              onSuccess: (res: { message?: string }) => setTierRetryNotice({
+                open: true,
+                severity: 'success',
+                message: res?.message || `Retry started for ${title}.`,
+              }),
+              // The server says why it refused, e.g. a step that cannot run on its own.
+              onError: (error: Error) => setTierRetryNotice({ open: true, severity: 'error', message: error.message }),
+            });
+          }
+          setRetryConfirmOpen(false);
+          setPendingRetryActivity(null);
+        }}
+        title="Retry Task"
+        message={pendingRetryActivity ? `Re-run ${pendingRetryActivity.title}? A new proxy will be assigned and results will be merged into this scan.` : ''}
+        confirmText="RETRY"
+        cancelText="CANCEL"
+        isDestructive={false}
+        isLoading={retryScanTaskMutation.isPending}
+        type="info"
+      />
+
+      <ConfirmDialog
+        open={!!pendingTierRetry}
+        onClose={() => setPendingTierRetry(null)}
+        onConfirm={confirmRetryTier}
+        title="Retry Tier"
+        message={pendingTierRetry
+          ? `Re-run every failed task of ${pendingTierRetry.label}? Tasks that cannot be retried on their own are skipped and reported.`
+          : ''}
+        confirmText="RETRY TIER"
+        cancelText="CANCEL"
+        isDestructive={false}
+        isLoading={retryScanTierMutation.isPending}
+        type="info"
+      />
+
+      <Snackbar
+        open={tierRetryNotice.open}
+        autoHideDuration={6000}
+        onClose={() => setTierRetryNotice((n) => ({ ...n, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setTierRetryNotice((n) => ({ ...n, open: false }))}
+          severity={tierRetryNotice.severity}
+          variant="filled"
+        >
+          {tierRetryNotice.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

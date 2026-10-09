@@ -8,7 +8,7 @@ import { useThemeTokens } from '../../../theme/useThemeTokens';
 
 export const AttackSurfacePage: React.FC = () => {
   const { tokens } = useThemeTokens();
-  const { projectSlug, scanId } = useParams({ strict: false }) as any;
+  const { projectSlug, scanId } = useParams({ from: '/$projectSlug/attack_surface/$scanId' });
 
   return (
     <Box sx={{ p: 3 }}>

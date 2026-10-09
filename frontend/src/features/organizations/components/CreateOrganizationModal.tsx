@@ -79,7 +79,6 @@ export const CreateOrganizationModal: React.FC<CreateOrganizationModalProps> = (
           name,
           description,
           domains: selectedDomains,
-          project: projectSlug as any, // Project ID or Slug depending on API
           slug: projectSlug
         });
       }

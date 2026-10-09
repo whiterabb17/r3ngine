@@ -241,8 +241,7 @@ class SaveEndpointCacheTest(TestCase):
         """
         from reNgine.utils.task import save_endpoint
 
-        # Use the domain name as the URL host so the guard at
-        #   ``if domain and domain.name not in http_url``
+        # Use the domain name as the URL host so the domain scope guard
         # is satisfied and execution falls through to the else-branch where
         # ScanHistory is fetched (and then cached in ctx['_scan_obj']).
         domain_host = self.domain.name  # 'endpoint-cache-test.invalid'

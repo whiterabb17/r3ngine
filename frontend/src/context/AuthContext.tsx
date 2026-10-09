@@ -1,12 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import axios from 'axios';
+import { fetchCurrentUser, logoutSession, type CurrentUser } from '../features/auth/api';
 
-interface User {
-  id: number;
-  username: string;
-  email: string;
-  role: string;
-}
+type User = CurrentUser;
 
 interface AuthContextType {
   user: User | null;
@@ -26,11 +21,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const checkAuth = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get('/api/users/me/', {
-        headers: { 'Accept': 'application/json' }
-      });
-      if (response.data && response.data.status !== false) {
-        setUser(response.data);
+      const currentUser = await fetchCurrentUser();
+      if (currentUser && currentUser.status !== false) {
+        setUser(currentUser);
       } else {
         setUser(null);
       }
@@ -51,11 +44,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = async () => {
     try {
-      await axios.post('/logout/', {}, {
-        headers: {
-          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1]
-        }
-      });
+      await logoutSession();
     } catch (error) {
       console.error('Logout failed', error);
     } finally {

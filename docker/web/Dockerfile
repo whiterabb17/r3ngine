@@ -23,13 +23,16 @@ RUN npm run build
 # ===========================================================================
 FROM golang:1.26-bookworm AS go-tools-builder
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && \
+RUN apt-get update && \
     apt-get install -y --no-install-recommends libpcap-dev make curl && \
     rm -rf /var/lib/apt/lists/*
 
 ENV GO111MODULE=on
+# Several tools below are installed at @latest, so any of them can start
+# requiring a newer Go than this image ships. The golang images default to
+# GOTOOLCHAIN=local, which turns that into a hard build failure rather than a
+# toolchain download. See the same note in the vigolium stage.
+ENV GOTOOLCHAIN=auto
 
 # All tools in one RUN: single cache-invalidation point, no intermediate layers
 # retaining module/build cache. -ldflags="-s -w" strips debug + DWARF symbols. 
@@ -44,7 +47,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go install -ldflags="-s -w" -v github.com/edoardottt/favirecon/cmd/favirecon@latest && \
     go install -ldflags="-s -w" -v github.com/fullstorydev/grpcurl/cmd/grpcurl@latest && \
     go install -ldflags="-s -w" -v github.com/mhmdiaa/second-order@latest && \
-    go install -ldflags="-s -w" -v github.com/praetorian-inc/julius/cmd/julius@latest && \
+    go install -ldflags="-s -w" -v github.com/praetorian-inc/julius/cmd/julius@v1.4.11 && \
     go install -ldflags="-s -w" -v github.com/denandz/sourcemapper@latest && \
     go install -ldflags="-s -w" -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest && \
     go install -ldflags="-s -w" -v github.com/projectdiscovery/chaos-client/cmd/chaos@latest && \
@@ -112,25 +115,36 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # ===========================================================================
 FROM golang:1.26-bookworm AS vigolium-builder
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && \
+RUN apt-get update && \
     apt-get install -y --no-install-recommends curl git make unzip && \
     rm -rf /var/lib/apt/lists/*
 
-# Install bun (needed for vigolium-audit and jsscan embedded binary builds)
-RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.1.34"
+# Install bun (needed for vigolium-audit and jsscan embedded binary builds).
+# vigolium-audit engines.bun is >=1.3.0; 1.1.34 cannot cross-compile its
+# current TypeScript tree.
+RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.1"
 ENV PATH="/root/.bun/bin:${PATH}"
 ENV GO111MODULE=on
+# The official golang images set GOTOOLCHAIN=local, which makes `go build` fail
+# outright when a module asks for a newer Go than the image ships. vigolium is
+# cloned from its default branch just below, unpinned, so whatever Go version it
+# requires today is whatever we have to satisfy — it has already moved from 1.26
+# to 1.27 under us. `auto` lets the toolchain named in go.mod be fetched instead
+# of failing the build.
+#
+# The real fix is to pin the clone to a release tag, as the comment below has
+# always claimed it does. Until that tag is chosen, this keeps the image
+# buildable as vigolium moves.
+ENV GOTOOLCHAIN=auto
 
 # Clone vigolium at the pinned release tag
 RUN git clone --depth 1 https://github.com/vigolium/vigolium /build/vigolium
 
 WORKDIR /build/vigolium
 
-# Build embedded binaries (vigolium-audit via bun, jsscan via bun)
+# Build embedded binaries (vigolium-audit via bun, jstangle via bun)
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-    make ensure-audit && make ensure-jsscan
+    make ensure-audit && make ensure-jstangle
 
 # Compile vigolium binary
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -148,9 +162,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # ===========================================================================
 FROM rust:bookworm AS dalfox-builder
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     musl-tools \
     pkg-config \
     git \
@@ -164,7 +176,6 @@ WORKDIR /tmp/dalfox
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/tmp/dalfox/target \
     cargo build --release && \
     cp target/release/dalfox /usr/local/bin/dalfox
 
@@ -207,9 +218,7 @@ LABEL \
 # Ubuntu 22.04 ships postgresql-client 14 by default; pg_dump requires the
 # client version to be >= the server version (now 16), so we pin to 16.
 # ---------------------------------------------------------------------------
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update -y && \
+RUN apt-get update -y && \
     apt-get install -y --no-install-recommends ca-certificates gnupg curl lsb-release && \
     rm -rf /var/lib/apt/lists/* && \
     curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
@@ -227,9 +236,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # build-essential is kept because pip installs some packages that compile
 # C extensions (cryptography, pycairo, etc.) and gems (wpscan) need gcc.
 # ---------------------------------------------------------------------------
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update -y && \
+RUN apt-get update -y && \
     apt-get install -y --no-install-recommends \
     # Python 3.12 runtime
     python3.12 \
@@ -324,9 +331,7 @@ ENV PATH="/root/.local/bin:${PATH}"
 # Node.js 20 + Retire.js (JS dependency vulnerability scanner)
 # Node runtime is needed at runtime for `retire` — not just build time.
 # ---------------------------------------------------------------------------
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    --mount=type=cache,target=/root/.npm \
+RUN --mount=type=cache,target=/root/.npm \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
     npm install -g retire && \
@@ -388,10 +393,21 @@ RUN FEROX_VERSION="2.11.0" && \
     chmod +x /usr/local/bin/feroxbuster && \
     rm /tmp/feroxbuster.zip
 
-# Searchsploit — offline Exploit-DB CLI search
-RUN git clone --depth 1 https://gitlab.com/exploit-database/exploitdb /usr/src/exploitdb && \
-    ln -sf /usr/src/exploitdb/searchsploit /usr/local/bin/searchsploit && \
-    cp /usr/src/exploitdb/.searchsploit_rc /root/.searchsploit_rc
+# check_if_email_exists (Reacher) — MX/SMTP mailbox verification. Replaces smtp-user-enum.
+# Unmodified upstream CLI, AGPL-3.0. Pinned GitHub release; installed at image build onto PATH.
+RUN ARCH=$(dpkg --print-architecture) && \
+    CIE_VERSION="v0.11.7" && \
+    if [ "${ARCH}" = "arm64" ]; then CIE_TRIPLE="aarch64-unknown-linux-gnu"; \
+    else CIE_TRIPLE="x86_64-unknown-linux-gnu"; fi && \
+    mkdir -p /tmp/cie && \
+    curl -fsSL "https://github.com/reacherhq/check-if-email-exists/releases/download/${CIE_VERSION}/check_if_email_exists-${CIE_TRIPLE}.tar.gz" \
+      -o /tmp/cie/check_if_email_exists.tar.gz && \
+    tar -xzf /tmp/cie/check_if_email_exists.tar.gz -C /tmp/cie && \
+    BIN=$(find /tmp/cie -type f -name 'check_if_email_exists' | head -n1) && \
+    test -n "$BIN" && test -f "$BIN" && \
+    install -m 0755 "$BIN" /usr/local/bin/check_if_email_exists && \
+    rm -rf /tmp/cie && \
+    command -v check_if_email_exists
 
 # WPScan — WordPress vulnerability scanner
 RUN --mount=type=cache,target=/root/.gem \
@@ -491,7 +507,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # environments so their transitive dependencies cannot clash.
 #
 # Conflicts resolved by pipx isolation:
-#   dirsearch 0.4.3.post1 — requires requests>=2.27.0  (system: 2.25.1)
+#   dirsearch 0.5.x     — uses httpx; SOCKS needs socksio (see internal_tools.sh)
 #   maigret   0.6.1       — requires requests>=2.32.4, chardet>=5, idna>=3.4
 #   semgrep   1.165.0     — requires urllib3~=2.0       (system: 1.26.x)
 #
@@ -501,7 +517,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # ---------------------------------------------------------------------------
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install --upgrade pip setuptools wheel pyOpenSSL h8mail && \
-    pip3 install --upgrade fierce dirsearch meson ninja arjun inql netlas holehe smtp-user-enum
+    pip3 install --upgrade fierce dirsearch socksio meson ninja arjun inql netlas holehe
 
 # emailfinder — email discovery from public sources (confirmed installable 2026-07-01)
 # LeakSearch is not on PyPI; no Dockerfile line added (binary unavailable, module degrades gracefully)
@@ -597,7 +613,12 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pipx install "bypass-url-parser" --force && \
     pipx install bbot --force && \
     pipx install sploitscan --force && \
-    pipx install git+https://github.com/doyensec/GQLSpection --force
+    pipx install git+https://github.com/doyensec/GQLSpection --force && \
+    # GQLSpection's own metadata omits click, so its entry point raises
+    # ModuleNotFoundError on every invocation. Injected here rather than at scan
+    # time: the runtime `pipx inject` it used to rely on is a network call in the
+    # middle of a scan, racing every other scan for the same virtualenv.
+    pipx inject gqlspection click
 
 # credspy — Microsoft account enumeration via Azure GetCredentialType endpoint
 # Python 3.10+ required (image runs 3.12); only runs when Microsoft MX records detected
@@ -666,9 +687,10 @@ RUN playwright install-deps chromium && \
 # Copy application source (placed last — changes most frequently, so layers
 # above this line are fully cached on code-only rebuilds)
 # ---------------------------------------------------------------------------
+COPY web/gf-patterns/ /usr/src/gf-patterns/
 COPY web/ /usr/src/app/
-RUN mkdir /usr/src/scripts 
-COPY docker/scripts/nuclei_tag_splitter.py /usr/src/scripts/nuclei_tag_splitter.py
+#RUN mkdir /usr/src/scripts 
+#COPY docker/scripts/nuclei_tag_splitter.py /usr/src/scripts/nuclei_tag_splitter.py
 COPY docker/web/entrypoint.sh /usr/src/app/entrypoint.sh
 COPY docker/temporal-python-orchestrator/entrypoint.sh /usr/src/app/temporal-entrypoint.sh
 COPY docker/temporal-go-executor/entrypoint.sh /usr/src/app/executor-entrypoint.sh

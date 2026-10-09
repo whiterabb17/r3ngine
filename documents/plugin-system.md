@@ -51,6 +51,13 @@ ui:
   menu_item: "Display Name"
   menu_path: "/p/my-plugin"
   entry_export: "MyDashboardComponent"
+
+# Optional: MCP tools agents may use when this plugin is installed + enabled.
+# Host exposes thin /api/mcp/… wrappers (never raw /api/plugins/{slug}/).
+# Sidecar registers these names only after r3ngine_list_plugins reports the slug.
+mcp:
+  tools:
+    - r3ngine_example_plugin_tool
 ```
 
 ### `runtime.run after`
@@ -67,7 +74,9 @@ Controls when the plugin is injected into the scan pipeline.
 
 Paths relative to the plugin's `backend/` directory, in `module.path.ClassName` format.
 
----
+### `mcp.tools`
+
+Optional list of MCP tool names this plugin contributes. Discovery endpoints (`r3ngine_list_plugins`, `r3ngine_list_capabilities.plugins`) surface these only for **enabled** installed plugins. Each name must have a matching host view under `/api/mcp/` that calls `require_plugin(slug)` before touching plugin models.
 
 ## Plugin Installation (`plugins/utils.py`)
 

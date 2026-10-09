@@ -60,9 +60,10 @@ class APMEOrchestrator:
                 try:
                     heartbeat_fn(detail)
                 except Exception:
-                    pass
+                    # A missed heartbeat must not abort the pipeline.
+                    logger.debug("APME heartbeat failed at %s", detail, exc_info=True)
 
-        logger.info(f"APME Orchestrator: Starting for scan_history_id={scan_history_id}")
+        logger.info("APME Orchestrator: Starting for scan_history_id=%s", scan_history_id)
 
         # Resolve Target Domain from ScanHistory to ensure we ingest ALL historical and current scan data
         from startScan.models import ScanHistory
@@ -118,7 +119,7 @@ class APMEOrchestrator:
         all_nodes.extend(goal_nodes)
 
         logger.info(
-            f"APME [1/7] Done. Nodes={len(all_nodes)}, Edges={len(all_edges)}"
+            "APME [1/7] Done. Nodes=%s, Edges=%s", len(all_nodes), len(all_edges)
         )
 
         if not all_nodes:
@@ -135,7 +136,7 @@ class APMEOrchestrator:
             builder.add_nodes(all_nodes, scan_history_id)
             builder.add_edges(all_edges, scan_history_id)
         except Exception as exc:
-            logger.error(f"APME: Graph build failed: {exc}")
+            logger.error("APME: Graph build failed: %s", exc)
             builder.close()
             return {"total_paths": 0, "returned_paths": 0, "paths": [], "error": str(exc)}
 
@@ -145,7 +146,7 @@ class APMEOrchestrator:
         logger.info("APME [3/7] Enriching graph via rules engine...")
         enricher = GraphEnricher(builder)
         derived_edges = enricher.enrich(all_nodes, scan_history_id)
-        logger.info(f"APME [3/7] Derived {len(derived_edges)} new edges from rules.")
+        logger.info("APME [3/7] Derived %s new edges from rules.", len(derived_edges))
 
         # Diagnostic: check goal node reachability immediately after enrichment.
         # If all goal nodes have zero incoming edges, no path algorithm can find anything.
@@ -161,12 +162,12 @@ class APMEOrchestrator:
             # internally; it returns all deduplicated candidates for the scorer.
             paths = pathfinder.find_all_paths(scan_history_id, top_n=self.top_n)
         except Exception as exc:
-            logger.error(f"APME: Pathfinding failed: {exc}")
+            logger.error("APME: Pathfinding failed: %s", exc)
             paths = []
         finally:
             pathfinder.close()
 
-        logger.info(f"APME [4/7] Found {len(paths)} candidate paths (pre-scoring).")
+        logger.info("APME [4/7] Found %s candidate paths (pre-scoring).", len(paths))
         _heartbeat("step 4/7 pathfinding complete")
 
         if not paths:
@@ -189,7 +190,7 @@ class APMEOrchestrator:
         _heartbeat("step 5/7 scoring complete")
 
         # ── Step 7: Persist & Return ──────────────────────────────────────────
-        logger.info(f"APME [6/7] Persisting top {self.top_n} paths...")
+        logger.info("APME [6/7] Persisting top %s paths...", self.top_n)
         top_paths = scored_paths[: self.top_n]
         node_index = {n.id: n for n in all_nodes}
         self._persist_paths(top_paths, scan_history_id, node_index)
@@ -198,9 +199,7 @@ class APMEOrchestrator:
 
         result = serialize_paths(scored_paths, node_index=node_index, top_n=self.top_n)
         logger.info(
-            f"APME [7/7] Complete. "
-            f"total_paths={result['total_paths']}, "
-            f"returned={result['returned_paths']}"
+            "APME [7/7] Complete. total_paths=%s, returned=%s", result['total_paths'], result['returned_paths']
         )
         return result
 
@@ -349,14 +348,35 @@ class APMEOrchestrator:
         """
         Persist attack paths to reNgine's ImpactAssessment model.
         Each top-level path is stored as a simulated_path JSON blob.
+        Checks existing paths by fingerprint and vulnerability to perform deduplication.
         """
         try:
             from startScan.models import ImpactAssessment, ScanHistory, Vulnerability
+            from apme.models.path import get_path_fingerprint
 
             scan_history = ScanHistory.objects.get(id=scan_history_id)
 
             from apme.output.llm_narrator import LLMNarrator
             narrator = LLMNarrator()
+
+            # Pre-load all existing assessments for this scan
+            existing_assessments = list(ImpactAssessment.objects.filter(scan_history=scan_history))
+
+            # Map existing assessments by vulnerability and fingerprint
+            existing_by_vuln = {ea.vulnerability_id: ea for ea in existing_assessments if ea.vulnerability_id is not None}
+
+            existing_by_fingerprint = {}
+            for ea in existing_assessments:
+                steps = None
+                if ea.simulated_path and "steps" in ea.simulated_path:
+                    steps = ea.simulated_path["steps"]
+                elif ea.potential_attack_chain and "steps" in ea.potential_attack_chain:
+                    steps = ea.potential_attack_chain["steps"]
+
+                if steps:
+                    fp = get_path_fingerprint(steps)
+                    if fp not in existing_by_fingerprint:
+                        existing_by_fingerprint[fp] = ea
 
             for path in paths:
                 path_dict = path.to_dict()
@@ -364,59 +384,62 @@ class APMEOrchestrator:
 
                 # Try to link to the most impactful vulnerability in the path
                 vuln = self._find_representative_vuln(path, scan_history_id)
+                vuln_id = vuln.id if vuln else None
 
-                if vuln:
-                    # Update or create by vulnerability since vulnerability_id must be unique
-                    ImpactAssessment.objects.update_or_create(
-                        vulnerability=vuln,
-                        defaults={
-                            "scan_history": scan_history,
-                            "simulated_path": path_dict,
-                            "potential_attack_chain": {
-                                "apme_path_id": path.id,
-                                "risk": path.risk,
-                                "score": path.score,
-                                "steps": serialize_path(path, node_index)["steps"],
-                                "narrative": narrative,
-                                "metadata": self._build_path_metadata(path, node_index, scan_id=scan_history_id),
-                            },
-                            "potential_impact": narrative,
-                            "remediation_priority": self._risk_to_priority(path.risk),
-                            "is_ai_generated": False,
-                        },
-                    )
+                # Find if there is an existing assessment we should update
+                matched_assessment = None
+                if vuln_id is not None and vuln_id in existing_by_vuln:
+                    matched_assessment = existing_by_vuln[vuln_id]
                 else:
-                    # Vulnerability is None, unique constraint doesn't apply, lookup by path ID
-                    ImpactAssessment.objects.update_or_create(
-                        scan_history=scan_history,
-                        vulnerability=None,
-                        potential_attack_chain__apme_path_id=path.id,
-                        defaults={
-                            "simulated_path": path_dict,
-                            "potential_attack_chain": {
-                                "apme_path_id": path.id,
-                                "risk": path.risk,
-                                "score": path.score,
-                                "steps": serialize_path(path, node_index)["steps"],
-                                "narrative": narrative,
-                                "metadata": self._build_path_metadata(path, node_index, scan_id=scan_history_id),
-                            },
-                            "potential_impact": narrative,
-                            "remediation_priority": self._risk_to_priority(path.risk),
-                            "is_ai_generated": False,
-                        },
+                    path_fp = path.fingerprint
+                    if path_fp in existing_by_fingerprint:
+                        matched_assessment = existing_by_fingerprint[path_fp]
+
+                defaults = {
+                    "scan_history": scan_history,
+                    "simulated_path": path_dict,
+                    "potential_attack_chain": {
+                        "apme_path_id": path.id,
+                        "risk": path.risk,
+                        "score": path.score,
+                        "steps": serialize_path(path, node_index)["steps"],
+                        "narrative": narrative,
+                        "metadata": self._build_path_metadata(path, node_index, scan_id=scan_history_id),
+                    },
+                    "potential_impact": narrative,
+                    "remediation_priority": self._risk_to_priority(path.risk),
+                    "is_ai_generated": False,
+                }
+
+                if matched_assessment:
+                    # Update fields
+                    matched_assessment.vulnerability = vuln
+                    for key, val in defaults.items():
+                        setattr(matched_assessment, key, val)
+                    matched_assessment.save()
+                    logger.debug("APME: Updated existing path %s with narrative.", path.id)
+                else:
+                    # Create new
+                    new_ea = ImpactAssessment.objects.create(
+                        vulnerability=vuln,
+                        **defaults
                     )
-                logger.debug(f"APME: Persisted path {path.id} with narrative.")
+                    # Add to caches to prevent duplicating within the same batch
+                    if vuln_id is not None:
+                        existing_by_vuln[vuln_id] = new_ea
+                    path_fp = path.fingerprint
+                    existing_by_fingerprint[path_fp] = new_ea
+                    logger.debug("APME: Created new path %s with narrative.", path.id)
 
         except Exception as exc:
-            logger.error(f"APME: Failed to persist paths: {exc}")
+            logger.error("APME: Failed to persist paths: %s", exc)
 
     @staticmethod
     def _find_representative_vuln(path: AttackPath, scan_history_id: int):
         """Find the most severe vulnerability mentioned in a path's steps."""
-        try:
-            from startScan.models import Vulnerability
+        from startScan.models import Vulnerability
 
+        try:
             for step in path.steps:
                 if step.from_id.startswith("vuln::"):
                     vuln_id = int(step.from_id.split("::")[-1])
@@ -424,7 +447,8 @@ class APMEOrchestrator:
                 if step.to_id.startswith("vuln::"):
                     vuln_id = int(step.to_id.split("::")[-1])
                     return Vulnerability.objects.get(id=vuln_id)
-        except Exception:
+        except (ValueError, Vulnerability.DoesNotExist):
+            # Malformed node id, or the vulnerability was deleted since graph build.
             pass
         return None
 

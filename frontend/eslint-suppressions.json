@@ -1,0 +1,707 @@
+{
+  "src/components/LinkedInSessionCard.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/components/Shell/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 9
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 2
+    }
+  },
+  "src/components/TacticalPanel.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/scan/StressTab/DrilldownPanel.tsx": {
+    "react-hooks/rules-of-hooks": {
+      "count": 1
+    }
+  },
+  "src/components/scan/StressTab/LatencyChart.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/scan/StressTab/SharedToolCharts/DistributionChart.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/components/scan/StressTab/SharedToolCharts/PercentileChart.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/scan/StressTab/SharedToolCharts/PerformanceGauge.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/scan/StressTab/SharedToolCharts/TimeSeriesChart.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/components/scan/StressTab/StressHeatmap.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/components/scan/StressTab/ToolComponents/Hping3Dashboard.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "react-hooks/immutability": {
+      "count": 1
+    }
+  },
+  "src/components/scan/StressTab/ToolComponents/K6Dashboard.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-useless-assignment": {
+      "count": 3
+    }
+  },
+  "src/components/scan/StressTab/ToolComponents/WrkDashboard.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/context/AppContext.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "react-refresh/only-export-components": {
+      "count": 1
+    }
+  },
+  "src/context/AuthContext.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    },
+    "react-refresh/only-export-components": {
+      "count": 1
+    }
+  },
+  "src/context/ThemeContext.tsx": {
+    "react-refresh/only-export-components": {
+      "count": 1
+    }
+  },
+  "src/features/assessments/index.tsx": {
+    "react-refresh/only-export-components": {
+      "count": 5
+    }
+  },
+  "src/features/auth/components/LoginPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/auth/components/LogoutPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/auth/components/OnboardingPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 8
+    },
+    "no-shadow-restricted-names": {
+      "count": 1
+    }
+  },
+  "src/features/bounty/components/BountyHubPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 10
+    }
+  },
+  "src/features/dashboard/components/ActivityFeed.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/features/dashboard/components/DistributionCharts.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/dashboard/components/GeoMap.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 4
+    }
+  },
+  "src/features/dashboard/components/VulnerabilityFeed.tsx": {
+    "no-useless-assignment": {
+      "count": 1
+    },
+    "prefer-const": {
+      "count": 2
+    }
+  },
+  "src/features/endpoints/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 7
+    }
+  },
+  "src/features/engines/components/EngineConfigModal.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 3
+    }
+  },
+  "src/features/engines/components/EngineList.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 7
+    }
+  },
+  "src/features/engines/components/EnginesPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/engines/components/TemplatePicker.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/engines/components/ViewWordlistModal.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/engines/components/WordlistList.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 7
+    }
+  },
+  "src/features/engines/components/YamlPreviewPanel.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/engines/components/sections/SubdomainDiscoverySection.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/engines/hooks/useEngineConfig.ts": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/evidence/components/EvidenceDetailDialog.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/features/evidence/components/EvidenceTable.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 22
+    }
+  },
+  "src/features/evidence/pages/EvidencePage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/exposures/components/ExposureList.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/monitoring/components/DiscoveryTable.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/monitoring/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/features/notifications/components/NotificationsDropdown.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 5
+    }
+  },
+  "src/features/organizations/components/CreateOrganizationModal.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/organizations/components/OrganizationPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/organizations/components/OrganizationTable.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/plugins/components/InstallProgressOverlay.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/features/plugins/components/PipelineBuilder.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/plugins/components/PluginCard.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    },
+    "react-hooks/rules-of-hooks": {
+      "count": 1
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 3
+    }
+  },
+  "src/features/plugins/components/PluginInventory.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/plugins/components/PluginPageLoader.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/projects/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    }
+  },
+  "src/features/scans/api/index.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/scans/api/useAttackPaths.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/AttackPathsTab.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 5
+    }
+  },
+  "src/features/scans/components/AttackSurfacePage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/AttackSurfaceTab.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/features/scans/components/BruteConfigDialog.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    }
+  },
+  "src/features/scans/components/DirectoriesTab.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 11
+    },
+    "no-empty": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/EndpointsTab.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/ExtractAuthModal.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 2
+    }
+  },
+  "src/features/scans/components/GraphBlastRadiusPanel.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/GraphCanvas.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/GraphControlPanel.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/features/scans/components/OsintTab/DocumentSection.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/OsintTab/DorkSection.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/OsintTab/EmailDiscoveryModal.tsx": {
+    "react-hooks/refs": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/OsintTab/EmailImportModal.tsx": {
+    "no-useless-escape": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/OsintTab/EmployeeIntelModal.tsx": {
+    "react-hooks/refs": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/OsintTab/OsintStagingSection.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    },
+    "no-control-regex": {
+      "count": 1
+    },
+    "react-hooks/preserve-manual-memoization": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/OsintTab/StagingMetadataPanel.tsx": {
+    "no-useless-assignment": {
+      "count": 1
+    },
+    "react-hooks/error-boundaries": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/ScanDetailPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 17
+    }
+  },
+  "src/features/scans/components/ScanHistoryDrawer.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 8
+    }
+  },
+  "src/features/scans/components/ScanHistoryPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 7
+    }
+  },
+  "src/features/scans/components/ScanList.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 7
+    }
+  },
+  "src/features/scans/components/ScanReportModal.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 6
+    }
+  },
+  "src/features/scans/components/ScreenshotsTab.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/SecretLeaksTab.tsx": {
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/StartScanModal.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/SubScansPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    }
+  },
+  "src/features/scans/components/SubdomainsTab.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 9
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/scans/components/VisualizationTab.tsx": {
+    "react-hooks/immutability": {
+      "count": 2
+    }
+  },
+  "src/features/scans/index.tsx": {
+    "react-refresh/only-export-components": {
+      "count": 9
+    }
+  },
+  "src/features/scans/utils/dorkUtils.ts": {
+    "prefer-const": {
+      "count": 1
+    }
+  },
+  "src/features/search/components/SearchPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 8
+    }
+  },
+  "src/features/settings/components/ApiVaultPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 5
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/settings/components/CheckForUpdateModal.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/settings/components/LlmToolkitPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 6
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 5
+    }
+  },
+  "src/features/settings/components/NotificationSettingsPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 8
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/settings/components/OpSecSettingsPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/settings/components/ProfileSettingsPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    }
+  },
+  "src/features/settings/components/ProxySettingsPage.tsx": {
+    "no-useless-escape": {
+      "count": 1
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 2
+    },
+    "react-refresh/only-export-components": {
+      "count": 1
+    }
+  },
+  "src/features/settings/components/ProxyValidationModal.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/settings/components/ReNgineSettingsPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 7
+    }
+  },
+  "src/features/settings/components/RemoteWorkersPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/settings/components/ReportSettingsPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 4
+    },
+    "react-hooks/refs": {
+      "count": 2
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/settings/components/ToolArsenalPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 10
+    },
+    "react-hooks/immutability": {
+      "count": 1
+    }
+  },
+  "src/features/settings/components/ToolFormModal.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/settings/components/ToolSettingsPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 10
+    }
+  },
+  "src/features/subdomains/RunSingleToolModal.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/subdomains/index.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 8
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/targets/components/AddTargetModal.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/features/targets/components/EditTargetModal.tsx": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/targets/components/TargetList.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 13
+    }
+  },
+  "src/features/targets/components/TargetReportModal.tsx": {
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 2
+    }
+  },
+  "src/features/targets/components/TargetSummary.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 22
+    }
+  },
+  "src/features/targets/index.tsx": {
+    "react-refresh/only-export-components": {
+      "count": 4
+    }
+  },
+  "src/features/todos/api/index.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    }
+  },
+  "src/features/todos/components/TodoItem.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/features/todos/components/TodoPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    }
+  },
+  "src/features/tools/components/ToolboxModals.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/vulnerabilities/api/index.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/features/vulnerabilities/components/ImpactExplorer.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/vulnerabilities/components/VulnerabilityDetailModal.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 5
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/features/vulnerabilities/components/VulnerabilityList.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    }
+  },
+  "src/features/vulnerabilities/components/VulnerabilityTable.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 12
+    },
+    "no-useless-assignment": {
+      "count": 2
+    },
+    "prefer-const": {
+      "count": 2
+    }
+  },
+  "src/features/vulnerabilities/index.tsx": {
+    "react-refresh/only-export-components": {
+      "count": 5
+    }
+  },
+  "src/features/workflows/components/WorkflowLauncher.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/hooks/useStressTelemetry.ts": {
+    "react-hooks/refs": {
+      "count": 1
+    }
+  },
+  "src/pages/StressTestingPage.tsx": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 16
+    },
+    "prefer-const": {
+      "count": 2
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/router.tsx": {
+    "react-hooks/rules-of-hooks": {
+      "count": 2
+    },
+    "react-refresh/only-export-components": {
+      "count": 2
+    }
+  }
+}

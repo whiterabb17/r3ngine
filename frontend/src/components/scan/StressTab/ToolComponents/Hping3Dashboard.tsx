@@ -7,7 +7,7 @@ import { TimeSeriesChart, PerformanceGauge } from '../SharedToolCharts';
 
 export interface Hping3TelemetryPoint {
   timestamp: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface Hping3DashboardProps {

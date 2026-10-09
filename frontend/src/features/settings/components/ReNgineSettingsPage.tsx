@@ -23,12 +23,15 @@ import {
   Upload
 } from 'lucide-react';
 import Chart from 'react-apexcharts';
-import axios from 'axios';
+import type { ApexOptions } from 'apexcharts';
 import {
   useRengineSystemSettings,
   useDeleteAllScanResults,
   useDeleteAllScreenshots,
-  useToggleScanQueueing
+  useToggleScanQueueing,
+  exportConfigBackup,
+  exportScanResultsBackup,
+  importConfigBackup
 } from '../api';
 import { TacticalPanel } from '../../../components/TacticalPanel';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
@@ -117,10 +120,8 @@ export const ReNgineSettingsPage: React.FC = () => {
   const handleExportConfig = async () => {
     try {
       setIsExporting(true);
-      const response = await axios.get('/api/settings/export/', {
-        responseType: 'blob'
-      });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const archive = await exportConfigBackup();
+      const url = window.URL.createObjectURL(new Blob([archive]));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', 'r3ngine_config_backup.zip');
@@ -138,10 +139,8 @@ export const ReNgineSettingsPage: React.FC = () => {
   const handleExportScanResults = async () => {
     try {
       setIsExportingScanResults(true);
-      const response = await axios.get('/api/settings/export/scan-results/', {
-        responseType: 'blob'
-      });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const archive = await exportScanResultsBackup();
+      const url = window.URL.createObjectURL(new Blob([archive]));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', 'scan_results_backup.zip');
@@ -160,20 +159,12 @@ export const ReNgineSettingsPage: React.FC = () => {
     if (!importFile) return;
     try {
       setIsImporting(true);
-      const formData = new FormData();
-      formData.append('file', importFile);
-      formData.append('overwrite_existing', overwriteConfigs ? 'true' : 'false');
-
-      const response = await axios.post('/api/settings/import/', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        }
-      });
-      if (response.data.status) {
+      const result = await importConfigBackup(importFile, overwriteConfigs);
+      if (result.status) {
         setSnackbar({ open: true, message: 'Configuration imported successfully', severity: 'success' });
         setImportFile(null);
       } else {
-        setSnackbar({ open: true, message: response.data.message || 'Import failed', severity: 'error' });
+        setSnackbar({ open: true, message: result.message || 'Import failed', severity: 'error' });
       }
     } catch (err) {
       setSnackbar({ open: true, message: 'Failed to import configuration', severity: 'error' });
@@ -197,7 +188,7 @@ export const ReNgineSettingsPage: React.FC = () => {
   const gaugeColor = isDanger ? '#ff1100' : (isWarning ? '#ffcc00' : tokens.accent.primary);
   const gradientColor = isDanger ? '#cc0000' : (isWarning ? '#997700' : tokens.accent.primary);
 
-  const chartOptions: any = {
+  const chartOptions: ApexOptions = {
     chart: {
       type: "radialBar",
       offsetY: -30,

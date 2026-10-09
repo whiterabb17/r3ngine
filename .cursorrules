@@ -32,3 +32,6 @@ Architecture notes:
 Validation:
 - Do not assume the full local stack starts successfully.
 - Prefer static checks such as `npx tsc -b`, `npm run lint`, targeted Python compile, and focused Django tests.
+
+Git commits:
+- Never add author tags or trailers (`Co-authored-by`, `Signed-off-by`, `Made-with`, `Generated-by`, or similar). Message body only.

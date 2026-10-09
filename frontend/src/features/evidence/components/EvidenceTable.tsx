@@ -16,6 +16,7 @@ import { useEvidenceCollections, useCollectionItems, useVerifyEvidence,
 import type { Evidence, EvidenceCollection } from '../types';
 import { EvidenceDetailDialog } from './EvidenceDetailDialog';
 import { EvidenceUploadDialog } from './EvidenceUploadDialog';
+import { openSafeUrl } from '../../../utils/securityUtils';
 
 // -------------------------------------------------------------------------
 // Constants
@@ -71,10 +72,10 @@ function CollectionHeader({
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
         <Shield size={20} color="#00f3ff" />
         <Box>
-          <Typography variant="subtitle1" sx={{ fontFamily: 'Orbitron', fontWeight: 700, color: '#fff', fontSize: '0.85rem' }}>
+          <Typography variant="subtitle1" sx={{ fontFamily: 'Orbitron', fontWeight: 700, color: 'text.primary', fontSize: '0.85rem' }}>
             {collection.name}
           </Typography>
-          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             {collection.item_count} items · {collection.status}
             {collection.retention_policy && (
               <> · Retention: {collection.retention_policy.archive_after_days}d</>
@@ -143,11 +144,11 @@ function EvidenceRow({
             {EVIDENCE_TYPE_ICONS[item.evidence_type] ?? <FileText size={14} />}
           </Box>
           <Box>
-            <Typography variant="body2" sx={{ color: '#fff', fontWeight: 500, fontSize: '0.8rem' }}>
+            <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 500, fontSize: '0.8rem' }}>
               {item.title}
             </Typography>
             {item.file_name && (
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'monospace', fontSize: '0.65rem' }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.65rem' }}>
                 {item.file_name}
               </Typography>
             )}
@@ -167,7 +168,7 @@ function EvidenceRow({
         />
       </TableCell>
       <TableCell sx={{ py: 1 }}>
-        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace' }}>
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>
           {item.file_size_mb > 0 ? `${item.file_size_mb} MB` : '—'}
         </Typography>
       </TableCell>
@@ -180,14 +181,14 @@ function EvidenceRow({
         />
       </TableCell>
       <TableCell sx={{ py: 1 }}>
-        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontFamily: 'monospace', fontSize: '0.65rem' }}>
+        <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: 'monospace', fontSize: '0.65rem' }}>
           {new Date(item.collected_at).toLocaleDateString()}
         </Typography>
       </TableCell>
       <TableCell sx={{ py: 1 }} onClick={(e) => e.stopPropagation()}>
         <Stack direction="row" spacing={0.5}>
           <Tooltip title="View details">
-            <IconButton size="small" onClick={() => onView(item)} sx={{ color: 'rgba(255,255,255,0.5)' }}>
+            <IconButton size="small" onClick={() => onView(item)} sx={{ color: 'text.secondary' }}>
               <Eye size={14} />
             </IconButton>
           </Tooltip>
@@ -196,8 +197,8 @@ function EvidenceRow({
               <Tooltip title="Download evidence">
                 <IconButton
                   size="small"
-                  onClick={() => window.open(item.download_url, '_blank')}
-                  sx={{ color: 'rgba(255,255,255,0.5)' }}
+                  onClick={() => openSafeUrl(item.download_url)}
+                  sx={{ color: 'text.secondary' }}
                 >
                   <Download size={14} />
                 </IconButton>
@@ -215,7 +216,7 @@ function EvidenceRow({
                 <IconButton
                   size="small"
                   onClick={() => onArchive(item.uuid)}
-                  sx={{ color: 'rgba(255,255,255,0.3)' }}
+                  sx={{ color: 'text.secondary' }}
                 >
                   <Archive size={14} />
                 </IconButton>
@@ -288,7 +289,7 @@ export function EvidenceTable({
           borderRadius: 2,
         }}>
           <Shield size={40} color="rgba(255,255,255,0.1)" style={{ marginBottom: 12 }} />
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.3)' }}>
+          <Typography variant="body2" sx={{ color: 'text.disabled' }}>
             No evidence items collected yet.
           </Typography>
           {collection.status === 'Active' && (
@@ -309,7 +310,7 @@ export function EvidenceTable({
               <TableRow>
                 {['Title / File', 'Type', 'Size', 'Status', 'Collected', 'Actions'].map(h => (
                   <TableCell key={h} sx={{
-                    color: 'rgba(255,255,255,0.4)',
+                    color: 'text.secondary',
                     fontFamily: 'Orbitron',
                     fontSize: '0.6rem',
                     letterSpacing: 1,

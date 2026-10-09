@@ -30,6 +30,7 @@ import { useProxySettings, useUpdateProxySettings, useFetchProxies, useProxyTask
 import { TacticalPanel } from '../../../components/TacticalPanel';
 import { ProxyValidationModal } from './ProxyValidationModal';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import type { ApiErrorLike } from '../../../types/errors';
 
 const KNOWN_SCHEMES = /^(https?|socks[45]):\/\//i;
 const HOST_PORT_RE = /^[\w.\-]+:\d{1,5}$/;
@@ -58,7 +59,7 @@ export function parseProxyLine(line: string): string | null {
 
 export const ProxySettingsPage: React.FC = () => {
   const { tokens } = useThemeTokens();
-  const { projectSlug = 'default' } = useParams({ strict: false }) as any;
+  const { projectSlug = 'default' } = useParams({ strict: false });
   const queryClient = useQueryClient();
   const { data: settings, isLoading: isSettingsLoading } = useProxySettings(projectSlug);
   const updateSettings = useUpdateProxySettings(projectSlug);
@@ -73,6 +74,9 @@ export const ProxySettingsPage: React.FC = () => {
   const [customLimit, setCustomLimit] = useState<string>('2000');
   const [validateOnSave, setValidateOnSave] = useState(false);
   const [useTor, setUseTor] = useState(false);
+  const [priorityProxies, setPriorityProxies] = useState('');
+  const [usePriorityProxies, setUsePriorityProxies] = useState(true);
+  const [proxyOnlyAfterBan, setProxyOnlyAfterBan] = useState(false);
   const [isValidationModalOpen, setIsValidationModalOpen] = useState(false);
   const [isFetchingQuick, setIsFetchingQuick] = useState<string | null>(null);
 
@@ -95,12 +99,15 @@ export const ProxySettingsPage: React.FC = () => {
       setUseProxychains(settings.use_proxychains);
       setProxyList(settings.proxies);
       setUseTor(settings.use_tor ?? false);
+      setPriorityProxies(settings.priority_proxies ?? '');
+      setUsePriorityProxies(settings.use_priority_proxies ?? true);
+      setProxyOnlyAfterBan(settings.proxy_only_after_ban ?? false);
     }
   }, [settings]);
 
   useEffect(() => {
     if (taskStatus?.status === 'SUCCESS' && taskStatus.result) {
-      const resultData = taskStatus.result as any;
+      const resultData = taskStatus.result;
       const proxyStr = typeof resultData === 'string' ? resultData : (resultData?.proxies || '');
       setProxyList(proxyStr);
       setUseProxy(true);
@@ -132,14 +139,18 @@ export const ProxySettingsPage: React.FC = () => {
       proxies,
       skip_validation: skipValidation,
       use_tor: useTor,
+      priority_proxies: priorityProxies,
+      use_priority_proxies: usePriorityProxies,
+      proxy_only_after_ban: proxyOnlyAfterBan,
     }, {
       onSuccess: () => {
         setSnackbar({ open: true, message: 'Proxy settings saved successfully.', severity: 'success' });
       },
-      onError: (error: any) => {
+      onError: (caught) => {
+        const error = caught as ApiErrorLike;
         setSnackbar({
           open: true,
-          message: `Failed to save proxy settings: ${error?.response?.data?.message || error.message || 'Unknown error'}`,
+          message: `Failed to save proxy settings: ${error?.response?.data?.message || error?.message || 'Unknown error'}`,
           severity: 'error',
         });
       },
@@ -188,10 +199,11 @@ export const ProxySettingsPage: React.FC = () => {
           severity: 'success'
         });
       },
-      onError: (error: any) => {
+      onError: (caught) => {
+        const error = caught as ApiErrorLike;
         setSnackbar({
           open: true,
-          message: `Failed to start proxy fetch: ${error?.response?.data?.error || error?.response?.data?.message || error.message || 'Unknown error'}`,
+          message: `Failed to start proxy fetch: ${error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Unknown error'}`,
           severity: 'error'
         });
       }
@@ -240,10 +252,11 @@ export const ProxySettingsPage: React.FC = () => {
         severity: addedCount > 0 ? 'success' : 'info'
       });
       setUseProxy(true);
-    } catch (error: any) {
+    } catch (caught) {
+      const error = caught as ApiErrorLike;
       setSnackbar({
         open: true,
-        message: `Failed to fetch from ${label}: ${error.message}`,
+        message: `Failed to fetch from ${label}: ${error?.message}`,
         severity: 'error'
       });
     } finally {
@@ -537,7 +550,75 @@ export const ProxySettingsPage: React.FC = () => {
               </Typography>
             </Box>
 
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2, mb: 1, fontWeight: 600 }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 3, mb: 1, fontWeight: 600 }}>
+              PRIORITY PROXIES (ONE PER LINE)
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
+              Your own proxies. Tried before the list below, never overwritten by the
+              automatic fetch, and never dropped when a health check fails.
+            </Typography>
+
+            <TextField
+              multiline
+              rows={5}
+              fullWidth
+              variant="outlined"
+              value={priorityProxies}
+              onChange={(e) => setPriorityProxies(e.target.value)}
+              disabled={!useProxy}
+              placeholder="socks5h://user:pass@proxy.example.com:1080"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  color: 'text.primary',
+                  bgcolor: 'action.hover',
+                  fontFamily: 'monospace',
+                  fontSize: '0.85rem',
+                  '& fieldset': { borderColor: 'divider' },
+                  '&:hover fieldset': { borderColor: `${tokens.accent.primary}4D` },
+                  '&.Mui-focused fieldset': { borderColor: tokens.accent.primary },
+                },
+                '& .Mui-disabled': { opacity: 0.5, bgcolor: 'rgba(0,0,0,0.2)' }
+              }}
+            />
+
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 1 }}>
+              <Switch
+                checked={usePriorityProxies}
+                onChange={(e) => setUsePriorityProxies(e.target.checked)}
+                disabled={!useProxy}
+                sx={{
+                  '& .MuiSwitch-switchBase.Mui-checked': { color: tokens.accent.primary },
+                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: tokens.accent.primary }
+                }}
+              />
+              <Typography variant="body2" sx={{ color: 'text.primary' }}>
+                Use these first
+              </Typography>
+            </Stack>
+
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 1 }}>
+              <Switch
+                checked={proxyOnlyAfterBan}
+                onChange={(e) => setProxyOnlyAfterBan(e.target.checked)}
+                disabled={!useProxy}
+                sx={{
+                  '& .MuiSwitch-switchBase.Mui-checked': { color: tokens.accent.secondary },
+                  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: tokens.accent.secondary }
+                }}
+              />
+              <Box>
+                <Typography variant="body2" sx={{ color: 'text.primary' }}>
+                  Scan direct, use proxies only when blocked
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  Much faster, because proxy mode throttles the scanner hard. A short
+                  probe of the target decides — note that it shows this server's own
+                  address to the target before any proxy is used.
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 3, mb: 1, fontWeight: 600 }}>
               PROXY LIST (ONE PER LINE)
             </Typography>
 
@@ -570,7 +651,7 @@ export const ProxySettingsPage: React.FC = () => {
             {currentTaskId && (
               <Box sx={{ mb: 4, p: 2, bgcolor: 'action.hover', borderRadius: 1, border: 1, borderColor: 'divider' }}>
                 <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 2 }}>
-                  {(!taskStatus || taskStatus.status === 'PROGRESS' || taskStatus.status === 'PENDING') ? (
+                  {(!taskStatus || taskStatus.status === 'RUNNING' || taskStatus.status === 'PENDING') ? (
                     <CircularProgress size={20} sx={{ color: tokens.accent.primary }} />
                   ) : taskStatus.status === 'SUCCESS' ? (
                     <CheckCircle2 size={20} color="#00ff00" />
@@ -603,7 +684,7 @@ export const ProxySettingsPage: React.FC = () => {
                 )}
                 {taskStatus?.status === 'FAILURE' && (
                   <Alert severity="error" sx={{ bgcolor: 'rgba(255, 0, 0, 0.05)', color: '#ff0055', border: '1px solid rgba(255, 0, 0, 0.2)' }}>
-                    Task failed: {taskStatus.result || 'Unknown error during verification'}
+                    Task failed: {typeof taskStatus.result === 'string' && taskStatus.result ? taskStatus.result : 'Unknown error during verification'}
                   </Alert>
                 )}
               </Box>
@@ -614,7 +695,7 @@ export const ProxySettingsPage: React.FC = () => {
                 variant="outlined"
                 startIcon={<RefreshCw size={18} className={fetchProxies.isPending ? 'spin' : ''} />}
                 onClick={handleFetchClick}
-                disabled={fetchProxies.isPending || (taskStatus && taskStatus.status === 'PROGRESS')}
+                disabled={fetchProxies.isPending || (taskStatus && taskStatus.status === 'RUNNING')}
                 sx={{
                   borderColor: tokens.accent.primary,
                   color: tokens.accent.primary,
@@ -695,6 +776,13 @@ export const ProxySettingsPage: React.FC = () => {
               Tools using raw sockets (naabu) will log a warning but run
               without TOR routing. Scanning will be significantly slower than normal.
             </Alert>
+
+            {/* Tor is a compose service started from the host; saving with TOR Mode on is refused while it is down. */}
+            {torStatus && !torStatus.running && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {torStatus.hint ?? 'Tor is an optional compose service; enable the "tor" profile and run make up.'}
+              </Alert>
+            )}
 
             <FormControlLabel
               control={

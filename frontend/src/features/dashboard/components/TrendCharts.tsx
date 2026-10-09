@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Card, CardContent, Typography, useTheme } from '@mui/material';
 import Chart from 'react-apexcharts';
+import type { ApexOptions } from 'apexcharts';
 import type { DashboardData } from '../api';
 import { themeTokens } from '../../../theme/tokens';
 
@@ -11,7 +12,7 @@ export const TrendCharts: React.FC<{ data: DashboardData['trends'] }> = ({ data 
   const chartColors = isLight ? themeTokens.enterprise.chart.series.slice(0, 3) : ['#00f3ff', '#ff003c', '#7000ff'];
   const chartMode = isLight ? 'light' : 'dark';
 
-  const areaOptions: any = {
+  const areaOptions: ApexOptions = {
     chart: {
       type: 'area',
       toolbar: { show: false },
@@ -61,7 +62,7 @@ export const TrendCharts: React.FC<{ data: DashboardData['trends'] }> = ({ data 
           <Chart 
             options={areaOptions} 
             series={series} 
-            type="area" as any 
+            type="area"
             height="100%"
           />
         </Box>

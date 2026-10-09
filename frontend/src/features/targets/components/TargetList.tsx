@@ -174,7 +174,7 @@ export const TargetList: React.FC = () => {
     borderBottom: `1px solid ${theme.palette.divider}`,
     py: 1.5,
   };
-  const { projectSlug = 'default' } = useParams({ strict: false }) as any;
+  const { projectSlug = 'default' } = useParams({ strict: false });
   const { data: domains, isLoading, error } = useDomains(projectSlug);
   const { mutate: deleteTargets } = useDeleteTargets(projectSlug);
   const pauseScanMutation = usePauseScan(projectSlug);
@@ -511,8 +511,8 @@ export const TargetList: React.FC = () => {
                   </TableCell>
                   <TableCell sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
                     <ScanStatusCell 
-                      status={(domain as any).most_recent_scan_status} 
-                      progress={(domain as any).most_recent_scan_progress} 
+                      status={domain.most_recent_scan_status} 
+                      progress={domain.most_recent_scan_progress} 
                     />
                   </TableCell>
                   <TableCell sx={{ borderBottom: `1px solid ${theme.palette.divider}`, textAlign: 'right' }}>

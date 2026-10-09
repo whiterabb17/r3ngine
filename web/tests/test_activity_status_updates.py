@@ -26,8 +26,8 @@ class TestRunParamDiscoveryActivityStatus(TestCase):
              patch('temporalio.activity.info', return_value=MagicMock(activity_id='act-1')), \
              patch('startScan.models.EndPoint.objects') as mock_ep, \
              patch('targetApp.models.Domain.objects') as mock_dom, \
-             patch('reNgine.temporal.activities._run_task') as mock_run_task, \
-             patch('reNgine.temporal.activities.TemporalTaskProxy') as mock_proxy_cls:
+             patch('reNgine.temporal.activities.enumeration._run_task') as mock_run_task, \
+             patch('reNgine.temporal.activities.enumeration.TemporalTaskProxy') as mock_proxy_cls:
 
             mock_ep.filter.return_value = mock_endpoint_qs
             mock_dom.filter.return_value.first.return_value = None
@@ -97,7 +97,7 @@ class TestRunSearchVulnsActivityStatus(TestCase):
 
         with patch('temporalio.activity.logger'), \
              patch('temporalio.activity.info', return_value=MagicMock(activity_id='act-2')), \
-             patch('reNgine.temporal.activities._run_task') as mock_run_task:
+             patch('reNgine.temporal.activities.vuln_scan._run_task') as mock_run_task:
 
             mock_run_task.return_value = True
             run_search_vulns_activity(ctx)
@@ -131,7 +131,7 @@ class TestRunSearchVulnsActivityStatus(TestCase):
 
         with patch('temporalio.activity.logger'), \
              patch('temporalio.activity.info', return_value=MagicMock(activity_id='act-3')), \
-             patch('reNgine.temporal.activities._run_task') as mock_run_task:
+             patch('reNgine.temporal.activities.vuln_scan._run_task') as mock_run_task:
 
             mock_run_task.return_value = True
             run_search_vulns_activity(ctx)

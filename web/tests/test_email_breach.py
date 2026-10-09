@@ -1,4 +1,4 @@
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, tag
 from django.utils import timezone
 from rest_framework.test import APIClient
 from django.contrib.auth import get_user_model
@@ -220,6 +220,7 @@ class HIBPScraperTaskTests(TransactionTestCase):
         self.assertEqual(count, 0)
         self.assertEqual(EmailBreach.objects.filter(email_address='testuser@example.com').count(), 0)
 
+    @tag('integration')
     def test_check_hibp_live_with_provided_email(self):
         # Live unmocked check to test haveibeenpwned page request and parsing logic
         from reNgine.osint.hibp_scraper import check_hibp_for_email_task

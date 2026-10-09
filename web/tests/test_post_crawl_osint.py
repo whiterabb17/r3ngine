@@ -130,8 +130,8 @@ class TestPostCrawlOsint(TestCase):
             MetaFinderDocument.objects.filter(scan_history=self.scan).count(), 1
         )
 
-    @patch('reNgine.tasks.osint.run_post_crawl_exifray')
-    @patch('reNgine.tasks.osint.run_swaggerspy_path_mode')
+    @patch('reNgine.tasks.osint.pipeline.run_post_crawl_exifray')
+    @patch('reNgine.tasks.osint.pipeline.run_swaggerspy_path_mode')
     def test_post_crawl_osint_calls_configured_tools(self, mock_swagger, mock_exifray):
         from reNgine.tasks.osint import post_crawl_osint
 
@@ -148,8 +148,8 @@ class TestPostCrawlOsint(TestCase):
         mock_exifray.assert_called_once()
         mock_swagger.assert_called_once()
 
-    @patch('reNgine.tasks.osint.run_post_crawl_exifray')
-    @patch('reNgine.tasks.osint.run_swaggerspy_path_mode')
+    @patch('reNgine.tasks.osint.pipeline.run_post_crawl_exifray')
+    @patch('reNgine.tasks.osint.pipeline.run_swaggerspy_path_mode')
     def test_post_crawl_osint_respects_config_flags(self, mock_swagger, mock_exifray):
         from reNgine.tasks.osint import post_crawl_osint
 
@@ -166,8 +166,8 @@ class TestPostCrawlOsint(TestCase):
         mock_exifray.assert_not_called()
         mock_swagger.assert_not_called()
 
-    @patch('reNgine.tasks.osint.run_post_crawl_exifray')
-    @patch('reNgine.tasks.osint.run_swaggerspy_path_mode')
+    @patch('reNgine.tasks.osint.pipeline.run_post_crawl_exifray')
+    @patch('reNgine.tasks.osint.pipeline.run_swaggerspy_path_mode')
     def test_post_crawl_osint_skips_when_no_config(self, mock_swagger, mock_exifray):
         from reNgine.tasks.osint import post_crawl_osint
 

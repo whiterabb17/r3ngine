@@ -15,12 +15,15 @@ Usage:
 """
 import hashlib
 import io
+import logging
 import os
 import uuid
 from datetime import timedelta
 from typing import Optional, Tuple
 
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 class BaseEvidenceStorage:
@@ -56,11 +59,15 @@ class BaseEvidenceStorage:
         """
         raise NotImplementedError
 
-    def delete(self, storage_key: str) -> None:
+    def delete(self, storage_key: str) -> bool:
         """Delete an evidence file from storage.
 
         Args:
             storage_key (str): The key returned by save().
+
+        Returns:
+            bool: True when the file is gone (deleted, or was already absent),
+            False when it could not be deleted. Failures are logged, not raised.
         """
         raise NotImplementedError
 
@@ -159,16 +166,21 @@ class FilesystemEvidenceStorage(BaseEvidenceStorage):
         with open(abs_path, 'rb') as f:
             return f.read()
 
-    def delete(self, storage_key: str) -> None:
-        """Delete a file from the filesystem. Silently ignores missing files."""
+    def delete(self, storage_key: str) -> bool:
+        """Delete a file from the filesystem. A missing file counts as deleted."""
         try:
             abs_path = self._resolve_safe(storage_key)
         except ValueError:
-            return
+            logger.warning("Refusing to delete evidence key outside the storage root: %s", storage_key)
+            return False
         try:
             os.remove(abs_path)
         except FileNotFoundError:
             pass
+        except OSError:
+            logger.warning("Could not delete evidence file %s", storage_key, exc_info=True)
+            return False
+        return True
 
     def exists(self, storage_key: str) -> bool:
         """Check if a file exists on the filesystem."""
@@ -228,12 +240,15 @@ class MinioEvidenceStorage(BaseEvidenceStorage):
         response = self.client.get_object(self.bucket, storage_key)
         return response.read()
 
-    def delete(self, storage_key: str) -> None:
+    def delete(self, storage_key: str) -> bool:
         """Delete object from MinIO."""
         try:
             self.client.remove_object(self.bucket, storage_key)
         except Exception:
-            pass
+            # Callers treat delete as best-effort; an orphaned object must still be visible.
+            logger.warning("Could not delete evidence object %s from MinIO", storage_key, exc_info=True)
+            return False
+        return True
 
     def exists(self, storage_key: str) -> bool:
         """Check if an object exists in MinIO."""
@@ -294,7 +309,7 @@ class S3EvidenceStorage(BaseEvidenceStorage):
         try:
             self.s3.delete_object(Bucket=self.bucket, Key=storage_key)
         except Exception:
-            pass
+            logger.warning("Could not delete evidence object %s from S3", storage_key, exc_info=True)
 
     def exists(self, storage_key: str) -> bool:
         """Check if an object exists in S3."""

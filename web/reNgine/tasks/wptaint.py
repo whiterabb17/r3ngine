@@ -230,7 +230,7 @@ def wptaint_scan(self, urls=[], ctx={}, description=None):
     os.makedirs(temp_download_dir, exist_ok=True)
 
     for plugin_name, subdomains in plugin_subdomains.items():
-        logger.info(f"WP Taint Scan target plugin: {plugin_name}")
+        logger.info("WP Taint Scan target plugin: %s", plugin_name)
         
         plugin_dir = os.path.join(temp_download_dir, plugin_name)
         plugin_zip = f"{plugin_dir}.zip"
@@ -264,7 +264,7 @@ def wptaint_scan(self, urls=[], ctx={}, description=None):
             parse_wptaint_results(self, results_file, subdomains, plugin_name)
             
         except Exception as e:
-            logger.error(f"Error executing WP Taint Scan on {plugin_name}: {e}")
+            logger.error("Error executing WP Taint Scan on %s: %s", plugin_name, e)
         finally:
             # Cleanup source
             if os.path.exists(plugin_zip):

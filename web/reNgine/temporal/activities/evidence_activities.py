@@ -15,7 +15,10 @@ from dataclasses import dataclass, field
 from typing import Optional, List
 
 from temporalio import activity
-from asgiref.sync import sync_to_async
+# channels' wrapper, not asgiref's: it refreshes the thread's database connection
+# around each call. The plain one left a dead cached connection in place for
+# good — see check_scan_queue_status_activity for the incident.
+from channels.db import database_sync_to_async
 
 from reNgine.utils.logger import get_module_logger
 
@@ -138,7 +141,7 @@ async def collect_screenshot_evidence_activity(input: ScreenshotEvidenceInput) -
     Returns:
         str: UUID of the created Evidence item (or empty string on failure).
     """
-    @sync_to_async
+    @database_sync_to_async
     def _capture() -> str:
         import subprocess
         import os
@@ -204,7 +207,7 @@ async def collect_http_evidence_activity(input: HTTPCaptureEvidenceInput) -> str
     Returns:
         str: UUID of the created Evidence item, or empty string on failure.
     """
-    @sync_to_async
+    @database_sync_to_async
     def _store() -> str:
         from engagements.models import Assessment
         from evidence.services import EvidenceService
@@ -259,7 +262,7 @@ async def collect_command_output_evidence_activity(input: CommandOutputEvidenceI
     Returns:
         str: UUID of the created Evidence item, or empty string on failure.
     """
-    @sync_to_async
+    @database_sync_to_async
     def _store() -> str:
         from engagements.models import Assessment
         from evidence.services import EvidenceService
@@ -302,7 +305,7 @@ async def enforce_evidence_retention_activity(input: RetentionEnforcementInput) 
     Returns:
         dict: Summary with keys 'archived', 'purged', 'errors'.
     """
-    @sync_to_async
+    @database_sync_to_async
     def _enforce() -> dict:
         from django.utils import timezone
         from evidence.models import EvidenceRetentionPolicy, EvidenceCollection
@@ -359,7 +362,7 @@ async def verify_evidence_integrity_activity(input: IntegrityVerificationInput) 
     Returns:
         dict: Summary with keys 'passed', 'failed', 'skipped'.
     """
-    @sync_to_async
+    @database_sync_to_async
     def _verify() -> dict:
         from evidence.models import Evidence, EvidenceCollection
         from evidence.services import EvidenceService

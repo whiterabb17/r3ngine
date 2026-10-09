@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
+import type { EndpointStressMetrics } from '../../../types/stressTesting';
 
 interface ThroughputChartProps {
-  data: any[];
+  data: Pick<EndpointStressMetrics, 'concurrent_users' | 'throughput_rps'>[];
 }
 
 export const ThroughputChart: React.FC<ThroughputChartProps> = ({ data }) => {

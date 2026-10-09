@@ -111,10 +111,9 @@ def ingest_credentials(target_id: int) -> Tuple[List[Node], List[Edge]]:
                     properties={"validated": validated},
                 ))
             except ValueError as exc:
-                logger.warning(f"APME Ingestion: {exc}")
+                logger.warning("APME Ingestion: %s", exc)
 
     logger.info(
-        f"APME Ingestion [credentials]: {len(nodes)} nodes, {len(edges)} edges "
-        f"(target_id={target_id})"
+        "APME Ingestion [credentials]: %s nodes, %s edges (target_id=%s)", len(nodes), len(edges), target_id
     )
     return nodes, edges

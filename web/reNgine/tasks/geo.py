@@ -1,4 +1,5 @@
 import logging
+import shlex
 import json
 import concurrent.futures
 import tldextract
@@ -63,9 +64,9 @@ def geo_localize(host, ip_id=None, scan_id=None, activity_id=None):
 					country_iso = parts[0].strip()
 					country_name = parts[1].strip() if len(parts) > 1 else country_iso
 			except Exception as e:
-				logger.error(f"Error parsing geoiplookup output for {host}: {e}")
+				logger.error("Error parsing geoiplookup output for %s: %s", host, e)
 		else:
-			logger.info(f'Geo IP lookup failed for host "{host}"')
+			logger.info('Geo IP lookup failed for host "%s"', host)
 
 	geo_object, _ = CountryISO.objects.get_or_create(
 		iso=country_iso,
@@ -91,14 +92,14 @@ def query_whois(target, force_reload_whois=False, scan_id=None, activity_id=None
 		# TODO: Implement cache whois only for 48 hours otherwise get from whois server
 		# TODO: in 3.0
 		if not force_reload_whois:
-			logger.info(f'Querying WHOIS information for {target} from db...')
+			logger.info("Querying WHOIS information for %s from db...", target)
 			domain_info = get_domain_info_from_db(target)
 			if domain_info:
 				return format_whois_response(domain_info)
 
 		# Query WHOIS information as not found in db
-		logger.info(f'Whois info not found in db')
-		logger.info(f'Querying WHOIS information for {target} from WHOIS server...')
+		logger.info("Whois info not found in db")
+		logger.info("Querying WHOIS information for %s from WHOIS server...", target)
 
 		domain_info = DottedDict()
 		domain_info.target = target
@@ -128,15 +129,15 @@ def query_whois(target, force_reload_whois=False, scan_id=None, activity_id=None
 						whois_data = result
 
 					logger.debug('*'*100)
-					logger.info(f'Task {func_name} finished for target {target}')
+					logger.info("Task %s finished for target %s", func_name, target)
 					logger.debug(result)
 					logger.debug('*'*100)
 
 				except Exception as e:
-					logger.error(f'An error occurred while fetching {func_name} for {target}: {str(e)}')
+					logger.error("An error occurred while fetching %s for %s: %s", func_name, target, str(e))
 					continue
 
-		logger.info(f'All concurrent whosi lookup tasks finished for target {target}')
+		logger.info("All concurrent whosi lookup tasks finished for target %s", target)
 
 		if 'tlsx_related_domain' in locals():
 			related_domains += tlsx_related_domain
@@ -155,7 +156,7 @@ def query_whois(target, force_reload_whois=False, scan_id=None, activity_id=None
 		saved_domain_info = save_domain_info_to_db(target, domain_info)
 		return format_whois_response(domain_info)
 	except Exception as e:
-		logger.error(f'An error occurred while querying WHOIS information for {target}: {str(e)}')
+		logger.error("An error occurred while querying WHOIS information for %s: %s", target, str(e))
 		return {
 			'status': False,
 			'target': target,
@@ -174,7 +175,7 @@ def fetch_related_tlds_and_domains(domain, scan_id=None, activity_id=None):
 	Returns:
 		tuple: A tuple containing two lists (related_tlds, related_domains).
 	"""
-	logger.info(f"Fetching related TLDs and domains for {domain}")
+	logger.info("Fetching related TLDs and domains for %s", domain)
 	related_tlds = set()
 	related_domains = set()
 
@@ -182,7 +183,7 @@ def fetch_related_tlds_and_domains(domain, scan_id=None, activity_id=None):
 	extracted = tldextract.extract(domain)
 	base_domain = f"{extracted.domain}.{extracted.suffix}"
 
-	cmd = f'tlsx -san -cn -silent -ro -host {domain}'
+	cmd = f'tlsx -san -cn -silent -ro -host {shlex.quote(domain)}'
 	_, result = run_command(cmd, shell=True, scan_id=scan_id, activity_id=activity_id)
 
 	for line in result.splitlines():
@@ -199,10 +200,10 @@ def fetch_related_tlds_and_domains(domain, scan_id=None, activity_id=None):
 				elif extracted_result.domain != extracted.domain or extracted_result.subdomain:
 					related_domains.add(line)
 		except Exception as e:
-			logger.error(f"An error occurred while fetching related TLDs and domains for {domain}: {str(e)}")
+			logger.error("An error occurred while fetching related TLDs and domains for %s: %s", domain, str(e))
 			continue
 
-	logger.info(f"Found {len(related_tlds)} related TLDs and {len(related_domains)} related domains for {domain}")
+	logger.info("Found %s related TLDs and %s related domains for %s", len(related_tlds), len(related_domains), domain)
 	return list(related_tlds), list(related_domains)
 
 
@@ -214,7 +215,7 @@ def fetch_whois_data_using_netlas(target, scan_id=None, activity_id=None):
 		Returns:
 			dict: WHOIS information.
 	"""
-	logger.info(f'Fetching WHOIS data for {target} using Netlas...')
+	logger.info("Fetching WHOIS data for %s using Netlas...", target)
 	command = f'netlas host {target} -f json'
 	netlas_key = get_netlas_key()
 	if netlas_key:

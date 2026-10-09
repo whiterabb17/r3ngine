@@ -18,7 +18,7 @@ class StressTelemetryPublisher:
                 db=0
             )
         except Exception as e:
-            logger.error(f"Failed to connect to Redis for telemetry: {e}")
+            logger.error("Failed to connect to Redis for telemetry: %s", e)
             self.redis_client = None
 
     def clear_stream(self):
@@ -28,7 +28,7 @@ class StressTelemetryPublisher:
         try:
             self.redis_client.delete(self.stream_key)
         except Exception as e:
-            logger.error(f"Error clearing telemetry stream: {e}")
+            logger.error("Error clearing telemetry stream: %s", e)
 
     def publish(self, metrics):
         """Publish a metric packet to the stream."""
@@ -41,4 +41,4 @@ class StressTelemetryPublisher:
             # Optional: Limit stream length to prevent memory issues (e.g., last 1000 events)
             self.redis_client.xtrim(self.stream_key, maxlen=1000, approximate=True)
         except Exception as e:
-            logger.error(f"Error publishing telemetry: {e}")
+            logger.error("Error publishing telemetry: %s", e)

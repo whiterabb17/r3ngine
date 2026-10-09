@@ -276,8 +276,8 @@ export const NotificationSettingsPage: React.FC = () => {
                           '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
                           '&:hover fieldset': { borderColor: 'rgba(0,243,255,0.5)' },
                         },
-                        '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' },
-                        '& .MuiInputBase-input': { color: '#fff' }
+                        '& .MuiInputLabel-root': { color: 'text.secondary' },
+                        '& .MuiInputBase-input': { color: 'text.primary' }
                       }}
                     />
                   </Grid>

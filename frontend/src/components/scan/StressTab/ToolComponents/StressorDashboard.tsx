@@ -10,7 +10,7 @@ export interface StressorTelemetryPoint {
   pps?: number;
   bps?: number;
   rps?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface StressorDashboardProps {
@@ -20,7 +20,6 @@ export interface StressorDashboardProps {
   bpsPeak?: number;
   rpsPeak?: number;
   statusCodes?: { [code: string]: number };
-  protocolBreakdown?: { [protocol: string]: number };
   responseRate?: number;
   blockRate?: number;
 }
@@ -39,7 +38,6 @@ export const StressorDashboard: React.FC<StressorDashboardProps> = ({
   bpsPeak = 0,
   rpsPeak = 0,
   statusCodes = {},
-  protocolBreakdown = {},
   responseRate = 0,
   blockRate = 0,
 }) => {
@@ -52,7 +50,6 @@ export const StressorDashboard: React.FC<StressorDashboardProps> = ({
   const validBpsPeak = typeof bpsPeak === 'number' ? bpsPeak : 0;
   const validRpsPeak = typeof rpsPeak === 'number' ? rpsPeak : 0;
   const validStatusCodes = typeof statusCodes === 'object' && statusCodes !== null && !Array.isArray(statusCodes) ? statusCodes : {};
-  const validProtocolBreakdown = typeof protocolBreakdown === 'object' && protocolBreakdown !== null && !Array.isArray(protocolBreakdown) ? protocolBreakdown : {};
   const validResponseRate = typeof responseRate === 'number' ? responseRate : 0;
   const validBlockRate = typeof blockRate === 'number' ? blockRate : 0;
 
@@ -215,20 +212,6 @@ export const StressorDashboard: React.FC<StressorDashboardProps> = ({
                 />
               </TacticalPanel>
             </Grid>
-
-            {/* Protocol Breakdown */}
-            {Object.keys(validProtocolBreakdown).length > 0 && (
-              <Grid size={{ xs: 12 }}>
-                <TacticalPanel title="PROTOCOL BREAKDOWN" icon={<Network size={18} />}>
-                  <DistributionChart
-                    data={validProtocolBreakdown}
-                    title="Protocol Distribution"
-                    type="pie"
-                    height={300}
-                  />
-                </TacticalPanel>
-              </Grid>
-            )}
           </>
         ) : (
           <>

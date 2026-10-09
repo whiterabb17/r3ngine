@@ -254,9 +254,10 @@ class AttackPathExplanationAPIView(APIView):
         explainer = LLMAttackPathExplainer(logger=logger)
         try:
             explanation = explainer.explain_path(path_id, path_details_str)
-        except Exception as e:
+        except Exception:
+            logger.exception('Failed to generate attack path explanation for %s', path_id)
             return Response(
-                {'error': f'Failed to generate explanation: {str(e)}'},
+                {'error': 'Failed to generate explanation; see server logs.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

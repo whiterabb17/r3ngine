@@ -15,6 +15,7 @@ import type { WorkflowSlug, WorkflowMeta, StartWorkflowPayload } from '../types'
 import { useStartWorkflow } from '../api';
 import { ProfileSelector } from '../../profiles/components/ProfileSelector';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import type { ResolvedThemeTokens } from '../../../theme/tokens';
 
 interface WorkflowLauncherProps {
   onSuccess?: (workflowId: string, slug: WorkflowSlug) => void;
@@ -76,7 +77,7 @@ function buildPayload(
   return payload;
 }
 
-const getFieldStyles = (tokens: any) => ({
+const getFieldStyles = (tokens: ResolvedThemeTokens) => ({
   '& .MuiOutlinedInput-root': {
     color: 'text.primary',
     '& fieldset': { borderColor: 'divider' },

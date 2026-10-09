@@ -40,7 +40,7 @@ class GraphBuilder:
             )
             logger.info("APME GraphBuilder connected to Neo4j.")
         except Exception as exc:
-            logger.error(f"APME GraphBuilder failed to connect to Neo4j: {exc}")
+            logger.error("APME GraphBuilder failed to connect to Neo4j: %s", exc)
             raise
 
     def close(self):
@@ -98,7 +98,7 @@ class GraphBuilder:
                 try:
                     session.execute_write(self._merge_node, node, scan_id)
                 except Exception as exc:
-                    logger.warning(f"APME: Failed to merge node {node.id}: {exc}")
+                    logger.warning("APME: Failed to merge node %s: %s", node.id, exc)
 
     def add_edges(self, edges: List[Edge], scan_id: int) -> None:
         """
@@ -111,12 +111,11 @@ class GraphBuilder:
                     created = session.execute_write(self._merge_edge, edge, scan_id)
                     if not created:
                         logger.debug(
-                            f"APME: Skipped edge {edge.from_id} -[{edge.type}]-> {edge.to_id} "
-                            "(one or both endpoint nodes not found)."
+                            "APME: Skipped edge %s -[%s]-> %s (one or both endpoint nodes not found).", edge.from_id, edge.type, edge.to_id
                         )
                 except Exception as exc:
                     logger.warning(
-                        f"APME: Failed to merge edge {edge.from_id} -> {edge.to_id}: {exc}"
+                        "APME: Failed to merge edge %s -> %s: %s", edge.from_id, edge.to_id, exc
                     )
 
     def clear_scan(self, scan_id: int) -> None:

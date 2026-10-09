@@ -16,6 +16,7 @@ from startScan.models import (
 
 from api.target_summary_serializers import TargetSummarySerializer, TacticalScanHistorySerializer
 from api.serializers import MonitoringDiscoverySerializer, SubScanSerializer
+from api.summary_domain_info import build_domain_info_summary, domain_info_select_related
 
 class TargetSummaryAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -33,7 +34,9 @@ class TargetSummaryAPIView(APIView):
         """
         try:
             project = Project.objects.get(slug=slug)
-            target = Domain.objects.get(id=id, project=project)
+            target = Domain.objects.select_related(
+                *domain_info_select_related('domain_info')
+            ).get(id=id, project=project)
         except (Project.DoesNotExist, Domain.DoesNotExist):
             return Response({'error': 'Target not found'}, status=404)
 
@@ -81,27 +84,7 @@ class TargetSummaryAPIView(APIView):
         discovered_ports = Port.objects.filter(ports__in=ip_addresses).values('number', 'service_name', 'is_uncommon').annotate(count=Count('number')).order_by('-count')[:20]
         discovered_technologies = Technology.objects.filter(technologies__in=subdomain_qs).values('name').annotate(count=Count('name')).order_by('-count')[:20]
 
-        # Domain Information
-        domain_info_data = None
-        if hasattr(target, 'domain_info') and target.domain_info:
-            di = target.domain_info
-            domain_info_data = {
-                'dnssec': di.dnssec,
-                'geolocation_iso': di.geolocation_iso,
-                'created': di.created,
-                'updated': di.updated,
-                'expires': di.expires,
-                'whois_server': di.whois_server,
-                'registrar': {
-                    'name': di.registrar.name if di.registrar else None,
-                    'phone': di.registrar.phone if di.registrar else None,
-                    'email': di.registrar.email if di.registrar else None,
-                },
-                'dns_records': list(di.dns_records.all().values('type', 'name'))[:20],
-                'name_servers': list(di.name_servers.all().values('name'))[:10],
-                'nameservers': [ns.name for ns in di.name_servers.all()][:10],
-                'historical_ips': list(di.historical_ips.all().values('ip', 'location', 'owner', 'last_seen'))[:10],
-            }
+        domain_info_data = build_domain_info_summary(target.domain_info)
 
         # Related domains: include both automatically discovered related domains and manually specified secondary domains
         related_domains = []

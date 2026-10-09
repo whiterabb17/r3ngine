@@ -24,6 +24,7 @@ class TestEmailSourceField(TestCase):
         self.assertIn(Email.SOURCE_PHONEBOOK, choices)
         self.assertIn(Email.SOURCE_PATTERN, choices)
         self.assertIn(Email.SOURCE_CRAWLED, choices)
+        self.assertIn(Email.SOURCE_MAILBOX_VERIFY, choices)
 
 
 class TestSaveEmailSource(TestCase):

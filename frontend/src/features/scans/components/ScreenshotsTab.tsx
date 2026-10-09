@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Typography,
@@ -13,61 +12,16 @@ import {
 import { X, ExternalLink, Camera } from 'lucide-react';
 import { TacticalPanel } from '../../../components/TacticalPanel';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
-
-interface ScreenshotEntry {
-  id: number | string;
-  screenshot_path: string;
-  url: string;
-  title: string | null;
-  status_code: number | null;
-}
-
-interface ScreenshotSubdomain {
-  id: number;
-  name: string;
-  http_url: string | null;
-  screenshot_path: string;
-  http_status: number | null;
-  screenshots: ScreenshotEntry[];
-}
+import { useScanScreenshots, type ScreenshotEntry } from '../api/scanResults';
 
 interface ScreenshotsTabProps {
   projectSlug: string;
   scanId: number;
 }
 
-const useScreenshots = (scanId: number) => {
-  return useQuery<ScreenshotSubdomain[]>({
-    queryKey: ['screenshots', scanId],
-    queryFn: async () => {
-      const url = new URL(`${window.location.origin}/api/listSubdomains/`);
-      url.searchParams.append('scan_id', scanId.toString());
-      // Fetch ALL subdomains to ensure we don't miss any due to server-side filter bugs
-      url.searchParams.append('no_page', '1');
-      url.searchParams.append('format', 'json');
-
-      const response = await fetch(url.toString(), {
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch screenshots');
-      }
-
-      const data = await response.json();
-      // SubdomainsViewSet returns the list directly (array) when no_page is set,
-      // or as { results: [...] }. Handle both.
-      if (Array.isArray(data)) return data;
-      if (Array.isArray(data?.results)) return data.results;
-      return [];
-    },
-    enabled: !!scanId,
-  });
-};
-
 export const ScreenshotsTab: React.FC<ScreenshotsTabProps> = ({ scanId }) => {
   const { tokens } = useThemeTokens();
-  const { data: subdomainData, isLoading, isError } = useScreenshots(scanId);
+  const { data: subdomainData, isLoading, isError } = useScanScreenshots(scanId);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [lightboxLabel, setLightboxLabel] = useState<string>('');
 
@@ -164,7 +118,7 @@ export const ScreenshotsTab: React.FC<ScreenshotsTabProps> = ({ scanId }) => {
               </Typography>
             </Box>
           </Box>
-          <Typography sx={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace' }}>
+          <Typography sx={{ fontSize: '10px', color: 'text.disabled', fontFamily: 'monospace' }}>
             CLICK THUMBNAIL TO EXPAND
           </Typography>
         </Box>
@@ -209,14 +163,14 @@ export const ScreenshotsTab: React.FC<ScreenshotsTabProps> = ({ scanId }) => {
               <Camera size={40} color="rgba(255,255,255,0.1)" />
               <Typography sx={{
                 mt: 2,
-                color: 'rgba(255,255,255,0.2)',
+                color: 'text.secondary',
                 fontFamily: 'Orbitron',
                 fontSize: '0.75rem',
                 fontWeight: 700,
               }}>
                 NO SCREENSHOTS CAPTURED
               </Typography>
-              <Typography sx={{ color: 'rgba(255,255,255,0.15)', fontSize: '0.65rem', mt: 1 }}>
+              <Typography sx={{ color: 'text.disabled', fontSize: '0.65rem', mt: 1 }}>
                 Playwright screenshot capture produced no results for this scan, or the task has not completed yet.
               </Typography>
             </Box>

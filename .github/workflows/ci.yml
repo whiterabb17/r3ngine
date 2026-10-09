@@ -1,0 +1,155 @@
+name: CI
+
+# Validates a change without a deployed stack: Django tests against a throwaway
+# Postgres, static checks, the frontend build and the Go executor build.
+# Neo4j and Temporal are not started — tests that need them must mock them.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    name: Backend tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: rengine
+          POSTGRES_USER: rengine
+          POSTGRES_PASSWORD: rengine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rengine"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: web/requirements.txt
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libpq-dev libxml2-dev libxslt1-dev libffi-dev pkg-config \
+            libpango-1.0-0 libpangoft2-1.0-0
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # Uses the production settings module: settings_test_local disables
+      # migrations, so it cannot see a missing one.
+      - name: Check for missing migrations
+        env:
+          RENGINE_SECRET_KEY: ci-only-not-secret
+          POSTGRES_DB: rengine
+          POSTGRES_USER: rengine
+          POSTGRES_PASSWORD: rengine
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: '5432'
+          POSTGRES_SSLMODE: disable
+        run: |
+          # settings.LOGGING opens its file handlers under /usr/src/app.
+          sudo mkdir -p /usr/src/app && sudo chown "$USER" /usr/src/app
+          python manage.py makemigrations --check --dry-run
+
+      - name: Run Django tests
+        env:
+          DJANGO_SETTINGS_MODULE: reNgine.settings_test_local
+        run: python manage.py test tests --exclude-tag=integration --noinput --verbosity=2
+
+  backend-lint:
+    name: Backend static checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install linters
+        run: pip install flake8 bandit
+
+      # Only error classes that are always bugs: syntax errors, undefined
+      # names, invalid comparisons. Style is not enforced yet.
+      - name: flake8 (errors only)
+        run: flake8 web --select=E9,F63,F7,F821,F822,F823 --show-source --statistics
+
+      # Report-only until the existing findings are triaged.
+      - name: bandit (medium+ severity, report only)
+        continue-on-error: true
+        run: bandit -r web -x web/tests,web/.local_test -ll -q
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - name: Type check
+        run: npx tsc -b
+      # Existing violations are baselined in eslint-suppressions.json; only new
+      # ones fail. Run `npx eslint . --prune-suppressions` after fixing some.
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  executor:
+    name: Go executor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web/executor
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: web/executor/go.mod
+          cache-dependency-path: web/executor/go.sum
+
+      - run: go vet ./...
+      - run: CGO_ENABLED=0 go build -o /dev/null .
+      - run: go test ./...

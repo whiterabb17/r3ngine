@@ -1,8 +1,353 @@
 # Changelog
 
+### [v3.7.9] - 2026-10-07
+
+#### Added
+
+- **SAFE PoC agent (MCP)**:
+  - Propose → operator approve → Temporal `SafePocWorkflow` for catalog-only probes (`marker_reflect`, `calc_echo`, `authz_status_delta`, `open_redirect_safe`, `flag_canary_read`).
+  - `SafePocAttempt` model + `/api/mcp/safe-poc/` views; results nest under `Vulnerability.agent_enrichment.poc` (never freeform `ValidationResult.payload`).
+  - Sidecar **v1.5.0** tools + `r3ngine-safe-poc` agent / `skills/safe-poc/`; expanded Anthropic skill allowlist (testing/triage/canary) with stronger deny substrings.
+  - Direct run returns **410**; PoC success does not auto-set `verified`.
+
+- **Large-scan resilience (PR #135)**:
+  - Tier 1–6 tool failures are isolated (`_isolated_tool`): one failed tool no longer aborts `MasterScanWorkflow`; Tier 7 still runs and the tool’s own timeline row keeps the failure.
+  - Tools stop shortly before their Temporal attempt `start_to_close` / `schedule_to_close` limit; partial results are kept; the row shows a clear time-limit message; stop then fail is non-retryable so Temporal does not restart hours of work.
+  - `stream_command` / fuzz loops honor cancel: no new tools after stop; mid-stop fuzz targets are not marked done so Retry can finish them.
+  - Timeline UI: planned rows that never started show **Did not run** instead of the scan’s own timeout/error text.
+
+- **Batched directory fuzzing (PR #135)**:
+  - `dir_file_fuzz` can run through `_run_chunked` (Temporal patch `chunked-dir-file-fuzz`): hosts in batches of 25, two in parallel, 2 h per batch / 12 h budget; plan + ctx under `{results_dir}/batches/` (`0o640`).
+  - Engine editor: `dir_file_fuzz.batching` (`BatchingOptions`); `enabled: false` restores the single activity. Design notes in `documents/large-scan-plan.md`.
+
+- **Duplicate-host skipping (PR #135)**:
+  - `Subdomain.final_url`, `duplicate_of`, `dedup_reason` (`startScan` migration `0070`); httpx records where each host’s root probe ended.
+  - Tier 2 **Target Deduplication** (patch `target-dedup`): marks `www.X` when `X` is live, and hosts whose **root** redirects to another live host’s root (redirects to a path, e.g. shared SSO, do not count).
+  - Batched fuzzer and Acunetix live-subdomain submission skip marked duplicates; settings `target_dedup.enabled` / `group_by` (on by default).
+
+- **Acunetix submission hardening (PR #133 / #135)**:
+  - Live hosts submitted in configurable batches with a per-run scan cap; AWVS target list is paged fully.
+  - `www.X` skipped when `X` is live (also when the dedup step did not run); live-host matching is case-insensitive.
+
+- **Stale SPA chunk recovery (PR #133)**:
+  - Vite content-hashed chunk filenames plus a one-shot `staleBuild` reload on chunk-load errors (30s `sessionStorage` guard).
+  - Hardcoded `modulepreload` tags dropped from `v3_index.html` so deploys cannot pin an old graph.
+
+#### Changed
+
+- **Retry dispatch (PR #133, merge caveats)**:
+  - Timeline `acunetix_scan` retries through `run_acunetix`; `nuclei_scan` retries as a **narrow** Nuclei + parse path (not the full `vulnerability_scan` correlate/enrich/risk/impact chain).
+  - `retry_dispatch_name` / `RETRYABLE_TASK_NAMES` in `task_plan.py`; unknown or non-retryable names return **400** without flipping the scan to RUNNING.
+  - Finaliser closes by `activity_id` when present, and by reverse alias names when not (e.g. `acunetix_scan` when dispatch was `run_acunetix`).
+  - Planned rows with no `time_started` no longer keep a retried scan RUNNING forever.
+
+- **Subscan task allowlisting (PR #133)**:
+  - `is_subscan_task()` is the single gate; settings-only YAML sections (`tier_7`, `email_security`, `wordpress`, …) are refused with a non-retryable workflow error and API **400**; the dialog lists only runnable tasks via `EngineSerializer.subscan_tasks`.
+
+- **Quieter local/CI tests (PR #135)**: console defaults to errors-only (~700 lines vs ~9,600); override with `RENGINE_TEST_LOG_LEVEL`.
+
+#### Fixed
+
+- **Acunetix scan outcomes (PR #133, merge caveats)**:
+  - Import findings when an AWVS scan ends `completed`, `failed`, or `aborted`; `failed` still fails the step (retry starts a new scan).
+  - Reuse an in-progress or completed AWVS scan for the same target during this scan history; **failed and operator-aborted scans are not reused** so an explicit retry starts fresh.
+  - `save_vulnerability` no longer crashes on a `None` description.
+
+#### Notes
+
+- Existing installs: run `make migrate` for `startScan.0070`. Rebuild/restart **web** and the Temporal **python orchestrator** so chunked/dedup activities register.
+- Open follow-ups: `max_batches` is backend-clamped only (not yet in the engine UI); redirect-root dedup can skip in-scope hosts by design when root redirects to another live root.
+
+### [v3.7.8] - 2026-10-01
+
+#### Added
+
+- **CI without a full stack** (PR #129):
+  - `.github/workflows/ci.yml` runs Django tests against throwaway Postgres, `makemigrations --check`, flake8 (bug classes), bandit (report), frontend `tsc` / lint / vitest / build, and Go executor vet/build/test.
+  - Vitest wired; pre-existing ESLint issues baselined in `frontend/eslint-suppressions.json`.
+  - Static guards: every workflow `execute_activity` must set an explicit `retry_policy`; silent broad `except` handlers and client-facing `str(e)` leaks are rejected by tests.
+
+- **Remote workers**:
+  - Server-generated tokens shown once, stored as SHA-256 (`scanEngine` migration `0019`); only sys admins create/delete; heartbeat bypasses login redirect and trusts `X-Real-IP`.
+  - Per-worker Go executor queues (`go-executor-queue-<WORKER_NAME>`); workers verify the master TLS cert (`MASTER_CA_BUNDLE` / `MASTER_TLS_VERIFY`).
+  - Inactive workers are rejected on heartbeat (merge harden).
+
+- **SecurityTrails** subdomain source (opt-in via vault key; skipped cleanly when unset).
+- **Compact vulnerability list**: `GET /api/listVulnerability/?compact=1` for table/Exploits tabs (default payload unchanged).
+- **OpenAI-compatible LLM provider** with configurable base URL; rate-limit retries and longer Anthropic replies.
+- **Engine editor** surfaces for dalfox, nuclei, s3scanner, OSINT/discovery switches, email security, and related scan options the backend already read.
+
+#### Changed
+
+- **Maintainability (PR #129)**:
+  - Split `temporal/activities`, `temporal/workflows`, `common_func`, API views/serializers, and OSINT/crawl tasks into domain packages with compatibility shims.
+  - Logger calls pass values as arguments; activity START/COMPLETE lines reach `temporal.log`.
+  - Frontend API calls go through typed feature `api` modules; `getSafeUrl` / `openSafeUrl` for links from API data; unused packages removed; Nivo replaced by ECharts where applicable.
+
+- **Query performance**: list endpoints used by UI tables batch per-row reads after pagination (`list_serializer_class`); `DirectoryViewSet` is read-only (405 on writes).
+
+- **Infrastructure images**:
+  - Temporal `auto-setup:1.22.4` → `temporalio/server:1.31.3` (+ schema/namespace jobs); upgrade via `make temporal-upgrade` / `documents/upgrading-infrastructure.md`.
+  - Neo4j `5.12.0` → `5.26-community` (backup volume first); Redis pinned `8.10-alpine`; nginx `1.31-alpine`.
+  - No `docker.sock` in app containers; Tor/Ollama are compose profiles (`TOR_CONTROL_PASSWORD` required for Tor).
+
+#### Fixed
+
+- **CVE enrichment retry storm**: keep `last_enriched_at` / `force=` skip logic and EnrichScanCVEs timeouts (`2h` / heartbeat `15m`) when merging PR #129 module splits.
+- **Temporal reliability**: `@keep_alive` heartbeats for long activities; schedule delete only ignores not-found; feroxbuster/ffuf no longer swallow DB flush errors; scan abort cancels Go-executor promptly.
+- **Shell injection**: crawled URLs/hostnames `shlex`-quoted in tool commands (arjun, LinkFinder, ffuf, feroxbuster, …).
+- **File deletion**: screenshot purge and scan-result cleanup confined under `RENGINE_RESULTS` (no more `rm -rf` of the whole results root).
+- **Exception text**: API responses return `INTERNAL_ERROR_MESSAGE` instead of `str(e)`; OllamaManager and MCP AD/compliance error paths included; static guard covers `response[key] = str(exc)`.
+- **Exploit-DB / Searchsploit** removed (volume race on clean install; no scan task used it).
+- **Frontend**: assessment execution under TanStack router, WHOIS/buckets/DNS display, compact vuln table, Resume on scan page, and related type-driven UI bugs.
+- **scanEngine 0019**: null/empty legacy worker tokens get unique unusable placeholder hashes so the irreversible unique `auth_token_hash` migration cannot collide or crash.
+
+#### Notes
+
+- Existing installs: run `make temporal-upgrade` (with Temporal/orchestrator/executor stopped) before `make up` on the new Temporal images; back up Neo4j before the 5.26 store upgrade; `scanEngine.0019` is irreversible.
+- Deploy checklist and rollback notes: `documents/upgrading-infrastructure.md`. Open follow-ups: `documents/TODO.md`.
+
+### [v3.7.7] - 2026-09-27
+
+#### Added
+
+- **Plugin-gated MCP tools**:
+  - `r3ngine_list_plugins` / `r3ngine_get_plugin` discovery plus a `plugins` section on `r3ngine_list_capabilities`.
+  - Host gates optional tools with `Plugin.is_enabled` + backend import; thin `/api/mcp/` wrappers never open raw `/api/plugins/{slug}/`.
+  - **Active Directory** (`active_directory`): list/get/start assessments, BloodHound/SharpHound JSON ingest (collectors not run), findings, AD graph attack paths, JSON reports.
+  - **Credential Intelligence**: task lifecycle, discovered credentials with secrets redacted, hash cracking status (plaintext redacted).
+  - **Compliance Assessment**: assessments, controls, attestation JSON, AI control enrich.
+  - **Burp Suite Integration**: issues, metrics, sync logs, health, import workflow trigger; `api_urls.py` shim so the host loader mounts the plugin.
+  - Sidecar (**r3ngine-mcp v1.4.0**) registers plugin tools only after session open when the matching slug is enabled (`tools/list_changed` on stdio).
+  - Manifest contract: optional `mcp.tools` in plugin `manifest.yaml` (documented in `documents/plugin-system.md` / plugin developers guide).
+  - Still excluded from MCP: Metasploit and active exploitation (offensive craft); email security / exploit readiness (no agent HTTP surface).
+
+#### Notes
+
+- Requires matching [r3ngine-mcp](https://github.com/whiterabb17/r3ngine-mcp) **v1.4.0** and updated plugin packages from [r3ngine-plugins](https://github.com/whiterabb17/r3ngine-plugins).
+- See `documents/mcp.md`.
+
+### [v3.7.6] - 2026-09-25
+
+#### Added
+
+- **Stop in-progress subscans from history**:
+  - Per-row Stop on Sub Scan History, scan-detail Sub Scan History, and the Scan History drawer Tasks tab (INITIATED / RUNNING / PAUSED).
+  - Uses existing `/api/action/stop/scan/` with `subscan_ids` → Temporal `handle.cancel()` on each SubScan workflow id, then marks the row ABORTED.
+  - Redis `scan_stop_{scan_history_id}` kill switch is only armed when the parent master scan is not live, so stopping one subscan does not hard-kill tools still owned by `MasterScanWorkflow`.
+
+- **Scan timeline failure UX (PR #113)**:
+  - `ScanActivity.target_host` so fan-out rows show which host a task ran against.
+  - `classify_failure()` maps exceptions to operator-facing categories with hints.
+  - Tier-level retry API and UI (`TimelineTierHeader`) when every failure in a tier looks environmental.
+  - Explicit Temporal `retry_policy` presets on every `execute_activity` (including Acunetix attempt caps).
+
+- **MCP Access**:
+  - Dedicated `/api/mcp/` allowlist with hashed per-user API keys, sessions, and an append-only request/response audit chain.
+  - Settings → MCP Access: transport (stdio / HTTP / both), named keys (secret shown once), connected agents, session revoke, audit drawer, inspect-only Replay overlay (stored request, agent, and response; never re-dispatches).
+  - MCP notes (sidecar **v1.0.3**): list/get for any MCP key; create/update for pentester/sys-admin keys (`TodoNote`); delete remains UI-only.
+  - MCP detail tools: companion `r3ngine_get_*_detail` for scan (status-bucketed tasks + finding rollups), target, vulnerability, subdomain, endpoint, exposure, and subscan. Thin `list_*` / `get_*` unchanged. Sidecar bumped to **v1.0.2**.
+  - MCP agent upgrade (sidecar **v1.2.0**): `r3ngine_export_scan_for_ai` exposes the scan-detail **Export for AI** Analyst Assist bundle over MCP (markdown + prompt + structured JSON) for one-shot full scan analysis; capability catalog, singular tool run, follow-up batch plans, OSINT staging verify remain as in **v1.1.0**.
+  - MCP agent upgrade (sidecar **v1.1.0**): capability catalog, singular tool run, follow-up batch plans (propose/edit/approve/abort/retry), `suggested_followups` on detail payloads; OSINT staging list/verify with `agent_verified` badges and UI Clear all / Add verified / Clear false positive; `r3ngine-osint` handoff sub-agent.
+  - Singular tool UI + installed-arg cache: Subdomains tab **Run single tool** modal; `GET /api/action/tool/<tool>/args/` (and MCP `r3ngine_get_tool_args`) returns schemas from binary `--help` with versioned `ToolArgSchemaCache`; optional `tool_args` on run/follow-up steps (validated, denylisted, no free-form shell); `InstalledExternalTool` live sync (`is_present` / version) + refreshed `fixtures/external_tools.yaml`; `manage.py sync_installed_tools` / `refresh_tool_arg_schemas`.
+  - Tool-arg / presence probes prefer Temporal worker containers (`temporal-go-executor` / `temporal-python-orchestrator`) via `docker exec`, so entrypoint binaries that live only on workers (e.g. `kr`) still populate schemas; paths stay worker-encoded.
+  - Singular runs namespace timeline rows as `single_tool_<task>` so they never claim, tier-retry, or finalize pipeline `ScanActivity` rows; host scope (`subdomain_id` / urls) is honored for port scan, crawl, nuclei, screenshot, OSINT, secrets, and WAF paths; timeline retry restores args from `singular_meta_*.json`.
+  - ScanActivity claim/initialize now stamps `subscan` when a subscan reuses a parent-scan row so subscan detail can resolve tasks.
+  - `r3ngine-mcp` TypeScript sidecar (stdio + Streamable HTTP). nginx `/mcp` proxies to the sidecar; the container has no database or scan-result volumes.
+  - HTTP sidecar rate-limits unauthorized clients (10 failures/IP/minute, `429 Retry-After`) before contacting r3ngine; invalid keys are remembered so Django is not re-probed.
+  - `scripts/install-mcp.mjs` clones `r3ngine-mcp` and runs its Node setup (`npm run setup` in that repo). Install and `--update` build and start the `r3ngine-mcp` compose service (`--profile mcp`), creating it when missing by inheriting the running stack’s compose project. `--no-docker` skips the container step.
+  - See `documents/mcp.md`.
+  - Compose: MCP sidecar is opt-in via `--profile mcp` so a missing sibling clone does not fail the default stack build; nginx resolves MCP/web upstreams per request.
+
+- **Mailbox verification (Reacher)**:
+  - Replaced noisy `smtp-user-enum` VRFY spraying in built-in email security with Reacher `check-if-email-exists` mailbox verification (CLI default, optional self-hosted HTTP).
+  - Confirmed addresses (`is_reachable=safe`) are stored on the scan; catch-all MX aborts enumeration. See `documents/email-verification.md`.
+  - Scan detail timeline shows **Mailbox Verification** (`check_if_email_exists`) after port scan: pending at start, running while Reacher executes, then success/fail.
+  - Operator SOCKS5 proxies are passed to Reacher as `--proxy-host` / `--proxy-port` (password via `PROXY_PASSWORD`, not argv). HTTP/SOCKS4 pool entries are skipped for this tool.
+
+- **Email security engine switch**:
+  - `email_security.enabled: false` in the scan engine config skips the email security activity and drops mailbox verification from the planned timeline. Absent config remains enabled so existing engines are unchanged.
+  - The skip is decided inside the activity (not the workflow) so in-flight scans keep Temporal replay safety.
+
+- **LLM master switch**:
+  - Settings → AI Hub now has an **Enable LLM Features** toggle that controls impact assessment, GPT vulnerability reports, and other provider calls during scans.
+  - Replaces the `LLM_ENABLED` environment variable as the operator switch. Existing installs that already have an active provider are seeded on.
+
+- **Plugin marketplace icons**:
+  - Marketplace cards load each plugin icon from the public plugin repo (PNG then SVG) instead of a letter placeholder.
+
+#### Fixed
+
+- **Async Temporal activities holding dead DB connections (PR #121)**:
+  - Async activities (including `CheckScanQueueStatusActivity`, the first step of `MasterScanWorkflow`) reached the ORM through plain `asgiref.sync_to_async`. That thread pool is outside `DjangoAwareThreadPoolExecutor`, so once Postgres closed an idle session the cached connection stayed dead and every later call raised `InterfaceError: connection already closed` — new scans sat at 0% while reading RUNNING.
+  - All async activities now use `channels.db.database_sync_to_async` (runs `close_old_connections()` around each call; with `CONN_HEALTH_CHECKS` opens a fresh connection). Orchestrator plugin registry load uses the same wrapper.
+  - Guard test `tests/test_async_activity_db_connections.py` keeps plain `sync_to_async` out of the activities package.
+
+- **Scan History drawer stop actions**:
+  - Tasks-tab Stop now posts `subscan_ids` (was a no-op); master-scan Stop posts `scan_ids` in the JSON body instead of an ignored `?scan_id=` query param.
+  - SubScan `bulk_stop` uses the same `abort_subscan` path as `/api/action/stop/scan/`.
+
+- **Nuclei / go-executor parsing and proxies**:
+  - Skip nuclei `-stats` (and other non-finding) JSON from go-executor stdout so `parse_nuclei_result` no longer raises `KeyError('info')` and fails `RunNucleiActivity`.
+  - Detect nuclei’s FTL “all proxies are dead” exit, refresh the proxy list, and retry up to three times before skipping that severity/tag slice.
+  - Keep SOCKS entries in the nuclei proxy file (HTTP-only filtering left SOCKS-heavy pools with one dead HTTP entry).
+  - Singular / subscan nuclei tech tags and vuln target resolution stay on the subdomain in ctx (no apex-wide tech pull or apex host fallback); vigolium / second_order / related vuln tools honor the same scoped targets.
+
+- **dirsearch / ffuf httpx proxy schemes**:
+  - Centralize `resolve_httpx_compatible_proxy()` so dirsearch 0.5 (httpx) and ffuf never receive `socks4://` (`Unknown scheme for proxy URL`); draw http(s)/socks5 replacements from the pool or continue without a proxy. Dirsearch also retries on that scheme error, not only the classic proxy-error string.
+
+- **Orphan Temporal tool workflows after completed scans**:
+  - `recover_stuck_scans` cancels leftover child go-exec workflows for scans already SUCCESS/ABORTED so a worker restart does not keep burning CPU on dead work.
+
+- **MCP follow-up / OSINT verify hardening**:
+  - Aborting a follow-up plan no longer stops the parent master scan; require `scan_id` for OSINT staging verify; cancel orphan subscans on partial follow-up failure; reject out-of-scope url/host tool steps.
+
+- **postleaksNg false-positive leaks**:
+  - `run_postleaks` now retries failed runs, refuses to persist findings on non-zero exit, strips ANSI, and filters traceback / connection-error noise so tool failures are not stored as `SecretLeak` rows.
+  - Scan summary scopes `secret_leaks` to the requested scan (not the whole target domain), so sibling-scan junk no longer appears on other scans' LEAKS tabs.
+
+- **Scan correctness and recovery (PR #113)**:
+  - Resume workflow ids count from the highest recorded run (no more `master-scan-<id>-run-0` collisions after manual resume).
+  - Auto-recovery now spends a `recovery_count` attempt instead of resetting the budget to 0 on every resume; manual UI resume still resets the budget.
+  - GraphQL endpoint detection requires the path to end at the graphql segment (no more `/node_modules/graphql/...` false positives).
+  - `inql` / `jwt_tool` / `graphql-cop` honor the processed-subdomain guard; `vigolium_discovery` is filed under Tier 2; Tier 5 analysis phases follow discovery evidence.
+  - Email security activity bound kept at **2 hours** (with matching budget constant) to stop restart loops on targets with many mail hosts.
+  - Hot-path DB indexes, scan_status N+1 fix, and timer-based tool-output persistence.
+  - Docker: log rotation, Redis memory policy, healthchecks, loopback port binds; nginx re-resolves web upstream after container recreate.
+
+- **Tier retry, stop/abort, and timeline honesty**:
+  - Tier retry stays FAILED-only and is idempotent (`no_op` when no FAILED rows remain); ABORTED tiers show as not-run so stop/cancel no longer offers a no-op Retry Tier.
+  - Individual timeline retry accepts ABORTED rows on terminal scans; single-task and tier retry clear the Redis `scan_stop_{id}` kill-switch before resuming.
+  - Final status treats ABORTED like FAILED so retrying one aborted sibling cannot mark the whole scan SUCCESS while others stay cancelled.
+  - Stopped scans no longer stamp never-started later-tier rows as FAILED with “Activity task failed”; those tiers read DID NOT RUN instead.
+  - Scan history prefers currently RUNNING tiers over leftover FAILED higher-tier rows after crash recovery so progress is not misleading.
+  - Exploits tab lists vulnerabilities that have exploit URLs (matches scan-summary `exploitable_count`).
+
+- **Acunetix submit settings and retry**:
+  - `vulnerability_scan.acunetix` round-trips through engine YAML so live subdomain submission reaches the backend.
+  - `acunetix_submit` is retryable via tier/single-task retry workflows.
+
+- **Tool invocation correctness**:
+  - **dirsearch 0.5.0**: `--format` → `--output-formats`, camelCase JSON keys, and `socksio` so SOCKS proxies keep working.
+  - **wafw00f**: skip lines that are not `Name (Manufacturer)` entries and bound field lengths so a bad line cannot fail Tier 5 / the whole scan.
+  - **GQLSpection**: invoke as `gqlspection -u`, bake `click` into the image, treat a successful schema dump as the finding, and gate/dedupe like other GraphQL tools (it had never actually run).
+  - **grpcurl**: probe ports the port scan found (TLS vs plaintext by transport), skip hosts with nothing gRPC-shaped, cap probes per host, and give each probe a deadline — not plaintext `:443` from the URL alone.
+
+- **V3 Light / OpSec theme contrast**:
+  - Stop hardcoding white / translucent-white text on surfaces that are white in V3 Light (including the OpSec IDENTITY & TRAFFIC controls missed by the earlier pass).
+
+- **Post-deploy UI asset freshness**:
+  - nginx serves `/staticfiles/` with `Cache-Control: no-cache` so browsers revalidate unhashed Vite bundles after a deploy (theme and settings chunks no longer stick on stale cache).
+
+- **Web process database connection leak**:
+  - `CONN_MAX_AGE` is configurable via `DJANGO_CONN_MAX_AGE`; compose sets it to `0` for web (ASGI/uvicorn does not reuse connections) while the Temporal worker keeps persistent connections.
+
+- **AI Impact Assessment skip no longer fails the scan**:
+  - When LLM was off, `generate_impact_assessment` skipped with `return False`, which Temporal treated as a hard failure, retried three times, and marked the whole scan failed.
+
+- **Failed-scan restart recovery retries only failed tasks**:
+  - `recover_stuck_scans` treated a completed-but-failed MasterScanWorkflow as dead and spawned a new full `MasterScanWorkflow`. YAML resource keys in `ScanHistory.tasks` (`threads`, `timeout`, `rate_limit`, ...) were treated as remaining tasks, which re-ran YAML-defaulted Vigolium harvest/discovery.
+  - Completed failed scans now retry unsuccessful `ScanActivity` rows via `SingleTaskRetryWorkflow`. Crash recovery still resumes remaining pipeline tasks only.
+
+- **AI Impact Assessment retry no longer stalls**:
+  - `SingleTaskRetryWorkflow` did not handle `generate_impact_assessment` on the running worker, raised an uncaught `ApplicationError`, left the scan RUNNING, and the timeline hid the reset INITIATED row (`time_started=None`).
+  - Retry now keeps the activity visible, claims INITIATED rows, and restores FAILED status if the retry workflow fails before the task starts — including post-completion retries that keep the parent scan SUCCESS.
+  - `retry_failed_tasks_temporal` no longer runs Django ORM inside `asyncio.run()`, which made orchestrator startup recovery fail with `SynchronousOnlyOperation`.
+
+#### Enhanced
+
+- **Frontend GPU / resource cost**:
+  - Replace live SVG `feTurbulence` cyber-noise and `background-attachment: fixed` with a static tiled noise asset and scroll attachment; cap glass `backdrop-filter` at 12px across theme, Shell, and TacticalPanel.
+  - Scan History / Detail: pulse chips and progress bars animate only `transform` / `opacity` (no animated `filter: drop-shadow`); scan list polling is 5s while pending/running/paused/SpiderFoot and 30s when idle.
+  - Cytoscape graphs skip animated initial layout and pause when the tab is hidden; GeoMap pulses only the top five countries; login static overlay no longer uses a per-frame canvas.
+  - Exposures use server-side pagination; Shell proxy polling no longer runs in background tabs; idle vuln-table text glows move to hover.
+
+### [v3.7.4] - 2026-07-24
+
+#### Enhanced
+
+- **Vigolium Spidering Phase Max Time Limit**:
+  - Configured container-wide Vigolium `spidering.max_duration` setting to `75m` in Docker entrypoints (`temporal-go-executor` and `temporal-python-orchestrator`).
+  - Updated Vigolium task routines (`vigolium_scan`, `vigolium_analysis`, and `fetch_url` spidering) to support and pass `--spider-max-time` (`75m` default) CLI flags.
+  - Added `spider_max_time` configuration to `web/reNgine/definitions.py`, `default_yaml_config.yaml`, and `full_yaml_config.yaml`.
+
+#### Fixed
+
+- **Vigolium Smart Retry — Phase-Split & Heuristic Fix**:
+  - Fixed a false-positive proxy-bypass retry in `_run_vigolium_phase`: when Nuclei hits its internal 30-minute `KnownIssueScan` phase deadline it is killed before flushing the `scan` summary record's `total_requests` field, causing the heuristic to incorrectly conclude the proxy had blocked all traffic and restart the entire vigolium pipeline from scratch.
+  - Added `_has_records(output_file)` helper that inspects the JSONL output for any `finding`, `http_record`, or `scan` entries. If records exist, the run is now treated as a partial success and the proxy-bypass retry is suppressed — preserving all findings already written to disk.
+  - The proxy-retry file-erasure logic now also gates on `_has_records`: a non-empty output file is no longer deleted before the no-proxy retry.
+  - Split `vigolium_scan` (Tier 6) into two independent `_run_vigolium_phase` calls: **Phase A** (`--only spidering,discovery`) and **Phase B** (`--only known-issue-scan,dynamic-assessment`), each writing to its own JSONL file. A proxy failure or timeout in Phase B (KnownIssueScan) now triggers an independent Phase B retry without touching Phase A's completed work.
+
+- **OpenAI `max_completion_tokens` Fallback**:
+  - Updated LLM generator and connection testing logic to support automatic fallback from `max_tokens` to `max_completion_tokens` whenever OpenAI returns HTTP 400 (`Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.`).
+  - Ensures compatibility across newer OpenAI models (such as `o1`, `o3-mini`, etc.) for all LLM calls and connectivity validations.
+
+- **Vigolium Scans Temporal Timeout Fix**:
+  - Resolved `Activity complete after timeout` error restarts on `go-executor-queue` by making `GoExecutorTaskWorkflow`'s `start_to_close_timeout` dynamic and configurable via `input_data` (defaulting to 12 hours).
+  - Forwarded execution timeouts (`timeout_seconds`) from `stream_command` and `run_command` to `GoExecutorTaskWorkflow`.
+  - Updated default task command timeouts to 12 hours (43,200s) and aligned Vigolium activity timeouts (`RunVigoliumScanActivity`, `RunVigoliumAnalysisActivity`, `RunVigoliumDiscoveryActivity`, `RunVigoliumHarvestActivity`) across `MasterScanWorkflow`, `SingleTaskRetryWorkflow`, and `assessment_workflow.py`.
+
+#### Added
+
+- **Target Report Generation**:
+  - A new **TARGET REPORT** button in the Vulnerabilities tab of the Target Summary page lets users generate a multi-scan PDF intelligence report covering the entire history of a target — not just a single scan.
+  - Select 2 or more completed scans to include. The report aggregates data across all selected scans and produces a cross-scan view of how the attack surface and vulnerability posture have changed over time.
+  - **Cross-Scan Vulnerability Tracking Timeline**: Every unique vulnerability (keyed by host + name + type) is tracked across each selected scan with status columns — `Open`, `Resolved (Auto)`, `Resolved (Manual)`, `False Positive`, `Accepted Risk`, `Not Detected`, and `—` (not yet active). First-seen and remediation dates are captured automatically.
+  - **Severity Trend Chart**: A stacked bar chart showing counts of Critical / High / Medium / Low / Info findings per scan, rendered as an embedded base64 PNG in the PDF.
+  - **Findings Timeline Chart**: A multi-line chart tracking new findings, resolved findings, and open total across the scan timeline.
+  - **Executive Summary**: Risk boxes by severity (Critical / High / Medium / Low / Info), plus total unique findings, resolved count, and new-in-latest-scan count.
+  - **11 Optional Report Sections** (user-selectable before generation): Subdomain Changes, Attack Surface Trend, Exposure Intelligence, Certificates, WAF Detection, Endpoints, Directories, S3 Buckets, Employees, Email Breaches, Secret Leaks.
+  - **Cyber Pro PDF Template**: Dark-themed cover page with corner marks, border accents, and footer strip; full table of contents with WeasyPrint page-reference links; all sections follow the existing `cyber_pro.html` design language.
+  - **Report Branding**: All colours (primary accent, cover background), company name, logo, footer text, and show/hide settings are loaded from the configured `VulnerabilityReportSetting` — same source as scan reports.
+  - Report generation runs asynchronously in a background thread. A polling modal in the UI updates status every 3 seconds and presents a **DOWNLOAD REPORT** button on completion.
+  - Allowlist-validated optional sections, cross-target scan-ownership enforcement, and generic client-facing error messages (exception details remain server-side) — consistent with the existing security posture.
+
+- **AI Vulnerability Severity Validation**:
+  - Added a **Validate Severity (AI)** action to the Vulnerability Table (row context menu and expanded row detail view).
+  - Queries active LLM configuration (`LLMSeverityValidator` in `web/reNgine/llm.py`) with complete finding context (name, description, scanner tool, target URL, CVEs, CWEs, extracted results, current severity).
+  - The LLM re-evaluates the vulnerability against CVSS v3.1 / OWASP standards to detect misclassified findings (e.g. WPScan / scanner mislabeling XSS as Info).
+  - Renders an interactive modal preview presenting side-by-side **Current Severity** vs **AI Suggested Severity**, confidence rating, suggested CVSS score, detailed AI rationale, and key risk factors.
+  - Allows users to accept or fine-tune the updated severity level, updating the database record and refreshing the vulnerability table in real-time.
+
+### [v3.7.3] - 2026-07-09
+
+#### Added
+
+- **Post-Completion Task Retry**:
+  - Any task in the scan timeline can now be re-run after a scan has fully completed (SUCCESS), not just failed tasks. Use this to accumulate additional results with a fresh proxy without re-running the entire scan.
+  - If the retried task fails, the overall scan status is preserved as SUCCESS — only the individual task activity row reflects the failure.
+  - The retry button appears on all timeline tasks when viewing a completed scan, and continues to appear only on failed tasks for aborted/failed scans (unchanged behaviour).
+
+- **Zombie Task & Timeline Cleanup on Scan Completion**:
+  - When a scan completes successfully (after all Tier 7 post-processing), any task rows still in a RUNNING state (zombie tasks from crashed workers or cancelled subscans) are now automatically marked as ABORTED.
+  - Spurious "Scan Aborted" sentinel entries written by cancelled previous attempts are deleted from the timeline when the overall scan succeeds, keeping the completed scan timeline clean.
+
+- **Massive GF Pattern Library Expansion**:
+  - Sourced and created 18 new high-value patterns and enhanced 6 existing ones, expanding the total default catalog from 14 to 32 patterns.
+  - New patterns target: API Keys, Command Injection, CORS, CRLF, Email Injection, GraphQL, HTTP Smuggling, JWT, Mass Assignment, NoSQL Injection, OAuth, Open Redirect, Path Traversal, Prototype Pollution, S3 Buckets, WebSockets, XML External Entity (XXE), and more.
+
+- **Dynamic API-Driven Scan Engine Editor Options**:
+  - The Scan Engine Editor's Fetch URLs section now dynamically queries the backend `tool_settings` API (which lists patterns via `gf -list`) to render available GF options.
+  - Users are no longer limited to a static list of hardcoded patterns in the UI and can select any installed pattern.
+  - Fallback mechanisms preserve the local list (updated to all 32 patterns) if the backend API is temporarily unreachable.
+
+- **Runtime Staging & Volume Overwrites Seeding**:
+  - Pattern files are staged in the image at `/usr/src/gf-patterns/` via Dockerfile.
+  - Web and Temporal orchestrator entrypoint scripts sync staged patterns into the `/root/.gf/` volume on every startup.
+  - Guarantees updated patterns are propagated to existing installations automatically without requiring a volume wipe.
+
 ### [v3.7.2] - 2026-07-06
 
 #### Fixed
+
+- **Vigolium Proxy Execution Reliability**:
+  - `vigolium` scans (harvest, discovery, analysis, scan) would silently fail and output 0 findings if the randomly assigned proxy was slow or dropping packets, as Vigolium's heuristic probes would time out and skip the target.
+  - Implemented a proxy-bypass retry mechanism in `_run_vigolium_phase`: if the scanner aborts with 0 requests made, it automatically retries the execution without the proxy.
+
+- **Vigolium Target Population**:
+  - `vigolium_scan` at Tier 6 was only receiving base `EndPoint` records (the root subdomains) rather than the full list of spidered URLs discovered during crawl phases. It was incorrectly using `get_http_urls` (which only queries DB endpoints).
+  - Updated `tasks/vigolium.py` to use `collect_all_scan_urls` (matching `nuclei_scan`) so Vigolium now scans all URLs discovered and stored in `fetch_url.txt` by spidering tools.
 
 - **Vulners Exploit Source Extraction — Cloudflare Bypass**:
   - The "Preview Exploit Content" feature for Vulners NSE scan findings was silently failing. The browser-side JS fetch was blocked by CORS; the backend `fetch_exploit_source` view used a bare `requests.get()` call which was blocked by Cloudflare on all major exploit repositories (packetstorm, githubexploit, seebug, 1337day, exploit-db).

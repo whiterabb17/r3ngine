@@ -21,6 +21,7 @@ import {
 import { X, Upload, Play, Key, ChevronDown, ChevronRight } from 'lucide-react';
 import { useWordlists, useUploadWordlist } from '../../engines/api';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import type { ApiErrorLike } from '../../../types/errors';
 
 interface BruteConfigDialogProps {
   open: boolean;
@@ -105,8 +106,9 @@ export const BruteConfigDialog: React.FC<BruteConfigDialogProps> = ({
         setShowUpload(false);
         setUploadSuccess('');
       }, 1500);
-    } catch (err: any) {
-      setUploadError(err.message || 'Failed to upload wordlist');
+    } catch (caught) {
+      const err = caught as ApiErrorLike;
+      setUploadError(err?.message || 'Failed to upload wordlist');
     }
   };
 
@@ -392,7 +394,7 @@ export const BruteConfigDialog: React.FC<BruteConfigDialogProps> = ({
                   <InputLabel sx={{ fontFamily: 'Orbitron', fontSize: '0.6rem', color: 'text.secondary' }}>USE AS</InputLabel>
                   <Select
                     value={uploadTarget}
-                    onChange={(e) => setUploadTarget(e.target.value as any)}
+                    onChange={(e) => setUploadTarget(e.target.value)}
                     sx={{
                       '&:before, &:after': { display: 'none' },
                       border: '1px solid',

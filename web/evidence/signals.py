@@ -8,15 +8,17 @@ from django.dispatch import receiver
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
+from reNgine.utils.logger import get_module_logger
+
+logger = get_module_logger(__name__)
+
 
 @receiver(post_save, sender='evidence.Evidence')
 def evidence_post_save(sender, instance, created, **kwargs):
     """Log creation events via the WebSocket evidence channel when a new item is saved."""
     if created:
         try:
-            from reNgine.utils.logger import get_module_logger
-            log = get_module_logger(__name__)
-            log.log_line("[EVIDENCE]", "CREATED", f"New evidence item {instance.uuid} in collection {instance.collection_id}")
+            logger.log_line("[EVIDENCE]", "CREATED", f"New evidence item {instance.uuid} in collection {instance.collection_id}")
             
             # Broadcast to the assessment's WebSocket group so the UI refreshes
             if instance.collection and instance.collection.assessment:
@@ -37,6 +39,6 @@ def evidence_post_save(sender, instance, created, **kwargs):
                             }
                         }
                     )
-        except Exception as e:
-            # Silently fail if channel layer isn't configured or relations are missing
-            pass
+        except Exception:
+            # The evidence row is already saved; only the live UI refresh is lost.
+            logger.warning("Could not broadcast evidence %s creation", instance.pk, exc_info=True)

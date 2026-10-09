@@ -180,22 +180,22 @@ class RengineUpdateCheck(APIView):
 			v_str = v_str.strip().lstrip('v')
 			try:
 				return version.parse(v_str)
-			except Exception:
+			except version.InvalidVersion:
 				# PEP 440 sanitization fallback
 				sanitized = v_str.replace('-beta.rc', 'b').replace('-rc', 'rc').replace('-beta', 'b').replace('-', '.')
 				try:
 					return version.parse(sanitized)
-				except Exception:
+				except version.InvalidVersion:
 					digits = re.findall(r'\d+', v_str)
 					if digits:
 						try:
 							return version.parse('.'.join(digits))
-						except Exception:
+						except version.InvalidVersion:
 							pass
 					return version.parse('0.0.0')
 
 		try:
-			response = requests.get(github_api).json()
+			response = requests.get(github_api, timeout=15).json()
 			if 'message' in response and 'rate limit' in response['message'].lower():
 				return_response['message'] = 'RateLimited'
 			elif isinstance(response, list) and len(response) > 0:
@@ -212,7 +212,7 @@ class RengineUpdateCheck(APIView):
 		# Fallback: check .version file in master branch
 		version_url = 'https://raw.githubusercontent.com/whiterabb17/r3ngine/main/web/.version'
 		try:
-			raw_version_response = requests.get(version_url)
+			raw_version_response = requests.get(version_url, timeout=15)
 			if raw_version_response.status_code == 200:
 				raw_version = raw_version_response.text.strip().replace('v', '')
 				# If raw_version is higher than latest release or no release found
@@ -420,3 +420,126 @@ class GetSystemLogs(APIView):
 			logger.error("Error reading system logs (%s)", log_type, exc_info=True)
 			return Response({'status': False, 'message': 'Internal error reading logs'}, status=500)
 
+
+class ProxySettingsAPIView(APIView):
+	permission_classes = [IsAuthenticated, HasPermission]
+	permission_required = PERM_MODIFY_SCAN_CONFIGURATIONS
+
+	def get(self, request):
+		from reNgine.common_func import get_valid_proxy_count
+
+		proxy = Proxy.objects.first()
+		serializer = ProxySerializer(proxy)
+		payload = dict(serializer.data) if proxy else {
+			'use_proxy': False,
+			'proxies': '',
+			'use_proxychains': False,
+			'use_tor': False,
+		}
+		payload['valid_proxy_count'] = get_valid_proxy_count(proxy)
+		return Response(payload)
+
+	def post(self, request):
+		proxy = Proxy.objects.first()
+		if not proxy:
+			proxy = Proxy.objects.create()
+		data = request.data.copy()
+		message = 'Proxies updated successfully'
+		skip_validation = request.data.get('skip_validation') == 'true'
+		if data.get('use_proxy') and data.get('proxies') and not skip_validation:
+			from reNgine.common_func import validate_proxies
+			original_count = len([line for line in data['proxies'].splitlines() if line.strip()])
+			validated = validate_proxies(data['proxies'])
+			data['proxies'] = validated
+			saved_count = len([line for line in validated.splitlines() if line.strip()])
+			message = f'Proxies updated. Validated {saved_count}/{original_count} live proxies.'
+		serializer = ProxySerializer(proxy, data=data, partial=True)
+		if serializer.is_valid():
+			serializer.save()
+			return Response({'status': True, 'message': message})
+		return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ProxyFetchAPIView(APIView):
+	permission_classes = [IsAuthenticated, HasPermission]
+	permission_required = PERM_MODIFY_SCAN_CONFIGURATIONS
+
+	def post(self, request):
+		try:
+			from reNgine.tasks import fetch_proxies_task
+			from reNgine.job_tracker import create_job
+			import threading
+			limit = request.data.get('limit', 1000)
+			try:
+				limit = int(limit)
+			except Exception:
+				limit = 1000
+			job_id = create_job()
+			logger.info("[ProxyFetch] Starting proxy fetch workflow (limit=%d, job_id=%s)", limit, job_id)
+			from reNgine.temporal_client import TemporalClientProvider
+			import asyncio
+			async def _start():
+				client = await TemporalClientProvider.get_client()
+				await client.start_workflow(
+					"ProxyFetchWorkflow",
+					args=[limit, job_id],
+					id=f"proxy-fetch-{job_id}",
+					task_queue="python-orchestrator-queue"
+				)
+			loop = asyncio.new_event_loop()
+			try:
+				loop.run_until_complete(_start())
+			except Exception as e:
+				from reNgine.job_tracker import update_job
+				update_job(job_id, "FAILED", 100, f"Failed to start workflow: {e}")
+				logger.error("[ProxyFetch] Failed to start proxy fetch workflow: %s", e)
+			finally:
+				loop.close()
+			return Response({'status': True, 'task_id': job_id})
+		except Exception:
+			logger.exception("[ProxyFetch] Unexpected error in ProxyFetchAPIView")
+			return Response({'status': False, 'message': INTERNAL_ERROR_MESSAGE}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class TorStatusAPIView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	def get(self, request):
+		from reNgine.tor_manager import TorManager
+		try:
+			return Response(TorManager().status())
+		except Exception as e:
+			# A probe that errors should read as "tor is not running", not as
+			# a 500 on a status endpoint the UI polls.
+			logger.warning('[TorStatus] Could not determine TOR state: %s', e)
+			return Response({'running': False, 'hint': TorManager.enable_hint()})
+
+
+class TorExitIPAPIView(APIView):
+	permission_classes = [IsAuthenticated]
+
+	def get(self, request):
+		from reNgine.tor_manager import TorManager
+		try:
+			if not TorManager().is_running():
+				return Response({'ip': None})
+			import requests as req_lib
+			proxies = {'http': 'socks5h://tor:9050', 'https': 'socks5h://tor:9050'}
+			resp = req_lib.get('https://api.ipify.org', proxies=proxies, timeout=10)
+			return Response({'ip': resp.text.strip()})
+		except Exception:
+			return Response({'ip': None})
+
+
+class HardwareProfileViewSet(viewsets.ModelViewSet):
+	permission_classes = [IsAuditor]
+	queryset = HardwareProfile.objects.all().order_by('id')
+	serializer_class = HardwareProfileSerializer
+
+
+class ListConfigurations(APIView):
+	permission_classes = [IsAuditor]
+	def get(self, request, format=None):
+		configurations = Configuration.objects.all()
+		configuration_serializer = ConfigurationSerializer(configurations, many=True)
+		return Response({'configurations': configuration_serializer.data})

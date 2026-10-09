@@ -15,7 +15,7 @@
 #   user_agent: ''            # Custom User-Agent string
 #
 # Tools installed in the Docker image (reference):
-#   Subdomain/DNS   : subfinder, dnsx, tlsx, ctfr, sublist3r, oneforall, netlas, baddns, chaos
+#   Subdomain/DNS   : subfinder, dnsx, tlsx, ctfr, sublist3r, oneforall, netlas, baddns, chaos, securitytrails
 #   ASN/WHOIS       : getasn, jswhois, whoisdomain
 #   OSINT           : bbot, maigret, h8mail, holehe, spiderfoot
 #   HTTP/Crawl      : httpx, katana, gospider, hakrawler, cariddi, gau, waybackurls,
@@ -33,7 +33,7 @@
 #   Net enum        : enum4linux-ng (SMB), onesixtyone+snmpwalk (SNMP), ldapsearch (LDAP), rdp-sec-check
 #   Brute force     : hydra
 #   Bypass          : bup (bypass-url-parser)
-#   Exploit         : searchsploit, search_vulns
+#   Exploit         : search_vulns
 #   OSINT identity  : maigret (username), h8mail (email)
 #   Stress          : k6, wrk, hping3, locust
 
@@ -55,6 +55,7 @@ subdomain_discovery:
     - oneforall
     - netlas
     - baddns
+    # - securitytrails        # SecurityTrails API; key in the API Vault, one query of the monthly quota per scan
     # - amass-passive         # Passive amass enumeration
     # - amass-active          # Active amass enumeration (with wordlist)
   enable_http_crawl: true
@@ -73,6 +74,17 @@ dns_security:
   enable_dnssec_check: true          # DNSSEC configuration check via dig
   enable_dns_brute: false            # Subdomain brute-force via fierce
   amplification_threshold: 10        # Amplification ratio threshold (UDP ANY query)
+
+# ---------------------------------------------------------------------------
+# POST TIER 2 — Email security / mailbox verification
+# ---------------------------------------------------------------------------
+email_security:
+  mailbox_verification:
+    enabled: true          # default true when omitted
+    http_url: ""           # empty → CLI check_if_email_exists; else self-hosted Reacher origin
+    timeout: 15            # seconds per address
+    max_candidates: 200
+    delay_ms: 250
 
 # ---------------------------------------------------------------------------
 # TIER 1 — OSINT
@@ -245,6 +257,7 @@ fetch_url:
 # ---------------------------------------------------------------------------
 dir_file_fuzz:
   auto_calibration: true
+  run_ffuf: true
   run_dirsearch: true
   enable_http_crawl: true
   rate_limit: 150
@@ -383,6 +396,7 @@ vulnerability_scan:
   nuclei:
     use_nuclei_config: false
     auto_update_templates: true
+    max_templates_per_batch: 100  # Template budget per tag batch (Temporal nuclei planner)
     severities:
       - unknown
       - info
@@ -425,8 +439,8 @@ vulnerability_scan:
 
   cpanel_scanner:
     run_cpanel2shell: true
-    cpanel_user_wordlist: /usr/src/app/wordlist/cpanel_users.txt
-    proxy_type: rotating
+    cpanel_user_wordlist: /usr/src/wordlist/cpanel_users.txt
+    proxy_type: rotating          # rotating | single
 
   wpscan_enumeration: vp,vt,u     # WPScan enumeration options
   wpscan_detection_mode: mixed    # mixed | passive | aggressive
@@ -659,8 +673,6 @@ user_hunt: {}
 
 # search_vulns — CVE lookup per discovered service/version. Fans out from
 #                HostReconWorkflow and MasterScanWorkflow after port scan.
-
-# searchsploit — Exploit-DB lookup per service. Same fan-out as search_vulns.
 
 # ===========================================================================
 # STRESS TESTING (standalone, triggered separately)

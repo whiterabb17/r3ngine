@@ -1,65 +1,83 @@
+import React, { useMemo } from 'react';
+import { Box, Typography, alpha } from '@mui/material';
+import { AlertTriangle } from 'lucide-react';
+import ReactECharts from 'echarts-for-react';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
-import React from 'react';
-import { ResponsiveBar } from '@nivo/bar';
 import { useStressStore } from '../../../store/stressStore';
+import { TacticalPanel } from '../../TacticalPanel';
 
-interface ErrorDistributionProps {
-  data: any[];
+export interface EndpointErrorRate {
+  endpoint: string;
+  /** Percentage of failed requests, 0-100. */
+  error_rate: number;
 }
 
-export const ErrorDistribution: React.FC<ErrorDistributionProps> = ({ data }) => {
-  const { tokens } = useThemeTokens();
-  const { setSelectedEndpoint } = useStressStore();
+interface ErrorDistributionProps {
+  data: EndpointErrorRate[];
+  height?: number;
+}
+
+export const ErrorDistribution: React.FC<ErrorDistributionProps> = ({ data, height = 320 }) => {
+  const { tokens, theme } = useThemeTokens();
+  const setSelectedEndpoint = useStressStore((state) => state.setSelectedEndpoint);
+
+  const option = useMemo(() => {
+    const axisColor = alpha(theme.palette.text.primary, 0.4);
+    return {
+      backgroundColor: 'transparent',
+      animation: false,
+      grid: { top: 30, bottom: 10, left: 10, right: 10, containLabel: true },
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: theme.palette.background.paper,
+        borderColor: alpha(tokens.accent.error, 0.3),
+        textStyle: { color: theme.palette.text.primary, fontSize: 11, fontFamily: 'monospace' },
+        valueFormatter: (value: number) => `${value}%`,
+      },
+      xAxis: {
+        type: 'category',
+        data: data.map((row) => row.endpoint),
+        axisLine: { lineStyle: { color: alpha(theme.palette.text.primary, 0.1) } },
+        axisLabel: { color: axisColor, fontSize: 10, rotate: 30, width: 140, overflow: 'truncate' },
+      },
+      yAxis: {
+        type: 'value',
+        name: 'Error Rate (%)',
+        nameTextStyle: { color: axisColor, fontSize: 10 },
+        splitLine: { lineStyle: { color: alpha(theme.palette.text.primary, 0.05) } },
+        axisLabel: { color: axisColor, fontSize: 10 },
+      },
+      series: [
+        {
+          type: 'bar',
+          name: 'Error Rate',
+          data: data.map((row) => row.error_rate),
+          barMaxWidth: 48,
+          itemStyle: { color: tokens.accent.error, borderRadius: [2, 2, 0, 0] },
+          label: { show: true, position: 'top', color: alpha(theme.palette.text.primary, 0.6), fontSize: 10 },
+          cursor: 'pointer',
+        },
+      ],
+    };
+  }, [data, theme, tokens]);
+
+  const onEvents = useMemo(() => ({
+    click: (params: { name?: string }) => {
+      if (params.name) setSelectedEndpoint(params.name);
+    },
+  }), [setSelectedEndpoint]);
 
   return (
-    <div className="w-full h-96 bg-gray-900 rounded-lg p-4 border border-gray-800">
-      <h3 className="text-lg font-bold text-gray-200 mb-2">Error Distribution</h3>
-      <div className="h-[calc(100%-2rem)]">
-        <ResponsiveBar
-            data={data}
-            keys={['error_rate']}
-            indexBy="endpoint"
-            animate={false}
-            margin={{ top: 10, right: 10, bottom: 50, left: 60 }}
-            padding={0.3}
-            valueScale={{ type: 'linear' }}
-            indexScale={{ type: 'band', round: true }}
-            colors={{ scheme: 'reds' }}
-            theme={{
-                axis: {
-                    ticks: {
-                        text: { fill: '#ccc' }
-                    },
-                    legend: {
-                        text: { fill: '#ccc' }
-                    }
-                },
-                tooltip: {
-                    container: { background: '#1f2937', color: '#f3f4f6' }
-                }
-            }}
-            axisBottom={{
-                tickSize: 5,
-                tickPadding: 5,
-                tickRotation: -45,
-                legend: 'Endpoint',
-                legendPosition: 'middle',
-                legendOffset: 40
-            }}
-            axisLeft={{
-                tickSize: 5,
-                tickPadding: 5,
-                tickRotation: 0,
-                legend: 'Error Rate (%)',
-                legendPosition: 'middle',
-                legendOffset: -40
-            }}
-            labelSkipWidth={12}
-            labelSkipHeight={12}
-            labelTextColor="#ffffff"
-            onClick={(node) => setSelectedEndpoint(node.data.endpoint as string)}
-        />
-      </div>
-    </div>
+    <TacticalPanel title="ERROR DISTRIBUTION" icon={<AlertTriangle size={18} />}>
+      {data.length === 0 ? (
+        <Box sx={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Typography sx={{ fontFamily: 'Orbitron', fontSize: '0.75rem', color: 'text.disabled', letterSpacing: 1 }}>
+            NO ERROR DATA
+          </Typography>
+        </Box>
+      ) : (
+        <ReactECharts option={option} onEvents={onEvents} style={{ height: `${height}px`, width: '100%' }} />
+      )}
+    </TacticalPanel>
   );
 };

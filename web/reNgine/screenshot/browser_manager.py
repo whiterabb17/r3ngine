@@ -34,7 +34,7 @@ class PlaywrightThread(threading.Thread):
                 except queue.Empty:
                     # Check for idle timeout
                     if self.browser and (time.time() - self.last_activity) >= self.idle_timeout:
-                        logger.info(f"Shutting down browser after {self.idle_timeout}s of inactivity.")
+                        logger.info("Shutting down browser after %ss of inactivity.", self.idle_timeout)
                         self._shutdown_resources()
                     continue
 
@@ -61,7 +61,7 @@ class PlaywrightThread(threading.Thread):
                             ]
                         )
                     except Exception as e:
-                        logger.error(f"Failed to launch browser inside PlaywrightThread: {e}")
+                        logger.error("Failed to launch browser inside PlaywrightThread: %s", e)
                         reply_queue.put((None, e))
                         self.queue.task_done()
                         continue
@@ -71,14 +71,14 @@ class PlaywrightThread(threading.Thread):
                     res = func(self.browser, *args, **kwargs)
                     reply_queue.put((res, None))
                 except Exception as e:
-                    logger.error(f"Error executing screenshot task: {e}")
+                    logger.error("Error executing screenshot task: %s", e)
                     reply_queue.put((None, e))
                 finally:
                     self.queue.task_done()
                     self.last_activity = time.time()
 
             except Exception as e:
-                logger.error(f"Error in PlaywrightThread event loop: {e}")
+                logger.error("Error in PlaywrightThread event loop: %s", e)
                 time.sleep(1)
 
         # Cleanup on stop
@@ -90,13 +90,13 @@ class PlaywrightThread(threading.Thread):
             try:
                 self.browser.close()
             except Exception as e:
-                logger.error(f"Error closing browser: {e}")
+                logger.error("Error closing browser: %s", e)
             self.browser = None
         if self.playwright:
             try:
                 self.playwright.stop()
             except Exception as e:
-                logger.error(f"Error stopping playwright: {e}")
+                logger.error("Error stopping playwright: %s", e)
             self.playwright = None
 
 
@@ -146,10 +146,11 @@ class BrowserManager:
                     try:
                         self._thread.join(timeout=5)
                     except Exception as e:
-                        logger.error(f"Error joining PlaywrightThread: {e}")
+                        logger.error("Error joining PlaywrightThread: %s", e)
                     self._thread = None
-        except Exception as e:
-            pass
+        except Exception:
+            # Runs from atexit: log and let interpreter shutdown continue.
+            logger.warning("PlaywrightThread shutdown failed", exc_info=True)
 
 browser_manager = BrowserManager()
 atexit.register(browser_manager.shutdown)

@@ -3,6 +3,70 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const API_URL = '/api/plugins/';
 
+/** Entry of a manifest's `ui.components` or `ui.overrides` list. */
+export interface PluginManifestComponent {
+  /** Core component (override) or slot entry name matched by `PluginComponent`. */
+  name?: string;
+  /** Module under `/media/plugins/<slug>/ui/`. */
+  file: string;
+  /** Slot name matched by `PluginSlot`. */
+  type?: string;
+  [key: string]: unknown;
+}
+
+/** Entry of a manifest's `ui.tabs` list, rendered as an extra scan-detail tab. */
+export interface PluginManifestTab {
+  label: string;
+  file: string;
+}
+
+/** `ui` section of a manifest; also served as-is by `/api/plugins/registry/`. */
+export interface PluginManifestUi {
+  menu_item?: string;
+  menu_path?: string;
+  entry_export?: string;
+  components?: PluginManifestComponent[];
+  overrides?: PluginManifestComponent[];
+  tabs?: PluginManifestTab[];
+  [key: string]: unknown;
+}
+
+/**
+ * Parsed `manifest.yaml` (`PluginManager.validate_manifest` in `web/plugins/utils.py`).
+ * `name`, `version` and `runtime` are required on upload, but the model defaults to `{}`.
+ */
+export interface PluginManifest {
+  name?: string;
+  version?: string;
+  description?: string;
+  author?: string;
+  icon?: string;
+  /** Holds `run after` or `run before`: the anchor scan task, or `standalone`. */
+  runtime?: Record<string, unknown>;
+  /** Dotted paths registered on the orchestrator (`web/plugins/temporal_registry.py`). */
+  temporal?: {
+    workflows?: string[];
+    activities?: string[];
+  };
+  ui?: PluginManifestUi;
+  [key: string]: unknown;
+}
+
+/** One entry of `tools.yaml`'s `tools` list. */
+export interface PluginToolEntry {
+  name?: string;
+  version?: string;
+  source?: string;
+  description?: string;
+  [key: string]: unknown;
+}
+
+/** Parsed `tools.yaml`; free-form apart from the `tools` list. */
+export interface PluginToolsConfig {
+  tools?: PluginToolEntry[];
+  [key: string]: unknown;
+}
+
 export interface Plugin {
   name: string;
   slug: string;
@@ -12,8 +76,8 @@ export interface Plugin {
   anchor_step: string;
   runtime_position: 'BEFORE' | 'AFTER';
   order_weight: number;
-  manifest: Record<string, any>;
-  tools_config: Record<string, any>;
+  manifest: PluginManifest;
+  tools_config: PluginToolsConfig;
   installed_at: string;
   needs_restart: boolean;
   author: string;
@@ -32,12 +96,83 @@ export interface MarketplacePlugin {
   is_installed: boolean;
   update_available?: boolean;
   installed_version?: string;
+  icon_url?: string | null;
+}
+
+const MARKETPLACE_ICON_HOST = 'raw.githubusercontent.com';
+const MARKETPLACE_ICON_PATH_PREFIX = '/whiterabb17/r3ngine-plugins/refs/heads/master/';
+const MARKETPLACE_ICON_EXT_RE = /\.(png|svg|jpe?g|webp|gif)$/i;
+
+function isSafeMarketplaceIconUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === 'https:' &&
+      parsed.hostname === MARKETPLACE_ICON_HOST &&
+      parsed.pathname.startsWith(MARKETPLACE_ICON_PATH_PREFIX)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function withIconExtension(url: string, ext: '.png' | '.svg'): string | undefined {
+  try {
+    const parsed = new URL(url);
+    if (!MARKETPLACE_ICON_EXT_RE.test(parsed.pathname)) return undefined;
+    parsed.pathname = parsed.pathname.replace(MARKETPLACE_ICON_EXT_RE, ext);
+    return parsed.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+/** Local installed icon first; otherwise same-repo GitHub raw PNG and SVG URLs. */
+export function resolvePluginIconSrcs(
+  plugin?: Plugin,
+  marketplacePlugin?: MarketplacePlugin,
+): string[] {
+  if (plugin?.icon_path && plugin.slug) {
+    return [`/api/plugins/${encodeURIComponent(plugin.slug)}/icon/`];
+  }
+  const primary = marketplacePlugin?.icon_url;
+  if (!primary || !isSafeMarketplaceIconUrl(primary)) return [];
+
+  const urls = [primary];
+  for (const ext of ['.svg', '.png'] as const) {
+    const alternate = withIconExtension(primary, ext);
+    if (alternate && alternate !== primary && isSafeMarketplaceIconUrl(alternate)) {
+      urls.push(alternate);
+    }
+  }
+  return urls;
+}
+
+export function resolvePluginIconSrc(
+  plugin?: Plugin,
+  marketplacePlugin?: MarketplacePlugin,
+): string | undefined {
+  return resolvePluginIconSrcs(plugin, marketplacePlugin)[0];
 }
 
 // --- CORE FETCHERS ---
 export const fetchPlugins = async (): Promise<Plugin[]> => {
   const { data } = await axios.get(API_URL);
   return Array.isArray(data) ? data : data.results || [];
+};
+
+/** UI section of an enabled plugin's manifest, as served by `/api/plugins/registry/`. */
+export type PluginRegistryComponents = PluginManifestUi;
+
+export interface PluginRegistryEntry {
+  slug: string;
+  name: string;
+  components: PluginRegistryComponents;
+}
+
+export const fetchPluginRegistry = async (): Promise<PluginRegistryEntry[]> => {
+  const res = await axios.get<PluginRegistryEntry[]>(`${API_URL}registry/`);
+  return res.data;
 };
 
 export const uploadPlugin = async (file: File): Promise<{ install_id: string }> => {
@@ -89,6 +224,10 @@ export const usePlugins = () => {
   return useQuery({ queryKey: ['plugins'], queryFn: fetchPlugins });
 };
 
+export const usePluginRegistry = () => {
+  return useQuery({ queryKey: ['pluginsRegistry'], queryFn: fetchPluginRegistry });
+};
+
 export const useUploadPlugin = () => {
   return useMutation({
     mutationFn: uploadPlugin,
@@ -102,7 +241,7 @@ export const useInstallStatus = (installId: string | null) => {
     queryFn: () => fetchInstallStatus(installId!),
     enabled: !!installId,
     refetchInterval: (query) =>
-      query.state.data?.status === 'running' ? 800 : false,
+      query.state.data?.status === 'running' ? 2000 : false,
   });
 };
 
@@ -254,7 +393,17 @@ export const updateBurpConfig = async (config: Partial<BurpConfig>): Promise<Bur
   return data;
 };
 
-export const fetchBurpHealth = async (): Promise<any> => {
+/**
+ * `GET /api/plugins/burpsuite_integration/health/`, served by the external plugin; only
+ * `status` (`'ok'` when Burp is reachable) and `message` are read.
+ */
+export interface BurpHealth {
+  status: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
+export const fetchBurpHealth = async (): Promise<BurpHealth> => {
   const { data } = await axios.get('/api/plugins/burpsuite_integration/health/');
   return data;
 };

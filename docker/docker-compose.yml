@@ -1,12 +1,40 @@
 name: r3ngine
+# Every service inherits this. Without it the json-file driver grows without
+# bound, and a box running 24-hour nuclei stages fills its disk.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
 services:
   db:
     restart: always
+    logging: *default-logging
     image: "postgres:16-alpine"
+    # These -c flags are the live configuration. docker/postgres/postgresql.conf
+    # is not mounted into this container and has no effect, so tuning must go
+    # here. random_page_cost defaults to 4.0, which models a spinning disk and
+    # makes the planner prefer sequential scans over the index on the scan
+    # result tables; 1.1 reflects the SSD the host actually runs on.
+    # max_connections stays at 200. Lowering it to 80 on a "real demand is about
+    # 40" estimate took the stack down with "FATAL: sorry, too many clients
+    # already": the estimate counted application threads but not the Temporal
+    # server's own pools (it keeps separate ones for its default and visibility
+    # stores), and not the fact that CONN_MAX_AGE now holds a connection open per
+    # ASGI worker thread instead of returning it after each request. The theoretical
+    # memory argument against 200 did not survive contact with measurement either —
+    # this container idles at 380M of its 1536M.
+    # work_mem stays at 8MB for the same reason: it is per sort, so raising it
+    # multiplies against whatever the real connection count turns out to be.
     command: >
       postgres
       -c max_connections=200
       -c shared_buffers=256MB
+      -c effective_cache_size=1152MB
+      -c work_mem=8MB
+      -c maintenance_work_mem=128MB
+      -c random_page_cost=1.1
       -c idle_in_transaction_session_timeout=30000
       -c statement_timeout=300000
     environment:
@@ -16,6 +44,10 @@ services:
       - POSTGRES_PORT=${POSTGRES_PORT}
     ports:
       - "127.0.0.1:5432:5432"
+    # Docker gives a container 64M of /dev/shm; parallel query workers allocate
+    # their shared memory there and fail with "could not resize shared memory
+    # segment" on the aggregate-heavy scan-summary queries.
+    shm_size: 256mb
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     networks:
@@ -29,34 +61,63 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
+          # shared_buffers is 256MB, so 1.5G is ample headroom for postgres.
+          memory: 1536M
+          cpus: '1.0'
         reservations:
-          memory: 1G
+          memory: 512M
 
   redis:
     restart: always
-    image: "redis:alpine"
-    command: redis-server --requirepass "${REDIS_PASSWORD}"
+    logging: *default-logging
+    # Pinned to the 8.10 line: Redis cannot load an RDB written by a newer
+    # release, so the tag only moves forward on purpose. Upgrading notes in
+    # documents/upgrading-infrastructure.md.
+    image: "redis:8.10-alpine"
+    # maxmemory sits below the 768M cgroup limit so Redis evicts instead of
+    # being OOM-killed: a kill plus `restart: always` brings it back empty,
+    # which silently drops the live Channels groups and the Django cache.
+    # This db holds only ephemeral state (Channels, cache, scan:logs:* streams),
+    # so RDB snapshots buy nothing and their fork would spike memory exactly
+    # when the instance is already near the ceiling.
+    command: redis-server --requirepass "${REDIS_PASSWORD}" --maxmemory 640mb --maxmemory-policy allkeys-lru --save ""
     hostname: redis
+    environment:
+      # Read by the healthcheck below, so the password stays out of any argv.
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     networks:
       - r3ngine_network
+    healthcheck:
+      # REDISCLI_AUTH instead of `redis-cli -a`, which would place the password
+      # in its own argv where any `ps` inside the container can read it.
+      # `$$` keeps compose from interpolating — the container shell expands it.
+      test: [ "CMD-SHELL", 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG' ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 768M
         reservations:
-          memory: 512M
+          memory: 256M
 
   web:
     build:
       context: ../
-      dockerfile: docker/web/Dockerfile
+      dockerfile: docker/web/${WEB_DOCKERFILE:-Dockerfile}
     entrypoint: /usr/src/app/entrypoint.sh
     restart: always
+    logging: *default-logging
     init: true
-    image: docker.pkg.github.com/whiterabb17/r3ngine/r3ngine:latest
+    # Tag of the locally built image, shared with the orchestrator and executor
+    # below. Point R3NGINE_IMAGE at a registry image built from this fork to
+    # deploy without building.
+    image: ${R3NGINE_IMAGE:-r3ngine:local}
     environment:
       - DEBUG=${DEBUG:-0}
+      - LLM_ENABLED=${LLM_ENABLED:-0}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,web,nginx}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - DOMAIN_NAME=${DOMAIN_NAME}
@@ -69,11 +130,18 @@ services:
       - DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL}
       - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD}
       - POSTGRES_SSLMODE=${POSTGRES_SSLMODE}
+      # No persistent database connections in this process. It serves ASGI under
+      # a uvicorn worker and does not reuse them: they are opened, used once and
+      # abandoned until something reaps them. The Temporal worker keeps the
+      # default, where every activity closes its own connection.
+      - DJANGO_CONN_MAX_AGE=0
       - NEO4J_URI=${NEO4J_URI}
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - TEMPORAL_HOST=temporal:7233
       - TEMPORAL_NAMESPACE=default
+      # Control-port password of the optional tor service (profile "tor").
+      - TOR_CONTROL_PASSWORD=${TOR_CONTROL_PASSWORD:-}
     volumes:
       - ../web:/usr/src/app
       - ../frontend:/usr/src/app/frontend
@@ -87,31 +155,79 @@ services:
       - static_volume:/usr/src/app/staticfiles/
       #- plugins_data:/usr/src/app/plugins_data
       - ../secrets/certs/ca.crt:/usr/src/app/ca.crt:ro
-      - /var/run/docker.sock:/var/run/docker.sock
+      # No /var/run/docker.sock: plugin restarts exit the process (restart: always),
+      # tool probes run on the orchestrator, and Tor/Ollama are profile services.
       - ./web/entrypoint.sh:/usr/src/app/entrypoint.sh:ro
-      - exploitdb:/usr/src/exploitdb
       - assessments_data:/usr/src/assessments
     ports:
-      - "8000:8000"
-      - "5173:5173"
+      # Loopback only: nginx reaches gunicorn over the compose network, so
+      # publishing these on 0.0.0.0 only offered a way around nginx and TLS.
+      # 5173 is the Vite dev server (DEBUG=1 only) and is never proxied.
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:5173:5173"
     depends_on:
-      - db
-      - redis
+      # The entrypoint runs `migrate` immediately, so a bare dependency let it
+      # race an unready postgres.
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       r3ngine_network:
         aliases:
           - rengine
           - r3ngine
+    healthcheck:
+      # Any HTTP status counts as healthy — the point is that the ASGI loop
+      # still answers. A plain port check would not catch a wedged worker,
+      # because the kernel keeps accepting connections into the backlog.
+      test: [ "CMD-SHELL", "curl -sS -o /dev/null -m 10 http://127.0.0.1:8000/ || exit 1" ]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 120s
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 3G
+          cpus: '2.0'
         reservations:
           memory: 1G
 
+  r3ngine-mcp:
+    # Opt-in: the build context is a separate repository that has to be cloned
+    # next to this one first (see documents/mcp.md). Without the profile, a
+    # missing ../r3ngine-mcp would fail the build for the whole stack.
+    profiles: ["mcp"]
+    build:
+      context: ../r3ngine-mcp
+      dockerfile: Dockerfile
+    restart: always
+    logging: *default-logging
+    environment:
+      - MCP_TRANSPORT=http
+      - MCP_BIND=0.0.0.0
+      - MCP_PORT=3100
+      - R3NGINE_URL=http://web:8000
+      - MCP_UNAUTH_MAX=10
+      - MCP_UNAUTH_WINDOW_MS=60000
+    networks:
+      - r3ngine_network
+    depends_on:
+      - web
+    expose:
+      - "3100"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+
   proxy:
     restart: always
-    image: nginx:alpine
+    logging: *default-logging
+    image: nginx:1.31-alpine
     ports:
       - 8082:8082/tcp
       - 443:443/tcp
@@ -135,13 +251,16 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
-        reservations:
           memory: 256M
+        reservations:
+          memory: 128M
 
   neo4j:
-    image: neo4j:5.12.0
+    # 5.26 is the Neo4j 5 LTS line. A store opened by 5.26 no longer starts on
+    # 5.12, so going back means restoring a backup taken before the upgrade.
+    image: neo4j:5.26-community
     restart: always
+    logging: *default-logging
     # Override entrypoint to remove stale PID file before each start.
     # The PID file survives stop (non-remove) cycles in the container's writable
     # layer and makes Neo4j refuse to launch with "already running".
@@ -155,8 +274,12 @@ services:
     environment:
       - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
       - NEO4J_PLUGINS=["apoc"]
+      # heap + pagecache must leave room for the JVM's own overhead (metaspace,
+      # thread stacks, direct buffers) inside the 2560M container limit. At
+      # 1536 + 512 that was about 512M, which the container was already using
+      # 1.6G of — one GC pause away from an OOM kill.
       - NEO4J_server_memory_heap_initial__size=768M
-      - NEO4J_server_memory_heap_max__size=1536M
+      - NEO4J_server_memory_heap_max__size=1024M
       - NEO4J_server_memory_pagecache_size=512M
     volumes:
       - neo4j_data:/data
@@ -171,17 +294,28 @@ services:
     deploy:
       resources:
         limits:
-          memory: 3G
+          # heap_max 1536M + pagecache 512M + JVM overhead; 3G was slack the
+          # host cannot back once the scanners are hot.
+          memory: 2560M
+          cpus: '1.0'
         reservations:
           memory: 1G
 
+  # Optional services. Enable with COMPOSE_PROFILES=tor,ollama in .env (the
+  # Makefile then includes them in every target) or start one directly with
+  # `make up-tor` / `make up-ollama`. The application only checks that they
+  # answer on the compose network; it never starts or stops them.
   tor:
+    profiles: ["tor"]
     build:
       context: ../web/tor
     image: r3ngine-tor:latest
-    container_name: tor
-    restart: "no"
-    profiles: ["tor"]
+    restart: always
+    logging: *default-logging
+    environment:
+      # Shared with web and the orchestrator, which authenticate on the control
+      # port to request new circuits. The entrypoint refuses to start without it.
+      - TOR_CONTROL_PASSWORD=${TOR_CONTROL_PASSWORD:-}
     networks:
       - r3ngine_network
     deploy:
@@ -191,44 +325,119 @@ services:
         reservations:
           memory: 64M
 
-  temporal:
-    image: temporalio/auto-setup:1.22.4
+  ollama:
+    profiles: ["ollama"]
+    build:
+      context: ./ollama
+      # nvidia.Dockerfile / amd.Dockerfile select the GPU images; device
+      # passthrough still has to be configured on the host.
+      dockerfile: ${OLLAMA_DOCKERFILE:-Dockerfile}
+    image: r3ngine-ollama:latest
     restart: always
-    ports:
-      - "127.0.0.1:7233:7233"
+    logging: *default-logging
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - r3ngine_network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  # Temporal runs as three services: a one-shot schema job, the server, and a
+  # one-shot job that registers the "default" namespace. temporalio/auto-setup
+  # did all three in one container, but it is a development image and stopped
+  # at 1.29. An existing database is moved between releases with
+  # scripts/temporal_upgrade.sh — see documents/upgrading-infrastructure.md.
+  temporal-schema:
+    image: temporalio/admin-tools:1.31.3
+    restart: on-failure:5
+    logging: *default-logging
+    entrypoint: [ "/bin/sh", "/scripts/setup-schema.sh" ]
     environment:
-      - DB=postgresql
       - DB_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PWD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_SEEDS=db
+    volumes:
+      - ./temporal/setup-schema.sh:/scripts/setup-schema.sh:ro
     depends_on:
       db:
         condition: service_healthy
     networks:
       - r3ngine_network
+
+  temporal:
+    image: temporalio/server:1.31.3
+    restart: always
+    logging: *default-logging
+    ports:
+      - "127.0.0.1:7233:7233"
+    environment:
+      # postgres12 selects the SQL advanced visibility store; the "postgresql"
+      # plugin meant standard visibility, which Temporal removed in 1.24.
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD}
+      - POSTGRES_SEEDS=db
+    volumes:
+      # The server refuses to start without a dynamic config file.
+      - ./temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      temporal-schema:
+        condition: service_completed_successfully
+    networks:
+      - r3ngine_network
     healthcheck:
-      test: [ "CMD", "tctl", "namespace", "list" ]
+      # The server image ships no CLI, so ask the frontend's HTTP API (port 7243)
+      # for the namespace the workers use: healthy means ready for them. It binds
+      # the container's network address, not loopback, hence "temporal:" rather
+      # than localhost.
+      test: [ "CMD", "wget", "-q", "-O", "/dev/null", "http://temporal:7243/api/v1/namespaces/default" ]
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 60s
     deploy:
       resources:
         limits:
-          memory: 2G
-        reservations:
           memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
 
+  temporal-create-namespace:
+    image: temporalio/admin-tools:1.31.3
+    restart: on-failure:5
+    logging: *default-logging
+    entrypoint: [ "/bin/sh", "/scripts/create-namespace.sh" ]
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - DEFAULT_NAMESPACE=default
+      # Same retention auto-setup gave the namespace.
+      - DEFAULT_NAMESPACE_RETENTION=24h
+    volumes:
+      - ./temporal/create-namespace.sh:/scripts/create-namespace.sh:ro
+    depends_on:
+      temporal:
+        condition: service_started
+    networks:
+      - r3ngine_network
 
   temporal-python-orchestrator:
-    image: docker.pkg.github.com/whiterabb17/r3ngine/r3ngine:latest
+    image: ${R3NGINE_IMAGE:-r3ngine:local}
     restart: always
+    logging: *default-logging
     init: true
     entrypoint: /usr/src/app/temporal-entrypoint.sh
     environment:
       - DEBUG=${DEBUG:-0}
+      - LLM_ENABLED=${LLM_ENABLED:-0}
       - TEMPORAL_HOST=temporal:7233
       - TEMPORAL_NAMESPACE=default
       - POSTGRES_DB=${POSTGRES_DB}
@@ -242,9 +451,15 @@ services:
       - NEO4J_URI=${NEO4J_URI}
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      # TorNewCircuitActivity rotates circuits from here (profile "tor").
+      - TOR_CONTROL_PASSWORD=${TOR_CONTROL_PASSWORD:-}
     depends_on:
-      #temporal:
-      #  condition: service_healthy
+      temporal:
+        condition: service_healthy
+      # Not needed for ordering (temporal turns healthy once the namespace
+      # exists), but `make up` names its services, and this is what starts the job.
+      temporal-create-namespace:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
       neo4j:
@@ -259,7 +474,6 @@ services:
       - tool_config:/root/.config
       - static_volume:/usr/src/app/staticfiles/
       - ./temporal-python-orchestrator/entrypoint.sh:/usr/src/app/temporal-entrypoint.sh:ro
-      - exploitdb:/usr/src/exploitdb
     networks:
       - r3ngine_network
     healthcheck:
@@ -267,17 +481,21 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      # The entrypoint fetches wordlists and template repos before the worker
+      # process exists; 30s marked a normally-starting container unhealthy.
+      start_period: 300s
     deploy:
       resources:
         limits:
-          memory: 4G
+          memory: 2G
+          cpus: '1.5'
         reservations:
-          memory: 3G
+          memory: 1G
 
   temporal-go-executor:
-    image: docker.pkg.github.com/whiterabb17/r3ngine/r3ngine:latest
+    image: ${R3NGINE_IMAGE:-r3ngine:local}
     restart: always
+    logging: *default-logging
     init: true
     entrypoint: /usr/src/app/executor-entrypoint.sh
     environment:
@@ -290,8 +508,8 @@ services:
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_PORT=${POSTGRES_PORT}
     depends_on:
-      #temporal:
-      #  condition: service_healthy
+      temporal:
+        condition: service_healthy
       db:
         condition: service_healthy
     volumes:
@@ -304,7 +522,6 @@ services:
       - tool_config:/root/.config
       - static_volume:/usr/src/app/staticfiles/
       - ./temporal-go-executor/entrypoint.sh:/usr/src/app/executor-entrypoint.sh:ro
-      - exploitdb:/usr/src/exploitdb
     networks:
       - r3ngine_network
     healthcheck:
@@ -312,13 +529,19 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      # Same reason as the orchestrator: setup runs long before the binary execs.
+      start_period: 300s
     deploy:
       resources:
         limits:
-          memory: 8G
-        reservations:
+          # The scan tools (nuclei et al.) run here. Uncapped CPU let them take
+          # all 8 vCPU and starve the web workers until gunicorn SIGKILLed them,
+          # which surfaced as nginx 502 "upstream prematurely closed connection"
+          # on unrelated endpoints. Keep the scanners boxed in.
           memory: 4G
+          cpus: '3.0'
+        reservations:
+          memory: 1G
     #memswap_limit: 9G
 
 networks:
@@ -347,8 +570,6 @@ volumes:
     name: r3ngine_neo4j_data
   plugins_data:
     name: r3ngine_plugins_data
-  exploitdb:
-    name: r3ngine_exploitdb
   assessments_data:
     name: r3ngine_assessments_data
 

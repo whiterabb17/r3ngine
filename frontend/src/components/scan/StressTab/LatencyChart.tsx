@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useStressStore } from '../../../store/stressStore';
+import type { EndpointStressMetrics } from '../../../types/stressTesting';
 
 interface LatencyChartProps {
-  data: any[];
+  data: Pick<EndpointStressMetrics, 'timestamp' | 'avg_latency' | 'p95_latency' | 'p99_latency'>[];
 }
 
 export const LatencyChart: React.FC<LatencyChartProps> = ({ data }) => {
@@ -62,8 +63,8 @@ export const LatencyChart: React.FC<LatencyChartProps> = ({ data }) => {
   }, [data]);
 
   const onEvents = {
-    dataZoom: (params: any) => {
-      // Stub for mapping zoom level to time range 
+    dataZoom: () => {
+      // Stub for mapping zoom level to time range
     }
   };
 

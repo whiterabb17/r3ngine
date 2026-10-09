@@ -168,7 +168,7 @@ class TestRunLinkedint(TestCase):
         result = run_linkedint('TargetCorp', scan.id)
         self.assertEqual(result, [])
 
-    @patch('reNgine.tasks.osint.LinkedInScraper')
+    @patch('reNgine.tasks.osint.people.LinkedInScraper')
     def test_returns_result_string_on_success(self, mock_cls):
         LinkedInCredentials.objects.create(
             id=1, username='u', cookies_json='[]', is_valid=False
@@ -189,7 +189,7 @@ class TestRunLinkedint(TestCase):
         result = run_linkedint('TargetCorp', scan.id)
         self.assertEqual(result, ['LinkedIn Intelligence processed 1 employees for TargetCorp'])
 
-    @patch('reNgine.tasks.osint.LinkedInScraper')
+    @patch('reNgine.tasks.osint.people.LinkedInScraper')
     def test_notes_are_logged_on_auth_failure(self, mock_cls):
         LinkedInCredentials.objects.create(
             id=1, username='u', cookies_json='', is_valid=False
@@ -212,7 +212,7 @@ class TestRunLinkedint(TestCase):
         self.assertIn('[OSINT][LinkedIn]', ' '.join(cm.output))
         self.assertEqual(result, ['LinkedIn Intelligence processed 0 employees for TargetCorp'])
 
-    @patch('reNgine.tasks.osint.LinkedInScraper')
+    @patch('reNgine.tasks.osint.people.LinkedInScraper')
     def test_never_raises_on_unexpected_exception(self, mock_cls):
         LinkedInCredentials.objects.create(
             id=1, username='u', cookies_json='[]', is_valid=False

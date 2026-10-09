@@ -53,7 +53,7 @@ export const AssessmentStatusTimeline: React.FC<Props> = ({ currentStage, progre
           <Box sx={{ maxHeight: 200, overflow: 'auto', bgcolor: 'background.default', p: 1, borderRadius: 1 }}>
             {events.slice().reverse().map((event, idx) => (
               <Typography key={idx} variant="caption" sx={{ display: 'block', mb: 0.5 }}>
-                [{new Date(event.timestamp).toLocaleTimeString()}] {event.event_type} - {JSON.stringify(event.data)}
+                [{new Date(event.receivedAt).toLocaleTimeString()}] {event.type} - {JSON.stringify(event.data)}
               </Typography>
             ))}
           </Box>

@@ -4,6 +4,16 @@ export interface Engine {
   yaml_configuration: string;
   default_engine: boolean;
   tasks: string[];
+  /** The tasks a subscan can run; `tasks` also lists settings-only YAML sections. */
+  subscan_tasks?: string[];
+}
+
+/** Row of `GET /api/listConfigurations/` (`ConfigurationSerializer`, all `Configuration` fields). */
+export interface Configuration {
+  id: number;
+  name: string;
+  short_name: string;
+  content: string;
 }
 
 export interface Wordlist {

@@ -27,6 +27,9 @@ class FakeSelf:
 
 class TestRunSpoofcheck(TestCase):
     def setUp(self):
+        installed = patch('reNgine.osint.domain_security._spoofy_installed', return_value=True)
+        installed.start()
+        self.addCleanup(installed.stop)
         self.domain = Domain.objects.create(name='example-test.local')
         engine = EngineType.objects.create(
             engine_name='Test',
@@ -42,6 +45,16 @@ class TestRunSpoofcheck(TestCase):
     # ------------------------------------------------------------------
     # JSON output path (Spoofy -o json)
     # ------------------------------------------------------------------
+
+    @patch('reNgine.osint.domain_security._spoofy_installed', return_value=False)
+    @patch('reNgine.osint.domain_security.run_command')
+    def test_run_spoofcheck_skips_when_spoofy_missing(self, mock_run, _installed):
+        from reNgine.osint.domain_security import run_spoofcheck
+
+        run_spoofcheck(FakeSelf(), 'example-test.local', self.scan, '/tmp')
+
+        mock_run.assert_not_called()
+        self.assertFalse(OsintStaging.objects.filter(scan_history=self.scan).exists())
 
     @patch('reNgine.osint.domain_security.run_command')
     def test_run_spoofcheck_saves_result_json(self, mock_run):

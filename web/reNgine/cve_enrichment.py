@@ -60,7 +60,7 @@ class CVEEnrichmentService:
     
     # ==================== Public API ====================
     
-    def enrich_cve(self, cve_name: str) -> Optional[CveId]:
+    def enrich_cve(self, cve_name: str, force: bool = False) -> Optional[CveId]:
         """
         Fetch and store CVE metadata from NVD and EPSS APIs.
         
@@ -68,6 +68,7 @@ class CVEEnrichmentService:
         
         Args:
             cve_name (str): CVE identifier, e.g., 'CVE-2024-1234'
+            force (bool): When True, bypass the 7-day local enrichment skip.
         
         Returns:
             CveId: Updated or created CveId object, or None if enrichment fails
@@ -101,11 +102,19 @@ class CVEEnrichmentService:
             # We don't perform external enrichment for non-CVE strings, just return
             return cve_obj
         
-        # Skip re-enrichment if recently updated (within 7 days)
-        if not created and cve_obj.last_modified_date:
-            days_old = (timezone.now() - cve_obj.last_modified_date).days
-            if days_old < 7 and cve_obj.cvss_v31_base_score is not None:
-                logger.debug(f"CVE {cve_name} recently enriched, skipping")
+        # Skip re-enrichment if we recently enriched locally (within 7 days).
+        # Do NOT use NVD lastModified here — that is upstream metadata and is
+        # often weeks/months old, which caused EnrichScanCVEsActivity to
+        # re-hammer every CVE, blow the Temporal heartbeat, and retry forever.
+        if (
+            not force
+            and not created
+            and cve_obj.last_enriched_at
+            and cve_obj.cvss_v31_base_score is not None
+        ):
+            days_old = (timezone.now() - cve_obj.last_enriched_at).days
+            if days_old < 7:
+                logger.debug("CVE %s recently enriched, skipping", cve_name)
                 return cve_obj
         
         # 1. Official NVD API (Primary Source)
@@ -113,31 +122,32 @@ class CVEEnrichmentService:
             self._enrich_from_nvd(cve_obj)
         except Exception as e:
             if "404" in str(e):
-                logger.debug(f"NVD enrichment not found for {cve_name}")
+                logger.debug("NVD enrichment not found for %s", cve_name)
             else:
-                logger.warning(f"NVD enrichment failed for {cve_name}: {e}")
+                logger.warning("NVD enrichment failed for %s: %s", cve_name, e)
         
         try:
             self._enrich_from_epss(cve_obj)
         except Exception as e:
-            logger.warning(f"EPSS enrichment failed for {cve_name}: {e}")
+            logger.warning("EPSS enrichment failed for %s: %s", cve_name, e)
 
         try:
             self._enrich_from_vulnx(cve_obj)
         except Exception as e:
-            logger.warning(f"vulnx enrichment failed for {cve_name}: {e}")
+            logger.warning("vulnx enrichment failed for %s: %s", cve_name, e)
 
         try:
             self._enrich_from_sploitscan(cve_obj)
         except Exception as e:
-            logger.warning(f"SploitScan enrichment failed for {cve_name}: {e}")
+            logger.warning("SploitScan enrichment failed for %s: %s", cve_name, e)
 
         try:
             self._generate_cve_ai_analysis(cve_obj)
         except Exception as e:
-            logger.warning(f"AI risk assessment failed for {cve_name}: {e}")
+            logger.warning("AI risk assessment failed for %s: %s", cve_name, e)
 
-        # Save and return
+        # Stamp local enrichment time (keep last_modified_date as NVD's value).
+        cve_obj.last_enriched_at = timezone.now()
         cve_obj.save()
         return cve_obj
     
@@ -161,7 +171,7 @@ class CVEEnrichmentService:
                     results[cve_name] = cve_obj
             except Exception as e:
                 print(f"DEBUG: Exception in enrich_cve: {e}")
-                logger.error(f"Failed to enrich {cve_name}: {e}", exc_info=True)
+                logger.error("Failed to enrich %s: %s", cve_name, e, exc_info=True)
         
         print(f"DEBUG: enrich_multiple_cves returning {len(results)} results")
         return results
@@ -205,7 +215,7 @@ class CVEEnrichmentService:
             vulns = kev_data.get("vulnerabilities", [])
             cve_names = [v["cveID"] for v in vulns if "cveID" in v]
             
-            logger.info(f"CISA KEV catalog contains {len(cve_names)} vulnerabilities")
+            logger.info("CISA KEV catalog contains %s vulnerabilities", len(cve_names))
             
             # Batch update all matching CveIds
             updated_count = CveId.objects.filter(
@@ -218,7 +228,7 @@ class CVEEnrichmentService:
             )
             new_count = len([c for c in cve_names if c not in existing_names])
             
-            logger.info(f"CISA KEV sync: {updated_count} updated, {new_count} new")
+            logger.info("CISA KEV sync: %s updated, %s new", updated_count, new_count)
             
             return {
                 'updated': updated_count,
@@ -228,7 +238,7 @@ class CVEEnrichmentService:
             }
         
         except Exception as e:
-            logger.error(f"Failed to synchronize CISA KEV catalog: {e}")
+            logger.error("Failed to synchronize CISA KEV catalog: %s", e)
             return {
                 'updated': 0,
                 'new': 0,
@@ -302,11 +312,11 @@ class CVEEnrichmentService:
                 EpssFeedData.objects.bulk_create(batch, ignore_conflicts=True)
                 inserted_count += len(batch)
 
-            logger.info(f"EPSS catalog sync complete: {inserted_count} records inserted.")
+            logger.info("EPSS catalog sync complete: %s records inserted.", inserted_count)
             return {'inserted': inserted_count, 'errors': 0}
 
         except Exception as e:
-            logger.error(f"Failed to synchronize EPSS catalog: {e}")
+            logger.error("Failed to synchronize EPSS catalog: %s", e)
             return {'inserted': 0, 'errors': 1}
     
     # ==================== Private Methods ====================
@@ -324,7 +334,7 @@ class CVEEnrichmentService:
         """
         # Circuit breaker to prevent 429s from flooding
         if cache.get('nvd_api_unavailable'):
-            logger.debug(f"NVD API paused, skipping enrichment for {cve_obj.name}")
+            logger.debug("NVD API paused, skipping enrichment for %s", cve_obj.name)
             return
 
         # Build request with API key if available
@@ -334,7 +344,7 @@ class CVEEnrichmentService:
         
         params = {'cveId': cve_obj.name}
         
-        logger.debug(f"Fetching NVD data for {cve_obj.name}...")
+        logger.debug("Fetching NVD data for %s...", cve_obj.name)
         
         response = requests.get(
             self.NVD_API_BASE,
@@ -344,7 +354,7 @@ class CVEEnrichmentService:
         )
         
         if response.status_code in [429, 502, 503, 504]:
-            logger.warning(f"NVD API unavailable ({response.status_code}), pausing requests for 15 minutes")
+            logger.warning("NVD API unavailable (%s), pausing requests for 15 minutes", response.status_code)
             cache.set('nvd_api_unavailable', True, 900)
             
         response.raise_for_status()
@@ -353,7 +363,7 @@ class CVEEnrichmentService:
         vulns = data.get("vulnerabilities", [])
         
         if not vulns:
-            logger.debug(f"No NVD data found for {cve_obj.name}")
+            logger.debug("No NVD data found for %s", cve_obj.name)
             return
         
         # Extract CVE data from first result
@@ -382,8 +392,7 @@ class CVEEnrichmentService:
             cve_obj.availability_impact = cvss_data.get("availabilityImpact")
             
             logger.debug(
-                f"NVD enrichment successful: {cve_obj.name} "
-                f"CVSS={cve_obj.cvss_v31_base_score}"
+                "NVD enrichment successful: %s CVSS=%s", cve_obj.name, cve_obj.cvss_v31_base_score
             )
     
     def _enrich_from_epss(self, cve_obj: CveId) -> None:
@@ -400,15 +409,14 @@ class CVEEnrichmentService:
 
         feed_data = EpssFeedData.objects.filter(cve_id=cve_obj.name).first()
         if not feed_data:
-            logger.debug(f"No local EPSS data found for {cve_obj.name}")
+            logger.debug("No local EPSS data found for %s", cve_obj.name)
             return
 
         cve_obj.epss_score = feed_data.epss_score
         cve_obj.epss_percentile = feed_data.epss_percentile
 
         logger.debug(
-            f"EPSS enrichment successful: {cve_obj.name} "
-            f"EPSS={cve_obj.epss_score} percentile={cve_obj.epss_percentile}"
+            "EPSS enrichment successful: %s EPSS=%s percentile=%s", cve_obj.name, cve_obj.epss_score, cve_obj.epss_percentile
         )
     
     def _enrich_from_vulnx(self, cve_obj: CveId) -> None:
@@ -550,7 +558,7 @@ class CVEEnrichmentService:
                 return make_aware(dt)
             return dt
         except (ValueError, TypeError) as e:
-            logger.warning(f"Failed to parse datetime '{date_str}': {e}")
+            logger.warning("Failed to parse datetime '%s': %s", date_str, e)
             return None
 
     def _enrich_from_sploitscan(self, cve_obj: CveId) -> None:
@@ -563,7 +571,7 @@ class CVEEnrichmentService:
         import tempfile
         import glob
         
-        logger.debug(f"Fetching SploitScan data for {cve_obj.name}...")
+        logger.debug("Fetching SploitScan data for %s...", cve_obj.name)
         
         with tempfile.TemporaryDirectory() as tmpdir:
             cmd = ["sploitscan", cve_obj.name, "-e", "json"]
@@ -578,7 +586,7 @@ class CVEEnrichmentService:
                 
                 json_files = glob.glob(os.path.join(tmpdir, "*.json"))
                 if not json_files:
-                    logger.debug(f"SploitScan failed to produce JSON for {cve_obj.name}")
+                    logger.debug("SploitScan failed to produce JSON for %s", cve_obj.name)
                     return
                 
                 with open(json_files[0], 'r') as f:
@@ -629,12 +637,12 @@ class CVEEnrichmentService:
                 if priority:
                     cve_obj.patching_priority = priority
                     
-                logger.info(f"SploitScan enrichment successful for {cve_obj.name}")
+                logger.info("SploitScan enrichment successful for %s", cve_obj.name)
                 
             except subprocess.TimeoutExpired:
-                logger.warning(f"SploitScan request timed out for {cve_obj.name}")
+                logger.warning("SploitScan request timed out for %s", cve_obj.name)
             except Exception as e:
-                logger.error(f"Error enriching {cve_obj.name} from SploitScan: {e}")
+                logger.error("Error enriching %s from SploitScan: %s", cve_obj.name, e)
 
     def _generate_cve_ai_analysis(self, cve_obj: CveId) -> None:
         """
@@ -646,7 +654,7 @@ class CVEEnrichmentService:
         if cve_obj.ai_risk_assessment:
             return
             
-        logger.debug(f"Generating AI risk assessment for {cve_obj.name}...")
+        logger.debug("Generating AI risk assessment for %s...", cve_obj.name)
         try:
             # We can use the existing report generator
             report_gen = LLMVulnerabilityReportGenerator(logger=logger)
@@ -671,11 +679,11 @@ class CVEEnrichmentService:
                 assessment = f"**Description**:\n{desc}\n\n**Impact**:\n{impact}\n\n**Mitigation**:\n{remediation}"
                 cve_obj.ai_risk_assessment = assessment
                 cve_obj.mitigation_ideas = remediation
-                logger.info(f"AI risk assessment generated for {cve_obj.name}")
+                logger.info("AI risk assessment generated for %s", cve_obj.name)
             else:
-                logger.warning(f"AI risk assessment failed for {cve_obj.name}: {response.get('error') if response else 'Unknown'}")
+                logger.warning("AI risk assessment failed for %s: %s", cve_obj.name, response.get('error') if response else 'Unknown')
         except Exception as e:
-            logger.error(f"Error generating AI risk assessment for {cve_obj.name}: {e}")
+            logger.error("Error generating AI risk assessment for %s: %s", cve_obj.name, e)
 
 
 class CVEBatchEnricher:
@@ -709,9 +717,9 @@ class CVEBatchEnricher:
                 self.service.enrich_cve(cve.name)
                 count += 1
             except Exception as e:
-                logger.error(f"Failed to enrich {cve.name}: {e}")
+                logger.error("Failed to enrich %s: %s", cve.name, e)
         
-        logger.info(f"Batch enrichment completed: {count}/{len(list(cves_to_enrich))} successful")
+        logger.info("Batch enrichment completed: %s/%s successful", count, len(list(cves_to_enrich)))
         return count
     
     def refresh_recent_cves(self, days: int = 30) -> int:
@@ -733,10 +741,10 @@ class CVEBatchEnricher:
         count = 0
         for cve in cves_to_refresh:
             try:
-                self.service.enrich_cve(cve.name)
+                self.service.enrich_cve(cve.name, force=True)
                 count += 1
             except Exception as e:
-                logger.error(f"Failed to refresh {cve.name}: {e}")
+                logger.error("Failed to refresh %s: %s", cve.name, e)
         
-        logger.info(f"Refresh completed: {count} CVEs")
+        logger.info("Refresh completed: %s CVEs", count)
         return count

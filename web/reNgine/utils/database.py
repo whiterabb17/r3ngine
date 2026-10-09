@@ -57,21 +57,21 @@ def bulk_import_targets(
 		try:
 			monitor_engine = EngineType.objects.filter(id=int(monitor_engine_id)).first()
 		except (ValueError, TypeError):
-			logger.warning(f"Invalid monitor_engine_id: {monitor_engine_id}")
+			logger.warning("Invalid monitor_engine_id: %s", monitor_engine_id)
 
 	for target in targets:
 		name = target.get('name', '').strip()
 		description = target.get('description', '')
 		
 		if not name:
-			logger.warning(f"Skipping target with empty name")
+			logger.warning("Skipping target with empty name")
 			continue
 		
 		is_domain = validators.domain(name)
 		is_ip = validators.ipv4(name) or validators.ipv6(name)
 		is_url = validators.url(name)
 
-		logger.info(f'{name} | Domain? {is_domain} | IP? {is_ip} | URL? {is_url}')
+		logger.info("%s | Domain? %s | IP? %s | URL? %s", name, is_domain, is_ip, is_url)
 
 		if is_domain:
 			target_obj = store_domain(name, project, description, h1_team_handle, starting_point_path, excluded_paths, in_scope_ips, secondary_domains)
@@ -80,7 +80,7 @@ def bulk_import_targets(
 		elif is_ip:
 			target_obj = store_ip(name, project, description, h1_team_handle, starting_point_path, excluded_paths, in_scope_ips, secondary_domains)
 		else:
-			logger.warning(f'{name} is not supported by reNgine')
+			logger.warning("%s is not supported by reNgine", name)
 			continue
 
 		if target_obj:
@@ -120,7 +120,7 @@ def bulk_import_targets(
 			for target in all_targets:
 				org.domains.add(target)
 
-			logger.info(f"{'Created' if created else 'Updated'} organization {org_name} with {len(all_targets)} targets")
+			logger.info("%s organization %s with %s targets", 'Created' if created else 'Updated', org_name, len(all_targets))
 
 	return new_targets_imported
 
@@ -139,7 +139,7 @@ def store_domain(domain_name, project, description, h1_team_handle, starting_poi
 	existing_domain = Domain.objects.filter(name=domain_name).first()
 
 	if existing_domain:
-		logger.info(f'Domain {domain_name} already exists. Updating project if necessary.')
+		logger.info("Domain %s already exists. Updating project if necessary.", domain_name)
 		if existing_domain.project != project:
 			existing_domain.project = project
 			existing_domain.save()
@@ -159,7 +159,7 @@ def store_domain(domain_name, project, description, h1_team_handle, starting_poi
 		secondary_domains=secondary_domains
 	)
 
-	logger.info(f'Added new domain {new_domain.name}')
+	logger.info("Added new domain %s", new_domain.name)
 
 	return new_domain
 
@@ -171,7 +171,7 @@ def store_url(url, project, description, h1_team_handle, starting_point_path=Non
 	domain = Domain.objects.filter(name=domain_name).first()
 
 	if domain:
-		logger.info(f'Domain {domain_name} already exists. Updating project if necessary.')
+		logger.info("Domain %s already exists. Updating project if necessary.", domain_name)
 		if domain.project != project:
 			domain.project = project
 			domain.save()
@@ -188,7 +188,7 @@ def store_url(url, project, description, h1_team_handle, starting_point_path=Non
 			in_scope_ips=in_scope_ips,
 			secondary_domains=secondary_domains
 		)
-		logger.info(f'Added new domain {domain.name}')
+		logger.info("Added new domain %s", domain.name)
 
 	EndPoint.objects.get_or_create(
 		target_domain=domain,
@@ -202,7 +202,7 @@ def store_ip(ip_address, project, description, h1_team_handle, starting_point_pa
 	domain = Domain.objects.filter(name=ip_address).first()
 	
 	if domain:
-		logger.info(f'Domain {ip_address} already exists. Updating project if necessary.')
+		logger.info("Domain %s already exists. Updating project if necessary.", ip_address)
 		if domain.project != project:
 			domain.project = project
 			domain.save()
@@ -219,7 +219,7 @@ def store_ip(ip_address, project, description, h1_team_handle, starting_point_pa
 			in_scope_ips=in_scope_ips,
 			secondary_domains=secondary_domains
 		)
-		logger.info(f'Added new domain {domain.name}')
+		logger.info("Added new domain %s", domain.name)
 	
 	ip_data = get_ip_info(ip_address)
 	ip, created = IpAddress.objects.get_or_create(address=ip_address)
@@ -243,7 +243,7 @@ def store_ip(ip_address, project, description, h1_team_handle, starting_point_pa
 		try:
 			loop.run_until_complete(_start())
 		except Exception as e:
-			logger.warning(f"Failed to start GeoLocalizeWorkflow for IP {ip_address}: {e}")
+			logger.warning("Failed to start GeoLocalizeWorkflow for IP %s: %s", ip_address, e)
 		finally:
 			loop.close()
 		

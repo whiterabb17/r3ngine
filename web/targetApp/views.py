@@ -74,7 +74,7 @@ def add_target(request, slug):
             # Multiple targets
             if multiple_targets:
                 bulk_targets = [t.rstrip() for t in request.POST['addTargets'].split('\n') if t]
-                logger.info(f'Adding multiple targets: {bulk_targets}')
+                logger.info("Adding multiple targets: %s", bulk_targets)
                 description = request.POST.get('targetDescription', '')
                 h1_team_handle = request.POST.get('targetH1TeamHandle', '')
                 organization_name = request.POST.get('targetOrganization')
@@ -95,7 +95,7 @@ def add_target(request, slug):
                     is_url = bool(validators.url(target))
 
                     # Set ip_domain / http_url based on type of input
-                    logger.info(f'{target} | Domain? {is_domain} | IP? {is_ip} | CIDR range? {is_range} | URL? {is_url}')
+                    logger.info("%s | Domain? %s | IP? %s | CIDR range? %s | URL? %s", target, is_domain, is_ip, is_range, is_url)
 
                     if is_domain:
                        domains.append(target)
@@ -131,7 +131,7 @@ def add_target(request, slug):
                             msg)
                         continue
 
-                    logger.info(f'IPs: {ips} | Domains: {domains} | URLs: {http_urls} | Ports: {ports}')
+                    logger.info("IPs: %s | Domains: %s | URLs: %s | Ports: %s", ips, domains, http_urls, ports)
 
                     for domain_name in domains:
                         if not Domain.objects.filter(name=domain_name).exists():
@@ -145,7 +145,7 @@ def add_target(request, slug):
                                 try:
                                     monitor_engine = EngineType.objects.filter(id=int(monitor_engine_id)).first()
                                 except (ValueError, TypeError):
-                                    logger.warning(f"Invalid monitor_engine_id: {monitor_engine_id}")
+                                    logger.warning("Invalid monitor_engine_id: %s", monitor_engine_id)
 
                             domain, created = Domain.objects.get_or_create(
                                 name=domain_name,
@@ -166,7 +166,7 @@ def add_target(request, slug):
 
                             added_target_count += 1
                             if created:
-                                logger.info(f'Added new domain {domain.name}')
+                                logger.info("Added new domain %s", domain.name)
 
                             if organization_name:
                                 organization = None
@@ -186,7 +186,7 @@ def add_target(request, slug):
                             target_domain=domain,
                             http_url=http_url)
                         if created:
-                            logger.info(f'Added new endpoint {endpoint.http_url}')
+                            logger.info("Added new endpoint %s", endpoint.http_url)
 
                     for ip_address in ips:
                         ip_data = get_ip_info(ip_address)
@@ -196,7 +196,7 @@ def add_target(request, slug):
                         ip.version = ip_data.version
                         ip.save()
                         if created:
-                            logger.warning(f'Added new IP {ip}')
+                            logger.warning("Added new IP %s", ip)
 
                     for port_number in ports:
                         res = get_port_service_description(port_number)
@@ -206,7 +206,7 @@ def add_target(request, slug):
                             description=res.get('description', '')
                         )
                         if created:
-                            logger.warning(f'Added new port {port_number} to DB')
+                            logger.warning("Added new port %s to DB", port_number)
 
             # Import from txt / csv
             elif 'import-txt-target' in request.POST or 'import-csv-target' in request.POST:
@@ -301,7 +301,7 @@ def add_target(request, slug):
                             try:
                                 monitor_engine = EngineType.objects.filter(id=int(monitor_engine_id)).first()
                             except (ValueError, TypeError):
-                                logger.warning(f"Invalid monitor_engine_id: {monitor_engine_id}")
+                                logger.warning("Invalid monitor_engine_id: %s", monitor_engine_id)
 
                         domain, created = Domain.objects.get_or_create(
                             name=ip,
@@ -322,7 +322,7 @@ def add_target(request, slug):
 
                         added_target_count += 1
                         if created:
-                            logger.info(f'Added new domain {domain.name}')
+                            logger.info("Added new domain %s", domain.name)
                         if is_ip:
                             ip_data = get_ip_info(ip)
                             ip, created = IpAddress.objects.get_or_create(address=ip)
@@ -331,7 +331,7 @@ def add_target(request, slug):
                             ip.version = ip_data.version
                             ip.save()
                             if created:
-                                logger.info(f'Added new IP {ip}')
+                                logger.info("Added new IP %s", ip)
 
         except Exception as e:
             logger.exception(e)

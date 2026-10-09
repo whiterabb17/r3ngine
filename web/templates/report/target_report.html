@@ -1,0 +1,917 @@
+{% load custom_tags %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Target Security Report — {{ domain.name }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+        @page {
+            size: A4;
+            margin: 20mm;
+            @bottom-left {
+                content: "{% if show_footer %}{{ footer_text }}{% else %}{{ company_name }} — Confidential{% endif %}";
+                font-family: 'Inter', sans-serif;
+                font-size: 8pt;
+                color: #64748b;
+            }
+            @bottom-right {
+                content: "Page " counter(page);
+                font-family: 'Inter', sans-serif;
+                font-size: 8pt;
+                color: #64748b;
+            }
+        }
+        @page cover-page {
+            margin: 0;
+            @bottom-left { content: none !important; }
+            @bottom-right { content: none !important; }
+        }
+        html {
+            color: #1e293b;
+            font-family: 'Inter', sans-serif;
+            font-size: 10pt;
+            line-height: 1.6;
+        }
+        body { margin: 0; padding: 0; }
+
+        .page-break { page-break-before: always; }
+        .no-break { page-break-inside: avoid; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .mb-8 { margin-bottom: 2rem; }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .text-muted { color: #64748b; }
+        .font-bold { font-weight: 600; }
+        .uppercase { text-transform: uppercase; letter-spacing: 0.05em; }
+
+        /* Severity colours */
+        .sev-critical { background-color: #991b1b; color: white; }
+        .sev-high     { background-color: #dc2626; color: white; }
+        .sev-medium   { background-color: #f97316; color: white; }
+        .sev-low      { background-color: #eab308; color: black; }
+        .sev-info     { background-color: #3b82f6; color: white; }
+        .sev-unknown  { background-color: #94a3b8; color: white; }
+
+        h1, h2, h3, h4 { color: {{ primary_color|default:"#0f172a" }}; font-weight: 600; }
+        h1 {
+            font-size: 22pt;
+            border-bottom: 2px solid {{ primary_color|default:"#0f172a" }};
+            padding-bottom: 3mm;
+            margin-bottom: 6mm;
+            break-after: avoid !important;
+        }
+        h2 { font-size: 16pt; margin-top: 8mm; margin-bottom: 4mm; break-after: avoid !important; }
+        h3 { font-size: 13pt; margin-top: 6mm; margin-bottom: 3mm; }
+        h4 { font-size: 11pt; margin-top: 4mm; margin-bottom: 2mm; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 6mm;
+            font-size: 9pt;
+        }
+        th {
+            background-color: #f1f5f9;
+            text-align: left;
+            padding: 2.5mm 3.5mm;
+            font-size: 8.5pt;
+            text-transform: uppercase;
+            color: #475569;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        td {
+            padding: 2.5mm 3.5mm;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: top;
+        }
+        tr:last-child td { border-bottom: none; }
+
+        /* Table of Contents */
+        .toc-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 2mm 0;
+            border-bottom: 1px dotted #cbd5e1;
+        }
+        .toc-item a { text-decoration: none; color: #1e293b; }
+        .toc-page { font-weight: 600; color: {{ primary_color|default:"#0f172a" }}; }
+        .toc-page::after { content: target-counter(attr(data-href), page); }
+
+        /* Cover */
+        #cover {
+            page: cover-page;
+            height: 297mm;
+            width: 210mm;
+            background-color: {{ secondary_color|default:"#0f172a" }};
+            position: relative;
+            overflow: hidden;
+            color: #ffffff;
+        }
+        .border-accent { position: absolute; border: 1px solid {{ primary_color|default:"#00f3ff" }}; opacity: 0.3; }
+        .accent-1 { top: 10mm; left: 10mm; right: 40mm; height: 1px; }
+        .accent-2 { top: 10mm; right: 10mm; bottom: 40mm; width: 1px; }
+        .accent-3 { bottom: 10mm; right: 10mm; left: 40mm; height: 1px; }
+        .accent-4 { bottom: 10mm; left: 10mm; top: 40mm; width: 1px; }
+        .corner-mark {
+            position: absolute;
+            width: 30mm; height: 30mm;
+            border: 4px solid {{ primary_color|default:"#00f3ff" }};
+            opacity: 0.8;
+        }
+        .top-left { top: 0; left: 0; border-right: none; border-bottom: none; }
+        .content-box { position: absolute; top: 60mm; left: 20mm; right: 20mm; }
+        .report-type-tag {
+            display: inline-block;
+            background-color: {{ primary_color|default:"#00f3ff" }};
+            color: {{ secondary_color|default:"#0f172a" }};
+            padding: 2mm 6mm;
+            font-size: 10pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 8mm;
+        }
+        .cover-report-title {
+            font-size: 38pt;
+            font-weight: 200;
+            line-height: 1;
+            margin: 0;
+            color: white;
+        }
+        .cover-report-title b { font-weight: 800; color: {{ primary_color|default:"#00f3ff" }}; }
+        .target-box {
+            margin-top: 16mm;
+            padding: 8mm;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.04);
+        }
+        .metadata-grid {
+            position: absolute;
+            bottom: 28mm;
+            left: 20mm;
+            right: 20mm;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8mm;
+            font-size: 9pt;
+        }
+        .meta-item label {
+            display: block;
+            color: {{ primary_color|default:"#00f3ff" }};
+            text-transform: uppercase;
+            font-weight: 700;
+            margin-bottom: 1mm;
+            opacity: 0.8;
+        }
+        .footer-strip {
+            position: absolute;
+            bottom: 0; left: 0;
+            width: 100%; height: 5mm;
+            background-color: {{ primary_color|default:"#00f3ff" }};
+        }
+
+        /* Charts */
+        .chart-container {
+            text-align: center;
+            padding: 4mm;
+            background: #ffffff;
+            border: 1px solid #f1f5f9;
+            border-radius: 2mm;
+            margin-bottom: 5mm;
+        }
+        .chart-img { max-width: 100%; height: auto; }
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5mm;
+            margin-bottom: 6mm;
+        }
+
+        /* Executive summary risk boxes */
+        .risk-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 4mm;
+            margin-bottom: 8mm;
+        }
+        .risk-box {
+            padding: 4mm;
+            border-radius: 2mm;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+        .risk-count { font-size: 22pt; font-weight: 700; display: block; }
+        .risk-label { font-size: 8pt; text-transform: uppercase; color: #64748b; }
+
+        /* Summary stats row */
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5mm;
+            margin-bottom: 8mm;
+        }
+        .stat-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 2mm;
+            padding: 5mm;
+            text-align: center;
+        }
+        .stat-value { font-size: 20pt; font-weight: 700; color: {{ primary_color|default:"#0f172a" }}; display: block; }
+        .stat-label { font-size: 8.5pt; color: #64748b; text-transform: uppercase; }
+
+        /* Vulnerability status badge */
+        .status-badge {
+            display: inline-block;
+            padding: 1mm 3mm;
+            border-radius: 1mm;
+            font-size: 8pt;
+            font-weight: 600;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .status-open         { background: #fee2e2; color: #991b1b; }
+        .status-resolved     { background: #dcfce7; color: #166534; }
+        .status-false_positive { background: #f1f5f9; color: #64748b; }
+        .status-accepted_risk  { background: #fefce8; color: #854d0e; }
+        .status-not_detected   { background: #f1f5f9; color: #94a3b8; }
+        .status-not_yet_found  { color: #94a3b8; }
+
+        /* Section intro boxes */
+        .section-intro {
+            background: #f8fafc;
+            border-left: 4px solid {{ primary_color|default:"#0f172a" }};
+            padding: 4mm 5mm;
+            margin-bottom: 6mm;
+            font-size: 9.5pt;
+        }
+
+        /* Delta diff table */
+        .diff-added   { color: #166534; font-weight: 500; }
+        .diff-removed { color: #991b1b; font-weight: 500; }
+        .diff-tag {
+            display: inline-block;
+            font-size: 7.5pt;
+            padding: 0.5mm 2mm;
+            border-radius: 1mm;
+            margin-right: 1mm;
+        }
+        .tag-added   { background: #dcfce7; color: #166534; }
+        .tag-removed { background: #fee2e2; color: #991b1b; }
+
+        /* Severity badge (inline) */
+        .sev-badge {
+            display: inline-block;
+            padding: 0.5mm 2.5mm;
+            border-radius: 1mm;
+            font-size: 8pt;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+
+<!-- ================================================ COVER ================================================ -->
+<article id="cover">
+    <div class="corner-mark top-left"></div>
+    <div class="border-accent accent-1"></div>
+    <div class="border-accent accent-2"></div>
+    <div class="border-accent accent-3"></div>
+    <div class="border-accent accent-4"></div>
+
+    <div class="content-box">
+        {% if company_logo %}
+        <img src="{{ company_logo }}" style="max-width:50mm; margin-bottom:10mm; display:block;" />
+        {% endif %}
+        <div class="report-type-tag">Target Security Report</div>
+        <p class="cover-report-title">Attack Surface<br><b>Intelligence</b></p>
+
+        <div class="target-box">
+            <div style="font-size:9pt; opacity:0.6; text-transform:uppercase; letter-spacing:1px; margin-bottom:2mm;">Target</div>
+            <div style="font-size:18pt; font-weight:700;">{{ domain.name }}</div>
+            {% if domain.description %}
+            <div style="font-size:9pt; opacity:0.7; margin-top:2mm;">{{ domain.description }}</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="metadata-grid">
+        <div class="meta-item">
+            <label>Report Period</label>
+            <span>{{ date_range.0|date:"d M Y" }} — {{ date_range.1|date:"d M Y" }}</span>
+        </div>
+        <div class="meta-item">
+            <label>Scans Analysed</label>
+            <span>{{ selected_scans|length }}</span>
+        </div>
+        <div class="meta-item">
+            <label>Unique Findings</label>
+            <span>{{ exec_summary.total_unique }}</span>
+        </div>
+    </div>
+
+    <div class="footer-strip"></div>
+</article>
+
+<!-- ================================================ TABLE OF CONTENTS ================================================ -->
+<section class="page-break" id="toc">
+    <h1>Table of Contents</h1>
+
+    <div class="toc-item">
+        <a href="#exec-summary">Executive Summary</a>
+        <span class="toc-page"><a data-href="#exec-summary"></a></span>
+    </div>
+    <div class="toc-item">
+        <a href="#trend-charts">Severity Trend &amp; Findings Timeline</a>
+        <span class="toc-page"><a data-href="#trend-charts"></a></span>
+    </div>
+    <div class="toc-item">
+        <a href="#vuln-timeline">Vulnerability Tracking Timeline</a>
+        <span class="toc-page"><a data-href="#vuln-timeline"></a></span>
+    </div>
+    {% if subdomain_delta %}
+    <div class="toc-item">
+        <a href="#subdomain-delta">Subdomain Changes</a>
+        <span class="toc-page"><a data-href="#subdomain-delta"></a></span>
+    </div>
+    {% endif %}
+    {% if attack_surface_trend %}
+    <div class="toc-item">
+        <a href="#attack-surface">Attack Surface Trend</a>
+        <span class="toc-page"><a data-href="#attack-surface"></a></span>
+    </div>
+    {% endif %}
+    {% if exposures %}
+    <div class="toc-item">
+        <a href="#exposures">Exposure Intelligence</a>
+        <span class="toc-page"><a data-href="#exposures"></a></span>
+    </div>
+    {% endif %}
+    {% if certificates %}
+    <div class="toc-item">
+        <a href="#certificates">Certificate Intelligence</a>
+        <span class="toc-page"><a data-href="#certificates"></a></span>
+    </div>
+    {% endif %}
+    {% if waf_info %}
+    <div class="toc-item">
+        <a href="#waf-info">WAF Detection</a>
+        <span class="toc-page"><a data-href="#waf-info"></a></span>
+    </div>
+    {% endif %}
+    {% if endpoints %}
+    <div class="toc-item">
+        <a href="#endpoints">Endpoints</a>
+        <span class="toc-page"><a data-href="#endpoints"></a></span>
+    </div>
+    {% endif %}
+    {% if directories %}
+    <div class="toc-item">
+        <a href="#directories">Directory Scans</a>
+        <span class="toc-page"><a data-href="#directories"></a></span>
+    </div>
+    {% endif %}
+    {% if s3_buckets %}
+    <div class="toc-item">
+        <a href="#s3-buckets">S3 Buckets</a>
+        <span class="toc-page"><a data-href="#s3-buckets"></a></span>
+    </div>
+    {% endif %}
+    {% if employees %}
+    <div class="toc-item">
+        <a href="#employees">Employee Intelligence</a>
+        <span class="toc-page"><a data-href="#employees"></a></span>
+    </div>
+    {% endif %}
+    {% if email_breaches %}
+    <div class="toc-item">
+        <a href="#email-breaches">Email Breaches</a>
+        <span class="toc-page"><a data-href="#email-breaches"></a></span>
+    </div>
+    {% endif %}
+    {% if secret_findings %}
+    <div class="toc-item">
+        <a href="#secrets">Secret Leaks</a>
+        <span class="toc-page"><a data-href="#secrets"></a></span>
+    </div>
+    {% endif %}
+</section>
+
+<!-- ================================================ EXECUTIVE SUMMARY ================================================ -->
+<section class="page-break" id="exec-summary">
+    <h1>Executive Summary</h1>
+
+    <div class="section-intro">
+        This report covers <strong>{{ selected_scans|length }} scans</strong> of
+        <strong>{{ domain.name }}</strong> from {{ date_range.0|date:"d M Y" }} to
+        {{ date_range.1|date:"d M Y" }}.
+        It identifies {{ exec_summary.total_unique }} unique vulnerabilities across the reporting period,
+        with {{ exec_summary.resolved_count }} remediated and
+        {{ exec_summary.new_in_latest }} new findings in the most recent scan.
+    </div>
+
+    <h3>Open Vulnerabilities by Severity (Latest Scan)</h3>
+    <div class="risk-grid">
+        <div class="risk-box">
+            <span class="risk-count" style="color:#991b1b;">{{ exec_summary.open_by_severity.critical }}</span>
+            <span class="risk-label">Critical</span>
+        </div>
+        <div class="risk-box">
+            <span class="risk-count" style="color:#dc2626;">{{ exec_summary.open_by_severity.high }}</span>
+            <span class="risk-label">High</span>
+        </div>
+        <div class="risk-box">
+            <span class="risk-count" style="color:#f97316;">{{ exec_summary.open_by_severity.medium }}</span>
+            <span class="risk-label">Medium</span>
+        </div>
+        <div class="risk-box">
+            <span class="risk-count" style="color:#ca8a04;">{{ exec_summary.open_by_severity.low }}</span>
+            <span class="risk-label">Low</span>
+        </div>
+        <div class="risk-box">
+            <span class="risk-count" style="color:#3b82f6;">{{ exec_summary.open_by_severity.info }}</span>
+            <span class="risk-label">Info</span>
+        </div>
+    </div>
+
+    <div class="summary-stats">
+        <div class="stat-box">
+            <span class="stat-value">{{ exec_summary.total_unique }}</span>
+            <span class="stat-label">Total Unique Findings</span>
+        </div>
+        <div class="stat-box">
+            <span class="stat-value" style="color:#166534;">{{ exec_summary.resolved_count }}</span>
+            <span class="stat-label">Remediated</span>
+        </div>
+        <div class="stat-box">
+            <span class="stat-value" style="color:#dc2626;">{{ exec_summary.new_in_latest }}</span>
+            <span class="stat-label">New in Latest Scan</span>
+        </div>
+    </div>
+
+    <h3>Scans Included</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Scan Date</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for scan in selected_scans %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>{{ scan.start_scan_date|date:"d M Y H:i" }}</td>
+                <td>{% if scan.scan_status == 2 %}Complete{% elif scan.scan_status == 1 %}Running{% elif scan.scan_status == 0 %}Pending{% else %}{{ scan.scan_status }}{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<!-- ================================================ TREND CHARTS ================================================ -->
+<section class="page-break" id="trend-charts">
+    <h1>Severity Trend &amp; Findings Timeline</h1>
+
+    {% if severity_trend_chart %}
+    <h3>Vulnerability Severity Trend Across Scans</h3>
+    <div class="chart-container">
+        <img class="chart-img" src="data:image/png;base64,{{ severity_trend_chart }}" alt="Severity trend chart" />
+    </div>
+    {% endif %}
+
+    {% if findings_timeline_chart %}
+    <h3>Findings &amp; Resolutions Timeline</h3>
+    <div class="chart-container">
+        <img class="chart-img" src="data:image/png;base64,{{ findings_timeline_chart }}" alt="Findings timeline chart" />
+    </div>
+    {% endif %}
+
+    <h3>Per-Scan Summary</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Scan Date</th>
+                <th>Critical</th>
+                <th>High</th>
+                <th>Medium</th>
+                <th>Low</th>
+                <th>Info</th>
+                <th>New Findings</th>
+                <th>Resolved</th>
+                <th>Open Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in severity_trend %}
+            {% with tl=findings_timeline|list_item:forloop.counter0 %}
+            <tr>
+                <td>{{ row.date|date:"d M Y" }}</td>
+                <td>{{ row.critical }}</td>
+                <td>{{ row.high }}</td>
+                <td>{{ row.medium }}</td>
+                <td>{{ row.low }}</td>
+                <td>{{ row.info }}</td>
+                <td>{% if tl %}{{ tl.new_findings }}{% else %}—{% endif %}</td>
+                <td>{% if tl %}{{ tl.resolved }}{% else %}—{% endif %}</td>
+                <td>{% if tl %}{{ tl.open_total }}{% else %}—{% endif %}</td>
+            </tr>
+            {% endwith %}
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<!-- ================================================ VULNERABILITY TIMELINE ================================================ -->
+<section class="page-break" id="vuln-timeline">
+    <h1>Vulnerability Tracking Timeline</h1>
+
+    <div class="section-intro">
+        Each row tracks a unique vulnerability across all selected scans by its fingerprint.
+        Colour coding: <span class="status-badge status-open">Open</span>
+        <span class="status-badge status-resolved">Resolved</span>
+        <span class="status-badge status-false_positive">False Positive</span>
+        <span class="status-badge status-not_detected">Not Detected</span>
+    </div>
+
+    {% if vuln_timeline %}
+    <table>
+        <thead>
+            <tr>
+                <th>Vulnerability</th>
+                <th>Sev</th>
+                <th>Hosts</th>
+                {% for scan in selected_scans %}
+                <th>{{ scan.start_scan_date|date:"d M" }}</th>
+                {% endfor %}
+                <th>Remediated</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in vuln_timeline %}
+            <tr class="no-break">
+                <td style="font-weight:500;">{{ entry.name }}</td>
+                <td>
+                    {% if entry.severity == 4 %}<span class="sev-badge sev-critical">C</span>
+                    {% elif entry.severity == 3 %}<span class="sev-badge sev-high">H</span>
+                    {% elif entry.severity == 2 %}<span class="sev-badge sev-medium">M</span>
+                    {% elif entry.severity == 1 %}<span class="sev-badge sev-low">L</span>
+                    {% else %}<span class="sev-badge sev-info">I</span>{% endif %}
+                </td>
+                <td style="font-size:8.5pt;">
+                    {% for host in entry.affected_hosts %}{{ host }}{% if not forloop.last %}<br/>{% endif %}{% endfor %}
+                </td>
+                {% for ss in entry.scan_statuses %}
+                <td class="text-center">
+                    {% if ss.status != 'not_yet_found' %}
+                    <span class="status-badge status-{{ ss.status }}">{{ ss.label }}</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+                <td style="font-size:8.5pt;">
+                    {% if entry.remediation_date %}{{ entry.remediation_date|date:"d M Y" }}
+                    {% if entry.remediation_type %}<br/><span class="text-muted">({{ entry.remediation_type }})</span>{% endif %}
+                    {% else %}—{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted">No vulnerability history entries found for the selected scans.</p>
+    {% endif %}
+</section>
+
+<!-- ================================================ SUBDOMAIN CHANGES ================================================ -->
+{% if subdomain_delta %}
+<section class="page-break" id="subdomain-delta">
+    <h1>Subdomain Changes</h1>
+
+    {% for delta in subdomain_delta %}
+    <div class="no-break">
+        <h3>{{ delta.from_scan.start_scan_date|date:"d M Y" }} → {{ delta.to_scan.start_scan_date|date:"d M Y" }}</h3>
+
+        {% if delta.added %}
+        <h4>Added ({{ delta.added|length }})</h4>
+        <table>
+            <thead><tr><th>Subdomain</th></tr></thead>
+            <tbody>
+                {% for name in delta.added %}
+                <tr><td class="diff-added">
+                    <span class="diff-tag tag-added">+</span>{{ name }}
+                </td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No new subdomains added.</p>
+        {% endif %}
+
+        {% if delta.removed %}
+        <h4>Removed ({{ delta.removed|length }})</h4>
+        <table>
+            <thead><tr><th>Subdomain</th></tr></thead>
+            <tbody>
+                {% for name in delta.removed %}
+                <tr><td class="diff-removed">
+                    <span class="diff-tag tag-removed">-</span>{{ name }}
+                </td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No subdomains removed.</p>
+        {% endif %}
+    </div>
+    {% endfor %}
+</section>
+{% endif %}
+
+<!-- ================================================ ATTACK SURFACE TREND ================================================ -->
+{% if attack_surface_trend %}
+<section class="page-break" id="attack-surface">
+    <h1>Attack Surface Trend</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Scan Date</th>
+                <th>Subdomains</th>
+                <th>Endpoints</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in attack_surface_trend %}
+            <tr>
+                <td>{{ row.date|date:"d M Y" }}</td>
+                <td>{{ row.subdomain_count }}</td>
+                <td>{{ row.endpoint_count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+<!-- ================================================ EXPOSURES ================================================ -->
+{% if exposures %}
+<section class="page-break" id="exposures">
+    <h1>Exposure Intelligence</h1>
+    {% for scan_group in exposures %}
+    <h3>Scan: {{ scan_group.scan.start_scan_date|date:"d M Y" }}</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Risk Score</th>
+                <th>Subdomain</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in scan_group.items %}
+            <tr>
+                <td>{% if item.type %}{{ item.type|join:", " }}{% else %}—{% endif %}</td>
+                <td>{{ item.status|default:"—" }}</td>
+                <td>{{ item.risk_score|default:"—" }}</td>
+                <td>{% if item.subdomain %}{{ item.subdomain.name }}{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endfor %}
+</section>
+{% endif %}
+
+<!-- ================================================ CERTIFICATES ================================================ -->
+{% if certificates %}
+<section class="page-break" id="certificates">
+    <h1>Certificate Intelligence</h1>
+    {% for scan_group in certificates %}
+    <h3>Scan: {{ scan_group.scan.start_scan_date|date:"d M Y" }}</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Subject CN</th>
+                <th>Issuer</th>
+                <th>Subject Alt Names</th>
+                <th>Expires</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cert in scan_group.items %}
+            <tr>
+                <td>{{ cert.subject_cn|default:"—" }}</td>
+                <td>{{ cert.issuer_org|default:"—" }}</td>
+                <td style="font-size:8pt;">{{ cert.subject_an|join:", "|default:"—" }}</td>
+                <td>{{ cert.not_after|date:"d M Y"|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endfor %}
+</section>
+{% endif %}
+
+<!-- ================================================ WAF INFO ================================================ -->
+{% if waf_info %}
+<section class="page-break" id="waf-info">
+    <h1>WAF Detection</h1>
+    {% for scan_group in waf_info %}
+    <h3>Scan: {{ scan_group.scan.start_scan_date|date:"d M Y" }}</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>WAF Name</th>
+                <th>Manufacturer</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for w in scan_group.items %}
+            <tr>
+                <td>{{ w.name|default:"—" }}</td>
+                <td>{{ w.manufacturer|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endfor %}
+</section>
+{% endif %}
+
+<!-- ================================================ ENDPOINTS ================================================ -->
+{% if endpoints %}
+<section class="page-break" id="endpoints">
+    <h1>Endpoints</h1>
+    {% for scan_group in endpoints %}
+    <h3>Scan: {{ scan_group.scan.start_scan_date|date:"d M Y" }}</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>URL</th>
+                <th>Status</th>
+                <th>Content Type</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ep in scan_group.items %}
+            <tr>
+                <td style="word-break:break-all; font-size:8.5pt;">{{ ep.http_url }}</td>
+                <td>{{ ep.http_status|default:"—" }}</td>
+                <td style="font-size:8.5pt;">{{ ep.content_type|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endfor %}
+</section>
+{% endif %}
+
+<!-- ================================================ DIRECTORIES ================================================ -->
+{% if directories %}
+<section class="page-break" id="directories">
+    <h1>Directory Scans</h1>
+    {% for scan_group in directories %}
+    <h3>Scan: {{ scan_group.scan.start_scan_date|date:"d M Y" }}</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Path</th>
+                <th>Status</th>
+                <th>Length</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ds in scan_group.items %}
+            {% for f in ds.directoryfile_set.all %}
+            <tr>
+                <td style="word-break:break-all; font-size:8.5pt;">{{ f.name }}</td>
+                <td>{{ f.response_code|default:"—" }}</td>
+                <td>{{ f.length|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endfor %}
+</section>
+{% endif %}
+
+<!-- ================================================ S3 BUCKETS ================================================ -->
+{% if s3_buckets %}
+<section class="page-break" id="s3-buckets">
+    <h1>S3 Buckets</h1>
+    {% for scan_group in s3_buckets %}
+    <h3>Scan: {{ scan_group.scan.start_scan_date|date:"d M Y" }}</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Region</th>
+                <th>Provider</th>
+                <th>Objects</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for b in scan_group.items %}
+            <tr>
+                <td>{{ b.name }}</td>
+                <td>{{ b.region|default:"—" }}</td>
+                <td>{{ b.provider|default:"—" }}</td>
+                <td>{{ b.num_objects|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endfor %}
+</section>
+{% endif %}
+
+<!-- ================================================ EMPLOYEES ================================================ -->
+{% if employees %}
+<section class="page-break" id="employees">
+    <h1>Employee Intelligence</h1>
+    {% for scan_group in employees %}
+    <h3>Scan: {{ scan_group.scan.start_scan_date|date:"d M Y" }}</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Designation</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for emp in scan_group.items %}
+            <tr>
+                <td>{{ emp.name }}</td>
+                <td>{{ emp.designation|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endfor %}
+</section>
+{% endif %}
+
+<!-- ================================================ EMAIL BREACHES ================================================ -->
+{% if email_breaches %}
+<section class="page-break" id="email-breaches">
+    <h1>Email Breaches</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Email Address</th>
+                <th>Breach Name</th>
+                <th>Source</th>
+                <th>First Seen</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in email_breaches %}
+            <tr>
+                <td>{{ entry.breach.email_address }}</td>
+                <td>{{ entry.breach.breach_name|default:"—" }}</td>
+                <td>{{ entry.breach.source|default:"—" }}</td>
+                <td>{{ entry.first_seen_scan.start_scan_date|date:"d M Y" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+<!-- ================================================ SECRETS ================================================ -->
+{% if secret_findings %}
+<section class="page-break" id="secrets">
+    <h1>Secret Leaks</h1>
+    {% for scan_group in secret_findings %}
+    <h3>Scan: {{ scan_group.scan.start_scan_date|date:"d M Y" }}</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>URL</th>
+                <th>Severity</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for leak in scan_group.leaks %}
+            <tr>
+                <td>{{ leak.name|default:"—" }}</td>
+                <td style="word-break:break-all; font-size:8.5pt;">
+                    {% if leak.subdomain %}{{ leak.subdomain.name }}{% else %}—{% endif %}
+                </td>
+                <td>{{ leak.severity|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endfor %}
+</section>
+{% endif %}
+
+</body>
+</html>

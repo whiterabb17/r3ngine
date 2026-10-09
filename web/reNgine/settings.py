@@ -53,6 +53,15 @@ DEFAULT_GET_GPT_REPORT = env.bool('DEFAULT_GET_GPT_REPORT', default=True)
 # Lowered from 10s to 5s in PR #66 to speed up bulk validation; set PROXY_VALIDATION_TIMEOUT env var to restore previous behaviour.
 PROXY_VALIDATION_TIMEOUT = env.int('PROXY_VALIDATION_TIMEOUT', default=5) # seconds
 PROXY_VALIDATION_MAX_WORKERS = env.int('PROXY_VALIDATION_MAX_WORKERS', default=50)
+# How long a freshly batch-verified proxy list is handed out entirely unchecked.
+# This covers the "fetch_proxies_task just finished" case only. Beyond it, and up
+# to Proxy.proxy_ttl_minutes, the proxy about to be used is verified individually
+# instead of the whole list being trusted — free proxies die in minutes, so the
+# old behaviour fed dead entries into scans for the full two-hour TTL.
+PROXY_TRUST_WINDOW_SECONDS = env.int('PROXY_TRUST_WINDOW_SECONDS', default=300)
+# How many random candidates get_random_proxy verifies before giving up on the
+# cheap path and re-validating the whole pool in parallel.
+PROXY_SAMPLE_ATTEMPTS = env.int('PROXY_SAMPLE_ATTEMPTS', default=3)
 
 # Acunetix (AWVS) Configuration
 ACUNETIX_POLL_INTERVAL = env.int('ACUNETIX_POLL_INTERVAL', default=30)  # seconds
@@ -111,14 +120,33 @@ DATABASES = {
         'PASSWORD': env('POSTGRES_PASSWORD'),
         'HOST': env('POSTGRES_HOST'),
         'PORT': env('POSTGRES_PORT'),
-        'CONN_MAX_AGE': 0,
+        # Persistent connections, per process rather than globally.
+        #
+        # 60 suits the Temporal worker: DjangoAwareThreadPoolExecutor closes
+        # connections at the end of every activity
+        # (scanEngine/management/commands/run_temporal_orchestrator.py:51), so a
+        # reused connection saves a reconnect and is never orphaned.
+        #
+        # The web process needs 0. It serves ASGI under a uvicorn worker, and
+        # its connections are opened, used once and never reused: a production
+        # instance accumulated 150 of them and exhausted max_connections, which
+        # took down manage.py and every scan's ability to write results. The
+        # handshake this used to save is smaller than the original note claimed
+        # — the database runs with ssl=off, so `sslmode: prefer` negotiates no
+        # TLS, leaving only TCP and SCRAM over the container network.
+        #
+        # Set DJANGO_CONN_MAX_AGE=0 for that service; tests force 0 too, see
+        # reNgine.test_runner.
+        'CONN_MAX_AGE': env.int('DJANGO_CONN_MAX_AGE', default=60),
         'CONN_HEALTH_CHECKS': True,
         'OPTIONS': {
-            'sslmode': env('POSTGRES_SSLMODE', default='prefer'),
+            'sslmode': env('POSTGRES_SSLMODE', default='prefer') or 'prefer',
             'sslrootcert': os.path.join(BASE_DIR, 'ca.crt'),
         }
     }
 }
+
+TEST_RUNNER = 'reNgine.test_runner.RengineTestRunner'
 
 # Application definition
 INSTALLED_APPS = [
@@ -144,6 +172,7 @@ INSTALLED_APPS = [
     'apme.apps.ApmeConfig',
     'engagements.apps.EngagementsConfig',
     'evidence.apps.EvidenceConfig',
+    'mcp.apps.McpConfig',
     'channels',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
@@ -460,8 +489,9 @@ LOGGING = {
             'level': 'ERROR',
             'propagate': False,
         },
-        # Temporal activities — write INFO+ to temporal.log; propagate to 'reNgine' for console
-        'reNgine.temporal_activities': {
+        # Temporal activities (the package and every module in it) — write INFO+ to
+        # temporal.log; propagate to 'reNgine' for console
+        'reNgine.temporal.activities': {
             'handlers': ['temporal_file'],
             'level': 'INFO',
             'propagate': True,
@@ -474,7 +504,7 @@ LOGGING = {
         },
         # All reNgine modules — use the task formatter for consistent grep-friendly output.
         # The task formatter produces: module.funcName | LEVEL | message
-        # Specific child loggers (e.g. reNgine.tasks, reNgine.temporal_activities) are
+        # Specific child loggers (e.g. reNgine.tasks, reNgine.temporal.activities) are
         # listed above with propagate=False to override this catch-all where needed.
         'reNgine': {
             'handlers': ['task', 'error_file'],
@@ -493,10 +523,26 @@ LOGGING = {
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
-        # Temporal SDK — suppress noise, only errors
+        # Temporal SDK internals (client, core bridge) — suppress noise.
         'temporalio': {
             'handlers': ['error_file'],
             'level': 'ERROR',
+            'propagate': False,
+        },
+        # Our own workflow/activity code logs through the temporalio.workflow and
+        # temporalio.activity adapters, NOT through a reNgine logger. Both used to
+        # fall under the 'temporalio' rule above, so every activity.logger.info()
+        # was dropped for being below ERROR, and the ERROR ones (a failing nuclei
+        # run, "Nuclei scan failed — continuing") went only to errors.log inside
+        # the container. Nothing reached `docker logs`. Route them to the console.
+        'temporalio.workflow': {
+            'handlers': ['task', 'error_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'temporalio.activity': {
+            'handlers': ['task', 'error_file'],
+            'level': 'INFO',
             'propagate': False,
         },
     },
@@ -584,6 +630,9 @@ LOGIN_REQUIRED_IGNORE_PATHS = [
     r'^/mapi/auth/token/',
     r'^/mapi/auth/token/refresh/',
     r'^/mapi/.*$',
+    r'^/api/mcp/.*$',
+    # Remote workers have no session; the view authenticates their token itself.
+    r'^/api/settings/workers/heartbeat/$',
 ]
 
 from datetime import timedelta

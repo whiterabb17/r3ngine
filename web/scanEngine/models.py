@@ -44,9 +44,18 @@ class EngineType(models.Model):
             config = yaml.safe_load(self.yaml_configuration)
             if isinstance(config, dict):
                 # Tasks are the top level keys in the YAML config
-                return list(config.keys())
-        except Exception:
-            pass
+                tasks = list(config.keys())
+                # The engine editor used to save the secret scanning section as
+                # a top-level leaks_and_secrets, which no workflow gates on.
+                if 'leaks_and_secrets' in tasks and 'secret_scanning' not in tasks:
+                    tasks.append('secret_scanning')
+                # CredSpy is switched on under osint but runs in the post-crawl OSINT step.
+                osint = config.get('osint')
+                if isinstance(osint, dict) and osint.get('credspy') and 'post_crawl_osint' not in tasks:
+                    tasks.append('post_crawl_osint')
+                return tasks
+        except yaml.YAMLError:
+            logger.warning("Engine %s has invalid YAML configuration", self.pk, exc_info=True)
         return []
 
     def has_task(self, task_name):
@@ -122,6 +131,35 @@ class Proxy(models.Model):
     proxy_ttl_minutes = models.IntegerField(
         default=120,
         help_text='Minutes before the verified proxy list is considered stale (default 120).',
+    )
+    # Routing nuclei through a proxy pool costs a great deal of speed: the
+    # concurrency and rate caps that keep nuclei from deadlocking on flaky
+    # proxies also make a large scan take days. Most targets do not block us at
+    # all, so paying that price unconditionally is waste.
+    # Hand-entered proxies the operator vouches for — typically paid, long-lived
+    # and authenticated. Kept in their own field rather than mixed into
+    # `proxies` so that fetch_proxies_task, which rewrites the scraped pool
+    # wholesale, can never overwrite them, and so they can be tried first.
+    priority_proxies = models.TextField(
+        blank=True,
+        null=True,
+        help_text=(
+            'One proxy per line, tried before the scraped pool. Never touched '
+            'by the automatic proxy fetch and never dropped by a health check.'
+        ),
+    )
+    use_priority_proxies = models.BooleanField(
+        default=True,
+        help_text='Try the manual proxies above before the scraped pool.',
+    )
+    proxy_only_after_ban = models.BooleanField(
+        default=False,
+        help_text=(
+            'Scan directly and switch to the proxy pool only when the target is '
+            'found to be blocking us. A short probe against a sample of the '
+            "target's own endpoints decides, before the vulnerability stage "
+            'starts. Leave off to always use the proxy pool.'
+        ),
     )
 
 
@@ -213,9 +251,44 @@ class InstalledExternalTool(models.Model):
     is_github_cloned = models.BooleanField(default=False)
     github_clone_path = models.CharField(max_length=1500, null=True, blank=True)
     subdomain_gathering_command = models.CharField(max_length=300, null=True, blank=True)
+    # Live inventory — filled by sync_installed_tools(), not by fixtures.
+    is_present = models.BooleanField(default=False)
+    resolved_path = models.CharField(max_length=1500, null=True, blank=True)
+    detected_version = models.CharField(max_length=200, null=True, blank=True)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    last_sync_error = models.CharField(max_length=500, null=True, blank=True)
 
     def __str__(self):
         return self.name
+
+
+class ToolArgSchemaCache(models.Model):
+    """Cached CLI flag schema from an installed binary's --help output."""
+
+    SOURCE_HELP = 'help'
+    SOURCE_SEED = 'seed_fallback'
+    SOURCE_CHOICES = (
+        (SOURCE_HELP, 'Help'),
+        (SOURCE_SEED, 'Seed fallback'),
+    )
+
+    pipeline_tool = models.CharField(max_length=100, db_index=True)
+    binary_name = models.CharField(max_length=100)
+    binary_path = models.CharField(max_length=1500, blank=True, default='')
+    version_fingerprint = models.CharField(max_length=200, blank=True, default='')
+    schema = models.JSONField(default=list, blank=True)
+    raw_help_hash = models.CharField(max_length=64, blank=True, default='')
+    fetched_at = models.DateTimeField(null=True, blank=True)
+    source = models.CharField(max_length=32, choices=SOURCE_CHOICES, default=SOURCE_SEED)
+
+    class Meta:
+        unique_together = (('pipeline_tool', 'binary_name'),)
+        indexes = [
+            models.Index(fields=['pipeline_tool', 'binary_name'], name='toolargs_pipe_bin_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.pipeline_tool}:{self.binary_name}'
 
 
 class HardwareProfile(models.Model):
@@ -324,11 +397,15 @@ class ScanProfile(models.Model):
         return d
 
 
+WORKER_TOKEN_PREFIX = 'r3n_wkr_'
+
+
 class ScanWorker(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(null=True, blank=True)
-    auth_token = models.CharField(max_length=255, unique=True) # Used to secure worker access
+    # SHA-256 of the worker's bearer token; the token itself is shown once at creation.
+    auth_token_hash = models.CharField(max_length=64, unique=True)
     task_queue = models.CharField(max_length=100)
     hostname = models.CharField(max_length=100, null=True, blank=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)

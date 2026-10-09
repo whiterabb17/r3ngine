@@ -1,0 +1,16 @@
+{
+    "flags": "-iE",
+    "patterns": [
+        "__proto__=",
+        "__proto__[",
+        "constructor[",
+        "constructor=",
+        "prototype[",
+        "prototype=",
+        "proto[",
+        "__defineGetter__",
+        "__defineSetter__",
+        "__lookupGetter__",
+        "hasOwnProperty="
+    ]
+}

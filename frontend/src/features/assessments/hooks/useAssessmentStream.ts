@@ -1,9 +1,30 @@
 import { useState, useEffect, useCallback } from 'react';
 
+/**
+ * Payload of an `AssessmentEventConsumer` message: `assessment_progress` (state machine
+ * transitions and the snapshot sent on connect) or `evidence_created`.
+ */
+export interface AssessmentStreamPayload {
+  assessment_id?: string;
+  /** Workflow stage, e.g. `Discovery`. */
+  stage?: string;
+  /** Percentage, 0-100. */
+  progress?: number;
+  timestamp?: string;
+  evidence_uuid?: string;
+  collection_uuid?: string;
+  evidence_type?: string;
+  title?: string;
+  [key: string]: unknown;
+}
+
+/** A message as the consumer sends it (`{ type, data }`), stamped with its arrival time. */
 export interface AssessmentStreamEvent {
-  event_type: string;
-  data: any;
-  timestamp: string;
+  /** Event name, e.g. `assessment_progress`. */
+  type: string;
+  data: AssessmentStreamPayload;
+  /** ISO time the browser received the message; the server does not stamp every event. */
+  receivedAt: string;
 }
 
 export const useAssessmentStream = (assessmentId: string) => {
@@ -31,8 +52,8 @@ export const useAssessmentStream = (assessmentId: string) => {
 
         ws.onmessage = (event) => {
           try {
-            const data = JSON.parse(event.data) as AssessmentStreamEvent;
-            setEvents((prev) => [...prev, data]);
+            const message = JSON.parse(event.data) as Omit<AssessmentStreamEvent, 'receivedAt'>;
+            setEvents((prev) => [...prev, { ...message, receivedAt: new Date().toISOString() }]);
           } catch (e) {
             console.error('Failed to parse websocket message:', e);
           }

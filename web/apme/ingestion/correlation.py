@@ -71,5 +71,5 @@ class ExposureCorrelator:
                 
         merged_edges.extend(self._edge_cache.values())
         
-        logger.info(f"ExposureCorrelator: Deduplicated {len(nodes)} nodes to {len(merged_nodes)}.")
+        logger.info("ExposureCorrelator: Deduplicated %s nodes to %s.", len(nodes), len(merged_nodes))
         return merged_nodes, merged_edges

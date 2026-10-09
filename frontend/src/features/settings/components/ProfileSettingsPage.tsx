@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useParams } from '@tanstack/react-router';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import { changePassword } from '../../auth/api';
 
 export const ProfileSettingsPage: React.FC = () => {
   const { tokens } = useThemeTokens();
@@ -68,27 +69,9 @@ export const ProfileSettingsPage: React.FC = () => {
     }
 
     try {
-      // Constructing form data for the legacy Django view
-      const form = new FormData();
-      form.append('old_password', formData.old_password);
-      form.append('new_password1', formData.new_password1);
-      form.append('new_password2', formData.new_password2);
-      
-      // We fetch the CSRF token from cookies
-      const csrfToken = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('csrftoken='))
-        ?.split('=')[1];
+      const accepted = await changePassword(projectSlug, formData);
 
-      const response = await fetch(`/${projectSlug}/profile/`, {
-        method: 'POST',
-        headers: {
-          'X-CSRFToken': csrfToken || '',
-        },
-        body: form,
-      });
-
-      if (response.ok) {
+      if (accepted) {
         setNotification({
           open: true,
           message: 'Password changed successfully!',

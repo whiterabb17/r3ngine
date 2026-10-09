@@ -43,6 +43,7 @@ from reNgine.definitions import (
     PERM_MODIFY_TARGETS, PERM_MODIFY_SCAN_CONFIGURATIONS,
     PERM_MODIFY_WORDLISTS, PERM_INITATE_SCANS_SUBSCANS,
     PERM_MODIFY_SCAN_REPORT, PERM_MODIFY_SCAN_RESULTS,
+    INTERNAL_ERROR_MESSAGE,
 )
 from reNgine.tasks import *
 from reNgine.llm import *
@@ -133,6 +134,66 @@ class OsintStagingViewSet(viewsets.ModelViewSet):
 			count += 1
 			
 		return Response({'status': 'success', 'message': f'Promoted {count} items'})
+
+	@action(detail=False, methods=['post'])
+	def clear_all(self, request):
+		"""Delete all pending staging rows for a scan."""
+		scan_id = request.data.get('scan_id')
+		if not scan_id:
+			return Response({'error': 'scan_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+		qs = OsintStaging.objects.filter(scan_history_id=scan_id, status='pending')
+		count, _ = qs.delete()
+		return Response({'status': 'success', 'message': f'Deleted {count} pending items', 'deleted': count})
+
+	@action(detail=False, methods=['post'])
+	def add_verified(self, request):
+		"""Promote all agent_verified=True rows for a scan (pending)."""
+		from reNgine.tasks import persist_osint_item
+		scan_id = request.data.get('scan_id')
+		if not scan_id:
+			return Response({'error': 'scan_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+		ids = request.data.get('ids')
+		qs = OsintStaging.objects.filter(
+			scan_history_id=scan_id,
+			agent_verified=True,
+			status='pending',
+		)
+		if ids:
+			qs = qs.filter(id__in=ids)
+		count = 0
+		for item in qs:
+			ctx = {
+				'scan_history_id': item.scan_history.id,
+				'domain_id': item.target_domain.id,
+			}
+			persist_osint_item(
+				scan_history=item.scan_history,
+				domain=item.target_domain,
+				osint_type=item.osint_type,
+				e_data=item.content,
+				confidence=item.confidence,
+				source_data=item.metadata.get('source_data') if isinstance(item.metadata, dict) else None,
+				event_type=item.metadata.get('sf_type') if isinstance(item.metadata, dict) else None,
+				ctx=ctx,
+				metadata=item.metadata or {},
+			)
+			item.status = 'validated'
+			item.save(update_fields=['status'])
+			count += 1
+		return Response({'status': 'success', 'message': f'Promoted {count} agent-verified items', 'promoted': count})
+
+	@action(detail=False, methods=['post'])
+	def clear_false_positives(self, request):
+		"""Delete staging rows marked agent_verified=False for a scan."""
+		scan_id = request.data.get('scan_id')
+		if not scan_id:
+			return Response({'error': 'scan_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+		ids = request.data.get('ids')
+		qs = OsintStaging.objects.filter(scan_history_id=scan_id, agent_verified=False)
+		if ids:
+			qs = qs.filter(id__in=ids)
+		count, _ = qs.delete()
+		return Response({'status': 'success', 'message': f'Deleted {count} false positives', 'deleted': count})
 
 	@action(detail=True, methods=['post'])
 	def promote(self, request, pk=None):
@@ -252,8 +313,9 @@ class AddReconNote(APIView):
 			note.project = project
 			note.save()
 			response = {'status': True}
-		except Exception as e:
-			response = {'status': False, 'message': str(e)}
+		except Exception:
+			logger.exception('Failed to save recon note')
+			response = {'status': False, 'message': INTERNAL_ERROR_MESSAGE}
 
 		return Response(response)
 
@@ -577,3 +639,239 @@ class EmployeeIntelReplayView(APIView):
                 complete = True
 
         return Response({'events': events, 'complete': complete})
+
+
+class Whois(APIView):
+	permission_classes = [IsPenetrationTester]
+	def get(self, request):
+		req = self.request
+		target = req.query_params.get('target')
+		if not target:
+			return Response({'status': False, 'message': 'Target IP/Domain required!'})
+		if not (validators.domain(target) or validators.ipv4(target) or validators.ipv6(target)):
+			logger.warning('Ip address or domain "%s" did not pass validator.', target)
+			return Response({'status': False, 'message': 'Invalid domain or IP'})
+		is_force_update = req.query_params.get('is_reload')
+		is_force_update = True if is_force_update and 'true' == is_force_update.lower() else False
+		response = query_whois(target, is_force_update)
+		return Response(response)
+
+
+class ReverseWhois(APIView):
+	permission_classes = [IsPenetrationTester]
+	def get(self, request):
+		req = self.request
+		lookup_keyword = req.query_params.get('lookup_keyword')
+		response = query_reverse_whois(lookup_keyword)
+		return Response(response)
+
+
+class DomainIPHistory(APIView):
+	permission_classes = [IsPenetrationTester]
+	def get(self, request):
+		req = self.request
+		domain = req.query_params.get('domain')
+		response = query_ip_history(domain)
+		return Response(response)
+
+
+class CMSDetector(APIView):
+	permission_classes = [IsPenetrationTester]
+	def get(self, request):
+		req = self.request
+		url = req.query_params.get('url')
+		#save_db = True if 'save_db' in req.query_params else False
+		response = {'status': False}
+
+		if not (validators.url(url) or validators.domain(url)):
+			response['message'] = 'Invalid Domain/URL provided!'
+			return Response(response)
+
+		try:
+			# response = get_cms_details(url)
+			response = {}
+			_, output = run_command(
+				['python3', '/usr/src/github/CMSeeK/cmseek.py',
+				 '--random-agent', '--batch', '--follow-redirect', '-u', url],
+				shell=False, remove_ansi_sequence=True)
+
+			response['message'] = 'Could not detect CMS!'
+
+			parsed_url = urlparse(url)
+
+			domain_name = parsed_url.hostname
+			port = parsed_url.port
+
+			find_dir = domain_name
+
+			if port:
+				find_dir += '_{}'.format(port)
+			# look for result path in output
+			path_regex = r"Result: (\/usr\/src[^\"\s]*)"
+			match = re.search(path_regex, output)
+			if match:
+				cms_json_path = match.group(1)
+				if os.path.isfile(cms_json_path):
+					cms_file_content = json.loads(open(cms_json_path, 'r').read())
+					if not cms_file_content.get('cms_id'):
+						return response
+					response = {}
+					response = cms_file_content
+					response['status'] = True
+					try:
+						# remove results
+						cms_dir_path = os.path.dirname(cms_json_path)
+						shutil.rmtree(cms_dir_path)
+					except Exception as e:
+						logger.error(e)
+					return Response(response)
+			return Response(response)
+		except Exception:
+			logger.exception('CMS detection failed')
+			response = {'status': False, 'message': INTERNAL_ERROR_MESSAGE}
+			return Response(response)
+
+
+class IPToDomain(APIView):
+	permission_classes = [IsPenetrationTester]
+	def get(self, request):
+		req = self.request
+		ip_address = req.query_params.get('ip_address')
+		if not ip_address:
+			return Response({
+				'status': False,
+				'message': 'IP Address Required'
+			})
+		try:
+			logger.info('Resolving IP address %s ...', ip_address)
+			resolved_ips = []
+			for ip in IPv4Network(ip_address, False):
+				domains = []
+				ips = []
+				try:
+					(domain, domains, ips) = socket.gethostbyaddr(str(ip))
+				except socket.herror:
+					logger.info('No PTR record for %s', ip_address)
+					domain = str(ip)
+				if domain not in domains:
+					domains.append(domain)
+				resolved_ips.append({'ip': str(ip),'domain': domain, 'domains': domains, 'ips': ips})
+			response = {
+				'status': True,
+				'orig': ip_address,
+				'ip_address': resolved_ips,
+			}
+		except Exception:
+			logger.exception('IP lookup failed')
+			response = {
+				'status': False,
+				'ip_address': ip_address,
+				'message': INTERNAL_ERROR_MESSAGE
+			}
+		return Response(response)
+
+
+class VisualiseData(APIView):
+	permission_classes = [IsAuditor]
+	def get(self, request, format=None):
+		req = self.request
+		scan_id = req.query_params.get('scan_id')
+		target_id = req.query_params.get('target_id')
+		if scan_id:
+			mitch_data = ScanHistory.objects.filter(id=scan_id)
+		elif target_id:
+			mitch_data = ScanHistory.objects.filter(domain__id=target_id).order_by('-start_scan_date')[:1]
+		else:
+			return Response([])
+
+		serializer = VisualiseDataSerializer(mitch_data, many=True)
+		return Response(serializer.data)
+
+
+class ListDorkTypes(APIView):
+	permission_classes = [IsAuditor]
+	def get(self, request, format=None):
+		req = self.request
+		scan_id = req.query_params.get('scan_id')
+		if scan_id:
+			dork = Dork.objects.filter(
+				dorks__in=ScanHistory.objects.filter(id=scan_id)
+			).values('type').annotate(count=Count('type')).order_by('-count')
+			serializer = DorkCountSerializer(dork, many=True)
+			return Response({"dorks": serializer.data})
+		else:
+			dork = Dork.objects.filter(
+				dorks__in=ScanHistory.objects.all()
+			).values('type').annotate(count=Count('type')).order_by('-count')
+			serializer = DorkCountSerializer(dork, many=True)
+			return Response({"dorks": serializer.data})
+
+
+class ListEmails(APIView):
+	permission_classes = [IsAuditor]
+	def get(self, request, format=None):
+		req = self.request
+		scan_id = req.query_params.get('scan_id')
+		if scan_id:
+			email = Email.objects.filter(
+				emails__in=ScanHistory.objects.filter(id=scan_id)).order_by('password')
+			serializer = EmailSerializer(email, many=True)
+			return Response({"emails": serializer.data})
+
+
+class ListDorks(APIView):
+	permission_classes = [IsAuditor]
+	def get(self, request, format=None):
+		req = self.request
+		scan_id = req.query_params.get('scan_id')
+		type = req.query_params.get('type')
+		if scan_id:
+			dork = Dork.objects.filter(
+				dorks__in=ScanHistory.objects.filter(id=scan_id))
+		else:
+			dork = Dork.objects.filter(
+				dorks__in=ScanHistory.objects.all())
+		if scan_id and type:
+			dork = dork.filter(type=type)
+		serializer = DorkSerializer(dork, many=True)
+		grouped_res = {}
+		for item in serializer.data:
+			item_type = item['type']
+			if item_type not in grouped_res:
+				grouped_res[item_type] = []
+			grouped_res[item_type].append(item)
+		return Response({"dorks": grouped_res})
+
+
+class ListEmployees(APIView):
+	permission_classes = [IsAuditor]
+	def get(self, request, format=None):
+		req = self.request
+		scan_id = req.query_params.get('scan_id')
+		if scan_id:
+			employee = Employee.objects.filter(
+				employees__in=ScanHistory.objects.filter(id=scan_id))
+			serializer = EmployeeSerializer(employee, many=True)
+			return Response({"employees": serializer.data})
+
+
+class ListOsintUsers(APIView):
+	permission_classes = [IsAuditor]
+	def get(self, request, format=None):
+		req = self.request
+		scan_id = req.query_params.get('scan_id')
+		if scan_id:
+			documents = MetaFinderDocument.objects.filter(scan_history__id=scan_id).exclude(author__isnull=True).values('author').distinct()
+			serializer = MetafinderUserSerializer(documents, many=True)
+			return Response({"users": serializer.data})
+
+
+class ListMetadata(APIView):
+	permission_classes = [IsAuditor]
+	def get(self, request, format=None):
+		req = self.request
+		scan_id = req.query_params.get('scan_id')
+		if scan_id:
+			documents = MetaFinderDocument.objects.filter(scan_history__id=scan_id).distinct()
+			serializer = MetafinderDocumentSerializer(documents, many=True)
+			return Response({"metadata": serializer.data})

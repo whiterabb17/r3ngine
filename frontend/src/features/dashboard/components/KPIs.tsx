@@ -5,7 +5,8 @@ import {
   Layers,
   Target,
   AlertTriangle,
-  Key
+  Key,
+  type LucideProps,
 } from 'lucide-react';
 import { themeTokens } from '../../../theme/tokens';
 import type { DashboardData } from '../api';
@@ -13,7 +14,8 @@ import type { DashboardData } from '../api';
 interface KpiCardProps {
   title: string;
   value: number;
-  icon: React.ReactNode;
+  /** A lucide icon element; it is cloned at two sizes. */
+  icon: React.ReactElement<LucideProps>;
   color: string;
   subtitle?: string;
 }
@@ -50,7 +52,7 @@ const KpiCard: React.FC<KpiCardProps> = ({ title, value, icon, color, subtitle }
             color: color
           }}
         >
-          {React.cloneElement(icon as React.ReactElement<any>, { size: 100 })}
+          {React.cloneElement(icon, { size: 100 })}
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2.5 }}>
@@ -64,7 +66,7 @@ const KpiCard: React.FC<KpiCardProps> = ({ title, value, icon, color, subtitle }
             border: `1px solid ${color}33`,
             boxShadow: isLight ? 'none' : `0 0 15px ${color}22`
           }}>
-            {React.cloneElement(icon as React.ReactElement<any>, { size: 22 })}
+            {React.cloneElement(icon, { size: 22 })}
           </Box>
           <Typography variant="overline" sx={{
             fontWeight: 800,

@@ -15,11 +15,11 @@ from reNgine.tasks.fuzzing import dir_file_fuzz
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-def _make_proxy(yaml_config=None):
+def _make_proxy(yaml_config=None, results_dir='/tmp/test_ffuf'):
     """Minimal scan proxy for prepare_only=True tests."""
     proxy = types.SimpleNamespace(
         yaml_configuration=yaml_config or {},
-        results_dir='/tmp/test_ffuf',
+        results_dir=results_dir,
         scan=MagicMock(),
         scan_id=1,
         activity_id=1,
@@ -29,10 +29,10 @@ def _make_proxy(yaml_config=None):
     return proxy
 
 
-def _prepare(yaml_config, ctx_override=None):
+def _prepare(yaml_config, ctx_override=None, wordlist_path=None, results_dir='/tmp/test_ffuf', extra_ctx=None):
     """Call dir_file_fuzz with prepare_only=True, returning the built command dict."""
-    proxy = _make_proxy(yaml_config)
-    ctx = {"urls_override": ctx_override or ["http://example.com/"]}
+    proxy = _make_proxy(yaml_config, results_dir=results_dir)
+    ctx = {"urls_override": ctx_override or ["http://example.com/"], **(extra_ctx or {})}
 
     def _fake_ensure(task_proxy, func, ctx, description=None):
         return func(ctx=ctx, description=description)
@@ -41,7 +41,7 @@ def _prepare(yaml_config, ctx_override=None):
                side_effect=_fake_ensure), \
          patch('os.path.exists', return_value=True), \
          patch('reNgine.tasks.api.resolve_wordlist_path',
-               side_effect=lambda cfg, path: path):
+               side_effect=lambda cfg, path: wordlist_path or path):
         return dir_file_fuzz(proxy, ctx=ctx, prepare_only=True)
 
 
@@ -486,6 +486,57 @@ class TestFeroxbusterConfig(TestCase):
         self.assertIn('ferox_base_cmd', result,
                       "prepare_only dict must contain ferox_base_cmd key")
 
+
+class TestExtensionDeduplication(TestCase):
+    """Duplicate extensions make ffuf replay the whole wordlist once more per duplicate."""
+
+    CONFIG = {
+        'dir_file_fuzz': {
+            'auto_calibration': True,
+            'extensions': ['php', 'conf', '.PHP', 'html', '.conf', 'Html', 'txt'],
+            'recursive_level': 0,
+            'run_dirsearch': True,
+            'run_feroxbuster': True,
+        }
+    }
+
+    def test_ffuf_extensions_deduplicated_case_insensitive_in_order(self):
+        cmd = _prepare(self.CONFIG)['ffuf_base_cmd']
+        self.assertIn(' -e .php,.conf,.html,.txt ', cmd)
+
+    def test_dirsearch_extensions_deduplicated(self):
+        cmd = _prepare(self.CONFIG)['dirsearch_base_cmd']
+        self.assertIn(' -e php,conf,html,txt', cmd)
+
+    def test_feroxbuster_extensions_deduplicated(self):
+        cmd = _prepare(self.CONFIG)['ferox_base_cmd']
+        self.assertIn(' --extensions .php,.conf,.html,.txt', cmd)
+
+    def test_default_extensions_have_no_duplicates(self):
+        from reNgine.definitions import DEFAULT_DIR_FILE_FUZZ_EXTENSIONS
+        lowered = [ext.lower() for ext in DEFAULT_DIR_FILE_FUZZ_EXTENSIONS]
+        self.assertEqual(len(lowered), len(set(lowered)))
+
+    def test_engine_fixtures_have_no_duplicate_extensions(self):
+        import yaml
+        from pathlib import Path
+
+        fixtures_dir = Path(__file__).resolve().parents[1] / 'fixtures'
+        configs = {'default_yaml_config.yaml': yaml.safe_load((fixtures_dir / 'default_yaml_config.yaml').read_text())}
+        for path in sorted((fixtures_dir / 'scan_engines').glob('*.yaml')):
+            for entry in yaml.safe_load(path.read_text()) or []:
+                raw = entry.get('fields', {}).get('yaml_configuration')
+                if raw:
+                    configs[f"{path.name}:{entry['fields'].get('engine_name')}"] = yaml.safe_load(raw)
+
+        self.assertIn('default_yaml_config.yaml', configs)
+        for name, config in configs.items():
+            extensions = (config or {}).get('dir_file_fuzz', {}).get('extensions') or []
+            lowered = [str(ext).lower().lstrip('.') for ext in extensions]
+            with self.subTest(engine=name):
+                self.assertEqual(len(lowered), len(set(lowered)), f"duplicate extensions: {extensions}")
+
+
 class TestFfufStreamingHeartbeat(TestCase):
     """Bug #7: ffuf must not be routed to Go executor (blocks heartbeats)."""
 
@@ -603,3 +654,102 @@ class TestFfufStreamingHeartbeat(TestCase):
             dir_file_fuzz(proxy, ctx=ctx)
 
         mock_heartbeat.assert_called()
+
+
+class TestDirsearchCliV050(TestCase):
+    """dirsearch 0.5.0 renamed --format to --output-formats."""
+
+    def test_build_dirsearch_run_cmd_uses_output_formats(self):
+        from reNgine.tasks.fuzzing import build_dirsearch_run_cmd
+
+        cmd = build_dirsearch_run_cmd(
+            'dirsearch -w /tmp/w.txt -e php -t 10',
+            'http://example.com/',
+            '/tmp/out.json',
+            proxy='socks5://1.2.3.4:1080',
+        )
+        self.assertIn('--output-formats=json', cmd)
+        self.assertNotIn('--format=', cmd)
+        self.assertNotIn('--format ', cmd)
+        self.assertIn('-o /tmp/out.json', cmd)
+        self.assertIn('-u http://example.com', cmd)
+        self.assertIn('--proxy socks5://1.2.3.4:1080', cmd)
+        self.assertIn('--no-color', cmd)
+
+    def test_build_dirsearch_run_cmd_omits_proxy_when_none(self):
+        from reNgine.tasks.fuzzing import build_dirsearch_run_cmd
+
+        cmd = build_dirsearch_run_cmd(
+            'dirsearch -w /tmp/w.txt',
+            'http://example.com',
+            '/tmp/out.json',
+        )
+        self.assertIn('--output-formats=json', cmd)
+        self.assertNotIn('--proxy', cmd)
+
+    def test_prepare_only_still_builds_dirsearch_base(self):
+        config = {
+            'dir_file_fuzz': {
+                'auto_calibration': False,
+                'rate_limit': 0,
+                'threads': 10,
+                'wordlist_name': 'dicc',
+                'extensions': ['.php'],
+                'match_http_status': [200],
+                'recursive_level': 1,
+                'max_time': 60,
+                'stop_on_error': False,
+                'follow_redirect': True,
+                'timeout': 10,
+                'run_dirsearch': True,
+            }
+        }
+        result = _prepare(config)
+        self.assertIsNotNone(result.get('dirsearch_base_cmd'))
+        self.assertTrue(result['dirsearch_base_cmd'].startswith('dirsearch'))
+        self.assertIn('-e php', result['dirsearch_base_cmd'])
+        self.assertIn('--follow-redirects', result['dirsearch_base_cmd'])
+
+
+class TestHttpxCompatibleProxy(TestCase):
+    """dirsearch 0.5 / httpx rejects socks4:// — resolve to http(s)/socks5 or None."""
+
+    def test_accepts_socks5_and_http(self):
+        from reNgine.tasks.fuzzing import resolve_httpx_compatible_proxy
+
+        self.assertEqual(
+            resolve_httpx_compatible_proxy('socks5://1.2.3.4:1080'),
+            'socks5://1.2.3.4:1080',
+        )
+        self.assertEqual(
+            resolve_httpx_compatible_proxy('http://1.2.3.4:8080'),
+            'http://1.2.3.4:8080',
+        )
+
+    def test_rejects_socks4_when_pool_exhausted(self):
+        from reNgine.tasks.fuzzing import resolve_httpx_compatible_proxy
+
+        with patch('reNgine.tasks.fuzzing.get_random_proxy', return_value='socks4://9.9.9.9:4153'):
+            self.assertIsNone(
+                resolve_httpx_compatible_proxy(
+                    'socks4://193.158.12.141:4153',
+                    tool_name='dirsearch',
+                    max_retries=3,
+                )
+            )
+
+    def test_replaces_socks4_with_socks5_from_pool(self):
+        from reNgine.tasks.fuzzing import resolve_httpx_compatible_proxy
+
+        with patch(
+            'reNgine.tasks.fuzzing.get_random_proxy',
+            side_effect=['socks4://1.1.1.1:1', 'socks5://2.2.2.2:1080'],
+        ):
+            self.assertEqual(
+                resolve_httpx_compatible_proxy(
+                    'socks4://193.158.12.141:4153',
+                    tool_name='dirsearch',
+                    max_retries=5,
+                ),
+                'socks5://2.2.2.2:1080',
+            )

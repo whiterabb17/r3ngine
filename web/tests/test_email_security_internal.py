@@ -45,42 +45,80 @@ class TestEmailSecurityImport(TestCase):
         self.assertIn('hostname_mismatch', result)
 
 
-class TestSmtpUserEnumDomainFlag(TestCase):
-    """Verify smtp_user_enum passes -d domain to smtp-user-enum when domain is given."""
+class TestEmailSecurityHasNoSmtpUserEnum(TestCase):
+    def test_smtp_user_enum_removed(self):
+        import reNgine.tasks.email_security as mod
+        self.assertFalse(hasattr(mod, 'smtp_user_enum'))
 
-    def _run(self, domain=''):
-        from reNgine.tasks.email_security import smtp_user_enum
-        captured = {}
 
-        def fake_run_command(cmd, **kwargs):
-            captured['cmd'] = cmd
-            return 0, ''
+class TestEmailSecurityCallsVerifier(TestCase):
+    def test_activity_calls_verify_even_without_smtp_hosts(self):
+        from django.utils import timezone
+        from startScan.models import ScanHistory
+        from targetApp.models import Domain
+        from scanEngine.models import EngineType
+        from reNgine.temporal.activities import _run_email_security_sync
 
-        with patch('os.path.isfile', return_value=True), \
-             patch('reNgine.tasks.email_security.run_command', side_effect=fake_run_command):
-            smtp_user_enum([('mail.example.com', 25)], domain=domain)
+        engine = EngineType.objects.create(engine_name='es-wire', yaml_configuration='')
+        domain = Domain.objects.create(name='example.com', insert_date=timezone.now())
+        scan = ScanHistory.objects.create(
+            domain=domain, scan_type=engine, scan_status=2, start_scan_date=timezone.now(),
+        )
+        ctx = {
+            'scan_history_id': scan.id,
+            'domain_name': 'example.com',
+            'yaml_configuration': {},
+        }
+        with patch('reNgine.tasks.email_security.check_spf', return_value={'found': True, 'record': 'v=spf1 -all', 'weak': False}), \
+             patch('reNgine.tasks.email_security.check_dmarc', return_value={'found': True, 'record': 'v=DMARC1; p=reject', 'policy': 'reject'}), \
+             patch('reNgine.tasks.email_security.check_dkim', return_value={'found': True, 'selector': 'google', 'record': 'v=DKIM1'}), \
+             patch('reNgine.common_func.get_random_proxy', return_value=None), \
+             patch('reNgine.tasks.email_verification.verify_domain_mailboxes', return_value={
+                 'catch_all': False,
+                 'checked': 1,
+                 'confirmed': ['admin@example.com'],
+                 'findings': [{'name': 'Valid Mailboxes Confirmed', 'severity': 2, 'description': '1 valid mailbox'}],
+                 'skipped_reason': None,
+             }) as mock_v, \
+             patch('reNgine.common_func.save_vulnerability') as mock_sv:
+            result = _run_email_security_sync(ctx)
+        mock_v.assert_called_once()
+        self.assertEqual(mock_v.call_args[0][0], 'example.com')
+        self.assertIn('activity_id', mock_v.call_args.kwargs)
+        self.assertIsNone(mock_v.call_args.kwargs.get('proxy_url'))
+        names = [call.kwargs.get('name') for call in mock_sv.call_args_list]
+        self.assertIn('Valid Mailboxes Confirmed', names)
+        self.assertEqual(result.get('mailboxes_confirmed'), 1)
 
-        return captured.get('cmd', [])
+    def test_activity_selects_socks5_proxy_for_mailbox(self):
+        from django.utils import timezone
+        from startScan.models import ScanHistory
+        from targetApp.models import Domain
+        from scanEngine.models import EngineType
+        from reNgine.temporal.activities import _run_email_security_sync
 
-    def test_domain_flag_absent_when_no_domain(self):
-        cmd = self._run(domain='')
-        self.assertNotIn('-d', cmd)
-
-    def test_domain_flag_present_when_domain_given(self):
-        cmd = self._run(domain='example.com')
-        self.assertIn('-d', cmd)
-        idx = cmd.index('-d')
-        self.assertEqual(cmd[idx + 1], 'example.com')
-
-    def test_host_and_port_always_present(self):
-        cmd = self._run(domain='example.com')
-        self.assertIn('mail.example.com', cmd)
-        self.assertIn('25', cmd)
-
-    def test_empty_targets_returns_early(self):
-        from reNgine.tasks.email_security import smtp_user_enum
-        with patch('os.path.isfile', return_value=True), \
-             patch('reNgine.tasks.email_security.run_command') as mock_rc:
-            result = smtp_user_enum([], domain='example.com')
-        mock_rc.assert_not_called()
-        self.assertEqual(result['users_found'], {})
+        engine = EngineType.objects.create(engine_name='es-proxy', yaml_configuration='')
+        domain = Domain.objects.create(name='example.com', insert_date=timezone.now())
+        scan = ScanHistory.objects.create(
+            domain=domain, scan_type=engine, scan_status=2, start_scan_date=timezone.now(),
+        )
+        ctx = {
+            'scan_history_id': scan.id,
+            'domain_name': 'example.com',
+            'yaml_configuration': {},
+        }
+        with patch('reNgine.tasks.email_security.check_spf', return_value={'found': True, 'record': 'v=spf1 -all', 'weak': False}), \
+             patch('reNgine.tasks.email_security.check_dmarc', return_value={'found': True, 'record': 'v=DMARC1; p=reject', 'policy': 'reject'}), \
+             patch('reNgine.tasks.email_security.check_dkim', return_value={'found': True, 'selector': 'google', 'record': 'v=DKIM1'}), \
+             patch('reNgine.common_func.get_random_proxy', return_value='socks5://u:p@10.0.0.2:1080') as mock_proxy, \
+             patch('reNgine.tasks.email_verification.verify_domain_mailboxes', return_value={
+                 'catch_all': False,
+                 'checked': 0,
+                 'confirmed': [],
+                 'findings': [],
+                 'skipped_reason': None,
+             }) as mock_v, \
+             patch('reNgine.common_func.save_vulnerability'):
+            _run_email_security_sync(ctx)
+        mock_proxy.assert_called_once_with(socks5_only=True)
+        self.assertEqual(mock_v.call_args.kwargs.get('proxy_url'), 'socks5://u:p@10.0.0.2:1080')

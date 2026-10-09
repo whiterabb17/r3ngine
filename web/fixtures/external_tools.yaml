@@ -29,8 +29,8 @@
     github_url: https://github.com/projectdiscovery/nuclei
     license_url: https://github.com/projectdiscovery/nuclei/blob/master/LICENSE.md
     version_lookup_command: nuclei -version
-    update_command: nuclei -update
-    install_command: go install -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest
+    update_command: go install -ldflags="-s -w" -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+    install_command: go install -ldflags="-s -w" -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
     version_match_regex: v(?i:v)?\d+\.\d+(?:\.\d+)*
     is_default: true
     is_subdomain_gathering: false
@@ -156,7 +156,7 @@
   fields:
     logo_url: null
     name: hakrawler
-    description: Fast golang web crawler for gathering URLs and JavaSript file locations.
+    description: Fast golang web crawler for gathering URLs and JavaScript file locations.
       This is basically a simple implementation of the awesome Gocolly library.
     github_url: https://github.com/hakluke/hakrawler
     license_url: https://github.com/hakluke/hakrawler/blob/master/LICENSE

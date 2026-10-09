@@ -140,7 +140,7 @@ class SubdomainScopeChecker:
 			Returns:
 				bool: True if the subdomain is out of scope, False otherwise.
 		"""
-		subdomain = subdomain.lower() # though we wont encounter this, but just in case
+		subdomain = subdomain.lower() # though we won't encounter this, but just in case
 		if subdomain in self.plain_patterns:
 			return True
 		return any(pattern.search(subdomain) for pattern in self.regex_patterns)
@@ -226,9 +226,14 @@ def get_screenshot_path(subdomain):
 	results_dir = subdomain.scan_history.results_dir if subdomain.scan_history else ""
 	
 	if not path:
-		# Fallback to the first available screenshot object
-		Screenshot = apps.get_model('startScan', 'Screenshot')
-		first_screenshot = Screenshot.objects.filter(subdomain=subdomain).first()
+		# Fallback to the first available screenshot object. A list serializer
+		# prefetches `screenshots` (same Meta ordering), so read that when present.
+		prefetched = getattr(subdomain, '_prefetched_objects_cache', {}).get('screenshots')
+		if prefetched is not None:
+			first_screenshot = next(iter(prefetched), None)
+		else:
+			Screenshot = apps.get_model('startScan', 'Screenshot')
+			first_screenshot = Screenshot.objects.filter(subdomain=subdomain).first()
 		if first_screenshot:
 			path = first_screenshot.screenshot_path
 			if first_screenshot.scan_history:

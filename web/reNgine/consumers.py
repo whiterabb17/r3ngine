@@ -26,7 +26,7 @@ class StressTelemetryConsumer(AsyncWebsocketConsumer):
         )
 
         await self.accept()
-        logger.info(f"WebSocket connected for scan {self.scan_id}")
+        logger.info("WebSocket connected for scan %s", self.scan_id)
 
         # Send authoritative current status from DB before replaying stream history.
         # This prevents a page reload from getting stuck in "running" state when the
@@ -62,7 +62,7 @@ class StressTelemetryConsumer(AsyncWebsocketConsumer):
                 self.channel_name
             )
         if hasattr(self, 'scan_id'):
-            logger.info(f"WebSocket disconnected for scan {self.scan_id}")
+            logger.info("WebSocket disconnected for scan %s", self.scan_id)
 
     async def tail_redis_stream(self):
         """Tails the Redis stream and sends updates to the client."""
@@ -96,7 +96,7 @@ class StressTelemetryConsumer(AsyncWebsocketConsumer):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error tailing Redis stream: {e}")
+                logger.error("Error tailing Redis stream: %s", e)
                 await asyncio.sleep(1)
 
     async def stress_message(self, event):
@@ -123,7 +123,7 @@ class ScanLogConsumer(AsyncWebsocketConsumer):
         )
 
         await self.accept()
-        logger.info(f"ScanLog WebSocket connected for scan {self.scan_id}")
+        logger.info("ScanLog WebSocket connected for scan %s", self.scan_id)
 
         # Start background task to tail Redis Stream
         self.keep_running = True
@@ -140,7 +140,7 @@ class ScanLogConsumer(AsyncWebsocketConsumer):
                 self.channel_name
             )
         if hasattr(self, 'scan_id'):
-            logger.info(f"ScanLog WebSocket disconnected for scan {self.scan_id}")
+            logger.info("ScanLog WebSocket disconnected for scan %s", self.scan_id)
 
     async def tail_redis_stream(self):
         """Tails the Redis stream and sends updates to the client."""
@@ -175,7 +175,7 @@ class ScanLogConsumer(AsyncWebsocketConsumer):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Error tailing scan log Redis stream: {e}")
+                logger.error("Error tailing scan log Redis stream: %s", e)
                 await asyncio.sleep(1)
 
     async def log_message(self, event):
@@ -200,7 +200,7 @@ class AssessmentEventConsumer(AsyncWebsocketConsumer):
         )
 
         await self.accept()
-        logger.info(f"AssessmentEvent WebSocket connected for assessment {self.assessment_id}")
+        logger.info("AssessmentEvent WebSocket connected for assessment %s", self.assessment_id)
 
         # Send authoritative current status from DB
         current_state = await self._get_current_state()
@@ -212,6 +212,7 @@ class AssessmentEventConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _get_current_state(self):
+        from django.core.exceptions import ValidationError
         from engagements.models import AssessmentWorkflowState
         try:
             state = AssessmentWorkflowState.objects.get(assessment__uuid=self.assessment_id)
@@ -220,7 +221,8 @@ class AssessmentEventConsumer(AsyncWebsocketConsumer):
                 'stage': state.current_stage,
                 'progress': state.progress_percent
             }
-        except Exception:
+        except (AssessmentWorkflowState.DoesNotExist, ValidationError):
+            # No workflow started yet, or the route id is not a valid UUID.
             return None
 
     async def disconnect(self, close_code):
@@ -229,7 +231,7 @@ class AssessmentEventConsumer(AsyncWebsocketConsumer):
                 self.group_name,
                 self.channel_name
             )
-        logger.info(f"AssessmentEvent WebSocket disconnected for assessment {getattr(self, 'assessment_id', 'unknown')}")
+        logger.info("AssessmentEvent WebSocket disconnected for assessment %s", getattr(self, 'assessment_id', 'unknown'))
 
     async def assessment_message(self, event):
         """Receive message from group send and forward to WebSocket."""

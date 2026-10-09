@@ -67,7 +67,7 @@ export const GraphBlastRadiusPanel: React.FC<Props> = ({ projectSlug }) => {
             <Box sx={{ bgcolor: 'action.hover', p: 1.5, borderRadius: 1, border: 1, borderColor: 'divider' }}>
                 <Typography sx={{ fontSize: '10px', color: 'text.secondary', mb: 1, fontWeight: 700 }}>AFFECTED NODES</Typography>
                 <Stack spacing={1}>
-                {data.nodes?.map((n: any) => (
+                {data.nodes?.map((n) => (
                     <Box key={n.data.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, bgcolor: tokens.surface.primary, border: 1, borderColor: 'divider', borderRadius: 1 }}>
                         <Typography sx={{ fontSize: '11px', color: 'text.primary', fontWeight: 500, wordBreak: 'break-all' }}>
                             {n.data.label}

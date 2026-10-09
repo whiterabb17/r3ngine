@@ -480,6 +480,34 @@ class TestEvidenceCRUD(TestCase):
         self.assertIsNone(evidence.file_path)
         purge_event = EvidenceEvent.objects.filter(evidence=evidence, event_type='Purged').first()
         self.assertIsNotNone(purge_event)
+        self.assertIn('not requested', purge_event.note)
+
+    def _purge_with_file(self, delete_result):
+        from unittest.mock import MagicMock, patch
+        collection = EvidenceService.get_or_create_collection(self.assessment)
+        evidence = EvidenceService.create_evidence(
+            collection=collection,
+            content=self.SAMPLE_CONTENT,
+            filename='purge_file_test.txt',
+            evidence_type='Log',
+            title='Purge file test',
+            skip_validation=True,
+        )
+        storage = MagicMock()
+        storage.delete.side_effect = delete_result if isinstance(delete_result, Exception) else None
+        storage.delete.return_value = delete_result
+        with patch('evidence.services.get_storage_backend', return_value=storage):
+            EvidenceService.purge_evidence(evidence, actor=self.user, delete_file=True)
+        storage.delete.assert_called_once()
+        return EvidenceEvent.objects.get(evidence=evidence, event_type='Purged')
+
+    def test_purge_event_records_a_deleted_file(self):
+        self.assertIn('Stored file: deleted', self._purge_with_file(True).note)
+
+    def test_purge_event_records_a_failed_delete(self):
+        """The chain of custody must not claim a file was destroyed when storage kept it."""
+        self.assertIn('FAILED', self._purge_with_file(False).note)
+        self.assertIn('FAILED', self._purge_with_file(OSError('bucket unreachable')).note)
 
     def test_archive_collection_archives_all_active_items(self):
         """archive_collection must archive every Active item in the collection."""

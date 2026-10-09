@@ -16,10 +16,13 @@ _TASK_TITLES = {
     'spiderfoot_scan':            'SpiderFoot OSINT',
     'baddns':                     'BadDNS Vulnerability Check',
     'vigolium_harvest':           'Vigolium Passive Harvest',
-    'vigolium_discovery':         'Vigolium Discovery',
     # Tier 2
     'http_crawl':                 'HTTP Crawl',
     'port_scan':                  'Port Scan',
+    'vigolium_discovery':         'Vigolium Discovery',
+    'target_dedup':               'Target Deduplication',
+    'acunetix_submit':            'Acunetix Target Submission',
+    'check_if_email_exists':      'Mailbox Verification',
     # Tier 3
     'fetch_url':                  'URL Fetching',
     'http_crawl_bridge':          'HTTP Crawl Bridge',
@@ -28,6 +31,7 @@ _TASK_TITLES = {
     'web_api_discovery':          'Web API Discovery',
     # Tier 4
     'dir_file_fuzz':              'Directory & File Fuzzing',
+    'post_crawl_osint':           'Post-Crawl OSINT',
     # Tier 5
     'waf_detection':              'WAF Detection',
     'secret_scanning':            'Secret Scanning',
@@ -64,15 +68,22 @@ _TASK_TIER = {
     'spiderfoot_scan':       1,
     'baddns':                1,
     'vigolium_harvest':      1,
-    'vigolium_discovery':    1,
     'http_crawl':            2,
     'port_scan':             2,
+    # Both MasterScanWorkflow and SubScanWorkflow schedule vigolium_discovery in
+    # Tier 2, after subdomain enumeration, so it targets every enumerated
+    # subdomain. The timeline groups rows by this map, and the tier retry
+    # endpoint selects rows by it, so it has to name the tier that really runs it.
+    'vigolium_discovery':    2,
+    'check_if_email_exists': 2,
     'fetch_url':             3,
     'http_crawl_bridge':     3,
     'screenshot':            3,
     'param_discovery':       3,
     'web_api_discovery':     3,
     'dir_file_fuzz':         4,
+    # Tier 4a in both scan workflows: runs once directory fuzzing has finished.
+    'post_crawl_osint':      4,
     'waf_detection':         5,
     'secret_scanning':       5,
     'vigolium_analysis':     5,
@@ -82,12 +93,22 @@ _TASK_TIER = {
     'dalfox_xss_scan':       6,
     's3scanner':             6,
     'acunetix_scan':         6,
+    'target_dedup':          2,
+    'acunetix_submit':       2,
     'wpscan_scan':           6,
     'vigolium_scan':         6,
     'cpanel_scan':           6,
     'react2shell_scan':      6,
     'waf_bypass':            6,
 
+    # Runtime-only tasks: never part of the planned list, but their activity rows
+    # need a tier so they are not all filed under Tier 7 in the timeline.
+    'search_vulns_scan':     2,
+    'smugglex_scan':         6,
+    'second_order_scan':     6,
+    'nuclei_dast_scan':      6,
+    'semgrep_scan':          6,
+    'wptaint_scan':          6,
 }
 
 _TIER7_TASKS = [
@@ -99,35 +120,184 @@ _TIER7_TASKS = [
     'scan_notification',
 ]
 
+# Engine YAML often stores resource keys (threads, timeout, ...) in ScanHistory.tasks.
+# Recovery must ignore those and only resume real pipeline task names.
+_SCAN_TASK_ALIASES = {
+    'attack_path_modeling': 'run_apme',
+}
+
+KNOWN_SCAN_TASK_NAMES = set(_TASK_TITLES) | set(_TIER7_TASKS)
+
+
+def canonical_scan_task_name(name: str):
+    """Return a known pipeline task name, or None for YAML/resource keys."""
+    if not name:
+        return None
+    mapped = _SCAN_TASK_ALIASES.get(name, name)
+    if mapped in KNOWN_SCAN_TASK_NAMES:
+        return mapped
+    return None
+
 _TIER1_TO_5 = [
     'subdomain_discovery', 'amass_intel_discovery', 'firewall_vpn_scan',
     'dns_security', 'osint', 'spiderfoot_scan', 'baddns',
-    'vigolium_harvest', 'vigolium_discovery',
-    'http_crawl', 'port_scan',
+    'vigolium_harvest',
+    'http_crawl', 'port_scan', 'vigolium_discovery',
     'fetch_url', 'screenshot', 'param_discovery',
     'http_crawl_bridge',
-    'dir_file_fuzz',
+    'dir_file_fuzz', 'post_crawl_osint',
     'web_api_discovery', 'waf_detection', 'secret_scanning',
     'waf_bypass',
 ]
+
+
+def get_task_tier(name: str) -> int:
+    """Return the timeline tier a task belongs to (7 for unplanned/post-processing)."""
+    return _TASK_TIER.get(pipeline_task_name(name), 7)
+
+
+# ---------------------------------------------------------------------------
+# Singular tool runs use a distinct ScanActivity.name namespace so they never
+# claim, retry, or finalize pipeline / tier-retry rows that share a task slug.
+# Workflow dispatch still uses the bare pipeline task name.
+# ---------------------------------------------------------------------------
+SINGLE_TOOL_ACTIVITY_PREFIX = 'single_tool_'
+
+
+def singular_activity_name(task_name: str) -> str:
+    """ScanActivity.name for a singular tool run (idempotent)."""
+    name = (task_name or '').strip()
+    if not name:
+        return name
+    if name.startswith(SINGLE_TOOL_ACTIVITY_PREFIX):
+        return name
+    return f'{SINGLE_TOOL_ACTIVITY_PREFIX}{name}'
+
+
+def pipeline_task_name(activity_name: str) -> str:
+    """Strip single_tool_ prefix to recover the pipeline task slug."""
+    name = (activity_name or '').strip()
+    if name.startswith(SINGLE_TOOL_ACTIVITY_PREFIX):
+        return name[len(SINGLE_TOOL_ACTIVITY_PREFIX):]
+    return name
+
+
+#: Task names ``SingleTaskRetryWorkflow`` knows how to dispatch. Anything else
+#: makes the workflow raise a non-retryable ``ApplicationError``, so the tier
+#: retry endpoint filters those rows out and reports them instead of queueing a
+#: workflow that is guaranteed to fail. Kept in sync with the dispatch chain in
+#: ``reNgine/temporal/workflows/jobs.py`` (see test_tier_retry.py).
+RETRYABLE_TASK_NAMES = frozenset({
+    'subdomain_discovery',
+    'amass_intel_discovery',
+    'firewall_vpn_scan',
+    'dns_security',
+    'osint',
+    'spiderfoot_scan',
+    'http_crawl',
+    'port_scan',
+    'vigolium_harvest',
+    'vigolium_discovery',
+    'vigolium_scan',
+    'fetch_url',
+    'screenshot',
+    'web_api_discovery',
+    'param_discovery',
+    'dir_file_fuzz',
+    'waf_detection',
+    'secret_scanning',
+    'vigolium_analysis',
+    'vulnerability_scan',
+    # Nuclei-only retry (NucleiPlanner + parse) — not the full vulnerability_scan chain.
+    'nuclei_scan',
+    'dalfox_xss_scan',
+    'waf_bypass',
+    'post_crawl_osint',
+    'http_crawl_bridge',
+    'run_acunetix',
+    'acunetix_submit',
+    'target_dedup',
+    # Tier 7 post-processing — dispatchable on its own since the upstream merge.
+    'correlate_vulnerabilities',
+    'calculate_risk_scores',
+    'generate_impact_assessment',
+    'sync_graph',
+    'run_apme',
+    'attack_path_modeling',
+    # Mailbox verification, under each of the names the workflow accepts.
+    'check_if_email_exists',
+    'email_security',
+    'mailbox_verification',
+})
+
+#: Timeline rows named after the activity that wrote them rather than the step
+#: ``SingleTaskRetryWorkflow`` dispatches on. The Acunetix timeline row is
+#: ``acunetix_scan``; the workflow step is ``run_acunetix``.
+RETRY_TASK_ALIASES = {
+    'acunetix_scan': 'run_acunetix',
+}
+
+
+def retry_dispatch_name(activity_name: str) -> str | None:
+    """The task name to retry a timeline row with, or None when it cannot be retried on its own."""
+    name = pipeline_task_name(activity_name or '')
+    name = RETRY_TASK_ALIASES.get(name, name)
+    return name if name in RETRYABLE_TASK_NAMES else None
+
+
+def is_singular_activity_name(activity_name: str) -> bool:
+    return (activity_name or '').startswith(SINGLE_TOOL_ACTIVITY_PREFIX)
+
+
+def email_security_enabled(yaml_configuration: dict) -> bool:
+    """True unless the engine config turns email security off.
+
+    The workflow schedules the activity whenever port_scan is in the task list,
+    so this is the only switch an operator has. Absent config means enabled, to
+    keep existing engines behaving as they did.
+    """
+    section = yaml_configuration.get('email_security') if isinstance(yaml_configuration, dict) else None
+    if not isinstance(section, dict):
+        return True
+    return bool(section.get('enabled', True))
+
+
+def _mailbox_verification_planned(tasks: list, yaml_configuration: dict, is_subscan: bool = False) -> bool:
+    """True when MasterScanWorkflow will run mailbox verification."""
+    if is_subscan:
+        return False
+    if 'port_scan' not in tasks:
+        return False
+    if not email_security_enabled(yaml_configuration):
+        return False
+    section = yaml_configuration.get('email_security') if isinstance(yaml_configuration, dict) else None
+    if not isinstance(section, dict):
+        section = {}
+    raw = section.get('mailbox_verification')
+    if raw is None:
+        return True
+    if not isinstance(raw, dict):
+        return True
+    return bool(raw.get('enabled', True))
 
 
 def _entry(name: str) -> dict:
     return {
         'name': name,
         'title': _TASK_TITLES.get(name, name.replace('_', ' ').title()),
-        'tier': _TASK_TIER.get(name, 7),
+        'tier': get_task_tier(name),
         'status': INITIATED_TASK,
     }
 
 
-def build_scan_task_plan(tasks: list, yaml_configuration: dict) -> list:
+def build_scan_task_plan(tasks: list, yaml_configuration: dict, is_subscan: bool = False) -> list:
     """
     Return ordered list of planned-task dicts given an engine task list
     and the full parsed YAML configuration dict.
 
     Each dict: {name, title, tier, status=INITIATED_TASK}.
     Sorted by tier ascending. No I/O — pure function.
+    is_subscan: SubScanWorkflow never runs RunEmailSecurityActivity.
     """
     plan = []
     seen = set()
@@ -146,6 +316,21 @@ def build_scan_task_plan(tasks: list, yaml_configuration: dict) -> list:
             add(t)
         elif t == 'http_crawl_bridge' and 'fetch_url' in tasks:
             add(t)
+
+    # Acunetix target submission rides on http_crawl, which is what establishes
+    # liveness — it is independent of whether the Acunetix scanner itself runs.
+    # Same-site hosts are marked once liveness is known; heavy tools skip them.
+    from reNgine.host_dedup import target_dedup_config
+    if 'http_crawl' in tasks and not is_subscan and target_dedup_config(yaml_configuration)[0]:
+        add('target_dedup')
+
+    acunetix_cfg = (yaml_configuration.get('vulnerability_scan') or {}).get('acunetix') or {}
+    if 'http_crawl' in tasks and acunetix_cfg.get('submit_live_subdomains', False):
+        add('acunetix_submit')
+
+    # Post-tier-2 mailbox verification (same gate as RunEmailSecurityActivity).
+    if _mailbox_verification_planned(tasks, yaml_configuration, is_subscan=is_subscan):
+        add('check_if_email_exists')
 
     # Vigolium tasks: harvest + discovery auto-added when vulnerability_scan is selected
     # (unless explicitly disabled in yaml_configuration).
@@ -192,7 +377,8 @@ def build_scan_task_plan(tasks: list, yaml_configuration: dict) -> list:
     add('calculate_risk_scores')
     add('generate_impact_assessment')
     add('sync_graph')
-    add('run_apme')
+    if (yaml_configuration.get('attack_path_modeling') or {}).get('enabled', True):
+        add('run_apme')
     add('scan_notification')
 
     return sorted(plan, key=lambda e: e['tier'])

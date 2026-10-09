@@ -7,6 +7,9 @@ import json
 import zipfile
 import io
 import os
+import shutil
+import tempfile
+from unittest.mock import patch
 from dashboard.models import OpenAiAPIKey
 from scanEngine.models import EngineType
 from rolepermissions.roles import assign_role
@@ -28,6 +31,19 @@ class ConfigMigrationTests(TestCase):
         
         # Assign admin role to pass HasPermission checks
         assign_role(self.user, 'sys_admin')
+
+        # Keep the import/export off the container paths the runner cannot write.
+        root = tempfile.mkdtemp(prefix='rengine_test_config_')
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        self.wordlist_dir = os.path.join(root, 'wordlist') + os.sep
+        tool_configs = {
+            'tool_configs/theharvester_api-keys.yaml': os.path.join(root, 'theHarvester', 'api-keys.yaml'),
+            'tool_configs/spiderfoot.cfg': os.path.join(root, 'spiderfoot', 'spiderfoot.cfg'),
+        }
+        for target, value in (('WORDLIST_DIR', self.wordlist_dir), ('TOOL_CONFIG_FILES', tool_configs)):
+            patcher = patch(f'api.config_migration_views.{target}', value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
         # Create some test data
         OpenAiAPIKey.objects.create(key='sk-testkey')

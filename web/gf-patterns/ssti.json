@@ -1,0 +1,31 @@
+{
+    "flags": "-iE",
+    "patterns": [
+        "template=",
+        "preview=",
+        "id=",
+        "view=",
+        "activity=",
+        "name=",
+        "content=",
+        "redirect=",
+        "render=",
+        "layout=",
+        "theme=",
+        "format=",
+        "engine=",
+        "tpl=",
+        "include=",
+        "inject=",
+        "body=",
+        "html=",
+        "msg=",
+        "message=",
+        "page=",
+        "doc=",
+        "data=",
+        "text=",
+        "prompt=",
+        "input="
+    ]
+}

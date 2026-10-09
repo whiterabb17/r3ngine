@@ -23,6 +23,7 @@ import { useParameters } from '../api';
 import { TacticalPanel } from '../../../components/TacticalPanel';
 import { copyToClipboard } from '../../endpoints/utils/copy';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import { getSafeUrl } from '../../../utils/securityUtils';
 
 interface ParametersTabProps {
   scanId?: number;
@@ -351,7 +352,7 @@ export const ParametersTab: React.FC<ParametersTabProps> = ({ scanId, targetId }
                           textDecoration: 'none',
                           wordBreak: 'break-all',
                           '&:hover': { color: tokens.accent.primary }
-                        }} component="a" href={/^https?:\/\//i.test(param.endpoint?.http_url ?? '') ? param.endpoint!.http_url : '#'} target="_blank">
+                        }} component="a" href={getSafeUrl(param.endpoint?.http_url) ?? '#'} target="_blank">
                           {param.endpoint?.http_url}
                         </Typography>
                         <IconButton

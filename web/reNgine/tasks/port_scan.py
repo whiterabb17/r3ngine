@@ -1,4 +1,5 @@
 import logging
+import shlex
 import os
 import json
 import xmltodict
@@ -39,7 +40,7 @@ def port_scan(self, hosts=[], ctx={}, description=None, prepare_only=False, pars
 	exclude_subdomains = config.get(NAABU_EXCLUDE_SUBDOMAINS, False)
 	ports = config.get(PORTS, NAABU_DEFAULT_PORTS)
 	ports = [str(port) for port in ports]
-	rate_limit = config.get(NAABU_RATE) or self.yaml_configuration.get(RATE_LIMIT, DEFAULT_RATE_LIMIT)
+	rate_limit = config.get(NAABU_RATE) or config.get(RATE_LIMIT) or self.yaml_configuration.get(RATE_LIMIT, DEFAULT_RATE_LIMIT)
 	threads = config.get(THREADS) or self.yaml_configuration.get(THREADS, DEFAULT_THREADS)
 	passive = config.get(NAABU_PASSIVE, False)
 	use_naabu_config = config.get(USE_NAABU_CONFIG, False)
@@ -85,6 +86,9 @@ def port_scan(self, hosts=[], ctx={}, description=None, prepare_only=False, pars
 	cmd += f' -passive' if passive else ''
 	cmd += f' -exclude-ports {exclude_ports_str}' if exclude_ports else ''
 	cmd += f' -silent'
+	if ctx.get('singular_tool_run') and ctx.get('extra_cli_args'):
+		from reNgine.tool_args import append_extra_cli_args
+		cmd = append_extra_cli_args(cmd, ctx.get('extra_cli_args') or [])
 
 	if prepare_only:
 		return {
@@ -169,7 +173,7 @@ def port_scan(self, hosts=[], ctx={}, description=None, prepare_only=False, pars
 		)
 
 		if created:
-			logger.warning(f'Added new port {port_number} to DB')
+			logger.warning("Added new port %s to DB", port_number)
 
 		# Centralized Brute-Force Candidate Registration for Naabu findings
 		bf_protocols = {
@@ -192,7 +196,7 @@ def port_scan(self, hosts=[], ctx={}, description=None, prepare_only=False, pars
 					tech_hint=f"Open Port {port_number}"
 				)
 			except Exception as e:
-				logger.error(f"Error registering AuthCandidate from Naabu port {port_number}: {e}")
+				logger.error("Error registering AuthCandidate from Naabu port %s: %s", port_number, e)
 
 		if port_number in UNCOMMON_WEB_PORTS:
 			port.is_uncommon = True
@@ -205,7 +209,7 @@ def port_scan(self, hosts=[], ctx={}, description=None, prepare_only=False, pars
 			ports_data[host] = [port_number]
 
 		# Send notification
-		logger.warning(f'Found opened port {port_number} on {ip_address} ({host})')
+		logger.warning("Found opened port %s on %s (%s)", port_number, ip_address, host)
 
 	if len(ports_data) == 0:
 		logger.info('Finished running naabu port scan - No open ports found.')
@@ -246,7 +250,7 @@ def port_scan(self, hosts=[], ctx={}, description=None, prepare_only=False, pars
 
 	# Process nmap results: 1 process per host
 	if nmap_enabled:
-		logger.warning(f'Starting nmap scans ...')
+		logger.warning("Starting nmap scans ...")
 		logger.warning(ports_data)
 		for host, port_list in ports_data.items():
 			ports_str = '_'.join([str(p) for p in port_list])
@@ -254,7 +258,7 @@ def port_scan(self, hosts=[], ctx={}, description=None, prepare_only=False, pars
 			ctx_nmap['description'] = get_task_title(f'nmap_{host}', self.scan_id, self.subscan_id)
 			ctx_nmap['track'] = False
 			ctx_nmap['activity_id'] = self.activity_id
-			logger.info(f"Running nmap for {host} in port_scan.")
+			logger.info("Running nmap for %s in port_scan.", host)
 			nmap(
 				self,
 				cmd=nmap_cmd,
@@ -377,13 +381,11 @@ def nmap(
 						parsed_port = parsed_url.port
 					else:
 						parsed_port = 443 if parsed_url.scheme == 'https' else 80
-				except Exception:
-					try:
-						port_part = url_str.split(':')[-1]
-						if port_part.isdigit():
-							parsed_port = int(port_part)
-					except Exception:
-						pass
+				except ValueError:
+					# Out-of-range or malformed port: take the trailing digits as-is.
+					port_part = url_str.split(':')[-1]
+					if port_part.isdigit():
+						parsed_port = int(port_part)
 			save_auth_candidate(
 				scan_history=self.scan,
 				target=vuln_data['http_url'],
@@ -449,7 +451,7 @@ def parse_nmap_results(xml_file, output_file=None):
 			nmap_results = xmltodict.parse(content) # parse XML to dict
 		except Exception as e:
 			logger.exception(e)
-			logger.error(f'Cannot parse {xml_file} to valid JSON. Skipping.')
+			logger.error("Cannot parse %s to valid JSON. Skipping.", xml_file)
 			return {'vulns': [], 'services': []}
 
 	# Write JSON to output file
@@ -510,7 +512,7 @@ def parse_nmap_results(xml_file, output_file=None):
 				url_vulns = []
 				port_number = port['@portid']
 				url = sanitize_url(f'{hostname}:{port_number}')
-				logger.info(f'Parsing nmap results for {hostname}:{port_number} ...')
+				logger.info("Parsing nmap results for %s:%s ...", hostname, port_number)
 				if not port_number or not port_number.isdigit():
 					continue
 				
@@ -538,7 +540,7 @@ def parse_nmap_results(xml_file, output_file=None):
 					service_product = service.get('@product', '')
 					service_version = service.get('@version', '')
 					service_title = f"{service_product} {service_version}".strip()
-					logger.debug(f'Ran nmap script "{script_id}" on {port_number}/{port_protocol}:\n{script_output}\n')
+					logger.debug('Ran nmap script "%s" on %s/%s:\n%s\n', script_id, port_number, port_protocol, script_output)
 					if script_id == 'vulscan':
 						vulns = parse_nmap_vulscan_output(script_output)
 						url_vulns.extend(vulns)
@@ -577,7 +579,7 @@ def parse_nmap_results(xml_file, output_file=None):
 									vulns = parse_nmap_generic_vuln_output(script_id, script_output)
 									url_vulns.extend(vulns)
 								else:
-									logger.warning(f'Script output parsing for script "{script_id}" is not supported yet.')
+									logger.warning('Script output parsing for script "%s" is not supported yet.', script_id)
 
 				# Add URL & source to vuln
 				for vuln in url_vulns:
@@ -703,7 +705,7 @@ def parse_nmap_vulscan_output(script_output):
 			continue
 		if not line.startswith('['): # provider line
 			if "No findings" in line:
-				logger.info(f"No findings: {line}")
+				logger.info("No findings: %s", line)
 				continue
 			elif ' - ' in line:
 				provider_name, provider_url = tuple(line.split(' - '))
@@ -711,7 +713,7 @@ def parse_nmap_vulscan_output(script_output):
 				continue
 			else:
 				# Log a warning
-				logger.warning(f"Unexpected line format: {line}")
+				logger.warning("Unexpected line format: %s", line)
 				continue
 		reg = r'\[(.*)\] (.*)'
 		matches = re.match(reg, line)
@@ -724,31 +726,31 @@ def parse_nmap_vulscan_output(script_output):
 
 	for provider_name in data:
 		if provider_name == 'Exploit-DB':
-			logger.error(f'Provider {provider_name} is not supported YET.')
+			logger.error("Provider %s is not supported YET.", provider_name)
 			pass
 		elif provider_name == 'IBM X-Force':
-			logger.error(f'Provider {provider_name} is not supported YET.')
+			logger.error("Provider %s is not supported YET.", provider_name)
 			pass
 		elif provider_name == 'MITRE CVE':
-			logger.error(f'Provider {provider_name} is not supported YET.')
+			logger.error("Provider %s is not supported YET.", provider_name)
 			for entry in data[provider_name]['entries']:
 				cve_id = entry['id']
 				vuln = cve_to_vuln(cve_id)
 				vulns.append(vuln)
 		elif provider_name == 'OSVDB':
-			logger.error(f'Provider {provider_name} is not supported YET.')
+			logger.error("Provider %s is not supported YET.", provider_name)
 			pass
 		elif provider_name == 'OpenVAS (Nessus)':
-			logger.error(f'Provider {provider_name} is not supported YET.')
+			logger.error("Provider %s is not supported YET.", provider_name)
 			pass
 		elif provider_name == 'SecurityFocus':
-			logger.error(f'Provider {provider_name} is not supported YET.')
+			logger.error("Provider %s is not supported YET.", provider_name)
 			pass
 		elif provider_name == 'VulDB':
-			logger.error(f'Provider {provider_name} is not supported YET.')
+			logger.error("Provider %s is not supported YET.", provider_name)
 			pass
 		else:
-			logger.error(f'Provider {provider_name} is not supported.')
+			logger.error("Provider %s is not supported.", provider_name)
 	return vulns
 
 
@@ -895,7 +897,7 @@ def cve_to_vuln(cve_id, vuln_type=''):
 	"""
 	cve_info = CVESearch('https://cve.circl.lu').id(cve_id)
 	if not cve_info:
-		logger.error(f'Could not fetch CVE info for cve {cve_id}. Skipping.')
+		logger.error("Could not fetch CVE info for cve %s. Skipping.", cve_id)
 		return None
 	vuln_cve_id = cve_info.get('id', cve_info.get('CVE', cve_id))
 	vuln_name = vuln_cve_id
@@ -1071,10 +1073,10 @@ def firewall_vpn_scan(self, ctx={}, description=None):
 
 	# 1. IKE-scan
 	if run_ike_scan:
-		logger.warning(f'Running IKE-scan on {target}')
+		logger.warning("Running IKE-scan on %s", target)
 		ike_output_file = f'{self.results_dir}/ike_scan_{target}.txt'
 		# ike-scan does not natively support HTTP/SOCKS proxies
-		cmd = f'ike-scan --multiline {target} > {ike_output_file}'
+		cmd = f'ike-scan --multiline {shlex.quote(target)} > {shlex.quote(ike_output_file)}'
 		#proxy = get_random_proxy()
 		run_command(
 			cmd,
@@ -1100,10 +1102,10 @@ def firewall_vpn_scan(self, ctx={}, description=None):
 	# 2. SSLScan
 	if run_sslscan:
 		for port in ssl_ports:
-			logger.warning(f'Running SSLScan on {target}:{port}')
+			logger.warning("Running SSLScan on %s:%s", target, port)
 			ssl_output_file = f'{self.results_dir}/sslscan_{target}_{port}.xml'
 			# sslscan does not natively support proxies
-			cmd = f'sslscan --xml={ssl_output_file} {target}:{port}'
+			cmd = f'sslscan --xml={shlex.quote(ssl_output_file)} {shlex.quote(f"{target}:{port}")}'
 			#proxy = get_random_proxy()
 			run_command(
 				cmd,

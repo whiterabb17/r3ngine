@@ -65,7 +65,7 @@ def send_scan_notif(
 		'fields': fields,
 		'severity': severity
 	}
-	logger.info(f'Sending notification "{title}" (severity: {severity})')
+	logger.info('Sending notification "%s" (severity: %s)', title, severity)
 
 	# inapp notification has to be sent eitherways
 	generate_inapp_notification(scan, subscan, status, engine, fields)
@@ -169,7 +169,7 @@ def send_task_notif(
 		subscan_id (int, optional): SuScan id.
 		engine_id (int, optional): EngineType id.
 		severity (str, optional): Severity (will be mapped to notif colors)
-		add_meta_info (bool, optional): Wheter to add scan / subscan info to notif.
+		add_meta_info (bool, optional): Whether to add scan / subscan info to notif.
 		update_fields (dict, optional): Fields key / value to update.
 	"""
 	from startScan.models import SubScan
@@ -314,7 +314,8 @@ def send_hackerone_report(vulnerability_id):
 		'https://api.hackerone.com/v1/hackers/reports',
 		auth=(api_key.username, api_key.key),
 		json=data,
-		headers=headers
+		headers=headers,
+		timeout=30
 	)
 	response = r.json()
 	status_code = r.status_code
@@ -323,5 +324,5 @@ def send_hackerone_report(vulnerability_id):
 		vulnerability.open_status = False
 		vulnerability.save()
 		return {"status_code": r.status_code, "message": "Report sent successfully"}
-	logger.error(f"Error sending report to HackerOne")
+	logger.error("Error sending report to HackerOne")
 	return {"status_code": r.status_code, "message": response}

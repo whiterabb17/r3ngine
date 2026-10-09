@@ -169,6 +169,8 @@ pip3_install_if_missing() {
 
 pip3_install_if_missing fierce
 pip3_install_if_missing dirsearch
+# dirsearch 0.5+ uses httpx for requests; SOCKS proxies need socksio
+pip3_install_if_missing socksio
 pip3_install_if_missing arjun
 pip3_install_if_missing netlas
 pip3_install_if_missing holehe

@@ -1,12 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import cytoscape from 'cytoscape';
-// @ts-ignore
 import fcose from 'cytoscape-fcose';
-// @ts-ignore
 import klay from 'cytoscape-klay';
-// @ts-ignore
 import expandCollapse from 'cytoscape-expand-collapse';
-// @ts-ignore
 import contextMenus from 'cytoscape-context-menus';
 import 'cytoscape-context-menus/cytoscape-context-menus.css';
 
@@ -33,6 +29,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
   const { setSelectedNode } = useGraphStore();
+  const layoutNameRef = useRef(layoutName);
+  const skipLayoutEffectRef = useRef(true);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -54,9 +52,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
     });
 
     const uniqueScans = new Set<number>();
-    processedNodes.forEach((n: any) => {
+    processedNodes.forEach((n) => {
         if (n.data?.scan_ids && Array.isArray(n.data.scan_ids)) {
-            n.data.scan_ids.forEach((id: number) => uniqueScans.add(id));
+            n.data.scan_ids.forEach((id) => uniqueScans.add(id));
         }
     });
     
@@ -88,16 +86,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
             'text-valign': 'bottom',
             'text-margin-y': 5,
             'text-opacity': 0,
-            'width': (ele: any) => Math.min(80, 30 + (ele.data('degree_centrality') || 0) * 5),
-            'height': (ele: any) => Math.min(80, 30 + (ele.data('degree_centrality') || 0) * 5),
-            'border-width': (ele: any) => (ele.data('criticalVulnCount') || 0) > 0 ? 4 : 1,
-            'border-color': (ele: any) => (ele.data('criticalVulnCount') || 0) > 0 ? tokens.accent.error : tokens.border.subtle,
+            'width': (ele: cytoscape.NodeSingular) => Math.min(80, 30 + (ele.data('degree_centrality') || 0) * 5),
+            'height': (ele: cytoscape.NodeSingular) => Math.min(80, 30 + (ele.data('degree_centrality') || 0) * 5),
+            'border-width': (ele: cytoscape.NodeSingular) => (ele.data('criticalVulnCount') || 0) > 0 ? 4 : 1,
+            'border-color': (ele: cytoscape.NodeSingular) => (ele.data('criticalVulnCount') || 0) > 0 ? tokens.accent.error : tokens.border.subtle,
             'overlay-padding': 6,
-            'z-index': 1,
-            'shadow-blur': 10,
-            'shadow-color': 'data(color)',
-            'shadow-opacity': 0.2
-          } as any
+            'z-index': 1
+          }
         },
         {
           selector: 'node:parent',
@@ -107,7 +102,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
             'border-width': 1,
             'border-style': 'solid',
             'border-color': `${tokens.accent.primary}33`,
-            'padding': 30,
+            'padding': '30px',
             'text-valign': 'top',
             'text-margin-y': -10,
             'font-size': '12px',
@@ -115,8 +110,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
             'text-opacity': 0.6,
             'text-transform': 'uppercase',
             'shape': 'roundrectangle',
-            'corner-radius': 12
-          } as any
+            'corner-radius': '12px'
+          }
         },
         {
           selector: 'node[type = "Domain"]',
@@ -128,10 +123,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
             'text-opacity': 1,
             'shape': 'hexagon',
             'border-width': 3,
-            'border-color': tokens.border.strong,
-            'shadow-opacity': 0.8,
-            'shadow-blur': 20
-          } as any
+            'border-color': tokens.border.strong
+          }
         },
         {
           selector: 'node[type = "Vulnerability"]',
@@ -139,9 +132,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
             'shape': 'diamond',
             'width': 45,
             'height': 45,
-            'background-color': tokens.accent.error,
-            'shadow-color': tokens.accent.error
-          } as any
+            'background-color': tokens.accent.error
+          }
         },
         {
           selector: 'node.cy-expand-collapse-collapsed-node',
@@ -153,8 +145,8 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
             'shape': 'roundrectangle',
             'text-opacity': 1,
             'color': tokens.text.primary,
-            'label': (ele: any) => `${ele.data('label')} (${ele.data('collapsedChildren')?.length || 0})`
-          } as any
+            'label': (ele: cytoscape.NodeSingular) => `${ele.data('label')} (${ele.data('collapsedChildren')?.length || 0})`
+          }
         },
         {
           selector: 'edge',
@@ -167,7 +159,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
             'control-point-distances': [20, -20],
             'control-point-weights': [0.25, 0.75],
             'opacity': 0.3
-          } as any
+          }
         },
         {
             selector: 'node.hover',
@@ -178,15 +170,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
                 'z-index': 999,
                 'text-background-opacity': 0.9,
                 'text-background-color': tokens.surface.elevated,
-                'text-background-padding': 4,
-                'text-background-shape': 'roundrectangle',
-                'shadow-opacity': 1,
-                'shadow-blur': 30
-            } as any
+                'text-background-padding': '4px',
+                'text-background-shape': 'roundrectangle'
+            }
         },
         {
             selector: 'node.highlighted',
-            style: { 'opacity': 1, 'z-index': 100, 'shadow-opacity': 0.6 } as any
+            style: { 'opacity': 1, 'z-index': 100 }
         },
         {
             selector: 'node.faded',
@@ -194,7 +184,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
         },
         {
             selector: 'edge.highlighted',
-            style: { 'line-color': tokens.accent.primary, 'target-arrow-color': tokens.accent.primary, 'width': 2, 'opacity': 1, 'z-index': 50 } as any
+            style: { 'line-color': tokens.accent.primary, 'target-arrow-color': tokens.accent.primary, 'width': 2, 'opacity': 1, 'z-index': 50 }
         },
         {
             selector: 'edge.faded',
@@ -204,15 +194,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
     });
 
     // Initialize expand-collapse API
-    const expandCollapseApi = (cy as any).expandCollapse({
+    const expandCollapseApi = cy.expandCollapse({
       layoutBy: {
         name: layoutName,
-        animate: true,
+        animate: false,
         randomize: false,
         fit: true
       },
-      fisheye: true,
-      animate: true,
+      fisheye: false,
+      animate: false,
       undoable: false,
       expandCollapseCuePosition: 'top-left',
       expandCollapseCueSize: 16,
@@ -222,13 +212,13 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
     });
 
     // Initialize Context Menus
-    (cy as any).contextMenus({
+    cy.contextMenus({
       menuItems: [
         {
           id: 'view-details',
           content: 'View Intelligence Details',
           selector: 'node',
-          onClickFunction: (event: any) => {
+          onClickFunction: (event: cytoscape.EventObject) => {
             const node = event.target;
             setSelectedNode(node.id(), node.data());
           }
@@ -237,7 +227,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
           id: 'blast-radius',
           content: 'Calculate Blast Radius',
           selector: 'node',
-          onClickFunction: (event: any) => {
+          onClickFunction: (event: cytoscape.EventObject) => {
              // Logic to switch panel to blast radius
              const node = event.target;
              useGraphStore.getState().setActivePanel('blastRadius');
@@ -249,7 +239,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
           id: 'run-scan',
           content: 'Initiate Targeted Scan',
           selector: 'node[type="Subdomain"]',
-          onClickFunction: (event: any) => {
+          onClickFunction: (event: cytoscape.EventObject) => {
             alert(`Initiating scan for ${event.target.data('label')}...`);
           }
         }
@@ -258,10 +248,10 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
       contextMenuClasses: ['custom-context-menu']
     });
 
-    // Initial Layout
+    // Initial Layout — no animation (compositor-friendly); user refresh may animate
     cy.layout({ 
       name: layoutName,
-      animate: true,
+      animate: false,
       nodeDimensionsIncludeLabels: true,
       ...(layoutName === 'fcose' ? {
         quality: 'default',
@@ -279,7 +269,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
           nodeLayering: 'NETWORK_SIMPLEX'
         }
       } : {})
-    } as any).run();
+    }).run();
 
     cy.on('mouseover', 'node', (e) => {
         const node = e.target;
@@ -307,7 +297,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
     cyRef.current = cy;
     if (onInit) onInit(cy);
 
+    const onVisibility = () => {
+      if (document.hidden) {
+        cy.stop();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
     return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
       cy.destroy();
     };
   }, [data]);
@@ -318,7 +316,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
     const cy = cyRef.current;
 
     if (searchQuery) {
-      const matches = cy.nodes().filter((node: any) => 
+      const matches = cy.nodes().filter((node) => 
         node.data('label')?.toLowerCase().includes(searchQuery.toLowerCase())
       );
 
@@ -338,16 +336,26 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ data, layoutName, sear
 
   useEffect(() => {
     if (!cyRef.current) return;
+    // Skip the mount pass — initial layout already ran without animation in the init effect.
+    if (skipLayoutEffectRef.current) {
+      skipLayoutEffectRef.current = false;
+      layoutNameRef.current = layoutName;
+      return;
+    }
+    if (layoutNameRef.current === layoutName) return;
+    layoutNameRef.current = layoutName;
+    // User-triggered layout change — keep brief animation for feedback
     cyRef.current.layout({ 
       name: layoutName,
       animate: true,
+      animationDuration: 300,
       ...(layoutName === 'fcose' ? {
         nodeRepulsion: 4500,
         idealEdgeLength: 100,
       } : layoutName === 'klay' ? {
         klay: { direction: 'DOWN', spacing: 50 }
       } : {})
-    } as any).run();
+    }).run();
   }, [layoutName]);
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;

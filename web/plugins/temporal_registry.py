@@ -17,7 +17,7 @@ class PluginTemporalRegistry:
         try:
             return list(Plugin.objects.filter(is_enabled=True).values('slug', 'manifest'))
         except Exception as e:
-            logger.error(f"PluginTemporalRegistry failed to fetch plugins: {e}")
+            logger.error("PluginTemporalRegistry failed to fetch plugins: %s", e)
             return []
 
     @classmethod
@@ -39,9 +39,9 @@ class PluginTemporalRegistry:
                     module = import_module(full_module_path)
                     workflow_class = getattr(module, class_name)
                     workflows.append(workflow_class)
-                    logger.info(f"Dynamically loaded Temporal workflow: {class_name} from plugin {slug}")
+                    logger.info("Dynamically loaded Temporal workflow: %s from plugin %s", class_name, slug)
                 except Exception as e:
-                    logger.error(f"Failed to load workflow {path} from plugin {slug}: {e}")
+                    logger.error("Failed to load workflow %s from plugin %s: %s", path, slug, e)
                     
         return workflows
 
@@ -62,8 +62,8 @@ class PluginTemporalRegistry:
                     module = import_module(full_module_path)
                     activity_func = getattr(module, func_name)
                     activities.append(activity_func)
-                    logger.info(f"Dynamically loaded Temporal activity: {func_name} from plugin {slug}")
+                    logger.info("Dynamically loaded Temporal activity: %s from plugin %s", func_name, slug)
                 except Exception as e:
-                    logger.error(f"Failed to load activity {path} from plugin {slug}: {e}")
+                    logger.error("Failed to load activity %s from plugin %s: %s", path, slug, e)
                     
         return activities

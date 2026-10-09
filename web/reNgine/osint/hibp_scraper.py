@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 import undetected_chromedriver as uc
 from pyvirtualdisplay import Display
+from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -63,8 +64,8 @@ def check_email_on_hibp_uc(email_address: str, proxy_string: str = None, results
                 bad = driver.find_element(By.ID, "email-result-bad").get_attribute("class")
                 if "d-none" not in good or "d-none" not in bad:
                     break
-            except Exception:
-                pass
+            except WebDriverException:
+                pass  # result elements not rendered yet
             time.sleep(1)
 
         bad_result = driver.find_element(By.ID, "email-result-bad")

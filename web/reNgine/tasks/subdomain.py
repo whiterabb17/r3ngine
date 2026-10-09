@@ -1,11 +1,13 @@
 ﻿import logging
 import os
+import shlex
 import json
 import validators
 from pathlib import Path
 
 from reNgine.common_func import *
 from reNgine.definitions import *
+from reNgine.osint.securitytrails import SecurityTrailsError, fetch_securitytrails_subdomains
 from reNgine.utils.opsec import OpSecManager, ProxychainsWrapper, get_opsec_manager
 from reNgine.utils.task import run_command, run_command_with_retry, stream_command, save_subdomain, save_endpoint, save_subdomain_metadata
 from reNgine.tasks.persistence import create_scan_activity
@@ -21,12 +23,11 @@ def amass_intel_discovery(self, host, ctx={}, description=None):
 	Args:
 		host (str): Target domain to run intel on.
 	"""
-	config = self.yaml_configuration.get(SUBDOMAIN_DISCOVERY) or {}
-	use_amass_config = config.get(USE_AMASS_CONFIG, False)
-	
+	use_amass_config = _amass_intel_uses_config(self.yaml_configuration)
+
 	output_path = f'{self.results_dir}/amass_intel.txt'
 	
-	cmd = f'amass intel -d {host} -whois -o {output_path}'
+	cmd = f'amass intel -d {shlex.quote(host)} -whois -o {shlex.quote(output_path)}'
 	cmd += ' -config /root/.config/amass.ini' if use_amass_config else ''
 	
 	#proxy = get_random_proxy()
@@ -49,7 +50,7 @@ def amass_intel_discovery(self, host, ctx={}, description=None):
 				domain_name = line.strip()
 				if domain_name and domain_name != host:
 					discovered_count += 1
-					logger.info(f"Discovered associated domain: {domain_name}")
+					logger.info("Discovered associated domain: %s", domain_name)
 					
 	if discovered_count > 0:
 		self.notify(fields={'Infrastructure Discovery': f'Discovered {discovered_count} associated domains/assets via Amass Intel.'})
@@ -75,7 +76,7 @@ def subdomain_discovery(
 		host = self.subdomain.name if self.subdomain else self.domain.name
 
 	if self.starting_point_path:
-		logger.warning(f'Ignoring subdomains scan as an URL path filter was passed ({self.starting_point_path}).')
+		logger.warning("Ignoring subdomains scan as an URL path filter was passed (%s).", self.starting_point_path)
 		return
 
 	# Config
@@ -103,6 +104,8 @@ def subdomain_discovery(
 	default_subdomain_tools.append('amass-active')
 	# Append baddns so it is always registered as a supported default subdomain discovery tool
 	default_subdomain_tools.append('baddns')
+	# SecurityTrails is an API, not an installed tool
+	default_subdomain_tools.append('securitytrails')
 
 	# Run tools
 	opsec = get_opsec_manager()
@@ -112,13 +115,13 @@ def subdomain_discovery(
 	for tool in tools:
 		cmd = None
 		results_file = None
-		logger.info(f'Scanning subdomains for {host} with {tool}')
+		logger.info("Scanning subdomains for %s with %s", host, tool)
 		proxy = get_random_proxy()
 		if tool in default_subdomain_tools:
 			if tool == 'amass-passive':
 				use_amass_config = config.get(USE_AMASS_CONFIG, False)
 				results_file = f'{self.results_dir}/subdomains_amass.txt'
-				cmd = f'amass enum -passive -d {host} -o {results_file}'
+				cmd = f'amass enum -passive -d {shlex.quote(host)} -o {shlex.quote(results_file)}'
 				cmd += ' -config /root/.config/amass.ini' if use_amass_config else ''
 				#if proxy:
 				#	cmd = f"export HTTP_PROXY='{proxy}' HTTPS_PROXY='{proxy}' && {cmd}"
@@ -128,7 +131,7 @@ def subdomain_discovery(
 				amass_wordlist_name = config.get(AMASS_WORDLIST, 'deepmagic.com-prefixes-top50000')
 				wordlist_path = f'/usr/src/wordlist/{amass_wordlist_name}.txt'
 				results_file = f'{self.results_dir}/subdomains_amass_active.txt'
-				cmd = f'amass enum -active -d {host} -o {results_file}'
+				cmd = f'amass enum -active -d {shlex.quote(host)} -o {shlex.quote(results_file)}'
 				cmd += ' -config /root/.config/amass.ini' if use_amass_config else ''
 				cmd += f' -brute -w {wordlist_path}'
 				#if proxy:
@@ -136,7 +139,7 @@ def subdomain_discovery(
 
 			elif tool == 'sublist3r':
 				results_file = f'{self.results_dir}/subdomains_sublister.txt'
-				cmd = f'python3 /usr/src/github/Sublist3r/sublist3r.py -d {host} -t {threads} -o {results_file}'
+				cmd = f'python3 /usr/src/github/Sublist3r/sublist3r.py -d {shlex.quote(host)} -t {threads} -o {shlex.quote(results_file)}'
 
 			elif tool == 'subfinder':
 				results_file = f'{self.results_dir}/subdomains_subfinder.txt'
@@ -184,6 +187,10 @@ def subdomain_discovery(
 				results_file = self.results_dir + '/subdomains_chaos.txt'
 				cmd = f'chaos -d {host} -silent -key {chaos_key} -o {results_file}'
 
+			elif tool == 'securitytrails':
+				_collect_securitytrails_subdomains(host, f'{self.results_dir}/subdomains_securitytrails.txt')
+				continue
+
 			elif tool == 'baddns':
 				results_file = self.results_dir + '/baddns_report.json'
 				# Run baddns in silent mode (JSON format) and redirect stdout to results_file
@@ -193,15 +200,15 @@ def subdomain_discovery(
 		elif tool in custom_subdomain_tools:
 			tool_query = InstalledExternalTool.objects.filter(name__icontains=tool.lower())
 			if not tool_query.exists():
-				logger.error(f'{tool} configuration does not exists. Skipping.')
+				logger.error("%s configuration does not exists. Skipping.", tool)
 				continue
 			custom_tool = tool_query.first()
 			cmd = custom_tool.subdomain_gathering_command
 			if '{TARGET}' not in cmd:
-				logger.error(f'Missing {{TARGET}} placeholders in {tool} configuration. Skipping.')
+				logger.error("Missing {TARGET} placeholders in %s configuration. Skipping.", tool)
 				continue
 			if '{OUTPUT}' not in cmd:
-				logger.error(f'Missing {{OUTPUT}} placeholders in {tool} configuration. Skipping.')
+				logger.error("Missing {OUTPUT} placeholders in %s configuration. Skipping.", tool)
 				continue
 
 			results_file = f'{self.results_dir}/subdomains_{tool}.txt'
@@ -210,7 +217,7 @@ def subdomain_discovery(
 			cmd = cmd.replace('{PATH}', custom_tool.github_clone_path) if '{PATH}' in cmd else cmd
 		else:
 			logger.warning(
-				f'Subdomain discovery tool "{tool}" is not supported by reNgine. Skipping.')
+				'Subdomain discovery tool "%s" is not supported by reNgine. Skipping.', tool)
 			continue
 
 		# Apply OpSec stealth
@@ -218,7 +225,7 @@ def subdomain_discovery(
 
 		# Run tool (with empty-file retry up to 3 attempts)
 		try:
-			logger.warning(f'Running {tool} with command: {cmd}')
+			logger.warning("Running %s with command: %s", tool, cmd)
 			run_command_with_retry(
 				cmd,
 				results_file=results_file,
@@ -264,14 +271,14 @@ def subdomain_discovery(
 						with open(extracted_file, 'w') as f_out:
 							for sub in sorted(discovered_subs):
 								f_out.write(f'{sub}\n')
-						logger.info(f"Extracted {len(discovered_subs)} subdomains from baddns output: {discovered_subs}")
+						logger.info("Extracted %s subdomains from baddns output: %s", len(discovered_subs), discovered_subs)
 				except Exception as parse_err:
-					logger.error(f"Error parsing baddns output to extract subdomains: {parse_err}")
+					logger.error("Error parsing baddns output to extract subdomains: %s", parse_err)
 					logger.exception(parse_err)
 
 		except Exception as e:
 			logger.error(
-				f'Subdomain discovery tool "{tool}" raised an exception')
+				'Subdomain discovery tool "%s" raised an exception', tool)
 			logger.exception(e)
 
 	# Gather all the tools' results in one single file. Write subdomains into
@@ -311,14 +318,14 @@ def subdomain_discovery(
 			valid_url
 		)
 		if not valid_domain:
-			logger.error(f'Subdomain {subdomain_name} is not a valid domain, IP or URL. Skipping.')
+			logger.error("Subdomain %s is not a valid domain, IP or URL. Skipping.", subdomain_name)
 			continue
 
 		if valid_url:
 			subdomain_name = urlparse(subdomain_name).netloc
 
 		if subdomain_scope_checker.is_out_of_scope(subdomain_name):
-			logger.error(f'Subdomain {subdomain_name} is out of scope. Skipping.')
+			logger.error("Subdomain %s is out of scope. Skipping.", subdomain_name)
 			continue
 
 		# Add subdomain
@@ -361,8 +368,8 @@ def subdomain_discovery(
 									data = json.loads(b_line)
 									if data.get('description'):
 										description_text = f"baddns: {data.get('description')}"
-								except Exception:
-									pass
+								except (ValueError, AttributeError):
+									pass  # plain-text baddns line: keep the generic description
 								
 								save_vulnerability(
 									name=f"Subdomain Takeover on {subdomain_name}",
@@ -446,7 +453,7 @@ def save_imported_subdomains(subdomains, ctx={}):
 	if not subdomains:
 		return
 
-	logger.warning(f'Found {len(subdomains)} imported subdomains.')
+	logger.warning("Found %s imported subdomains.", len(subdomains))
 	with open(f'{results_dir}/from_imported.txt', 'w+') as output_file:
 		for name in subdomains:
 			subdomain_name = name.strip()
@@ -456,7 +463,36 @@ def save_imported_subdomains(subdomains, ctx={}):
 			output_file.write(f'{subdomain}\n')
 
 
+def _collect_securitytrails_subdomains(host: str, results_file: str) -> int:
+	"""Write SecurityTrails subdomains of ``host`` to ``results_file``.
+
+	The file is picked up with the other ``subdomains_*.txt`` outputs. Skips the
+	lookup without a vault key: each call spends one query of the monthly quota.
+	"""
+	api_key = get_securitytrails_key()
+	if not api_key:
+		logger.warning('SecurityTrails API key not configured in the API vault. Skipping.')
+		return 0
+	try:
+		subdomains = fetch_securitytrails_subdomains(host, api_key)
+	except SecurityTrailsError as exc:
+		logger.error('SecurityTrails lookup for %s failed: %s', host, exc)
+		return 0
+	with open(results_file, 'w') as f:
+		f.writelines(f'{name}\n' for name in subdomains)
+	logger.info('SecurityTrails returned %d subdomains for %s', len(subdomains), host)
+	return len(subdomains)
 
 
+def _amass_intel_uses_config(yaml_configuration: dict) -> bool:
+	"""Whether amass intel runs with /root/.config/amass.ini.
 
-
+	Read from the amass_intel_discovery section; engines that only set
+	subdomain_discovery.use_amass_config keep that value.
+	"""
+	subdomain_config = yaml_configuration.get(SUBDOMAIN_DISCOVERY)
+	intel_config = yaml_configuration.get(AMASS_INTEL_DISCOVERY)
+	fallback = subdomain_config.get(USE_AMASS_CONFIG, False) if isinstance(subdomain_config, dict) else False
+	if isinstance(intel_config, dict):
+		return bool(intel_config.get(USE_AMASS_CONFIG, fallback))
+	return bool(fallback)

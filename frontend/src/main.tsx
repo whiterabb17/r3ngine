@@ -46,23 +46,39 @@ import cytoscape from 'cytoscape';
 import App from './App';
 import './index.css';
 
+// Globals that dynamically loaded plugin bundles read instead of bundling their own copies.
+declare global {
+  interface Window {
+    React: typeof React;
+    ReactDOM: typeof ReactDOM & typeof ReactDOMClient;
+    MaterialUI: typeof MaterialUI;
+    MaterialUIStyles: typeof MaterialUIStyles;
+    MaterialUIIcons: typeof MaterialUIIcons;
+    LucideReact: typeof LucideReact;
+    Cytoscape: typeof cytoscape;
+  }
+}
+
 // Bind React and dependencies to window for dynamic plugins loading
-(window as any).React = React;
-(window as any).ReactDOM = { ...ReactDOM, ...ReactDOMClient };
-(window as any).MaterialUI = MaterialUI;
-(window as any).MaterialUIStyles = MaterialUIStyles;
-(window as any).MaterialUIIcons = MaterialUIIcons;
-(window as any).LucideReact = LucideReact;
-(window as any).Cytoscape = cytoscape;
+window.React = React;
+window.ReactDOM = { ...ReactDOM, ...ReactDOMClient };
+window.MaterialUI = MaterialUI;
+window.MaterialUIStyles = MaterialUIStyles;
+window.MaterialUIIcons = MaterialUIIcons;
+window.LucideReact = LucideReact;
+window.Cytoscape = cytoscape;
 
 
 
-// @ts-ignore
-import '@fontsource/orbitron';
-// @ts-ignore
-import '@fontsource/inter';
-// @ts-ignore
-import '@fontsource/bangers';
+import { reloadOnceForStaleBuild } from './utils/staleBuild';
+import '@fontsource/orbitron/index.css';
+import '@fontsource/inter/index.css';
+import '@fontsource/bangers/index.css';
+
+// A chunk of the previous build failed to load after a redeploy: load the new build.
+window.addEventListener('vite:preloadError', (event) => {
+  if (reloadOnceForStaleBuild()) event.preventDefault();
+});
 
 ReactDOMClient.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

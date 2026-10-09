@@ -11,7 +11,6 @@ import {
   TableRow,
   Chip,
   IconButton,
-  LinearProgress,
   Tooltip,
   TextField,
   InputAdornment,
@@ -28,6 +27,7 @@ import {
 import {
   Search,
   Activity,
+  Calendar,
   Clock,
   CheckCircle2,
   XCircle,
@@ -62,18 +62,71 @@ import {
   usePauseScan,
   useUnpauseScan
 } from '../api';
+import { isResumableScanStatus } from '../utils/scanStatus';
 import { useParams, Link as RouterLink, useNavigate } from '@tanstack/react-router';
 import { ScanReportModal } from './ScanReportModal';
 import { StartScanModal } from './StartScanModal';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 
-import { timeout } from 'd3';
 import type { ScanHistory } from '../types';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 
+function clampProgress(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, value));
+}
+
+/** Overall bar for history rows: prefer tier position while running/paused so
+ * leftover FAILED rows from a crash/resume do not inflate the percentage. */
+function getScanHistoryDisplayProgress(scan: ScanHistory): number {
+  // Coerce — API may return scan_status as a string, which would skip the
+  // tier formula and fall through to unclamped current_progress (e.g. 111%).
+  const status = Number(scan.scan_status);
+  if (status === 2 || status === 0 || status === 3) return 100;
+
+  const totalTiers = Number(scan.total_tiers || 0);
+  const currentTier = Number(scan.current_tier || 0);
+  if ((status === 1 || status === 5) && totalTiers > 0 && currentTier > 0) {
+    const tierProgress = clampProgress(Number(scan.current_tier_progress || 0));
+    const tierShare = (currentTier - 1 + tierProgress / 100) / totalTiers;
+    return clampProgress(Math.round(tierShare * 10000) / 100);
+  }
+
+  return clampProgress(Number(scan.current_progress || 0));
+}
+
+/** Width-based fill — avoids MUI LinearProgress transform quirks and glow paint cost. */
+const HistoryProgressBar: React.FC<{
+  value: number;
+  color: string;
+  height?: number;
+}> = ({ value, color, height = 4 }) => {
+  const pct = clampProgress(value);
+  return (
+    <Box
+      sx={{
+        width: '100%',
+        height,
+        bgcolor: 'action.hover',
+        overflow: 'hidden',
+        borderRadius: 0,
+      }}
+    >
+      <Box
+        sx={{
+          width: `${pct}%`,
+          height: '100%',
+          bgcolor: color,
+          transition: 'width 0.35s ease',
+        }}
+      />
+    </Box>
+  );
+};
+
 export const ScanHistoryPage: React.FC = () => {
   const { tokens, isLight, theme } = useThemeTokens();
-  const { projectSlug = 'default' } = useParams({ strict: false }) as any;
+  const { projectSlug = 'default' } = useParams({ strict: false });
   const navigate = useNavigate();
   const { data: scans, isLoading } = useScansHistory(projectSlug);
   const stopScanMutation = useStopScan(projectSlug);
@@ -190,12 +243,8 @@ export const ScanHistoryPage: React.FC = () => {
               fontSize: '0.65rem',
               fontWeight: 900,
               fontFamily: 'Orbitron',
-              animation: 'pulse-spider 2s infinite ease-in-out',
-              '@keyframes pulse-spider': {
-                '0%': { transform: 'scale(1)', filter: `drop-shadow(0 0 0px ${tokens.accent.secondary})` },
-                '50%': { transform: 'scale(1.05)', filter: `drop-shadow(0 0 8px ${tokens.accent.secondary})` },
-                '100%': { transform: 'scale(1)', filter: `drop-shadow(0 0 0px ${tokens.accent.secondary})` },
-              }
+              boxShadow: `0 0 8px ${tokens.accent.secondary}`,
+              // Static affordance only — no infinite keyframes (GPU)
             }}
             icon={<Bug size={12} color={tokens.accent.secondary} />}
           />
@@ -210,8 +259,8 @@ export const ScanHistoryPage: React.FC = () => {
         const color = isLight ? tokens.accent.success : '#00ff62';
         return <Chip label={completeLabel} size="small" sx={{ bgcolor: isLight ? `${tokens.accent.success}1A` : 'rgba(0, 255, 98, 0.1)', color: color, border: `1px solid ${color}33`, fontSize: '0.65rem', fontWeight: 900, fontFamily: 'Orbitron' }} icon={<CheckCircle2 size={12} />} />;
       }
-      case 1: // Running
-        return <Chip label="RUNNING" size="small" sx={{ bgcolor: `${tokens.accent.primary}15`, color: tokens.accent.primary, border: `1px solid ${tokens.accent.primary}33`, fontSize: '0.65rem', fontWeight: 900, fontFamily: 'Orbitron' }} icon={<RefreshCw size={12} className="spin" />} />;
+      case 1: // Running — static icon (no .spin) to avoid continuous compositor work
+        return <Chip label="RUNNING" size="small" sx={{ bgcolor: `${tokens.accent.primary}15`, color: tokens.accent.primary, border: `1px solid ${tokens.accent.primary}33`, fontSize: '0.65rem', fontWeight: 900, fontFamily: 'Orbitron' }} icon={<Activity size={12} />} />;
       case 5: { // Paused
         const color = isLight ? '#d97706' : '#ffab00';
         return (
@@ -225,12 +274,8 @@ export const ScanHistoryPage: React.FC = () => {
               fontSize: '0.65rem',
               fontWeight: 900,
               fontFamily: 'Orbitron',
-              animation: 'pulse-paused 2s infinite ease-in-out',
-              '@keyframes pulse-paused': {
-                '0%': { transform: 'scale(1)', filter: `drop-shadow(0 0 0px ${color})` },
-                '50%': { transform: 'scale(1.02)', filter: `drop-shadow(0 0 4px ${color})` },
-                '100%': { transform: 'scale(1)', filter: `drop-shadow(0 0 0px ${color})` },
-              }
+              boxShadow: `0 0 4px ${color}`,
+              // Static affordance only — no infinite keyframes (GPU)
             }}
             icon={<PauseCircle size={12} color={color} />}
           />
@@ -390,7 +435,7 @@ export const ScanHistoryPage: React.FC = () => {
             <TableBody>
               {paginatedScans.map((scan) => {
                 const isItemSelected = isSelected(scan.id!);
-                const displayProgress = (scan.scan_status === 2 || scan.scan_status === 0 || scan.scan_status === 3) ? 100 : Number(scan.current_progress || 0);
+                const displayProgress = getScanHistoryDisplayProgress(scan);
                 return (
                   <TableRow
                     key={scan.id!}
@@ -402,21 +447,21 @@ export const ScanHistoryPage: React.FC = () => {
                     sx={{
                       '&:hover': { bgcolor: 'rgba(0, 243, 255, 0.02) !important' },
                       '&.Mui-selected': { bgcolor: `${tokens.accent.primary}0D !important` },
-                      transition: 'all 0.2s',
+                      transition: 'background-color 0.2s, border-color 0.2s',
                       cursor: 'pointer'
                     }}
                   >
                     <TableCell padding="checkbox" sx={{ borderBottom: 1, borderColor: 'divider' }}>
                       <Checkbox
                         checked={isItemSelected}
-                        sx={{ color: 'rgba(255,255,255,0.2)', '&.Mui-checked': { color: tokens.accent.primary } }}
+                        sx={{ color: 'text.disabled', '&.Mui-checked': { color: tokens.accent.primary } }}
                       />
                     </TableCell>
                     <TableCell
                       sx={{ borderBottom: 1, borderColor: 'divider', cursor: 'pointer' }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigate({ to: `/${projectSlug}/scan/detail/${scan.id}` as any });
+                        navigate({ to: '/$projectSlug/scan/detail/$scanId', params: { projectSlug, scanId: String(scan.id) } });
                       }}
                     >
                       <Typography
@@ -482,52 +527,33 @@ export const ScanHistoryPage: React.FC = () => {
                             {scan.scan_status === 2 ? 'ALL TIERS COMPLETE' : `TIER ${scan.current_tier || 0}/${scan.total_tiers || 0}`}
                           </Typography>
                           <Typography variant="caption" sx={{ fontWeight: 900, color: 'text.primary', fontSize: '0.6rem', fontFamily: 'Orbitron' }}>
-                            {Math.round(Number(displayProgress))}%
+                            {Math.round(displayProgress)}%
                           </Typography>
                         </Box>
-                        <LinearProgress
-                          variant="determinate"
+                        <HistoryProgressBar
                           value={displayProgress}
-                          sx={{
-                            width: '100%',
-                            height: 4,
-                            borderRadius: 0,
-                            bgcolor: 'action.hover',
-                            '& .MuiLinearProgress-bar': {
-                              bgcolor: (scan.scan_status === 0 || scan.scan_status === 3) ? '#ff003c' : scan.scan_status === 5 ? '#ffab00' : tokens.accent.primary,
-                              boxShadow: `0 0 10px ${(scan.scan_status === 0 || scan.scan_status === 3) ? 'rgba(255, 0, 60, 0.5)' : scan.scan_status === 5 ? 'rgba(255, 171, 0, 0.5)' : `${tokens.accent.primary}80`}`,
-                              ...((scan.scan_status === 1 || scan.scan_status === -1) && {
-                                background: `linear-gradient(90deg, #00f3ff 0%, #00a8ff 50%, ${tokens.accent.primary} 100%)`,
-                                backgroundSize: '200% 100%',
-                                animation: 'progress-flow 2s linear infinite'
-                              })
-                            }
-                          }}
+                          color={
+                            (scan.scan_status === 0 || scan.scan_status === 3) ? '#ff003c'
+                              : scan.scan_status === 5 ? '#ffab00'
+                              : tokens.accent.primary
+                          }
+                          height={4}
                         />
 
-                        {(scan.scan_status === 1 || scan.scan_status === 5) && scan.current_tier && scan.current_tier > 0 ? (
+                        {(Number(scan.scan_status) === 1 || Number(scan.scan_status) === 5) && scan.current_tier && scan.current_tier > 0 ? (
                           <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <Typography variant="caption" sx={{ fontSize: '0.5rem', color: `${tokens.accent.primary}99`, fontFamily: 'Orbitron', fontWeight: 600 }}>
                                 TIER TASK PROGRESS
                               </Typography>
                               <Typography variant="caption" sx={{ color: `${tokens.accent.primary}CC`, fontSize: '0.55rem', fontFamily: 'Orbitron', fontWeight: 800 }}>
-                                {Math.round(scan.current_tier_progress || 0)}%
+                                {Math.round(clampProgress(Number(scan.current_tier_progress || 0)))}%
                               </Typography>
                             </Box>
-                            <LinearProgress
-                              variant="determinate"
-                              value={scan.current_tier_progress || 0}
-                              sx={{
-                                width: '100%',
-                                height: 2,
-                                borderRadius: 0,
-                                bgcolor: 'action.hover',
-                                '& .MuiLinearProgress-bar': {
-                                  bgcolor: scan.scan_status === 5 ? 'rgba(255, 171, 0, 0.6)' : '#d500f9',
-                                  boxShadow: `0 0 5px ${scan.scan_status === 5 ? 'rgba(255, 171, 0, 0.3)' : 'rgba(213, 0, 249, 0.3)'}`,
-                                }
-                              }}
+                            <HistoryProgressBar
+                              value={Number(scan.current_tier_progress || 0)}
+                              color={Number(scan.scan_status) === 5 ? 'rgba(255, 171, 0, 0.85)' : '#d500f9'}
+                              height={2}
                             />
                           </Box>
                         ) : null}
@@ -535,6 +561,12 @@ export const ScanHistoryPage: React.FC = () => {
                     </TableCell>
                     <TableCell sx={{ borderBottom: 1, borderColor: 'divider' }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Calendar size={12} style={{ color: `${tokens.accent.primary}80` }} />
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.65rem' }}>
+                          Start: {scan.start_scan_date ? new Date(scan.start_scan_date).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
                         <Clock size={12} style={{ color: `${tokens.accent.primary}80` }} />
                         <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.65rem' }}>
                           Time: {scan.completed_ago || 'just now'}
@@ -677,7 +709,7 @@ export const ScanHistoryPage: React.FC = () => {
         }}>
           <StopCircle size={14} /> STOP SCAN
         </MenuItem>
-        {activeScanId && (scans?.find((s) => s.id === activeScanId)?.scan_status === 0 || scans?.find((s) => s.id === activeScanId)?.scan_status === 3) && (
+        {activeScanId && isResumableScanStatus(scans?.find((s) => s.id === activeScanId)?.scan_status) && (
           <MenuItem onClick={() => {
             if (activeScanId) {
               resumeScanMutation.mutate(activeScanId);

@@ -41,7 +41,7 @@ class StressTestTask:
         """Logic to kill all processes related to this scan."""
         if redis_client:
             redis_client.set(f"kill_switch_{scan_id}", "1", ex=3600)
-        logger.warning(f"Termination requested for stress test on scan {scan_id}")
+        logger.warning("Termination requested for stress test on scan %s", scan_id)
 
 
 def is_kill_switch_active(scan_id):
@@ -63,7 +63,7 @@ def run_stress_testing(self, scan_history_id, target_domain_name, yaml_config, *
     # Validate duration is not empty
     if not duration or duration == "":
         duration = "30s"
-        logger.warning(f"Empty duration received for scan {scan_history_id}, defaulting to 30s")
+        logger.warning("Empty duration received for scan %s, defaulting to 30s", scan_history_id)
 
     tools = stress_config.get("uses_tools", ["k6"])
     
@@ -86,7 +86,7 @@ def run_stress_testing(self, scan_history_id, target_domain_name, yaml_config, *
             scan.scan_status = RUNNING_TASK
             scan.save()
         except Exception as e:
-            logger.error(f"Stress test error: {e}")
+            logger.error("Stress test error: %s", e)
             return {"status": "failed"}
 
         selected_endpoints = stress_config.get('selected_endpoints', [])
@@ -112,13 +112,13 @@ def run_stress_testing(self, scan_history_id, target_domain_name, yaml_config, *
                     subdomain__name=target_domain_name
                 )[:5]
         if not endpoints:
-            logger.warning(f"No endpoints found for scan {scan_history_id} to stress test.")
+            logger.warning("No endpoints found for scan %s to stress test.", scan_history_id)
             try:
                 scan.scan_status = SUCCESS_TASK
                 scan.stop_scan_date = timezone.now()
                 scan.save()
             except Exception as e:
-                logger.error(f"Failed to update scan status: {e}")
+                logger.error("Failed to update scan status: %s", e)
             return {"status": "success", "message": "No endpoints to stress test"}
 
         neo4j = Neo4jManager()
@@ -153,7 +153,7 @@ def run_stress_testing(self, scan_history_id, target_domain_name, yaml_config, *
 
         for endpoint in endpoints:
             if is_kill_switch_active(scan_history_id):
-                logger.warning(f"Kill switch activated for scan {scan_history_id}. Aborting.")
+                logger.warning("Kill switch activated for scan %s. Aborting.", scan_history_id)
                 overall_result.is_kill_switch_triggered = True
                 overall_result.save()
                 task_aborted = True
@@ -161,7 +161,7 @@ def run_stress_testing(self, scan_history_id, target_domain_name, yaml_config, *
 
             for tool in tools:
                 if is_kill_switch_active(scan_history_id):
-                    logger.warning(f"Kill switch activated for scan {scan_history_id}. Aborting tool {tool}.")
+                    logger.warning("Kill switch activated for scan %s. Aborting tool %s.", scan_history_id, tool)
                     overall_result.is_kill_switch_triggered = True
                     overall_result.save()
                     task_aborted = True
@@ -174,11 +174,11 @@ def run_stress_testing(self, scan_history_id, target_domain_name, yaml_config, *
                     "wrk": WrkParser,
                     "hping3": Hping3Parser,
                     "locust": LocustParser,
-                    "stressor": TAStresserParser,
+                    "stressor": TAStressorParser,
                 }
                 parser_cls = parsers.get(tool)
                 if not parser_cls:
-                    logger.warning(f"Unknown stress tool {tool!r} — skipping.")
+                    logger.warning("Unknown stress tool %r — skipping.", tool)
                     continue
                 parser = parser_cls()
                 temp_conf_path = None
@@ -197,16 +197,16 @@ def run_stress_testing(self, scan_history_id, target_domain_name, yaml_config, *
                         base_dir=settings.BASE_DIR,
                     )
                 except Exception as build_err:
-                    logger.error(f"Failed to build command for tool={tool}: {build_err}")
+                    logger.error("Failed to build command for tool=%s: %s", tool, build_err)
                     continue
 
                 if proxy_wrapper.should_wrap():
                     cmd_str, temp_conf_path = proxy_wrapper.wrap_command(cmd_str)
                     if temp_conf_path:
                         temp_files.append(temp_conf_path)
-                    logger.info(f"Wrapping execution via proxychains: {cmd_str}")
+                    logger.info("Wrapping execution via proxychains: %s", cmd_str)
                 else:
-                    logger.info(f"Executing {tool}: {cmd_str}")
+                    logger.info("Executing %s: %s", tool, cmd_str)
                 
                 command_obj = Command.objects.create(
                     command=cmd_str,
@@ -264,7 +264,7 @@ def run_stress_testing(self, scan_history_id, target_domain_name, yaml_config, *
                             try:
                                 os.killpg(os.getpgid(process.pid), signal.SIGTERM)
                             except Exception as kill_err:
-                                logger.error(f"Failed to kill process group: {kill_err}")
+                                logger.error("Failed to kill process group: %s", kill_err)
                             break
 
                     process.wait()
@@ -290,14 +290,14 @@ def run_stress_testing(self, scan_history_id, target_domain_name, yaml_config, *
                             max_rps_values.append(final_metrics["max_requests_per_second"])
                     
                 except Exception as e:
-                    logger.error(f"Execution of {tool} failed: {e}")
+                    logger.error("Execution of %s failed: %s", tool, e)
                 finally:
                     for _path in temp_files:
                         if _path and os.path.exists(_path):
                             try:
                                 os.remove(_path)
                             except Exception as rm_err:
-                                logger.error(f"Failed to remove temp file {_path}: {rm_err}")
+                                logger.error("Failed to remove temp file %s: %s", _path, rm_err)
             
             if task_aborted:
                 break
@@ -336,7 +336,7 @@ def run_stress_testing(self, scan_history_id, target_domain_name, yaml_config, *
         return {"status": "success"}
 
     except Exception as exc:
-        logger.error(f"Stress test failed: {exc}")
+        logger.error("Stress test failed: %s", exc)
         try:
             scan = ScanHistory.objects.get(id=scan_history_id)
             scan.scan_status = FAILED_TASK
@@ -348,7 +348,7 @@ def run_stress_testing(self, scan_history_id, target_domain_name, yaml_config, *
                 status='FAILED'
             )
         except Exception as db_err:
-            logger.error(f"Failed to update scan status: {db_err}")
+            logger.error("Failed to update scan status: %s", db_err)
         raise exc
 
     finally:

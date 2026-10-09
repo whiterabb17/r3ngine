@@ -47,10 +47,11 @@ import {
 import type { ReportSettings } from '../api';
 import { TacticalPanel } from '../../../components/TacticalPanel';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import type { ApiErrorLike } from '../../../types/errors';
 
 export const ReportSettingsPage: React.FC = () => {
   const { tokens } = useThemeTokens();
-  const { projectSlug = 'default' } = useParams({ strict: false }) as any;
+  const { projectSlug = 'default' } = useParams({ strict: false });
   const { data: settings, isLoading } = useReportSettings();
   const updateSettings = useUpdateReportSettings();
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
@@ -99,10 +100,11 @@ export const ReportSettingsPage: React.FC = () => {
           severity: 'success',
         });
       },
-      onError: (error: any) => {
+      onError: (caught) => {
+        const error = caught as ApiErrorLike;
         setSnackbar({
           open: true,
-          message: `Failed to update report settings: ${error?.response?.data?.message || error.message || 'Unknown error'}`,
+          message: `Failed to update report settings: ${error?.response?.data?.message || error?.message || 'Unknown error'}`,
           severity: 'error',
         });
       },
@@ -431,7 +433,7 @@ export const ReportSettingsPage: React.FC = () => {
                       }}>
                         {item.tag}
                       </Typography>
-                      <Typography sx={{ color: 'rgba(255,255,255,0.6)', fontSize: '11px' }}>{item.desc}</Typography>
+                      <Typography sx={{ color: 'text.secondary', fontSize: '11px' }}>{item.desc}</Typography>
                     </Box>
                   ))}
                 </Stack>
@@ -543,7 +545,7 @@ export const ReportSettingsPage: React.FC = () => {
                   placeholder="Footer text..."
                   value={form.footer_text}
                   onChange={(e) => setForm({ ...form, footer_text: e.target.value })}
-                  sx={{ mt: 1, '& .MuiOutlinedInput-root': { color: '#fff' } }}
+                  sx={{ mt: 1, '& .MuiOutlinedInput-root': { color: 'text.primary' } }}
                 />
               )}
             </Box>

@@ -14,9 +14,12 @@ import shlex
 import subprocess
 import tempfile
 from datetime import timezone as dt_timezone
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from django.utils.dateparse import parse_datetime
+
+if TYPE_CHECKING:
+    from startScan.models import CertificateIntelligence
 
 logger = logging.getLogger(__name__)
 

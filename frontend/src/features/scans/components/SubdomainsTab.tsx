@@ -53,11 +53,10 @@ import {
   Shield,
   Network,
   X,
-  Folder
+  Folder,
+  Crosshair,
+  Wrench,
 } from 'lucide-react';
-import { getCsrfToken } from '../../../api/axiosConfig';
-
-
 import {
   useSubdomains,
   useDeleteSubdomain,
@@ -65,8 +64,12 @@ import {
   useInitiateSubscan,
   useGPTAttackSurface,
   useAddManualSubdomain,
+  createAdAssessmentFromSubdomain,
 } from '../../subdomains/api';
 import type { SubdomainFilters } from '../../subdomains/api';
+import type { Subdomain } from '../../subdomains/types';
+import type { ApiErrorLike } from '../../../types/errors';
+import { RunSingleToolModal } from '../../subdomains/RunSingleToolModal';
 import { useEngines } from '../../engines/api';
 import { usePlugins } from '../../plugins/api/pluginsApi';
 import { useCreateTodo } from '../../todos/api';
@@ -134,6 +137,7 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
   
   // Modals state
   const [subscanModalOpen, setSubscanModalOpen] = useState(false);
+  const [singleToolModalOpen, setSingleToolModalOpen] = useState(false);
   const [attackSurfaceModalOpen, setAttackSurfaceModalOpen] = useState(false);
   const [todoModalOpen, setTodoModalOpen] = useState(false);
   const [addSubdomainModalOpen, setAddSubdomainModalOpen] = useState(false);
@@ -142,7 +146,7 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
   const addSubdomainMutation = useAddManualSubdomain(projectSlug);
   
   // Selected subdomain for single actions
-  const [targetSubdomain, setTargetSubdomain] = useState<any>(null);
+  const [targetSubdomain, setTargetSubdomain] = useState<Subdomain | null>(null);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [lightboxLabel, setLightboxLabel] = useState<string>('');
   
@@ -205,6 +209,8 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
   const deleteMutation = useDeleteSubdomain(projectSlug);
   const importantMutation = useToggleSubdomainImportant(projectSlug);
   const subscanMutation = useInitiateSubscan();
+  const probeMutation = useInitiateSubscan();
+  const [probeTarget, setProbeTarget] = useState<Subdomain | null>(null);
   const attackSurfaceMutation = useGPTAttackSurface();
   const createTodoMutation = useCreateTodo();
   const { data: enginesData } = useEngines();
@@ -239,7 +245,7 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
     setActiveSearch(searchQuery);
   };
 
-  const handleActionClick = (event: React.MouseEvent<HTMLButtonElement>, sub: any) => {
+  const handleActionClick = (event: React.MouseEvent<HTMLButtonElement>, sub: Subdomain) => {
     setAnchorEl(event.currentTarget);
     setSelectedId(sub.id);
     setTargetSubdomain(sub);
@@ -260,8 +266,8 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
         try {
           await deleteMutation.mutateAsync([id]);
           showNotification('Subdomain deleted successfully');
-        } catch (error: any) {
-          showNotification(error.message || 'Failed to delete subdomain', 'error');
+        } catch (error: unknown) {
+          showNotification((error as ApiErrorLike)?.message || 'Failed to delete subdomain', 'error');
         }
         handleActionClose();
       }
@@ -280,8 +286,8 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
           await deleteMutation.mutateAsync(selectedAssets);
           showNotification(`${selectedAssets.length} subdomains deleted`);
           setSelectedAssets([]);
-        } catch (error: any) {
-          showNotification(error.message || 'Failed to delete subdomains', 'error');
+        } catch (error: unknown) {
+          showNotification((error as ApiErrorLike)?.message || 'Failed to delete subdomains', 'error');
         }
       }
     });
@@ -292,8 +298,8 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
     try {
       await importantMutation.mutateAsync(id);
       showNotification('Status updated');
-    } catch (error: any) {
-      showNotification(error.message || 'Failed to update status', 'error');
+    } catch (error: unknown) {
+      showNotification((error as ApiErrorLike)?.message || 'Failed to update status', 'error');
     }
     handleActionClose();
   };
@@ -302,14 +308,7 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
     handleActionClose();
     if (!selectedId) return;
     try {
-      const res = await fetch('/api/action/ad-assessment/from-subdomain/', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() ?? '' },
-        body: JSON.stringify({ subdomain_id: selectedId }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      const json = await createAdAssessmentFromSubdomain(selectedId);
       setAdLaunchMsg({
         text: `AD Assessment created for ${json.target_domain}. Open the AD Intelligence plugin to start it.`,
         severity: 'success',
@@ -353,8 +352,8 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
       setSelectedEngineId(null);
       setSelectedTasks([]);
       setSelectedPlugins([]);
-    } catch (error: any) {
-      showNotification(error.message || 'Failed to initiate subscan', 'error');
+    } catch (error: unknown) {
+      showNotification((error as ApiErrorLike)?.message || 'Failed to initiate subscan', 'error');
     }
   };
 
@@ -368,8 +367,25 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
       });
       showNotification('Acunetix scan initiated successfully');
       setSelectedAssets([]);
-    } catch (error: any) {
-      showNotification(error.message || 'Failed to initiate Acunetix scan', 'error');
+    } catch (error: unknown) {
+      showNotification((error as ApiErrorLike)?.message || 'Failed to initiate Acunetix scan', 'error');
+    }
+  };
+
+  const handleProbeConfirm = async () => {
+    if (!probeTarget) return;
+    const id = probeTarget.id;
+    const name = probeTarget.name;
+    setProbeTarget(null);
+    try {
+      await probeMutation.mutateAsync({
+        engine_id: null,
+        tasks: ['http_crawl', 'screenshot'],
+        subdomain_ids: [id],
+      });
+      showNotification(`Probe initiated for ${name}`);
+    } catch (error: unknown) {
+      showNotification((error as ApiErrorLike)?.message || 'Failed to initiate probe', 'error');
     }
   };
 
@@ -380,6 +396,7 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
       showNotification('Please enter a description', 'error');
       return;
     }
+    if (!targetSubdomain) return;
     try {
       await createTodoMutation.mutateAsync({
         title: todoTitle || `TODO: ${targetSubdomain.name}`,
@@ -390,18 +407,18 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
       setTodoModalOpen(false);
       setTodoDescription('');
       showNotification('TODO note added successfully');
-    } catch (error: any) {
-      showNotification(error.message || 'Failed to add TODO note', 'error');
+    } catch (error: unknown) {
+      showNotification((error as ApiErrorLike)?.message || 'Failed to add TODO note', 'error');
     }
   };
 
-  const handleShowAttackSurface = async (sub: any) => {
+  const handleShowAttackSurface = async (sub: Subdomain) => {
     setTargetSubdomain(sub);
     setAttackSurfaceModalOpen(true);
     try {
       await attackSurfaceMutation.mutateAsync(sub.id);
-    } catch (error: any) {
-      showNotification(error.message || 'Failed to fetch attack surface', 'error');
+    } catch (error: unknown) {
+      showNotification((error as ApiErrorLike)?.message || 'Failed to fetch attack surface', 'error');
     }
   };
 
@@ -982,9 +999,23 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
                           <Zap size={14} />
                         </IconButton>
                       </Tooltip>
+                      {!!scanId && (
+                        <Tooltip title="Run single tool">
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setTargetSubdomain(sub);
+                              setSingleToolModalOpen(true);
+                            }}
+                            sx={{ color: tokens.accent.primary, bgcolor: `${tokens.accent.primary}0D`, p: 0.5 }}
+                          >
+                            <Wrench size={14} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       <Tooltip title="Add Recon TODO/Note">
-                        <IconButton 
-                          size="small" 
+                        <IconButton
+                          size="small"
                           onClick={() => {
                             setTargetSubdomain(sub);
                             setTodoModalOpen(true);
@@ -992,6 +1023,17 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
                           sx={{ color: tokens.accent.warning, bgcolor: `${tokens.accent.warning}0D`, p: 0.5 }}
                         >
                           <FileText size={14} />
+                        </IconButton>
+                      </Tooltip>
+                      {/* Probe button */}
+                      <Tooltip title="Probe Subdomain">
+                        <IconButton
+                          size="small"
+                          onClick={() => setProbeTarget(sub)}
+                          disabled={probeMutation.isPending}
+                          sx={{ color: tokens.accent.primary, bgcolor: `${tokens.accent.primary}0D`, p: 0.5 }}
+                        >
+                          <Crosshair size={14} />
                         </IconButton>
                       </Tooltip>
                       <IconButton size="small" onClick={(e) => handleActionClick(e, sub)} sx={{ color: 'text.disabled', p: 0.5 }}>
@@ -1043,27 +1085,37 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
               ...getMenuPaperSx(isLight, theme, tokens),
               border: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : `${tokens.accent.primary}33`}`,
               color: 'text.primary',
+              minWidth: 0,
               '& .MuiMenuItem-root': {
-                fontSize: '12px',
-                fontWeight: 600,
-                fontFamily: 'Inter',
+                py: 0.5,
+                px: 1.5,
+                minHeight: 'unset',
                 '&:hover': { bgcolor: `${tokens.accent.primary}15` }
+              },
+              '& .MuiListItemText-primary': {
+                fontSize: '10px',
+                fontWeight: 700,
+                fontFamily: 'Inter',
+                letterSpacing: '0.05em',
+              },
+              '& .MuiListItemIcon-root': {
+                minWidth: 22,
               }
             }
           }
         }}
       >
         <MenuItem onClick={handleLaunchADAssessment} sx={{ color: tokens.accent.primary }}>
-          <ListItemIcon><Network size={16} color={tokens.accent.primary} /></ListItemIcon>
+          <ListItemIcon><Network size={12} color={tokens.accent.primary} /></ListItemIcon>
           <ListItemText primary="ASSESS IDENTITY INFRASTRUCTURE" />
         </MenuItem>
-        <Divider sx={{ my: 0.5, borderColor: 'divider' }} />
+        <Divider sx={{ my: 0.25, borderColor: 'divider' }} />
         <MenuItem onClick={() => handleToggleImportant(selectedId!)} sx={{ color: tokens.accent.warning }}>
-          <ListItemIcon><Shield size={16} color={tokens.accent.warning} /></ListItemIcon>
+          <ListItemIcon><Shield size={12} color={tokens.accent.warning} /></ListItemIcon>
           <ListItemText primary={targetSubdomain?.is_important ? "UNMARK IMPORTANT" : "MARK IMPORTANT"} />
         </MenuItem>
         <MenuItem onClick={() => handleDelete(selectedId!)} sx={{ color: tokens.accent.error }}>
-          <ListItemIcon><Trash2 size={16} color={tokens.accent.error} /></ListItemIcon>
+          <ListItemIcon><Trash2 size={12} color={tokens.accent.error} /></ListItemIcon>
           <ListItemText primary="DELETE ASSET" />
         </MenuItem>
       </Menu>
@@ -1120,7 +1172,7 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
                 AVAILABLE TASKS
               </Typography>
               <FormGroup>
-                {[...selectedEngine.tasks]
+                {[...(selectedEngine.subscan_tasks ?? selectedEngine.tasks)]
                   .sort((a, b) => {
                     const ai = TASK_TIER_ORDER.indexOf(a);
                     const bi = TASK_TIER_ORDER.indexOf(b);
@@ -1202,6 +1254,18 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
         </DialogActions>
       </Dialog>
 
+      {targetSubdomain && !!scanId && (
+        <RunSingleToolModal
+          open={singleToolModalOpen}
+          onClose={() => setSingleToolModalOpen(false)}
+          subdomainId={targetSubdomain.id}
+          subdomainName={targetSubdomain.name}
+          scanHistoryId={scanId}
+          onSuccess={(msg) => showNotification(msg)}
+          onError={(msg) => showNotification(msg, 'error')}
+        />
+      )}
+
       {/* Attack Surface Modal */}
       <Dialog
         open={attackSurfaceModalOpen}
@@ -1231,7 +1295,7 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
             </Box>
           ) : attackSurfaceMutation.isError ? (
             <Alert severity="error" sx={{ bgcolor: isLight ? 'rgba(239, 68, 68, 0.08)' : 'rgba(255, 0, 60, 0.05)', color: 'error.main', border: '1px solid', borderColor: 'error.main' }}>
-              {((attackSurfaceMutation.error as any)?.response?.data?.error) || (attackSurfaceMutation.error as any)?.message || "Failed to generate attack surface. Ensure LLM is configured in settings."}
+              {((attackSurfaceMutation.error as ApiErrorLike)?.response?.data?.error) || (attackSurfaceMutation.error as ApiErrorLike)?.message || "Failed to generate attack surface. Ensure LLM is configured in settings."}
             </Alert>
           ) : attackSurfaceMutation.data?.status === false ? (
             <Alert severity="error" sx={{ bgcolor: isLight ? 'rgba(239, 68, 68, 0.08)' : 'rgba(255, 0, 60, 0.05)', color: 'error.main', border: '1px solid', borderColor: 'error.main' }}>
@@ -1341,6 +1405,20 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
         title={confirmConfig.title}
         message={confirmConfig.message}
         type={confirmConfig.type}
+      />
+
+      {/* Probe confirmation */}
+      <ConfirmDialog
+        open={Boolean(probeTarget)}
+        onClose={() => setProbeTarget(null)}
+        onConfirm={handleProbeConfirm}
+        title="Probe Subdomain"
+        message={`Run HTTP crawl and screenshot against ${probeTarget?.name}? This will refresh its status, content length, IP, and screenshot.`}
+        confirmText="PROBE"
+        cancelText="CANCEL"
+        isDestructive={false}
+        type="info"
+        isLoading={probeMutation.isPending}
       />
 
       <Snackbar
@@ -1543,8 +1621,9 @@ export const SubdomainsTab: React.FC<SubdomainsTabProps> = ({ projectSlug, scanI
                 } else {
                   showNotification(res.message || 'Failed to add subdomain', 'error');
                 }
-              } catch (err: any) {
-                showNotification(err.response?.data?.message || err.message || 'Error adding subdomain', 'error');
+              } catch (err: unknown) {
+                const apiError = err as ApiErrorLike;
+                showNotification(apiError?.response?.data?.message || apiError?.message || 'Error adding subdomain', 'error');
               }
             }}
             sx={{

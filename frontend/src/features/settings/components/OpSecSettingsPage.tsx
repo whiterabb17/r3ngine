@@ -37,10 +37,12 @@ import { useOpSecSettings, useUpdateOpSecSettings } from '../api';
 import type { OpSecSettings } from '../api';
 import { TacticalPanel } from '../../../components/TacticalPanel';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import type { ApiErrorLike } from '../../../types/errors';
+import type { ResolvedThemeTokens } from '../../../theme/tokens';
 
 export const OpSecSettingsPage: React.FC = () => {
   const { tokens } = useThemeTokens();
-  const { projectSlug = 'default' } = useParams({ strict: false }) as any;
+  const { projectSlug = 'default' } = useParams({ strict: false });
   const { data: settings, isLoading: isSettingsLoading } = useOpSecSettings(projectSlug);
   const updateSettings = useUpdateOpSecSettings(projectSlug);
   
@@ -68,7 +70,7 @@ export const OpSecSettingsPage: React.FC = () => {
     setActivePreset(null);
   };
 
-  const handleChange = (field: keyof OpSecSettings, value: any) => {
+  const handleChange = <K extends keyof OpSecSettings>(field: K, value: OpSecSettings[K]) => {
     if (!formData) return;
     setFormData({ ...formData, [field]: value });
     setActivePreset(null);
@@ -138,10 +140,11 @@ export const OpSecSettingsPage: React.FC = () => {
             severity: 'success',
           });
         },
-        onError: (error: any) => {
+        onError: (caught) => {
+          const error = caught as ApiErrorLike;
           setSnackbar({
             open: true,
-            message: `Failed to update OpSec settings: ${error?.response?.data?.message || error.message || 'Unknown error'}`,
+            message: `Failed to update OpSec settings: ${error?.response?.data?.message || error?.message || 'Unknown error'}`,
             severity: 'error',
           });
         },
@@ -219,14 +222,14 @@ export const OpSecSettingsPage: React.FC = () => {
             STEALTH PRESETS
           </Typography>
           <Grid container spacing={2}>
-            {[
+            {([
               { id: 'quiet', title: 'QUIET', icon: Wind, color: tokens.accent.primary, desc: 'Maximum stealth. Very slow. Random jitter (50%), long delays (5s), HTTP/2 only.' },
               { id: 'balanced', title: 'BALANCED', icon: Activity, color: '#4caf50', desc: 'Optimized for reliability. 100ms delay, 10% jitter, random UA, WAF bypass.' },
               { id: 'aggressive', title: 'AGGRESSIVE', icon: Zap, color: '#f44336', desc: 'Low stealth. Fast scans. Only random UA and basic WAF bypass enabled.' }
-            ].map((preset) => (
+            ] as const).map((preset) => (
               <Grid size={{xs: 12, md: 4}} key={preset.id}>
                 <Card 
-                  onClick={() => applyPreset(preset.id as any)}
+                  onClick={() => applyPreset(preset.id)}
                   sx={{ 
                     cursor: 'pointer',
                     bgcolor: activePreset === preset.id ? `rgba(${preset.id === 'quiet' ? 'var(--mui-palette-primary-mainChannel)' : preset.id === 'balanced' ? '76, 175, 80' : '244, 67, 54'}, 0.1)` : 'action.hover',
@@ -257,15 +260,15 @@ export const OpSecSettingsPage: React.FC = () => {
               <Stack spacing={2} sx={{ p: 1 }}>
                 <FormControlLabel
                   control={<Switch checked={formData.enable_random_ua} onChange={() => handleToggle('enable_random_ua')} size="small" />}
-                  label={<Typography variant="body2" sx={{ color: '#fff' }}>Random User-Agents</Typography>}
+                  label={<Typography variant="body2" sx={{ color: 'text.primary' }}>Random User-Agents</Typography>}
                 />
                 <FormControlLabel
                   control={<Switch checked={formData.enable_waf_bypass} onChange={() => handleToggle('enable_waf_bypass')} size="small" />}
-                  label={<Typography variant="body2" sx={{ color: '#fff' }}>Inject WAF Bypass Headers</Typography>}
+                  label={<Typography variant="body2" sx={{ color: 'text.primary' }}>Inject WAF Bypass Headers</Typography>}
                 />
                 <FormControlLabel
                   control={<Switch checked={formData.enable_ja3_randomization} onChange={() => handleToggle('enable_ja3_randomization')} size="small" />}
-                  label={<Typography variant="body2" sx={{ color: '#fff' }}>JA3 Fingerprint Randomization</Typography>}
+                  label={<Typography variant="body2" sx={{ color: 'text.primary' }}>JA3 Fingerprint Randomization</Typography>}
                 />
               </Stack>
             </TacticalPanel>
@@ -442,7 +445,7 @@ export const OpSecSettingsPage: React.FC = () => {
   );
 };
 
-const getInputStyle = (tokens: any) => ({
+const getInputStyle = (tokens: ResolvedThemeTokens) => ({
   '& .MuiOutlinedInput-root': {
     color: 'text.primary',
     bgcolor: 'action.hover',

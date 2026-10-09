@@ -24,7 +24,7 @@ export const FirewallVpnSection: React.FC<Props> = ({ config, enabled, onToggle,
       onToggle={onToggle}
     >
       <Grid container spacing={1} sx={{ mb: 2 }}>
-        {([['run_ike_scan', 'IKE scan (IPSec VPN detection)'], ['run_sslscan', 'SSL scan (TLS audit)']] as const).map(([field, label]) => (
+        {([['run_ike_scan', 'IKE scan (IPSec VPN detection)'], ['run_sslscan', 'SSL scan (TLS audit)'], ['enable_testssl', 'testssl.sh (deep TLS audit)'], ['enable_crt_sh', 'crt.sh (certificate transparency)']] as const).map(([field, label]) => (
           <Grid size={{ xs: 12 }} key={field}>
             <FormControlLabel
               control={

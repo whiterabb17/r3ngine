@@ -9,8 +9,12 @@ import { SpiderfootSection } from './sections/SpiderfootSection';
 import { VigoliumHarvestSection } from './sections/VigoliumHarvestSection';
 import { VigoliumDiscoverySection } from './sections/VigoliumDiscoverySection';
 import { FirewallVpnSection } from './sections/FirewallVpnSection';
+import { AmassIntelSection } from './sections/AmassIntelSection';
+import { BaddnsSection } from './sections/BaddnsSection';
+import { PostCrawlOsintSection } from './sections/PostCrawlOsintSection';
 import { HttpCrawlSection } from './sections/HttpCrawlSection';
 import { PortScanSection } from './sections/PortScanSection';
+import { EmailSecuritySection } from './sections/EmailSecuritySection';
 import { ScreenshotSection } from './sections/ScreenshotSection';
 import { FetchUrlSection } from './sections/FetchUrlSection';
 import { WebApiDiscoverySection } from './sections/WebApiDiscoverySection';
@@ -23,11 +27,13 @@ import { VigoliumAnalysisSection } from './sections/VigoliumAnalysisSection';
 import { VulnerabilitySection } from './sections/VulnerabilitySection';
 import { AttackPathSection } from './sections/AttackPathSection';
 import { VigoliumAuditSection } from './sections/VigoliumAuditSection';
+import { Tier7Section } from './sections/Tier7Section';
 import { YamlPreviewPanel } from './YamlPreviewPanel';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
 
 interface EngineConfigTabsProps {
   state: UseEngineConfigReturn;
+  availableGfPatterns?: string[];
 }
 
 const TAB_LABELS = [
@@ -42,7 +48,7 @@ const TAB_LABELS = [
   'YAML',
 ];
 
-export const EngineConfigTabs: React.FC<EngineConfigTabsProps> = ({ state }) => {
+export const EngineConfigTabs: React.FC<EngineConfigTabsProps> = ({ state, availableGfPatterns }) => {
   const [tab, setTab] = useState(0);
   const { tokens } = useThemeTokens();
   const { config, yaml, yamlError, updateSection, toggleSection, updateGlobal, setYaml } = state;
@@ -101,9 +107,23 @@ export const EngineConfigTabs: React.FC<EngineConfigTabsProps> = ({ state }) => 
               onToggle={(v) => toggleSection('subdomain_discovery', v)}
               onChange={(p) => updateSection('subdomain_discovery', p)}
             />
+            <AmassIntelSection
+              config={config.amass_intel_discovery.config}
+              enabled={config.amass_intel_discovery.enabled}
+              onToggle={(v) => toggleSection('amass_intel_discovery', v)}
+              onChange={(p) => updateSection('amass_intel_discovery', p)}
+            />
+            <BaddnsSection
+              enabled={config.baddns.enabled}
+              onToggle={(v) => toggleSection('baddns', v)}
+              subdomainDiscovery={config.subdomain_discovery}
+              onSubdomainToolsChange={(uses_tools) => updateSection('subdomain_discovery', { uses_tools })}
+            />
             <DnsSecuritySection
+              config={config.dns_security.config}
               enabled={config.dns_security.enabled}
               onToggle={(v) => toggleSection('dns_security', v)}
+              onChange={(p) => updateSection('dns_security', p)}
             />
             <OsintSection
               config={config.osint.config}
@@ -155,11 +175,15 @@ export const EngineConfigTabs: React.FC<EngineConfigTabsProps> = ({ state }) => 
               onToggle={(v) => toggleSection('port_scan', v)}
               onChange={(p) => updateSection('port_scan', p)}
             />
+            <EmailSecuritySection
+              config={config.email_security.config}
+              enabled={config.email_security.enabled}
+              onToggle={(v) => toggleSection('email_security', v)}
+              onChange={(p) => updateSection('email_security', p)}
+            />
             <ScreenshotSection
-              config={config.screenshot.config}
               enabled={config.screenshot.enabled}
               onToggle={(v) => toggleSection('screenshot', v)}
-              onChange={(p) => updateSection('screenshot', p)}
             />
           </Box>
         )}
@@ -174,6 +198,7 @@ export const EngineConfigTabs: React.FC<EngineConfigTabsProps> = ({ state }) => 
               enabled={config.fetch_url.enabled}
               onToggle={(v) => toggleSection('fetch_url', v)}
               onChange={(p) => updateSection('fetch_url', p)}
+              availableGfPatterns={availableGfPatterns}
             />
             <WebApiDiscoverySection
               config={config.web_api_discovery.config}
@@ -194,12 +219,20 @@ export const EngineConfigTabs: React.FC<EngineConfigTabsProps> = ({ state }) => 
       {/* Tab 4 — Tier 4: Fuzzing */}
       <Box {...panelProps(4)}>
         {tab === 4 && (
-          <DirFileFuzzSection
-            config={config.dir_file_fuzz.config}
-            enabled={config.dir_file_fuzz.enabled}
-            onToggle={(v) => toggleSection('dir_file_fuzz', v)}
-            onChange={(p) => updateSection('dir_file_fuzz', p)}
-          />
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <DirFileFuzzSection
+              config={config.dir_file_fuzz.config}
+              enabled={config.dir_file_fuzz.enabled}
+              onToggle={(v) => toggleSection('dir_file_fuzz', v)}
+              onChange={(p) => updateSection('dir_file_fuzz', p)}
+            />
+            <PostCrawlOsintSection
+              config={config.post_crawl_osint.config}
+              enabled={config.post_crawl_osint.enabled}
+              onToggle={(v) => toggleSection('post_crawl_osint', v)}
+              onChange={(p) => updateSection('post_crawl_osint', p)}
+            />
+          </Box>
         )}
       </Box>
 
@@ -256,6 +289,12 @@ export const EngineConfigTabs: React.FC<EngineConfigTabsProps> = ({ state }) => 
               enabled={config.attack_path_modeling.enabled}
               onToggle={(v) => toggleSection('attack_path_modeling', v)}
               onChange={(p) => updateSection('attack_path_modeling', p)}
+            />
+            <Tier7Section
+              config={config.tier_7.config}
+              enabled={config.tier_7.enabled}
+              onToggle={(v) => toggleSection('tier_7', v)}
+              onChange={(p) => updateSection('tier_7', p)}
             />
             <VigoliumAuditSection
               config={config.vigolium_audit.config}

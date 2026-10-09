@@ -6,6 +6,7 @@ import {
 } from '@mui/material';
 import { Upload, X, File } from 'lucide-react';
 import { useUploadEvidence } from '../api';
+import type { ApiErrorLike } from '../../../types/errors';
 
 const EVIDENCE_TYPES = [
   { value: 'Screenshot',      label: 'Screenshot' },
@@ -69,7 +70,8 @@ export function EvidenceUploadDialog({
         setDescription('');
         onClose();
       }, 1500);
-    } catch (e: any) {
+    } catch (caught) {
+      const e = caught as ApiErrorLike;
       setError(e?.response?.data?.error ?? 'Upload failed. Check file size and type.');
     }
   };

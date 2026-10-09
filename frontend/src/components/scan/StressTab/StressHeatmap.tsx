@@ -2,9 +2,10 @@ import { useThemeTokens } from '../../../theme/useThemeTokens';
 import React, { useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useStressStore } from '../../../store/stressStore';
+import type { EndpointStressMetrics } from '../../../types/stressTesting';
 
 interface StressHeatmapProps {
-  data: any[];
+  data: Pick<EndpointStressMetrics, 'concurrent_users' | 'endpoint' | 'avg_latency'>[];
 }
 
 export const StressHeatmap: React.FC<StressHeatmapProps> = ({ data }) => {
@@ -78,7 +79,7 @@ export const StressHeatmap: React.FC<StressHeatmapProps> = ({ data }) => {
   }, [data]);
 
   const onEvents = {
-    click: (params: any) => {
+    click: (params: { name?: string }) => {
       // params.name would be the Y axis category (endpoint) if we structure data correctly
       if (params.name) {
          setSelectedEndpoint(params.name);

@@ -9,9 +9,9 @@ class TestGetHttpUrlsUncrawledFilter(TestCase):
     def _make_ctx(self, scan_id=1, domain_id=1):
         return {'scan_history_id': scan_id, 'domain_id': domain_id}
 
-    @patch('reNgine.common_func.ScanHistory')
-    @patch('reNgine.common_func.Domain')
-    @patch('reNgine.common_func.EndPoint')
+    @patch('reNgine.common_func.db_queries.ScanHistory')
+    @patch('reNgine.common_func.db_queries.Domain')
+    @patch('reNgine.common_func.db_queries.EndPoint')
     def test_finds_endpoints_with_http_status_zero(self, MockEndPoint, MockDomain, MockScan):
         """Endpoints with http_status=0 (model default) must be returned when is_uncrawled=True."""
         mock_scan = MagicMock()
@@ -28,14 +28,14 @@ class TestGetHttpUrlsUncrawledFilter(TestCase):
         MockEndPoint.objects = MagicMock()
         MockEndPoint.objects.filter.return_value = mock_qs
 
-        with patch('reNgine.common_func.is_valid_url', return_value=True):
+        with patch('reNgine.common_func.db_queries.is_valid_url', return_value=True):
             result = get_http_urls(is_uncrawled=True, ctx=self._make_ctx())
 
         self.assertIsInstance(result, list)
 
-    @patch('reNgine.common_func.ScanHistory')
-    @patch('reNgine.common_func.Domain')
-    @patch('reNgine.common_func.EndPoint')
+    @patch('reNgine.common_func.db_queries.ScanHistory')
+    @patch('reNgine.common_func.db_queries.Domain')
+    @patch('reNgine.common_func.db_queries.EndPoint')
     def test_uncrawled_filter_uses_http_status_zero_not_null(self, MockEndPoint, MockDomain, MockScan):
         """Verify the ORM call includes http_status=0 in the uncrawled filter."""
         MockScan.objects.filter.return_value.first.return_value = MagicMock()
@@ -46,7 +46,7 @@ class TestGetHttpUrlsUncrawledFilter(TestCase):
         mock_qs.distinct.return_value.order_by.return_value.all.return_value = []
         MockEndPoint.objects = mock_qs
 
-        with patch('reNgine.common_func.is_valid_url', return_value=True):
+        with patch('reNgine.common_func.db_queries.is_valid_url', return_value=True):
             get_http_urls(is_uncrawled=True, ctx=self._make_ctx())
 
         call_args_list = mock_qs.filter.call_args_list
@@ -66,7 +66,7 @@ class TestSeedEndpointsForCrawlActivity(TestCase):
             'yaml_configuration': {},
         }
 
-    @patch('reNgine.temporal.activities.activity')
+    @patch('reNgine.temporal.activities.enumeration.activity')
     def test_activity_creates_missing_endpoints(self, mock_activity):
         """For each subdomain without a default endpoint, save_endpoint is called."""
         from reNgine.temporal_activities import seed_endpoints_for_crawl_activity
@@ -90,7 +90,36 @@ class TestSeedEndpointsForCrawlActivity(TestCase):
         self.assertIn('seed_urls', result)
         self.assertIsInstance(result['seed_urls'], list)
 
-    @patch('reNgine.temporal.activities.activity')
+    @patch('reNgine.temporal.activities.enumeration.activity')
+    def test_result_stays_serialisable_when_save_endpoint_caches_models(self, mock_activity):
+        """save_endpoint caches model instances in its ctx; they must not reach Temporal."""
+        import json
+        from reNgine.temporal_activities import seed_endpoints_for_crawl_activity
+
+        mock_sub = MagicMock()
+        mock_sub.name = 'new.example.com'
+        endpoint = MagicMock()
+        endpoint.http_url = 'http://new.example.com'
+
+        def caching_save_endpoint(url, ctx=None, **kwargs):
+            ctx['_domain_obj'] = object()
+            ctx['_scan_obj'] = object()
+            return endpoint, True
+
+        ctx = self._make_ctx()
+        with patch('startScan.models.Subdomain') as MockSub, \
+             patch('startScan.models.EndPoint') as MockEP, \
+             patch('reNgine.utils.task.save_endpoint', side_effect=caching_save_endpoint):
+            MockSub.objects.filter.return_value = [mock_sub]
+            MockEP.objects.filter.return_value.first.return_value = None
+            result = seed_endpoints_for_crawl_activity(ctx)
+
+        self.assertNotIn('_domain_obj', result)
+        self.assertNotIn('_scan_obj', ctx)
+        self.assertEqual(result['seed_urls'], ['http://new.example.com'])
+        json.dumps(result)
+
+    @patch('reNgine.temporal.activities.enumeration.activity')
     def test_activity_skips_existing_endpoints(self, mock_activity):
         """Subdomains that already have a default endpoint are not re-seeded."""
         from reNgine.temporal_activities import seed_endpoints_for_crawl_activity
@@ -124,8 +153,8 @@ class TestRunHTTPCrawlBridgeActivity(TestCase):
             'yaml_configuration': {},
         }
 
-    @patch('reNgine.temporal.activities._run_task')
-    @patch('reNgine.temporal.activities.activity')
+    @patch('reNgine.temporal.activities.enumeration._run_task')
+    @patch('reNgine.temporal.activities.enumeration.activity')
     def test_bridge_activity_crawls_expected_endpoints(self, mock_activity, mock_run_task):
         """Verify bridge activity retrieves dead/not-alive/new endpoints and calls _run_task."""
         from reNgine.temporal_activities import run_http_crawl_bridge_activity
@@ -151,8 +180,8 @@ class TestRunHTTPCrawlBridgeActivity(TestCase):
         self.assertEqual(kwargs['urls'], ['http://dead.example.com'])
         self.assertFalse(kwargs['recrawl'])
 
-    @patch('reNgine.temporal.activities._run_task')
-    @patch('reNgine.temporal.activities.activity')
+    @patch('reNgine.temporal.activities.enumeration._run_task')
+    @patch('reNgine.temporal.activities.enumeration.activity')
     def test_bridge_activity_skips_when_no_endpoints(self, mock_activity, mock_run_task):
         """Verify bridge activity skips calling _run_task when no target endpoints are found."""
         from reNgine.temporal_activities import run_http_crawl_bridge_activity

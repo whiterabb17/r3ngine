@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import logging
+import os
 import re
 
 ###############################################################################
@@ -73,6 +74,7 @@ TOOL_COLORS = {
     'enum4linux-ng': COLOR_YELLOW,
     'dnsrecon': COLOR_CYAN,
     'fierce': COLOR_ORANGE,
+    'check_if_email_exists': COLOR_CYAN,
 }
 
 ###############################################################################
@@ -119,8 +121,25 @@ NUCLEI_CONCURRENCY = 'concurrency'
 # Maximum concurrency and rate when routing nuclei through a proxy file.
 # nuclei v3.9.0 AdaptiveWaitGroup deadlocks at high concurrency when the
 # proxy error rate exceeds ~60% — these caps prevent the semaphore hang.
-NUCLEI_PROXY_MAX_CONCURRENCY = 20
-NUCLEI_PROXY_MAX_RATE_LIMIT = 50
+#
+# The caps assume a pool of free public proxies, where that error rate is normal,
+# and they are punishing at scale: a thousand subdomains at a throttled rate is
+# days of work, which is how Tier 6 came to exceed its 24-hour budget. With a
+# reliable (paid, authenticated) proxy the error rate is nowhere near 60% and the
+# cap costs more than the deadlock it guards against, so both are tunable from
+# the environment. Raise them only when the pool is actually reliable.
+NUCLEI_PROXY_MAX_CONCURRENCY = int(os.environ.get('NUCLEI_PROXY_MAX_CONCURRENCY', 20))
+NUCLEI_PROXY_MAX_RATE_LIMIT = int(os.environ.get('NUCLEI_PROXY_MAX_RATE_LIMIT', 50))
+# nuclei exits with FTL "all proxies are dead" when every entry in the -proxy
+# file fails. Retry the same slice this many times (refreshing the proxy file
+# between attempts) before skipping that slice and moving on.
+NUCLEI_PROXY_DEAD_MAX_ATTEMPTS = int(os.environ.get('NUCLEI_PROXY_DEAD_MAX_ATTEMPTS', 3))
+NUCLEI_PROXY_DEAD_MARKER = 'all proxies are dead'
+# Wall-clock budget for the nuclei stage of Tier 6. Once it is spent the
+# remaining tag batches are skipped so that the rest of Tier 6 (Acunetix,
+# WPScan, cPanel, S3, Dalfox) and the whole of Tier 7 still run, instead of
+# every one of them dying with "Child Workflow execution timed out".
+NUCLEI_STAGE_BUDGET_HOURS = int(os.environ.get('NUCLEI_STAGE_BUDGET_HOURS', 10))
 NUCLEI_MAX_TEMPLATES_PER_BATCH = 'max_templates_per_batch'
 OSINT = 'osint'
 OSINT_DOCUMENTS_LIMIT = 'documents_limit'
@@ -177,7 +196,8 @@ TRUFFLEHOG = 'trufflehog'
 RUN_CPANEL2SHELL = 'run_cpanel2shell'
 CPANEL_USER_WORDLIST = 'cpanel_user_wordlist'
 CPANEL_SCANNER_PROXY_TYPE = 'proxy_type'
-CPANEL_SCANNER_DEFAULT_WORDLIST = '/usr/src/app/wordlist/auth/cpanel_users.txt'
+# Downloaded by the orchestrator and executor entrypoints into the shared wordlist volume.
+CPANEL_SCANNER_DEFAULT_WORDLIST = '/usr/src/wordlist/cpanel_users.txt'
 
 RUN_REACT2SHELL = 'run_react2shell'
 USE_WORDFENCE_CANDIDATE = 'use_wordfence_candidate'
@@ -211,7 +231,9 @@ ENUMEREPO = 'enumerepo'
 POST_CRAWL_OSINT = 'post_crawl_osint'
 METAGOOFIL = 'metagoofil'
 AMASS_INTEL = 'amass_intel'
+AMASS_INTEL_DISCOVERY = 'amass_intel_discovery'
 DIRSEARCH = 'dirsearch'
+RUN_FFUF = 'run_ffuf'
 RUN_DIRSEARCH = 'run_dirsearch'
 RUN_FEROXBUSTER = 'run_feroxbuster'
 
@@ -254,12 +276,18 @@ RUN_VIGOLIUM_DISCOVERY = 'run_vigolium_discovery'
 RUN_VIGOLIUM_ANALYSIS = 'run_vigolium_analysis'
 VIGOLIUM = 'vigolium'
 VIGOLIUM_HARVEST = 'vigolium_harvest'
+VIGOLIUM_DISCOVERY = 'vigolium_discovery'
 VIGOLIUM_STRATEGY = 'strategy'
 VIGOLIUM_CONCURRENCY = 'concurrency'
 VIGOLIUM_RATE_LIMIT = 'rate_limit'
 VIGOLIUM_TIMEOUT = 'timeout'
+VIGOLIUM_SPIDER_MAX_TIME = 'spider_max_time'
 VIGOLIUM_MODULES = 'modules'
 VIGOLIUM_SEVERITY_FILTER = 'severity_filter'
+VIGOLIUM_RUN_PHASE_A = 'run_phase_a'     # Phase A: spidering (Tier 6 vuln scan)
+VIGOLIUM_RUN_PHASE_B = 'run_phase_b'     # Phase B: known-issue-scan + dynamic-assessment
+VIGOLIUM_SCOPE_ORIGIN = 'scope_origin'   # Host scope strictness: all, relaxed, balanced, strict
+VIGOLIUM_SKIP_SPIDERING = 'skip_spidering'  # Skip Phase A spidering in Tier 6 vuln scan
 
 VIGOLIUM_DEFAULT_CONFIG = {
     'run_vigolium': True,
@@ -267,6 +295,11 @@ VIGOLIUM_DEFAULT_CONFIG = {
     'concurrency': 50,
     'rate_limit': 100,
     'timeout': '15s',
+    'spider_max_time': '20m',
+    'run_phase_a': True,   # Phase A: spidering (discovery runs in earlier tiers)
+    'run_phase_b': True,   # Phase B: known-issue-scan + dynamic-assessment
+    'scope_origin': 'balanced',  # Host scope strictness: all, relaxed, balanced, strict
+    'skip_spidering': False,      # When True, Phase A spidering is skipped
 }
 
 # Tier 1 — passive ingestion harvest (works with root domain only, no subdomains needed)
@@ -293,6 +326,7 @@ VIGOLIUM_DEFAULT_ANALYSIS_CONFIG = {
     'concurrency': 20,
     'rate_limit': 50,
     'timeout': '10s',
+    'spider_max_time': '75m',
 }
 
 # Tier 3 — spidering within fetch_url against fetched URL set
@@ -301,6 +335,7 @@ VIGOLIUM_DEFAULT_SPIDER_CONFIG = {
     'concurrency': 30,
     'rate_limit': 80,
     'timeout': '20s',
+    'spider_max_time': '75m',
 }
 
 RUN_VIGOLIUM_AUDIT = 'run_vigolium_audit'
@@ -644,19 +679,40 @@ DEFAULT_IGNORE_FILE_EXTENSIONS = [
 ]
 
 DEFAULT_GF_PATTERNS = [
+    'api-keys',
+    'command-injection',
+    'cors',
+    'crlf',
     'debug_logic',
+    'email-injection',
+    'graphql',
+    'http-smuggling',
     'idor',
+    'img-traversal',
     'interestingEXT',
     'interestingparams',
     'interestingsubs',
+    'jsvar',
+    'jwt',
     'lfi',
+    'mass-assignment',
+    'nosqli',
+    'oauth',
+    'open-redirect',
+    'path-traversal',
+    'prototype-pollution',
     'rce',
     'redirect',
     'sqli',
     'ssrf',
+    's3-bucket',
     'ssti',
-    'xss'
+    'upload',
+    'websocket',
+    'xss',
+    'xxe',
 ]
+
 
 
 # Default Dir File Fuzz Params
@@ -677,14 +733,13 @@ DEFAULT_DIR_FILE_FUZZ_EXTENSIONS =  [
     '.asp',
     '.aspx',
     '.txt',
-    '.conf',
     '.sql',
     '.json',
     '.yml',
     '.pdf',
 ]
 
-# Default Excluded Paths during Initate Scan
+# Default Excluded Paths during Initiate Scan
 # Mostly static files and directories
 DEFAULT_EXCLUDED_PATHS = [
     # Static assets (using regex patterns)
@@ -723,6 +778,8 @@ OLLAMA = 'ollama'
 OPENAI = 'openai'
 ANTHROPIC = 'anthropic'
 GEMINI = 'gemini'
+# Any server that speaks the OpenAI chat completions API at a configured base URL.
+OPENAI_COMPATIBLE = 'openai_compatible'
 
 SUGGESTED_OLLAMA_MODELS = [
     {
@@ -835,6 +892,7 @@ Ensure that:
 3. All URLs in the 'references' section begin with 'http://' or 'https://'.
 4. Remediation steps should be specific and actionable and should not contain any ambiguous or general recommendations. Format the remediation sub-sections clearly using bold text (e.g. **Short-Term Strategy:**) and bullet points.
 5. Refrain from including any personal opinions or subjective assessments in your report.
+6. CRITICAL: Do NOT include any conversational follow-up questions or offers of assistance (such as "Would you like to include a longer brief?" or "Let me know if you need more details"). Output ONLY the report content.
 """
 
 
@@ -853,22 +911,29 @@ ATTACK_SUGGESTION_GPT_SYSTEM_PROMPT = """
     I'm seeking insights into potential technical web application attacks that could be executed on this subdomain, along with explanations for why these attacks are feasible given the discovered information.
     Please provide a detailed list of these attack types and their underlying technical rationales on every attacks you suggested.
     Also suggest if any CVE ID, known exploits, existing vulnerabilities, any news articles URL related to the information provided to you.
+    CRITICAL: Do NOT include any conversational follow-up questions or offers of assistance (such as "Would you like to include a longer brief?"). Output ONLY the technical analysis.
 """
 
 
 LLM_REPORT_OVERVIEW_SYSTEM_PROMPT = """
 You are an expert penetration tester. Based on the provided assessment data, write a professional 'Overview' section for a security assessment report.
-The overview should provide a high-level summary of the assessment's scope, objectives, and key findings.
-Ensure the tone is technical yet accessible to project managers.
+The overview should provide a high-level summary of the assessment's scope, objectives, key findings, and a dedicated executive-ready Top Risks assessment.
+Ensure the tone is technical yet accessible to executive leadership and project managers.
+
+REQUIRED CONTENT SECTIONS:
+1. Scope & Objectives Overview
+2. Key Findings Summary
+3. Top Risks: Include a concise, executive-ready "Top Risks" section that directly maps discovered findings to likely threat scenarios (e.g. mapping an unauthenticated endpoint finding to an external data exfiltration threat scenario).
 
 FORMATTING REQUIREMENTS:
 1. Use clean and structured Markdown formatting. The output will be compiled directly to HTML, so proper Markdown tags must be used.
-2. Structure the "Key Findings" and detailed vulnerability areas/attributes as bulleted lists using `-` or `*` on separate lines.
+2. Structure the "Key Findings", "Top Risks", and detailed vulnerability areas/attributes as bulleted lists using `-` or `*` on separate lines.
 3. Ensure there is a blank line before starting any list, and a blank line between list items or major points to allow the markdown parser to render lists correctly.
-4. Use bold text (e.g., **Key Findings:**, **Severity Distribution:**, **Notable Insights:**, etc.) to label items and structure findings clearly.
+4. Use bold text (e.g., **Key Findings:**, **Top Risks:**, **Severity Distribution:**, **Notable Insights:**, etc.) to label items and structure findings clearly.
 5. Avoid using markdown headers like # or ##. Use bold text for emphasis instead.
 6. CRITICAL: Do NOT output findings as a continuous line/paragraph separated by hyphens (e.g. "Key findings - Finding 1 - Finding 2..."). Each finding must be a separate, clean bullet point.
 7. CRITICAL: Do NOT include any sign-offs, signatures, or placeholders like 'Sincerely', '[Your Name]', or '[Company Name]' at the end.
+8. CRITICAL: Do NOT include any conversational follow-up questions or offers of assistance at the end of the text (such as "Would you like to include a longer brief?", "Let me know if you want more details", or "Should I generate further sections?"). Output ONLY report content.
 """
 
 LLM_REPORT_EXECUTIVE_BRIEF_SYSTEM_PROMPT = """
@@ -881,6 +946,7 @@ FORMATTING REQUIREMENTS:
 3. If highlighting specific key risks or recommendations, organize them as a clean bulleted list using `-` or `*` on separate lines with a blank line before starting the list.
 4. Avoid using markdown headers like # or ##. Use bold text for emphasis instead.
 5. CRITICAL: Do NOT include any sign-offs, signatures, or placeholders like 'Sincerely', '[Your Name]', '[Company Name]', or 'Penetration Testing Expert' at the end. The text should end immediately after the final paragraph of the brief.
+6. CRITICAL: Do NOT include any conversational follow-up questions or offers of assistance (such as "Would you like to include a longer brief?" or "Let me know if you need anything else"). Output ONLY the brief content.
 """
 
 LLM_REPORT_CONCLUSION_SYSTEM_PROMPT = """
@@ -893,6 +959,7 @@ FORMATTING REQUIREMENTS:
 3. Organize remediation priorities or key takeaways as a clean bulleted list using `-` or `*` on separate lines.
 4. Avoid using markdown headers like # or ##. Use bold text for emphasis instead.
 5. CRITICAL: Do NOT include any sign-offs, signatures, or placeholders like 'Sincerely', '[Your Name]', or '[Company Name]' at the end.
+6. CRITICAL: Do NOT include any conversational follow-up questions or offers of assistance (such as "Would you like to include a longer brief?"). Output ONLY the report conclusion.
 """
 
 LLM_ATTACK_SCENARIO_SYSTEM_PROMPT = """
@@ -901,7 +968,7 @@ Your task is to describe a realistic attack scenario where an attacker leverages
 Explain the steps an attacker might take, the tools they might use, and the potential outcome (e.g., data theft, system takeover, etc.).
 Ensure the tone is technical, professional, and objective.
 Avoid using markdown headers like # or ##. Use bold text for emphasis if needed.
-CRITICAL: Do NOT include any sign-offs, signatures, or placeholders.
+CRITICAL: Do NOT include any sign-offs, signatures, placeholders, or conversational follow-up questions (such as "Would you like to include a longer brief?"). Output ONLY the attack scenario.
 """
 
 LLM_IMPACT_ASSESSMENT_SYSTEM_PROMPT = """
@@ -910,6 +977,7 @@ Instead of focusing on specific threat actors, focus on the **Potential Attack C
 Describe how this vulnerability fits into a broader attack path (e.g., Initial Access -> Lateral Movement -> Data Exfiltration).
 Provide a prioritized list of business consequences.
 Format the response clearly with sections for 'Potential Attack Chain' and 'Impact Summary'.
+CRITICAL: Do NOT include any conversational follow-up questions or offers of assistance (such as "Would you like to include a longer brief?"). Output ONLY the impact assessment.
 """
 
 LLM_ATTACK_PATH_REMEDIATION_SYSTEM_PROMPT = """
@@ -935,6 +1003,7 @@ FORMATTING REQUIREMENTS:
 5. Do NOT use generic advice like "patch your systems" without specifics.
 6. Do NOT include sign-offs, signatures, or placeholders.
 7. CRITICAL: Each bullet must be on its own separate line with a blank line before the first bullet under each heading.
+8. CRITICAL: Do NOT include any conversational follow-up questions or offers of assistance (such as "Would you like to include a longer brief?"). Output ONLY the remediation guidance.
 """
 
 
@@ -952,6 +1021,26 @@ Return ONLY valid JSON with these exact keys:
 }
 
 Be precise and technical. Do not include markdown, code blocks, or any text outside the JSON object.
+"""
+
+LLM_VULNERABILITY_SEVERITY_VALIDATION_SYSTEM_PROMPT = """
+You are a Lead Penetration Tester and Vulnerability Management Specialist.
+Your task is to re-evaluate the severity of a discovered vulnerability to determine if it has been misclassified (especially if marked as 'Info' or 'Low' by automated scanners despite high-risk characteristics like Cross-Site Scripting, SQL Injection, Remote Code Execution, Authentication Bypass, or Sensitive Data Exposure).
+
+You must evaluate the vulnerability based on standard security principles (CVSS v3.1, OWASP Top 10, NIST SP 800-115) and output ONLY a JSON object with the following schema:
+
+{
+    "suggested_severity": "info" | "low" | "medium" | "high" | "critical",
+    "suggested_cvss_score": 6.1,
+    "confidence": "High" | "Medium" | "Low",
+    "reasoning": "Detailed technical rationale explaining why the current severity is accurate or why it should be reclassified.",
+    "key_factors": [
+        "Key factor 1",
+        "Key factor 2"
+    ]
+}
+
+DO NOT wrap the response in markdown code blocks like ```json ... ```. Return ONLY raw valid JSON string.
 """
 
 
@@ -1014,3 +1103,7 @@ TARGET_TYPE_CHOICES = [
     (TARGET_TYPE_CRYPTO_ADDRESS, 'Crypto Address'),
     (TARGET_TYPE_CODE_PATH, 'Code Path / Repository'),
 ]
+
+
+# Returned to clients in place of exception text; the details go to the server log.
+INTERNAL_ERROR_MESSAGE = 'Internal error; see server logs for details.'

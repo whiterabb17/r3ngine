@@ -223,11 +223,28 @@ tput setaf 4;
 echo "#########################################################################"
 echo "Installing reNgine"
 echo "#########################################################################"
-make certs 
-make build 
-make up 
-fix_volumes_permissions $SUDO_UID $SUDO_GID
-tput setaf 2 && echo "reNgine is installed!!!" && failed=0 || failed=1
+# The image build unpacks nuclei templates, browsers and dozens of tools, and
+# BuildKit keeps intermediate layers while it runs; a nearly full disk fails
+# half an hour in with "no space left on device".
+MIN_FREE_GB=${MIN_FREE_GB:-60}
+docker_root=$(docker info -f '{{.DockerRootDir}}' 2>/dev/null) || docker_root=""
+[ -d "$docker_root" ] || docker_root=/var/lib/docker
+[ -d "$docker_root" ] || docker_root=/
+free_gb=$(df -BG --output=avail "$docker_root" 2>/dev/null | tail -1 | tr -dc '0-9')
+if [ -n "$free_gb" ] && [ "$free_gb" -lt "$MIN_FREE_GB" ] && [ -z "$SKIP_DISK_CHECK" ]; then
+  tput setaf 1
+  echo "Only ${free_gb} GB free under ${docker_root}; the build needs about ${MIN_FREE_GB} GB."
+  echo "Free or add space (on Ubuntu LVM: sudo lvextend -l +100%FREE -r /dev/ubuntu-vg/ubuntu-lv),"
+  echo "or set SKIP_DISK_CHECK=1 to try anyway."
+  exit 1
+fi
+
+failed=0
+make certs && make build && make up || failed=1
+if [ "${failed}" -eq 0 ]; then
+  fix_volumes_permissions $SUDO_UID $SUDO_GID
+  tput setaf 2 && echo "reNgine is installed!!!"
+fi
 
 if [ "${failed}" -eq 0 ]; then
   sleep 3

@@ -1,10 +1,15 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import type { operations, components } from '@/types/api';
-import type { ScanHistory, ScheduledScan, SubScan, Command, ScanSummaryResponse, SecretLeak, DirectoryFile } from '../types';
-import type { Domain } from '../../targets/types';
+import type { ScanHistory, ScheduledScan, SubScan, Command, ScanSummaryResponse, ScanTierRetryResponse, SecretLeak, DirectoryFile, DirectorySubdomainSummary, EmailBreach, ScanStatusResponse } from '../types';
+import type { Domain, DomainListResponse } from '../../targets/types';
+import { getCsrfToken } from '../../../api/axiosConfig';
 
+/**
+ * `GET /api/listDirectories/`: the endpoint files of one subdomain when `subdomain_id` is set,
+ * otherwise one summary row per subdomain of the scan that has endpoints.
+ */
 export const useDirectories = (params: { scan_id?: string | number, subdomain_id?: string | number, page?: number }) => {
-  return useQuery<{ count: number, next: string | null, previous: string | null, results: DirectoryFile[] }>({
+  return useQuery<{ count: number, next: string | null, previous: string | null, results: (DirectoryFile | DirectorySubdomainSummary)[] }>({
     queryKey: ['directories', params],
     queryFn: async () => {
       const searchParams = new URLSearchParams();
@@ -34,7 +39,7 @@ export const useDomains = (projectSlug: string) => {
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }
-      const data = await response.json() as operations["api_listTargets_list"]["responses"]["200"]["content"]["application/json"];
+      const data: DomainListResponse = await response.json();
       return data.results || [];
     },
     enabled: !!projectSlug,
@@ -56,7 +61,17 @@ export const useScans = (projectSlug: string) => {
       return (data.results || []) as ScanHistory[];
     },
     enabled: !!projectSlug,
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const rows = query.state.data ?? [];
+      const live = rows.some(
+        (s) =>
+          s.scan_status === -1 ||
+          s.scan_status === 1 ||
+          s.scan_status === 5 ||
+          s.is_spiderfoot_running
+      );
+      return live ? 5000 : 30000;
+    },
   });
 };
 
@@ -175,7 +190,11 @@ export const useSubScans = (projectSlug: string) => {
       return Array.isArray(data) ? data : data.results || [];
     },
     enabled: !!projectSlug,
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const rows = query.state.data ?? [];
+      const live = rows.some((s) => s.status === -1 || s.status === 1 || s.status === 5);
+      return live ? 5000 : 30000;
+    },
   });
 };
 
@@ -196,6 +215,35 @@ export const useBulkStopSubScans = (projectSlug: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subscans', projectSlug] });
+      queryClient.invalidateQueries({ queryKey: ['scan-status', projectSlug] });
+      queryClient.invalidateQueries({ queryKey: ['scan-summary'] });
+    },
+  });
+};
+
+/** Stop a single in-progress SubScan via Temporal workflow cancellation. */
+export const useStopSubScan = (projectSlug: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch('/api/action/stop/scan/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ subscan_ids: [id] }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to stop subscan');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['subscans', projectSlug] });
+      queryClient.invalidateQueries({ queryKey: ['scan-status', projectSlug] });
+      queryClient.invalidateQueries({ queryKey: ['scan-summary'] });
     },
   });
 };
@@ -235,7 +283,17 @@ export const useScansHistory = (project: string) => {
       return (data.results || []) as ScanHistory[];
     },
     enabled: !!project,
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const rows = query.state.data ?? [];
+      const live = rows.some(
+        (s) =>
+          s.scan_status === -1 ||
+          s.scan_status === 1 ||
+          s.scan_status === 5 ||
+          s.is_spiderfoot_running
+      );
+      return live ? 5000 : 30000;
+    },
   });
 };
 
@@ -264,6 +322,47 @@ export const useStopScan = (projectSlug: string) => {
   });
 };
 
+export interface ScanHardwareProfileResponse {
+  status: boolean;
+  message: string;
+  hardware_profile?: { id: number; name: string };
+}
+
+/**
+ * `POST /api/action/scan/<id>/hardware-profile/`: switch the hardware profile of a scan.
+ * Works on a running scan; steps that start afterwards use the new profile.
+ */
+export const setScanHardwareProfile = async (
+  scanId: number,
+  hardwareProfileId: number,
+): Promise<ScanHardwareProfileResponse> => {
+  const response = await fetch(`/api/action/scan/${scanId}/hardware-profile/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCsrfToken() || '',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ hardware_profile_id: hardwareProfileId }),
+  });
+  const body = (await response.json().catch(() => ({}))) as Partial<ScanHardwareProfileResponse>;
+  if (!response.ok || !body.status) {
+    throw new Error(body.message || 'Failed to change the hardware profile');
+  }
+  return body as ScanHardwareProfileResponse;
+};
+
+export const useSetScanHardwareProfile = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ scanId, hardwareProfileId }: { scanId: number; hardwareProfileId: number }) =>
+      setScanHardwareProfile(scanId, hardwareProfileId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scan-summary'] });
+    },
+  });
+};
+
 export const useResumeScan = (projectSlug: string) => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -277,11 +376,12 @@ export const useResumeScan = (projectSlug: string) => {
         credentials: 'include',
         body: JSON.stringify({ scan_id: id }),
       });
-      return response.json();
+      return response.json() as Promise<{ status: boolean; message?: string }>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scans-history', projectSlug] });
       queryClient.invalidateQueries({ queryKey: ['scan-status', projectSlug] });
+      queryClient.invalidateQueries({ queryKey: ['scan-summary'] });
     },
   });
 };
@@ -329,18 +429,23 @@ export const useBulkScanAction = (projectSlug: string) => {
   });
 };
 
+const scanSummaryQueryKey = (projectSlug: string, scanId: number) =>
+  ['scan-summary', projectSlug, scanId] as const;
+
+const fetchScanSummary = async (projectSlug: string, scanId: number): Promise<ScanSummaryResponse> => {
+  const response = await fetch(`/api/scan-summary/${projectSlug}/${scanId}/`, {
+    credentials: 'include'
+  });
+  if (!response.ok) {
+    throw new Error('Network response was not ok');
+  }
+  return response.json();
+};
+
 export const useScanSummary = (projectSlug: string, scanId: number) => {
   return useQuery<ScanSummaryResponse>({
-    queryKey: ['scan-summary', projectSlug, scanId],
-    queryFn: async () => {
-      const response = await fetch(`/api/scan-summary/${projectSlug}/${scanId}/`, {
-        credentials: 'include'
-      });
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      return response.json();
-    },
+    queryKey: scanSummaryQueryKey(projectSlug, scanId),
+    queryFn: () => fetchScanSummary(projectSlug, scanId),
     enabled: !!projectSlug && !!scanId,
     refetchInterval: (query) => {
       const data = query.state.data;
@@ -398,25 +503,22 @@ export const useDownloadAiExport = (projectSlug: string, scanId: number) => {
   });
 };
 
+const EMPTY_SECRET_LEAKS: SecretLeak[] = [];
+const selectSecretLeaks = (data: ScanSummaryResponse): SecretLeak[] => data.secret_leaks || EMPTY_SECRET_LEAKS;
+
+// Shares the scan-summary cache entry instead of fetching the whole payload a second time;
+// the summary observer's refetchInterval keeps this view fresh.
 export const useSecretLeaks = (projectSlug: string, scanId: number) => {
-  return useQuery<SecretLeak[]>({
-    queryKey: ['secret-leaks', projectSlug, scanId],
-    queryFn: async () => {
-      const response = await fetch(`/api/scan-summary/${projectSlug}/${scanId}/`, {
-        credentials: 'include'
-      });
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      const data = await response.json() as ScanSummaryResponse;
-      return data.secret_leaks || [];
-    },
+  return useQuery<ScanSummaryResponse, Error, SecretLeak[]>({
+    queryKey: scanSummaryQueryKey(projectSlug, scanId),
+    queryFn: () => fetchScanSummary(projectSlug, scanId),
+    select: selectSecretLeaks,
     enabled: !!projectSlug && !!scanId,
   });
 };
 
 export const useEmailBreaches = (scanId: number) => {
-  return useQuery<any[]>({
+  return useQuery<EmailBreach[]>({
     queryKey: ['email-breaches', scanId],
     queryFn: async () => {
       const response = await fetch(`/api/emailBreaches/?scan_id=${scanId}`, {
@@ -439,6 +541,7 @@ export const useCheckEmailBreach = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
         },
         body: JSON.stringify({ email_address: emailAddress, scan_id: scanId }),
         credentials: 'include'
@@ -456,8 +559,8 @@ export const useCheckEmailBreach = () => {
 };
 
 
-export const useScanStatus = (projectSlug: string) => {
-  return useQuery({
+export const useScanStatus = (projectSlug: string, options: { enabled?: boolean } = {}) => {
+  return useQuery<ScanStatusResponse>({
     queryKey: ['scan-status', projectSlug],
     queryFn: async () => {
       const response = await fetch(`/api/scan_status/?project=${projectSlug}`, {
@@ -468,8 +571,8 @@ export const useScanStatus = (projectSlug: string) => {
       }
       return response.json();
     },
-    enabled: !!projectSlug,
-    refetchInterval: 10000, // Poll every 10 seconds
+    enabled: !!projectSlug && (options.enabled ?? true),
+    refetchInterval: 10000, // Poll every 10 seconds while enabled
   });
 };
 
@@ -477,17 +580,21 @@ export const useStopScanAction = (projectSlug: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: number) => {
-      const response = await fetch(`/api/action/stop/scan/?scan_id=${id}`, {
+      const response = await fetch('/api/action/stop/scan/', {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
         },
         credentials: 'include',
+        body: JSON.stringify({ scan_ids: [id] }),
       });
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scan-status', projectSlug] });
+      queryClient.invalidateQueries({ queryKey: ['scans-history', projectSlug] });
+      queryClient.invalidateQueries({ queryKey: ['scan-summary'] });
     }
   });
 };
@@ -572,11 +679,13 @@ export const useStressTelemetry = (scanId: number | string | undefined) => {
     refetchInterval: 15000, // Refresh every 15s during test runs
   });
 };
-export const useFetchWhois = (projectSlug: string, scanId: number) => {
+/** Runs a fresh WHOIS lookup (stored on the target) and refetches the summary showing it. */
+export const useFetchWhois = (summaryQueryKey: QueryKey) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (target: string) => {
-      const response = await fetch(`/api/tools/whois/?target=${target}&is_reload=true`, {
+      const params = new URLSearchParams({ target, is_reload: 'true' });
+      const response = await fetch(`/api/tools/whois/?${params.toString()}`, {
         credentials: 'include',
       });
       if (!response.ok) {
@@ -585,7 +694,7 @@ export const useFetchWhois = (projectSlug: string, scanId: number) => {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['scan-summary', projectSlug, scanId] });
+      queryClient.invalidateQueries({ queryKey: summaryQueryKey });
     },
   });
 };
@@ -678,6 +787,70 @@ export const useBulkPromoteOsint = () => {
       queryClient.invalidateQueries({ queryKey: ['emails'] });
       queryClient.invalidateQueries({ queryKey: ['subdomains'] });
       queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+};
+
+const osintCsrfHeaders = () => ({
+  'Content-Type': 'application/json',
+  'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+});
+
+export const useClearAllOsintStaging = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (scanId: number) => {
+      const response = await fetch('/api/osintStaging/clear_all/', {
+        method: 'POST',
+        headers: osintCsrfHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ scan_id: scanId }),
+      });
+      if (!response.ok) throw new Error('Clear all failed');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['osint-staging'] });
+    },
+  });
+};
+
+export const useAddVerifiedOsintStaging = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (scanId: number) => {
+      const response = await fetch('/api/osintStaging/add_verified/', {
+        method: 'POST',
+        headers: osintCsrfHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ scan_id: scanId }),
+      });
+      if (!response.ok) throw new Error('Add verified failed');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['osint-staging'] });
+      queryClient.invalidateQueries({ queryKey: ['emails'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+};
+
+export const useClearFalsePositiveOsintStaging = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (scanId: number) => {
+      const response = await fetch('/api/osintStaging/clear_false_positives/', {
+        method: 'POST',
+        headers: osintCsrfHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ scan_id: scanId }),
+      });
+      if (!response.ok) throw new Error('Clear false positives failed');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['osint-staging'] });
     },
   });
 };
@@ -883,8 +1056,43 @@ export const useRetryScanTask = (projectSlug: string, scanId: number) => {
       queryClient.invalidateQueries({ queryKey: ['scan-summary', projectSlug, scanId] });
     },
     onError: (e: Error) => {
-      // Toast is handled by the caller if needed; log for now
+      // The caller shows it to the user; keep it in the console as well.
       console.error('Retry task failed:', e.message);
+    },
+  });
+};
+
+/**
+ * Re-run every failed task of one tier of a scan.
+ * `POST /api/action/retry/tier/<scan_id>/<tier>/` (api/urls.py -> ScanTierRetryAPIView).
+ */
+export const useRetryScanTier = (projectSlug: string, scanId: number) => {
+  const queryClient = useQueryClient();
+  return useMutation<ScanTierRetryResponse, Error, number>({
+    mutationFn: async (tier: number) => {
+      const response = await fetch(`/api/action/retry/tier/${scanId}/${tier}/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '',
+        },
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        let message = 'Failed to retry tier';
+        try {
+          const errorData = await response.json();
+          message = errorData.message || errorData.error || message;
+        } catch {
+          // Response carried no JSON body; keep the generic message.
+        }
+        throw new Error(message);
+      }
+      return response.json();
+    },
+    onSettled: () => {
+      // Refresh the timeline either way: a partial success still moved rows.
+      queryClient.invalidateQueries({ queryKey: scanSummaryQueryKey(projectSlug, scanId) });
     },
   });
 };

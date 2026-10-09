@@ -31,6 +31,7 @@ import PluginInventory from '../components/PluginInventory';
 import PipelineBuilder from '../components/PipelineBuilder';
 import InstallProgressOverlay from '../components/InstallProgressOverlay';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
+import type { ApiErrorLike } from '../../../types/errors';
 
 const PluginManagementPage: React.FC = () => {
   const { tokens } = useThemeTokens();
@@ -55,10 +56,11 @@ const PluginManagementPage: React.FC = () => {
         onSuccess: (result) => {
           setInstallId(result.install_id);
         },
-        onError: (err: any) => {
+        onError: (caught) => {
+          const err = caught as ApiErrorLike;
           setSnackbar({
             open: true,
-            message: `Upload failed: ${err.response?.data?.error || err.message}`,
+            message: `Upload failed: ${err?.response?.data?.error || err?.message}`,
             severity: 'error'
           });
         }
@@ -83,10 +85,11 @@ const PluginManagementPage: React.FC = () => {
       onSuccess: () => {
         setSnackbar({ open: true, message: 'Marketplace index refreshed.', severity: 'success' });
       },
-      onError: (err: any) => {
+      onError: (caught) => {
+        const err = caught as ApiErrorLike;
         setSnackbar({ 
           open: true, 
-          message: `Refresh failed: ${err.message}`, 
+          message: `Refresh failed: ${err?.message}`, 
           severity: 'error' 
         });
       }

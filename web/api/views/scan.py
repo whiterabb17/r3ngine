@@ -39,7 +39,7 @@ from recon_note.models import *
 from reNgine.common_func import *
 from reNgine.utils.database import *
 from reNgine.definitions import (
-    ABORTED_TASK, RUNNING_TASK, SUCCESS_TASK,
+    ABORTED_TASK, FAILED_TASK, PARTIALLY_COMPLETE_TASK, RUNNING_TASK, SUCCESS_TASK,
     PERM_MODIFY_TARGETS, PERM_MODIFY_SCAN_CONFIGURATIONS,
     PERM_MODIFY_WORDLISTS, PERM_INITATE_SCANS_SUBSCANS,
     PERM_MODIFY_SCAN_REPORT, PERM_MODIFY_SCAN_RESULTS,
@@ -47,6 +47,7 @@ from reNgine.definitions import (
 from reNgine.tasks import *
 from reNgine.llm import *
 from reNgine.utilities import is_safe_path
+from reNgine.task_plan import RETRY_TASK_ALIASES, RETRYABLE_TASK_NAMES, retry_dispatch_name  # noqa: F401
 from scanEngine.models import *
 from startScan.models import *
 from startScan.models import EndPoint
@@ -57,6 +58,7 @@ from api.serializers import *
 from reNgine.utils.graph import Neo4jManager
 from reNgine.temporal_client import TemporalClientProvider, run_and_close
 from api.views.tools import _WORKFLOW_REGISTRY
+from reNgine.definitions import INTERNAL_ERROR_MESSAGE
 
 logger = logging.getLogger(__name__)
 
@@ -159,9 +161,9 @@ class InitiateScan(APIView):
 						raise Exception(res.get('error', 'Failed to initiate scan'))
 					results.append({'domain': domain.name, 'scan_id': scan.id})
 					
-				except Exception as e:
+				except Exception:
 					logger.error("Error initiating scan for domain %s", domain_id, exc_info=True)
-					errors.append({'domain_id': domain_id, 'error': str(e)})
+					errors.append({'domain_id': domain_id, 'error': INTERNAL_ERROR_MESSAGE})
 
 			if not results:
 				return Response({
@@ -176,12 +178,12 @@ class InitiateScan(APIView):
 				'results': results,
 				'errors': errors if errors else None
 			})
-		except Exception as e:
-			logger.error(e)
+		except Exception:
+			logger.exception('Failed to initiate scans')
 			return Response({
 				'status': False,
-				'message': str(e)
-			}, status=status.HTTP_400_BAD_REQUEST)
+				'message': INTERNAL_ERROR_MESSAGE
+			}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class InitiateSubTask(APIView):
@@ -225,6 +227,18 @@ class InitiateSubTask(APIView):
 				subdomain_ids = [single]
 		subdomain_ids = list(dict.fromkeys(int(subdomain_id) for subdomain_id in subdomain_ids))
 
+		from reNgine.temporal.workflows.subscan import is_subscan_task
+		scan_types = [scan_types] if isinstance(scan_types, str) else list(scan_types or [])
+		unsupported = [t for t in scan_types if not is_subscan_task(t)]
+		if unsupported or not scan_types:
+			return Response({
+				'status': False,
+				'message': (
+					f"Not runnable as a subscan: {', '.join(unsupported)}" if unsupported
+					else 'Select at least one task'
+				),
+			}, status=status.HTTP_400_BAD_REQUEST)
+
 		def _run_single_subscan(sub_id):
 			"""Run a single subscan launch inside a worker thread, ensuring DB connection cleanup."""
 			try:
@@ -238,9 +252,9 @@ class InitiateSubTask(APIView):
 					'task_queue': task_queue or worker_name,
 				}
 				return sub_id, initiate_subscan_temporal(**ctx)
-			except Exception as ex:
-				logger.exception('Error starting concurrent subscan for subdomain %s', sub_id, exc_info=True)
-				return sub_id, {'success': False, 'error': str(ex)}
+			except Exception:
+				logger.exception('Error starting concurrent subscan for subdomain %s', sub_id)
+				return sub_id, {'success': False, 'error': INTERNAL_ERROR_MESSAGE}
 			finally:
 				# Close all connections created or cached for this thread to prevent leaks
 				connections.close_all()
@@ -290,9 +304,9 @@ class StopScan(APIView):
 				if scan.scan_status == SUCCESS_TASK or scan.scan_status == ABORTED_TASK:
 					continue
 				response = abort_scan_history(scan, aborted_by=request.user)
-			except Exception as e:
-				logger.error(e)
-				response = {'status': False, 'message': str(e)}
+			except Exception:
+				logger.exception('Failed to abort scan %s', scan_id)
+				response = {'status': False, 'message': INTERNAL_ERROR_MESSAGE}
 
 		for subscan_id in subscan_ids:
 			try:
@@ -300,11 +314,14 @@ class StopScan(APIView):
 				if subscan.status == SUCCESS_TASK or subscan.status == ABORTED_TASK:
 					continue
 				response = abort_subscan(subscan)
-			except Exception as e:
-				logger.error(e)
-				response = {'status': False, 'message': str(e)}
+			except Exception:
+				logger.exception('Failed to abort subscan %s', subscan_id)
+				response = {'status': False, 'message': INTERNAL_ERROR_MESSAGE}
 
 		return Response(response)
+
+
+RESUMABLE_SCAN_STATUSES = (FAILED_TASK, ABORTED_TASK, PARTIALLY_COMPLETE_TASK)
 
 
 class ResumeScan(APIView):
@@ -323,19 +340,22 @@ class ResumeScan(APIView):
 			scan = ScanHistory.objects.get(id=scan_id)
 			if scan.scan_status == SUCCESS_TASK:
 				return Response({'status': False, 'message': 'Scan is already completed.'})
-			if scan.recovery_count >= 3:
-				return Response({'status': False, 'message': 'Max recovery limit (3) exceeded. Use the manual Resume button to override.'})
+			# A running, pending or paused scan still has a workflow; resuming it would
+			# start a second one over the same scan. recovery_count only caps automatic
+			# recovery: a manual resume is the override and resets it.
+			if scan.scan_status not in RESUMABLE_SCAN_STATUSES:
+				return Response({'status': False, 'message': 'Only a failed, aborted or partially complete scan can be resumed.'})
 
 			from reNgine.tasks import resume_scan_temporal
 			resume_scan_temporal(scan.id)
-			
+
 			response['status'] = True
 			response['message'] = 'Scan resumption initiated successfully.'
 		except ScanHistory.DoesNotExist:
 			response['message'] = 'Scan not found'
-		except Exception as e:
+		except Exception:
 			logger.error('Error resuming scan %s', scan_id, exc_info=True)
-			response['message'] = str(e)
+			response['message'] = INTERNAL_ERROR_MESSAGE
 		
 		return Response(response)
 
@@ -446,6 +466,54 @@ class UnpauseScan(APIView):
 				logger.error("Failed to resume/unpause scan %s", scan.id, exc_info=True)
 
 		return Response({'status': True, 'resumed_count': resumed_count, 'message': f'Resumed {resumed_count} scans.'})
+
+
+class SetScanHardwareProfile(APIView):
+	"""Switch the hardware profile of a scan, including a pending or running one.
+
+	Every activity re-reads the profile when it starts (TemporalTaskProxy), so the
+	change applies to the steps that start afterwards; tools already running keep
+	the settings they were launched with.
+	"""
+	permission_classes = [HasPermission]
+	permission_required = PERM_INITATE_SCANS_SUBSCANS
+
+	def post(self, request, scan_id: int) -> Response:
+		try:
+			profile_id = int(request.data.get('hardware_profile_id'))
+		except (TypeError, ValueError):
+			return Response(
+				{'status': False, 'message': 'A valid hardware_profile_id is required.'},
+				status=status.HTTP_400_BAD_REQUEST,
+			)
+
+		scan = ScanHistory.objects.filter(pk=scan_id).first()
+		if scan is None:
+			return Response({'status': False, 'message': 'Scan not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+		profile = HardwareProfile.objects.filter(pk=profile_id, is_active=True).first()
+		if profile is None:
+			return Response(
+				{'status': False, 'message': 'Hardware profile not found or inactive.'},
+				status=status.HTTP_400_BAD_REQUEST,
+			)
+
+		try:
+			scan.hardware_profile = profile
+			scan.save(update_fields=['hardware_profile'])
+		except Exception:
+			logger.exception('Failed to set hardware profile %s on scan %s', profile_id, scan_id)
+			return Response(
+				{'status': False, 'message': INTERNAL_ERROR_MESSAGE},
+				status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+			)
+
+		logger.info('Scan %s switched to hardware profile %s by user %s', scan_id, profile.id, request.user.pk)
+		return Response({
+			'status': True,
+			'message': 'Hardware profile updated; it applies to scan steps that start from now on.',
+			'hardware_profile': {'id': profile.id, 'name': profile.name},
+		})
 
 
 class FetchSubscanResults(APIView):
@@ -614,7 +682,7 @@ class ScanActivityRetryAPIView(APIView):
         import yaml
         import asyncio
         from startScan.models import ScanActivity
-        from reNgine.definitions import FAILED_TASK, RUNNING_TASK, INITIATED_TASK
+        from reNgine.definitions import FAILED_TASK, RUNNING_TASK, INITIATED_TASK, SUCCESS_TASK
         from reNgine.temporal_client import TemporalClientProvider
 
         from django.db import transaction
@@ -627,12 +695,6 @@ class ScanActivityRetryAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        if activity_obj.subscan_id is not None:
-            return Response(
-                {"status": False, "message": "Retrying subscan tasks is not yet supported"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         scan = activity_obj.scan_of
 
         if scan is None:
@@ -641,27 +703,54 @@ class ScanActivityRetryAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        from reNgine.definitions import PAUSED_TASK
+        from reNgine.definitions import PAUSED_TASK, ABORTED_TASK
         if scan.scan_status in (RUNNING_TASK, PAUSED_TASK):
             return Response(
                 {"status": False, "message": "Cannot retry a task while the scan is running or paused"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if activity_obj.status != FAILED_TASK:
+        # Single-task retry accepts FAILED and ABORTED. Tier retry stays
+        # FAILED-only so a stop/cancel does not offer "Retry Tier".
+        # Subscan-linked activities are retryable with the same rules (parity
+        # with parent-scan rows); subdomain context is stamped into ctx below.
+        if scan.scan_status != SUCCESS_TASK and activity_obj.status not in (
+            FAILED_TASK, ABORTED_TASK,
+        ):
             return Response(
-                {"status": False, "message": "Task is not in a failed state"},
+                {"status": False, "message": "Task is not in a failed or aborted state"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Refuse before touching anything: the workflow would raise "Unrecognised
+        # task_name" at once, and the row would just turn red again.
+        task_name = retry_dispatch_name(activity_obj.name)
+        if task_name is None:
+            return Response(
+                {"status": False, "message": f"{activity_obj.title or activity_obj.name} cannot be retried on its own."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        original_scan_status = scan.scan_status
+
         with transaction.atomic():
-            # Reset the failed activity row so the serializer counts it as pending
-            # and _create_scan_activity can claim it normally.
+            # Reset the failed activity row so _create_scan_activity can claim it.
+            # Keep time_started so the timeline does not hide it as a ghost
+            # INITIATED row (those are filtered when time_started is null).
+            # Singular parents stay RUNNING (workflow starts immediately; children
+            # may never reclaim this row — e.g. single_tool_vulnerability_scan).
+            from reNgine.task_plan import is_singular_activity_name
+            reset_status = (
+                RUNNING_TASK
+                if is_singular_activity_name(activity_obj.name)
+                else INITIATED_TASK
+            )
             ScanActivity.objects.filter(pk=activity_obj.pk).update(
-                status=INITIATED_TASK,
-                time_started=None,
+                status=reset_status,
                 time_ended=None,
                 error_message=None,
+                traceback=None,
+                time=timezone.now(),
             )
 
             # Flip scan back to RUNNING so the UI reflects active state.
@@ -670,24 +759,111 @@ class ScanActivityRetryAPIView(APIView):
             scan.stop_scan_date = None
             scan.save(update_fields=["scan_status", "error_message", "stop_scan_date"])
 
+        # abort_scan_history leaves Redis scan_stop_{id} set; clear it the same
+        # way resume / retry_failed_tasks_temporal do, or the Go executor will
+        # kill the retry process group within seconds.
+        from reNgine.utils.scan_cancellation import set_scan_stop_kill_switch
+        set_scan_stop_kill_switch(scan.id, enabled=False)
+
         yaml_config = yaml.safe_load(scan.scan_type.yaml_configuration or "")
+        from reNgine.task_plan import is_singular_activity_name, pipeline_task_name
+        from urllib.parse import urlparse
+
+        # The overlay a singular run stored is keyed by the tool's own name (see
+        # api/tool_run.py); the workflow is dispatched on task_name.
+        tool_name = pipeline_task_name(activity_obj.name)
+        singular = is_singular_activity_name(activity_obj.name)
+
         ctx = {
             "scan_history_id": scan.id,
             "engine_id": scan.scan_type.id,
             "domain_id": scan.domain.id,
             "results_dir": scan.results_dir,
             "yaml_configuration": yaml_config or {},
-            "tasks": [activity_obj.name],
+            "tasks": [task_name],
+            "original_scan_status": original_scan_status,
+            "activity_id": activity_obj.id,
         }
+        if singular:
+            # Keep singular namespace / host scope on timeline retry.
+            ctx["singular_tool_run"] = True
+            host_raw = (activity_obj.target_host or "").strip()
+            if host_raw:
+                hostname = (
+                    urlparse(host_raw).hostname
+                    if "://" in host_raw
+                    else host_raw.split("/")[0]
+                )
+                if hostname:
+                    http_url = (
+                        host_raw
+                        if "://" in host_raw
+                        else f"https://{hostname}/"
+                    )
+                    ctx["subdomain_name"] = hostname
+                    ctx["subdomain_http_url"] = http_url
+                    ctx["hosts"] = [hostname]
+                    ctx["urls"] = [http_url]
+                    ctx["target_host"] = hostname
+                    from startScan.models import Subdomain
+                    sub = Subdomain.objects.filter(
+                        scan_history=scan, name=hostname,
+                    ).first()
+                    if sub:
+                        ctx["subdomain_id"] = sub.id
+            # Restore tool_args / yaml overlay written at singular start.
+            try:
+                import json
+                import os
+                from reNgine.tool_args import merge_yaml_overlay
+                meta_path = os.path.join(
+                    scan.results_dir or '', f'singular_meta_{activity_obj.id}.json',
+                )
+                if os.path.isfile(meta_path):
+                    with open(meta_path, encoding='utf-8') as fh:
+                        meta = json.load(fh) or {}
+                    overlay = meta.get('yaml_overlay') or {}
+                    if overlay:
+                        ctx['yaml_configuration'] = merge_yaml_overlay(
+                            ctx.get('yaml_configuration') or {},
+                            tool_name,
+                            overlay,
+                        )
+                    ctx['singular_tool_args'] = meta.get('sanitized') or {}
+                    ctx['extra_cli_args'] = meta.get('extra_cli_args') or []
+                    if meta.get('subdomain_id') and not ctx.get('subdomain_id'):
+                        ctx['subdomain_id'] = meta['subdomain_id']
+                    if meta.get('subdomain_name') and not ctx.get('subdomain_name'):
+                        ctx['subdomain_name'] = meta['subdomain_name']
+                    if meta.get('http_url') and not ctx.get('urls'):
+                        ctx['urls'] = [meta['http_url']]
+                        ctx['subdomain_http_url'] = meta['http_url']
+            except Exception:
+                logger.exception(
+                    'Failed to restore singular_meta for activity %s', activity_obj.id,
+                )
+        if activity_obj.subscan_id is not None:
+            subscan = activity_obj.subscan
+            ctx["subscan_id"] = activity_obj.subscan_id
+            if subscan and subscan.subdomain_id:
+                ctx["subdomain_id"] = subscan.subdomain_id
+                ctx["subdomain_name"] = subscan.subdomain.name
+                ctx["subdomain_http_url"] = (
+                    subscan.subdomain.http_url
+                    or f"https://{subscan.subdomain.name}/"
+                )
+                ctx["hosts"] = [subscan.subdomain.name]
+                ctx["urls"] = [ctx["subdomain_http_url"]]
+                ctx["target_host"] = subscan.subdomain.name
         workflow_id = (
-            f"retry-{activity_obj.name}-{scan.id}-{int(timezone.now().timestamp())}"
+            f"retry-{task_name}-{scan.id}-{activity_obj.id}-{int(timezone.now().timestamp())}"
         )
 
         async def _start():
             client = await TemporalClientProvider.get_client()
             await client.start_workflow(
                 "SingleTaskRetryWorkflow",
-                args=[ctx, activity_obj.name],
+                args=[ctx, task_name],
                 id=workflow_id,
                 task_queue="python-orchestrator-queue",
             )
@@ -699,6 +875,260 @@ class ScanActivityRetryAPIView(APIView):
         return Response(
             {"status": True, "message": f"Retry started for {activity_obj.title}"}
         )
+
+#: Highest tier the timeline uses (Tier 7 holds finalisation/post-processing).
+MAX_SCAN_TIER = 7
+
+
+def tier_retry_workflow_id(scan_id: int, tier: int, activity_id: int) -> str:
+    """Deterministic workflow id for a tier retry of a single activity row.
+
+    No timestamp: a second click while the first retry is still running hits the
+    same workflow id and Temporal rejects it with ``WorkflowAlreadyStartedError``
+    instead of launching a duplicate run of the same task.
+    """
+    return f"tier-retry-{scan_id}-t{tier}-a{activity_id}"
+
+
+class ScanTierRetryAPIView(APIView):
+    """Retry every failed activity of one tier of a scan.
+
+    ``POST /api/action/retry/tier/<scan_id>/<tier>/``
+
+    Reuses the single-task path: the same guard rails as
+    ``ScanActivityRetryAPIView`` and one ``SingleTaskRetryWorkflow`` per failed
+    row. Rows that are not FAILED are left untouched, and rows whose task name
+    the workflow cannot dispatch are skipped and reported rather than failing the
+    whole request.
+    """
+
+    permission_classes = [HasPermission]
+    permission_required = PERM_INITATE_SCANS_SUBSCANS
+
+    def post(self, request, scan_id, tier):
+        import yaml
+        import asyncio
+        from django.db import transaction
+        from startScan.models import ScanActivity
+        from reNgine.definitions import (
+            FAILED_TASK, RUNNING_TASK, INITIATED_TASK, PAUSED_TASK,
+        )
+        from reNgine.task_plan import get_task_tier, is_singular_activity_name
+        from reNgine.temporal_client import TemporalClientProvider
+
+        try:
+            tier = int(tier)
+        except (TypeError, ValueError):
+            return Response(
+                {"status": False, "message": "Tier must be an integer"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not 0 <= tier <= MAX_SCAN_TIER:
+            return Response(
+                {"status": False, "message": f"Tier must be between 0 and {MAX_SCAN_TIER}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            scan = ScanHistory.objects.select_related('scan_type', 'domain').get(id=scan_id)
+        except ScanHistory.DoesNotExist:
+            return Response(
+                {"status": False, "message": "Scan not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        original_scan_status = scan.scan_status
+
+        failed_rows = [
+            activity for activity in ScanActivity.objects.filter(
+                scan_of=scan, status=FAILED_TASK,
+            ).order_by('id')
+            if self._tier_of(activity, get_task_tier) == tier
+        ]
+
+        retryable, skipped = [], []
+        for activity in failed_rows:
+            if activity.subscan_id is not None:
+                skipped.append(self._skip(
+                    activity, 'subscan_unsupported',
+                    'Retrying subscan tasks is not yet supported',
+                ))
+            elif is_singular_activity_name(activity.name):
+                skipped.append(self._skip(
+                    activity, 'singular_tool',
+                    'Singular tool runs are not included in tier retry',
+                ))
+            elif retry_dispatch_name(activity.name) is None:
+                skipped.append(self._skip(
+                    activity, 'unsupported_task',
+                    f"Task '{activity.name}' cannot be retried on its own",
+                ))
+            else:
+                retryable.append(activity)
+
+        # No-op before the running-scan guard so a second click while the first
+        # retry is already RUNNING returns no_op (nothing left FAILED) instead
+        # of a hard 400.
+        if not retryable:
+            return Response({
+                "status": True,
+                "no_op": True,
+                "scan_id": scan.id,
+                "tier": tier,
+                "queued_count": 0,
+                "skipped_count": len(skipped),
+                "queued": [],
+                "skipped": skipped,
+                "message": (
+                    f"No failed tasks in tier {tier}"
+                    if not skipped else
+                    f"No retryable failed tasks in tier {tier}; {len(skipped)} skipped"
+                ),
+            })
+
+        # Same rule as the single-task view: a live scan owns its own rows.
+        if scan.scan_status in (RUNNING_TASK, PAUSED_TASK):
+            return Response(
+                {"status": False, "message": "Cannot retry a tier while the scan is running or paused"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            # Reset the failed rows so the serializer counts them as pending and
+            # _create_scan_activity can claim them normally. time_started is kept:
+            # the timeline drops INITIATED rows that have none, treating them as
+            # ghosts of an earlier run, which would hide the very tasks the
+            # operator just asked to re-run.
+            ScanActivity.objects.filter(pk__in=[a.pk for a in retryable]).update(
+                status=INITIATED_TASK,
+                time_ended=None,
+                error_message=None,
+                traceback=None,
+                time=timezone.now(),
+            )
+            scan.scan_status = RUNNING_TASK
+            scan.error_message = None
+            scan.stop_scan_date = None
+            scan.save(update_fields=["scan_status", "error_message", "stop_scan_date"])
+
+        from reNgine.utils.scan_cancellation import set_scan_stop_kill_switch
+        set_scan_stop_kill_switch(scan.id, enabled=False)
+
+        yaml_config = yaml.safe_load(scan.scan_type.yaml_configuration or "") or {}
+
+        # Every retry in this batch reaches GetScanFinalStatusActivity, which
+        # reports RUNNING while any name in the batch is still unfinished.
+        # Without it the retries race to write the scan's final status and the
+        # last one to finish decides it, even if its siblings are still going.
+        batch_names = sorted({a.name for a in retryable})
+
+        async def _start_all():
+            client = await TemporalClientProvider.get_client()
+            outcomes = []
+            for activity in retryable:
+                task_name = retry_dispatch_name(activity.name)
+                ctx = {
+                    "scan_history_id": scan.id,
+                    "engine_id": scan.scan_type.id,
+                    "domain_id": scan.domain.id,
+                    "results_dir": scan.results_dir,
+                    "yaml_configuration": yaml_config,
+                    "tasks": [task_name],
+                    "original_scan_status": original_scan_status,
+                    "retry_batch_names": batch_names,
+                    # Lets the finaliser close this exact row when the retry fails;
+                    # by name it would look for task_name, which differs for aliases.
+                    "activity_id": activity.id,
+                }
+                workflow_id = tier_retry_workflow_id(scan.id, tier, activity.id)
+                try:
+                    await client.start_workflow(
+                        "SingleTaskRetryWorkflow",
+                        args=[ctx, task_name],
+                        id=workflow_id,
+                        task_queue="python-orchestrator-queue",
+                    )
+                    outcomes.append((activity, workflow_id, None))
+                except Exception as exc:
+                    outcomes.append((activity, workflow_id, exc))
+            return outcomes
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        outcomes = run_and_close(loop, _start_all())
+
+        queued, failed_to_start = [], []
+        for activity, workflow_id, exc in outcomes:
+            if exc is None:
+                queued.append({
+                    "activity_id": activity.id,
+                    "name": activity.name,
+                    "title": activity.title,
+                    "workflow_id": workflow_id,
+                })
+                continue
+
+            already_running = type(exc).__name__ == 'WorkflowAlreadyStartedError'
+            if already_running:
+                reason, message = 'already_running', 'A retry for this task is already running'
+            else:
+                reason, message = 'start_failed', 'Failed to start the retry workflow'
+                logger.error(
+                    "[ScanTierRetry] scan=%s tier=%s activity=%s failed to start: %s",
+                    scan.id, tier, activity.id, str(exc),
+                )
+            skipped.append(self._skip(activity, reason, message))
+            failed_to_start.append(activity)
+
+        # Put rows we could not queue back exactly where we found them, original
+        # failure reason included, so the timeline does not show a task as
+        # pending that nothing is going to run.
+        for activity in failed_to_start:
+            ScanActivity.objects.filter(pk=activity.pk).update(
+                status=FAILED_TASK,
+                time_started=activity.time_started,
+                time_ended=activity.time_ended,
+                error_message=activity.error_message,
+                traceback=activity.traceback,
+            )
+
+        if not queued:
+            scan.scan_status = original_scan_status
+            scan.save(update_fields=["scan_status"])
+
+        return Response({
+            "status": bool(queued),
+            "no_op": False,
+            "scan_id": scan.id,
+            "tier": tier,
+            "queued_count": len(queued),
+            "skipped_count": len(skipped),
+            "queued": queued,
+            "skipped": skipped,
+            "message": (
+                f"Retry started for {len(queued)} task(s) in tier {tier}"
+                if queued else
+                f"Could not start any retry in tier {tier}"
+            ),
+        })
+
+    @staticmethod
+    def _tier_of(activity, get_task_tier) -> int:
+        """Tier of a row, falling back to the plan for rows written before the
+        ``tier`` column was populated."""
+        return activity.tier if activity.tier is not None else get_task_tier(activity.name)
+
+    @staticmethod
+    def _skip(activity, reason: str, message: str) -> dict:
+        return {
+            "activity_id": activity.id,
+            "name": activity.name,
+            "title": activity.title,
+            "reason": reason,
+            "message": message,
+        }
+
 
 class DirectoryFileDispatchView(APIView):
     """Dispatch a security testing action against a specific directory file URL.
@@ -901,10 +1331,9 @@ class ExtractAuthLogsView(APIView):
                         logs.append(fields['data'])
 
             return Response({'status': True, 'logs': logs}, status=status.HTTP_200_OK)
-        except Exception as exc:
-            import logging
-            logging.getLogger(__name__).error(f"Failed to fetch auth logs for {workflow_id}: {exc}")
-            return Response({'error': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception("Failed to fetch auth logs for %s", workflow_id)
+            return Response({'error': INTERNAL_ERROR_MESSAGE}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # ---------------------------------------------------------------------------
 # Phase 4 — ScanProfile CRUD API

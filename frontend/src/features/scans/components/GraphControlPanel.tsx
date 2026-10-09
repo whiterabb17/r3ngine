@@ -55,7 +55,7 @@ export const GraphControlPanel: React.FC<Props> = ({
           <ToggleButtonGroup
             value={layoutName}
             exclusive
-            onChange={(e, newLayout) => newLayout && onChangeLayout(newLayout as any)}
+            onChange={(_e, newLayout: Props['layoutName'] | null) => newLayout && onChangeLayout(newLayout)}
             size="small"
             sx={{ 
                 bgcolor: 'action.hover',

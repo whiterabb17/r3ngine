@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from django.test import TestCase
+from django.test import TestCase, tag
 
 os.environ['RENGINE_SECRET_KEY'] = 'secret'
 os.environ['CELERY_ALWAYS_EAGER'] = 'True'
@@ -19,6 +19,9 @@ DOMAIN_NAME = os.environ.get('DOMAIN_NAME', 'test.local')
 #     logging.disable(logging.CRITICAL)
 
 
+# Scans a live DOMAIN_NAME with real tools; also predates the task-proxy
+# signatures (self, ...) and needs rewriting before it can run again.
+@tag('integration')
 class TestOnlineScan(TestCase):
     def setUp(self):
         self.url = f'https://{DOMAIN_NAME}'
