@@ -60,6 +60,7 @@ from reNgine.temporal.workflows.jobs import (
     MonitoringWorkflow,
     ProxyFetchWorkflow,
     RecalculateApmeWorkflow,
+    SafePocWorkflow,
     ScheduledScanWorkflow,
     SingleTaskRetryWorkflow,
     StartupSyncWorkflow,

@@ -22,6 +22,21 @@ class RedactTests(SimpleTestCase):
         self.assertEqual(body['nested']['R3NGINE_MCP_API_KEY'], '[REDACTED]')
         self.assertEqual(body['ok'], 1)
 
+    def test_redacts_cookie_value_in_nested_params(self):
+        body, truncated = redact_payload({
+            'template_id': 'authz_status_delta',
+            'params': {
+                'url_a': 'https://app.example.com/1',
+                'url_b': 'https://app.example.com/2',
+                'cookie_name': 'session',
+                'cookie_value': 'super-secret-session',
+            },
+        })
+        self.assertFalse(truncated)
+        self.assertEqual(body['params']['cookie_value'], '[REDACTED]')
+        self.assertEqual(body['params']['cookie_name'], 'session')
+        self.assertEqual(body['params']['url_a'], 'https://app.example.com/1')
+
     def test_truncates_over_64kib(self):
         huge = {'blob': 'a' * 70000}
         body, truncated = redact_payload(huge)

@@ -128,6 +128,19 @@ Path create/enrich/update/dismiss and APME queue are **propose → operator appr
 
 Direct `r3ngine_enrich_attack_path`, `r3ngine_trigger_apme`, and `r3ngine_recalculate_apme` return **410** and point agents at proposals. UI non-MCP APME endpoints are unchanged.
 
+### SAFE PoC (catalog templates)
+
+Benign proof-of-concept probes are **propose → operator approve → Temporal execute**. Agents pick a server catalog `template_id` only (no freeform payloads):
+
+| Tool | Purpose |
+|------|---------|
+| `r3ngine_propose_safe_poc` | Draft marker/calc/authz/redirect/flag-canary attempt |
+| `r3ngine_list_safe_pocs` / `r3ngine_get_safe_poc` | Browse attempts |
+| `r3ngine_update_safe_poc` | Edit while `proposed` |
+| `r3ngine_approve_safe_poc` / `r3ngine_abort_safe_poc` | Operator yes only |
+
+Direct `r3ngine_run_safe_poc` returns **410**. Results nest under `Vulnerability.agent_enrichment.poc`. PoC success does **not** auto-set `verified`. Delegate to the `r3ngine-safe-poc` agent; see `r3ngine-mcp/skills/safe-poc/`.
+
 ### Credential Intelligence (plugin: `credential_intelligence`)
 
 | Tool | Purpose |
@@ -179,7 +192,8 @@ Agents (and the Subdomains tab **Run single tool** modal) can:
 3. **`r3ngine_run_tool`** — start one pipeline tool on a subdomain, endpoint, or URL. Optional `tool_args` must match the schema (denylisted retargeting / filesystem flags; no free-form shell). Timeline rows are namespaced `single_tool_<task>` so they never collide with master-scan claim / tier-retry / resume.
 4. **Follow-up plans** — `propose` → optional `update` → operator `approve` / `abort` / `retry`; detail payloads may include capped `suggested_followups`.
 5. **Attack-path proposals** — `r3ngine_propose_attack_path` → optional update → operator approve/abort (enrich/create/update/dismiss/APME queue).
-6. **OSINT staging** — `r3ngine_list_osint_staging` / `r3ngine_verify_osint_staging` with `agent_verified` badges in the UI.
+6. **SAFE PoC** — `r3ngine_propose_safe_poc` → optional update → operator approve/abort (catalog templates only).
+7. **OSINT staging** — `r3ngine_list_osint_staging` / `r3ngine_verify_osint_staging` with `agent_verified` badges in the UI.
 
 Operators manage keys, sessions, and the audit chain in **Settings → MCP Access**. Sync installed binaries and refresh arg schemas on the web container with `manage.py sync_installed_tools` and `manage.py refresh_tool_arg_schemas` when tools are updated.
 

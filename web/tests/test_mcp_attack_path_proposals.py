@@ -365,7 +365,8 @@ class McpAttackPathProposalTests(TestCase):
         )
         self.assertEqual(res.status_code, 403)
 
-    def test_update_marks_operator_edited(self):
+    def test_mcp_update_does_not_claim_operator(self):
+        """MCP agents must not set operator_edited (body operator=true ignored)."""
         proposed = self.pt.post(
             '/api/mcp/attack-path-proposals/propose/',
             {
@@ -380,14 +381,25 @@ class McpAttackPathProposalTests(TestCase):
         res = self.pt.post(
             f'/api/mcp/attack-path-proposals/{proposed["id"]}/update/',
             {
+                'operator': True,  # forged — must not elevate
                 'payload': {'feasibility': 'plausible', 'confidence': 0.8},
             },
             format='json',
         )
         self.assertEqual(res.status_code, 200)
-        self.assertTrue(res.json()['operator_edited'])
+        self.assertFalse(res.json()['operator_edited'])
         row = AttackPathProposal.objects.get(pk=proposed['id'])
-        self.assertTrue(row.operator_edited)
+        self.assertFalse(row.operator_edited)
+
+        # After a real operator lock, MCP agent cannot overwrite.
+        row.operator_edited = True
+        row.save(update_fields=['operator_edited'])
+        locked = self.pt.post(
+            f'/api/mcp/attack-path-proposals/{proposed["id"]}/update/',
+            {'payload': {'feasibility': 'fantasy', 'confidence': 0.1}},
+            format='json',
+        )
+        self.assertEqual(locked.status_code, 403)
 
     @patch('mcp.attack_path_proposals._apply_enrich')
     def test_approve_unexpected_error_rolls_back(self, mock_enrich):

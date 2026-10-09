@@ -153,16 +153,9 @@ class FollowupUpdateAPIView(APIView):
         if not plan:
             return Response({'error': 'Not found'}, status=404)
         data = request.data or {}
-        # Treat JWT/UI and MCP pentester as operator; agent identity uses mcp_key
-        is_operator = not getattr(request, 'mcp_key', None) or bool(
-            getattr(request, 'mcp_operator', False)
-        )
-        # MCP agent keys are not operators unless marked; default agent = False
-        if getattr(request, 'mcp_key', None) and not request.data.get('_operator'):
-            is_operator = False
-            # Operator-facing MCP tools set operator=true in body
-            if data.get('operator') is True:
-                is_operator = True
+        # MCP body flags must not elevate privilege (bypass of operator_edited).
+        from mcp.operator_gate import resolve_is_operator
+        is_operator = resolve_is_operator(request)
         try:
             plan = update_plan_steps(
                 plan,
