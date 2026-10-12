@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://github.com/whiterabb17/r3ngine/releases" target="_blank">
-    <img src="https://img.shields.io/badge/version-v3.7.8-informational?&logo=none" alt="r3ngine Latest Version" />
+    <img src="https://img.shields.io/badge/version-v3.7.9-informational?&logo=none" alt="r3ngine Latest Version" />
   </a>
   &nbsp;
   <a href="https://www.gnu.org/licenses/gpl-3.0" target="_blank">
@@ -30,9 +30,9 @@
   </a>
 </p>
 
-<h3 align="center">r3ngine 3.7.8: Hardening, CI, and Infrastructure</h3>
+<h3 align="center">r3ngine 3.7.9: SAFE PoC Agent &amp; Large-Scan Resilience</h3>
 <p>
-  r3ngine v3.7.8 extends official <b>MCP Access</b> with <b>plugin-gated tools</b> — agents discover enabled plugins via <code>r3ngine_list_plugins</code> and only then receive AD / BloodHound ingest, credential intelligence, compliance, and Burp Suite tools (sidecar <b>v1.4.0</b>). Dedicated <code>/api/mcp/</code> wrappers never open raw <code>/api/plugins/</code> routes; secrets stay redacted; Metasploit and active exploitation remain out of MCP. Building on v3.7.6 MCP foundations (hashed keys, sessions, audit chain, singular tools, SAFE validation, portable cyber skills, Reacher mailbox verification) and the broader Phoenix stack — <b>Target Report Generation</b>, <b>APME</b>, <b>Distributed Workers</b>, <b>Certificate &amp; Identity Intelligence</b>, <b>Exposure Correlation</b>, and Temporal-backed orchestration — this release focuses on agent-ready plugin surfaces while keeping defense-in-depth. Building off the original reNgine and further inspired by rengine-ng (Check out <a href="https://github.com/Security-Tools-Alliance/rengine-ng" target="_blank">rengine-ng v3</a> if you haven't!). Infrastructure remains <b>Django 5.2.3 LTS</b>, <b>PostgreSQL 16</b>, and <b>Gunicorn + Uvicorn ASGI</b>.
+  r3ngine v3.7.9 adds the <b>SAFE PoC agent</b> — catalog-only probes via propose → operator approve → Temporal <code>SafePocWorkflow</code> (sidecar <b>v1.5.0</b>, specialist <code>r3ngine-safe-poc</code>). Templates stay server-side (<code>marker_reflect</code>, <code>calc_echo</code>, <code>authz_status_delta</code>, <code>open_redirect_safe</code>, <code>flag_canary_read</code>); direct run returns <b>410</b>; PoC success never auto-sets <code>verified</code>. This release also hardens large scans (isolated tool failures, batched directory fuzzing, duplicate-host skipping) and keeps MCP defense-in-depth: hashed keys, sessions, audit redaction, plugin-gated tools, and JWT/UI-only operator gates. Building off the original reNgine and further inspired by rengine-ng (Check out <a href="https://github.com/Security-Tools-Alliance/rengine-ng" target="_blank">rengine-ng v3</a> if you haven't!). Infrastructure remains <b>Django 5.2.3 LTS</b>, <b>PostgreSQL 16</b>, and <b>Gunicorn + Uvicorn ASGI</b>.
 </p>
 
 ![-----------------------------------------------------](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/aqua.png)
@@ -81,11 +81,11 @@ The plugin system supports dynamic installation, signed `.r3n` packages with Ed2
 <h2 align="center" id="r3ngine-mcp"><a href="https://github.com/whiterabb17/r3ngine-mcp" target="_blank">r3ngine MCP</a>: Official v1 Server Out Now</h2>
 <p align="center">
   <a href="https://github.com/whiterabb17/r3ngine-mcp" target="_blank">
-    <img src="https://img.shields.io/badge/r3ngine--mcp-v1.4.0-blue.svg?logo=none" alt="r3ngine MCP v1.4.0" />
+    <img src="https://img.shields.io/badge/r3ngine--mcp-v1.5.0-blue.svg?logo=none" alt="r3ngine MCP v1.5.0" />
   </a>
   &nbsp;
   <a href="https://github.com/whiterabb17/r3ngine-mcp/releases" target="_blank">
-    <img src="https://img.shields.io/badge/compatible_with-r3ngine_v3.7.8+-warning.svg?logo=none" alt="Compatible with r3ngine v3.7.8+" />
+    <img src="https://img.shields.io/badge/compatible_with-r3ngine_v3.7.9+-warning.svg?logo=none" alt="Compatible with r3ngine v3.7.9+" />
   </a>
   &nbsp;
   <a href="https://modelcontextprotocol.io" target="_blank">
@@ -97,7 +97,7 @@ The plugin system supports dynamic installation, signed `.r3n` packages with Ed2
   </a>
 </p>
 
-The [r3ngine-mcp](https://github.com/whiterabb17/r3ngine-mcp) companion (**v1.4.0**) is the official Model Context Protocol server for this instance. Cursor, Claude Desktop, VS Code, or any MCP-capable agent can list recon data, run a **singular pipeline tool** on one asset (with host-local `tool_args` schemas), propose follow-up batches, verify OSINT staging, run **SAFE vulnerability enrichment** and **attack-path proposals** (propose→approve — no exploit craft), and — when plugins are installed — use **plugin-gated tools** for AD/BloodHound ingest, credential intelligence, compliance assessments, and Burp Suite sync. Identity, keys, sessions, and the request/response audit chain live in **Settings → MCP Access**. The sidecar speaks MCP only and is an HTTP client of `/api/mcp/`. Specialist Cursor agents: **r3ngine-assessor**, **r3ngine-osint**, **r3ngine-vuln-validator**, **r3ngine-attack-path**.
+The [r3ngine-mcp](https://github.com/whiterabb17/r3ngine-mcp) companion (**v1.5.0**) is the official Model Context Protocol server for this instance. Cursor, Claude Desktop, VS Code, or any MCP-capable agent can list recon data, run a **singular pipeline tool** on one asset (with host-local `tool_args` schemas), propose follow-up batches, verify OSINT staging, run **SAFE vulnerability enrichment**, **attack-path proposals**, and **SAFE PoC attempts** (propose→operator approve→catalog probe — no freeform payloads / no exploit craft), and — when plugins are installed — use **plugin-gated tools** for AD/BloodHound ingest, credential intelligence, compliance assessments, and Burp Suite sync. Identity, keys, sessions, and the request/response audit chain live in **Settings → MCP Access**. The sidecar speaks MCP only and is an HTTP client of `/api/mcp/`. Specialist Cursor agents: **r3ngine-assessor**, **r3ngine-osint**, **r3ngine-vuln-validator**, **r3ngine-attack-path**, **r3ngine-safe-poc**.
 
 **Install (after r3ngine is running and you have generated a key):**
 
@@ -183,7 +183,7 @@ r3ngine is a production-grade web reconnaissance and vulnerability scanning plat
 
 ⚙️&nbsp;&nbsp; **Role-based access control**: Sys Admin, Penetration Tester, and Auditor roles with precisely defined permissions.
 
-🔌&nbsp;&nbsp; **MCP Access**: official [r3ngine-mcp](https://github.com/whiterabb17/r3ngine-mcp) **v1.4.0** server so IDE agents can read recon, run singular tools with validated `tool_args`, propose follow-ups, verify OSINT staging, SAFE-enrich vulnerabilities/attack paths, and use **plugin-gated** AD / credential / compliance / Burp tools through `/api/mcp/` — hashed keys, sessions, portable cyber-skill sync, and an audit chain in Settings. The UI mirrors singular runs from the Subdomains tab (**Run single tool**).
+🔌&nbsp;&nbsp; **MCP Access**: official [r3ngine-mcp](https://github.com/whiterabb17/r3ngine-mcp) **v1.5.0** server so IDE agents can read recon, run singular tools with validated `tool_args`, propose follow-ups, verify OSINT staging, SAFE-enrich vulnerabilities/attack paths, run **SAFE PoC** catalog probes (operator approve), and use **plugin-gated** AD / credential / compliance / Burp tools through `/api/mcp/` — hashed keys, sessions, portable cyber-skill sync, and an audit chain in Settings. The UI mirrors singular runs from the Subdomains tab (**Run single tool**).
 
 ![-----------------------------------------------------](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/aqua.png)
 
@@ -463,7 +463,7 @@ The r3ngine frontend is built with a "Safety-First" philosophy under `strict: tr
 
 1. In the UI, open **Settings → MCP Access**. A sys-admin sets transport to **stdio**, **HTTP**, or **both**, then you generate a named key. Copy the secret (`r3n_mcp_…`) immediately — it is shown once.
 
-2. Install the companion server from this checkout ([repo](https://github.com/whiterabb17/r3ngine-mcp), [v1.4.0](https://github.com/whiterabb17/r3ngine-mcp/releases)):
+2. Install the companion server from this checkout ([repo](https://github.com/whiterabb17/r3ngine-mcp), [v1.5.0](https://github.com/whiterabb17/r3ngine-mcp/releases)):
 
     ```bash
     # Linux / macOS — clones ./r3ngine-mcp if needed and runs npm run setup
