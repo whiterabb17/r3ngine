@@ -1,14 +1,16 @@
 # Changelog
 
-### [v3.7.9] - 2026-10-07
+### [v3.7.9] - 2026-10-09
 
 #### Added
 
 - **SAFE PoC agent (MCP)**:
   - Propose → operator approve → Temporal `SafePocWorkflow` for catalog-only probes (`marker_reflect`, `calc_echo`, `authz_status_delta`, `open_redirect_safe`, `flag_canary_read`).
-  - `SafePocAttempt` model + `/api/mcp/safe-poc/` views; results nest under `Vulnerability.agent_enrichment.poc` (never freeform `ValidationResult.payload`).
-  - Sidecar **v1.5.0** tools + `r3ngine-safe-poc` agent / `skills/safe-poc/`; expanded Anthropic skill allowlist (testing/triage/canary) with stronger deny substrings.
-  - Direct run returns **410**; PoC success does not auto-set `verified`.
+  - `SafePocAttempt` model + migration `mcp.0008` + `/api/mcp/safe-poc/` views; results nest under `Vulnerability.agent_enrichment.poc` (never freeform `ValidationResult.payload`).
+  - Sidecar **v1.5.0** tools + Cursor/Claude specialist **`r3ngine-safe-poc`** / `skills/safe-poc/`; expanded Anthropic skill allowlist (testing/triage/canary) with stronger deny substrings.
+  - Direct run returns **410**; PoC success does **not** auto-set `verified`.
+  - Execution hardening: DNS pin against rebinding, SSRF-safe redirect hop re-checks, shared cookie jar on `authz_status_delta`, blank `allowed_paths` rejected, abort-wins row locks, `cookie_value` audit redaction.
+  - Operator privilege locked to JWT/UI via `resolve_is_operator` (MCP body flags cannot forge operator) for safe-poc, attack-path proposals, and follow-ups.
 
 - **Large-scan resilience (PR #135)**:
   - Tier 1–6 tool failures are isolated (`_isolated_tool`): one failed tool no longer aborts `MasterScanWorkflow`; Tier 7 still runs and the tool’s own timeline row keeps the failure.
@@ -55,7 +57,7 @@
 
 #### Notes
 
-- Existing installs: run `make migrate` for `startScan.0070`. Rebuild/restart **web** and the Temporal **python orchestrator** so chunked/dedup activities register.
+- Existing installs: run `make migrate` for `startScan.0070` and `mcp.0008` (SAFE PoC). Rebuild/restart **web** and the Temporal **python orchestrator** so chunked/dedup/`SafePocWorkflow` activities register. Pair with **r3ngine-mcp v1.5.0**.
 - Open follow-ups: `max_batches` is backend-clamped only (not yet in the engine UI); redirect-root dedup can skip in-scope hosts by design when root redirects to another live root.
 
 ### [v3.7.8] - 2026-10-01
@@ -1188,7 +1190,7 @@
     # Inside the web or celery container:
     python manage.py recover_scan_results           # dry-run
     python manage.py recover_scan_results --apply   # write to DB
-    python manage.py recover_scan_results --apply --scan-dir /usr/src/scan_results/defijn.io_108
+    python manage.py recover_scan_results --apply --scan-dir /usr/src/scan_results/example.txt_108
     ```
 - **Configuration Export & Import**: Added a complete backup and restore system for custom user settings.
   - **Export System**: Added the `/api/settings/export/` endpoint that dynamically generates a single `.zip` backup containing API keys, custom wordlists (from `/usr/src/wordlist/`), tool configurations, and custom scan engines.
