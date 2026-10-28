@@ -1,0 +1,118 @@
+{% if include_performance_benchmarking and performance_context %}
+<article id="performance-benchmarking" style="page-break-before: always; margin-top: 8mm;">
+    <h2 class="page-title primary" style="margin-bottom: 4mm;">Performance Benchmarking</h2>
+    <p style="font-size: 9pt; color: #64748b; margin-bottom: 5mm;">
+        Lighthouse scores for default live assets collected during asset analysis,
+        plus HTTP probe latency from httpx.
+    </p>
+
+    {% if not performance_context.has_benchmarks %}
+    <p style="font-size: 9pt;">
+        No Lighthouse results were stored for this scan. Enable
+        <b>Performance Benchmark</b> on the scan engine and re-run asset analysis
+        to collect scores. Probe latency below still reflects httpx timings when available.
+    </p>
+    {% else %}
+    <div style="display: flex; flex-wrap: wrap; gap: 4mm; margin-bottom: 6mm;">
+        <div style="min-width: 35mm; border: 1px solid #e2e8f0; border-radius: 2mm; padding: 3mm;">
+            <div style="font-size: 8pt; color: #64748b; text-transform: uppercase;">URLs measured</div>
+            <div style="font-size: 16pt; font-weight: 700;">{{ performance_context.success_count }}</div>
+        </div>
+        <div style="min-width: 35mm; border: 1px solid #e2e8f0; border-radius: 2mm; padding: 3mm;">
+            <div style="font-size: 8pt; color: #64748b; text-transform: uppercase;">Avg Perf Score</div>
+            <div style="font-size: 16pt; font-weight: 700;">
+                {% if performance_context.avg_performance_score != None %}
+                {{ performance_context.avg_performance_score|floatformat:0 }}
+                {% else %}—{% endif %}
+            </div>
+        </div>
+        <div style="min-width: 35mm; border: 1px solid #e2e8f0; border-radius: 2mm; padding: 3mm;">
+            <div style="font-size: 8pt; color: #64748b; text-transform: uppercase;">Avg LCP</div>
+            <div style="font-size: 16pt; font-weight: 700;">
+                {% if performance_context.avg_lcp_ms != None %}
+                {{ performance_context.avg_lcp_ms|floatformat:0 }}ms
+                {% else %}—{% endif %}
+            </div>
+        </div>
+        <div style="min-width: 35mm; border: 1px solid #e2e8f0; border-radius: 2mm; padding: 3mm;">
+            <div style="font-size: 8pt; color: #64748b; text-transform: uppercase;">Avg FCP</div>
+            <div style="font-size: 16pt; font-weight: 700;">
+                {% if performance_context.avg_fcp_ms != None %}
+                {{ performance_context.avg_fcp_ms|floatformat:0 }}ms
+                {% else %}—{% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if performance_context.probe_latency.count %}
+    <h3 style="font-size: 11pt; margin: 4mm 0 2mm;">HTTP Probe Latency (httpx)</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 5mm;">
+        <thead>
+            <tr style="background: #f1f5f9; text-align: left;">
+                <th style="padding: 2mm; border-bottom: 1px solid #cbd5e1;">Samples</th>
+                <th style="padding: 2mm; border-bottom: 1px solid #cbd5e1;">Avg</th>
+                <th style="padding: 2mm; border-bottom: 1px solid #cbd5e1;">Median</th>
+                <th style="padding: 2mm; border-bottom: 1px solid #cbd5e1;">P95</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="padding: 2mm; border-bottom: 1px solid #e2e8f0;">{{ performance_context.probe_latency.count }}</td>
+                <td style="padding: 2mm; border-bottom: 1px solid #e2e8f0;">
+                    {% if performance_context.probe_latency.avg_ms != None %}{{ performance_context.probe_latency.avg_ms|floatformat:0 }}ms{% else %}—{% endif %}
+                </td>
+                <td style="padding: 2mm; border-bottom: 1px solid #e2e8f0;">
+                    {% if performance_context.probe_latency.median_ms != None %}{{ performance_context.probe_latency.median_ms|floatformat:0 }}ms{% else %}—{% endif %}
+                </td>
+                <td style="padding: 2mm; border-bottom: 1px solid #e2e8f0;">
+                    {% if performance_context.probe_latency.p95_ms != None %}{{ performance_context.probe_latency.p95_ms|floatformat:0 }}ms{% else %}—{% endif %}
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if performance_context.rows %}
+    <h3 style="font-size: 11pt; margin: 4mm 0 2mm;">Lighthouse Results</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 7.5pt;">
+        <thead>
+            <tr style="background: #f1f5f9; text-align: left;">
+                <th style="padding: 1.5mm; border-bottom: 1px solid #cbd5e1;">URL</th>
+                <th style="padding: 1.5mm; border-bottom: 1px solid #cbd5e1;">Perf</th>
+                <th style="padding: 1.5mm; border-bottom: 1px solid #cbd5e1;">A11y</th>
+                <th style="padding: 1.5mm; border-bottom: 1px solid #cbd5e1;">BP</th>
+                <th style="padding: 1.5mm; border-bottom: 1px solid #cbd5e1;">SEO</th>
+                <th style="padding: 1.5mm; border-bottom: 1px solid #cbd5e1;">LCP</th>
+                <th style="padding: 1.5mm; border-bottom: 1px solid #cbd5e1;">FCP</th>
+                <th style="padding: 1.5mm; border-bottom: 1px solid #cbd5e1;">CLS</th>
+                <th style="padding: 1.5mm; border-bottom: 1px solid #cbd5e1;">TTFB</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in performance_context.rows %}
+            <tr>
+                <td style="padding: 1.5mm; border-bottom: 1px solid #e2e8f0; word-break: break-all; max-width: 70mm;">
+                    {{ row.http_url }}
+                    {% if row.error %}<div style="color: #b91c1c; font-size: 7pt;">{{ row.error|truncatechars:80 }}</div>{% endif %}
+                </td>
+                <td style="padding: 1.5mm; border-bottom: 1px solid #e2e8f0;">{% if row.performance_score != None %}{{ row.performance_score|floatformat:0 }}{% else %}—{% endif %}</td>
+                <td style="padding: 1.5mm; border-bottom: 1px solid #e2e8f0;">{% if row.accessibility_score != None %}{{ row.accessibility_score|floatformat:0 }}{% else %}—{% endif %}</td>
+                <td style="padding: 1.5mm; border-bottom: 1px solid #e2e8f0;">{% if row.best_practices_score != None %}{{ row.best_practices_score|floatformat:0 }}{% else %}—{% endif %}</td>
+                <td style="padding: 1.5mm; border-bottom: 1px solid #e2e8f0;">{% if row.seo_score != None %}{{ row.seo_score|floatformat:0 }}{% else %}—{% endif %}</td>
+                <td style="padding: 1.5mm; border-bottom: 1px solid #e2e8f0;">{% if row.lcp_ms != None %}{{ row.lcp_ms|floatformat:0 }}ms{% else %}—{% endif %}</td>
+                <td style="padding: 1.5mm; border-bottom: 1px solid #e2e8f0;">{% if row.fcp_ms != None %}{{ row.fcp_ms|floatformat:0 }}ms{% else %}—{% endif %}</td>
+                <td style="padding: 1.5mm; border-bottom: 1px solid #e2e8f0;">{% if row.cls != None %}{{ row.cls|floatformat:3 }}{% else %}—{% endif %}</td>
+                <td style="padding: 1.5mm; border-bottom: 1px solid #e2e8f0;">{% if row.ttfb_ms != None %}{{ row.ttfb_ms|floatformat:0 }}ms{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if performance_context.rows_truncated %}
+    <p style="font-size: 8pt; color: #64748b; margin-top: 2mm;">
+        Showing {{ performance_context.rows|length }} of {{ performance_context.total_rows }} measured URLs.
+    </p>
+    {% endif %}
+    {% endif %}
+</article>
+{% endif %}

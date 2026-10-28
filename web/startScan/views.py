@@ -1136,6 +1136,7 @@ def create_report(request, id):
             'include_dorks_metadata': _bool('include_dorks_metadata'),
             'include_certificates': _bool('include_certificates'),
             'include_employees': _bool('include_employees'),
+            'include_performance_benchmarking': _bool('include_performance_benchmarking'),
             'comments': comments,
         }
     )

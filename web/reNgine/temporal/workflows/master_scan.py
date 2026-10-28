@@ -425,8 +425,9 @@ class MasterScanWorkflow:
 
             await self._check_paused()
             # ------------------------------------------------------------------
-            # TIER 3: URL Fetching + Screenshot (parallel — both depend only on
-            # Tier 2 http_crawl; screenshot does NOT depend on fetch_url output)
+            # TIER 3: URL Fetching + Screenshot + Performance Benchmark
+            # (parallel — all depend only on Tier 2 http_crawl; screenshot /
+            # performance_benchmark do NOT depend on fetch_url output)
             # ------------------------------------------------------------------
             tier3_futures = []
             if "fetch_url" in tasks:
@@ -447,6 +448,17 @@ class MasterScanWorkflow:
                         ctx,
                         start_to_close_timeout=timedelta(hours=1),
                         heartbeat_timeout=timedelta(minutes=5),
+                        retry_policy=_RETRY_NETWORK_SCAN,
+                        task_queue="python-orchestrator-queue"
+                    ))
+                )
+            if "performance_benchmark" in tasks and workflow.patched("add-performance-benchmark"):
+                tier3_futures.append(
+                    _isolated_tool("RunPerformanceBenchmarkActivity", workflow.execute_activity(
+                        "RunPerformanceBenchmarkActivity",
+                        ctx,
+                        start_to_close_timeout=timedelta(hours=8),
+                        heartbeat_timeout=timedelta(minutes=10),
                         retry_policy=_RETRY_NETWORK_SCAN,
                         task_queue="python-orchestrator-queue"
                     ))

@@ -334,7 +334,7 @@ ENV PATH="/root/.local/bin:${PATH}"
 RUN --mount=type=cache,target=/root/.npm \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
-    npm install -g retire && \
+    npm install -g retire lighthouse && \
     rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------

@@ -4,6 +4,12 @@
 
 #### Added
 
+- **Lighthouse performance benchmarking**:
+  - Opt-in engine task `performance_benchmark` runs in the same Tier 3 wave as screenshots (MasterScan/SubScan) and alongside screenshots in assessment EnumerationWorkflow.
+  - Persists per-URL scores and Core Web Vitals on `PerformanceBenchmark` (`startScan` migration `0072`); hard-caps `max_urls` (50) / timeout (120s) under an 8h activity budget; retries clear prior rows for the scan scope.
+  - Scan report Technical Mode checkbox **Performance Benchmarking** adds a PDF section (Lighthouse KPIs + httpx probe latency); AI export includes a compact `performance_benchmarking` slice.
+  - Requires web image rebuild for the global `lighthouse` npm package and `make migrate` for `0072`.
+
 - **SAFE PoC agent (MCP)**:
   - Propose → operator approve → Temporal `SafePocWorkflow` for catalog-only probes (`marker_reflect`, `calc_echo`, `authz_status_delta`, `open_redirect_safe`, `flag_canary_read`).
   - `SafePocAttempt` model + migration `mcp.0008` + `/api/mcp/safe-poc/` views; results nest under `Vulnerability.agent_enrichment.poc` (never freeform `ValidationResult.payload`).

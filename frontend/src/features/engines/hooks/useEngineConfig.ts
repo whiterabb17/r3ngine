@@ -121,6 +121,7 @@ export const FORM_OWNED_KEYS: Readonly<Record<SectionKey | keyof GlobalConfig | 
     mailbox_verification: owned('enabled', 'timeout', 'max_candidates', 'delay_ms', 'http_url'),
   },
   screenshot: owned(),
+  performance_benchmark: owned('max_urls', 'timeout'),
   fetch_url: owned(
     'uses_tools', 'remove_duplicate_endpoints', 'duplicate_fields', 'enable_http_crawl',
     'gf_patterns', 'ignore_file_extensions', 'threads',
@@ -382,6 +383,11 @@ export function serialiseConfigToYaml(config: EngineConfig, leftovers: Leftovers
   }
 
   if (config.screenshot.enabled) writeSection('screenshot', {});
+
+  if (config.performance_benchmark.enabled) {
+    const c = config.performance_benchmark.config;
+    writeSection('performance_benchmark', { max_urls: c.max_urls, timeout: c.timeout });
+  }
 
   // ── Tier 3+4 ────────────────────────────────────────────────────────────
   if (config.fetch_url.enabled) {
@@ -744,6 +750,11 @@ function parseYamlToConfig(yamlStr: string): EngineConfig {
     })(),
 
     screenshot: { enabled: 'screenshot' in raw && raw.screenshot !== null, config: {} },
+
+    performance_benchmark: section('performance_benchmark', (r) => ({
+      max_urls: (r.max_urls as number) ?? def.performance_benchmark.config.max_urls,
+      timeout: (r.timeout as number) ?? def.performance_benchmark.config.timeout,
+    }), def.performance_benchmark.config) as EngineConfig['performance_benchmark'],
 
     fetch_url: section('fetch_url', (r) => ({
       uses_tools: (r.uses_tools as string[]) ?? def.fetch_url.config.uses_tools,

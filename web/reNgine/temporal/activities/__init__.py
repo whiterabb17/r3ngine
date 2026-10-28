@@ -117,6 +117,7 @@ from reNgine.temporal.activities.enumeration import (  # noqa: E402
     run_port_scan_activity,
     run_tor_new_circuit_activity,
     run_screenshot_activity,
+    run_performance_benchmark_activity,
     run_fetch_url_activity,
     parse_enumeration_results_activity,
     run_dir_file_fuzz_activity,

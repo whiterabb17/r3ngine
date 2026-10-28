@@ -105,6 +105,7 @@ from reNgine.tasks.llm import (
 from reNgine.tasks.proxies import fetch_proxies_task
 from reNgine.tasks.waf import waf_detection, waf_bypass
 from reNgine.tasks.screenshot import screenshot
+from reNgine.tasks.performance_benchmark import performance_benchmark
 from reNgine.tasks.notifications import (
     send_notif,
     send_scan_notif,

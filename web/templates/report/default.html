@@ -1016,6 +1016,8 @@
     </article>
     {% endif %}
 
+    {% include 'report/performance_benchmark_section.html' %}
+
     {% if all_vulnerabilities_count > 0 and show_vuln %}
       <article style="page-break-before: always" class="summary">
         <h3 id="vulnerabilities-discovered" class="page_title">Vulnerabilities Discovered</h3>

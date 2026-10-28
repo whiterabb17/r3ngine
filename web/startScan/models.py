@@ -384,6 +384,50 @@ class Screenshot(models.Model):
 		return str(self.url)
 
 
+class PerformanceBenchmark(models.Model):
+	"""Lighthouse performance snapshot for a URL captured during asset analysis."""
+	scan_history = models.ForeignKey(
+		ScanHistory, on_delete=models.CASCADE, related_name='performance_benchmarks'
+	)
+	subdomain = models.ForeignKey(
+		Subdomain, on_delete=models.CASCADE, null=True, blank=True,
+		related_name='performance_benchmarks',
+	)
+	endpoint = models.ForeignKey(
+		'EndPoint', on_delete=models.SET_NULL, null=True, blank=True,
+		related_name='performance_benchmarks',
+	)
+	http_url = models.CharField(max_length=30000)
+	performance_score = models.FloatField(null=True, blank=True)
+	accessibility_score = models.FloatField(null=True, blank=True)
+	best_practices_score = models.FloatField(null=True, blank=True)
+	seo_score = models.FloatField(null=True, blank=True)
+	fcp_ms = models.FloatField(null=True, blank=True)
+	lcp_ms = models.FloatField(null=True, blank=True)
+	tbt_ms = models.FloatField(null=True, blank=True)
+	cls = models.FloatField(null=True, blank=True)
+	speed_index_ms = models.FloatField(null=True, blank=True)
+	tti_ms = models.FloatField(null=True, blank=True)
+	ttfb_ms = models.FloatField(null=True, blank=True)
+	raw_json = models.JSONField(default=dict, blank=True)
+	error = models.TextField(null=True, blank=True)
+	captured_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['-captured_at']
+		indexes = [
+			models.Index(
+				fields=['scan_history', 'performance_score'],
+				name='startScan_p_scan_hi_perf_idx',
+			),
+		]
+
+	def __str__(self):
+		score = self.performance_score
+		score_str = f'{score:.0f}' if score is not None else 'n/a'
+		return f'{self.http_url} (perf={score_str})'
+
+
 class SubScan(models.Model):
 	id = models.AutoField(primary_key=True)
 	type = models.CharField(max_length=100, blank=True, null=True)
@@ -417,6 +461,7 @@ class SubScan(models.Model):
 			'fetch_url': 'Fetch URLs',
 			'vulnerability_scan': 'Vulnerability Scan',
 			'screenshot': 'Screenshot',
+			'performance_benchmark': 'Performance Benchmark',
 			'waf_detection': 'Waf Detection',
 			'osint': 'Open-Source Intelligence'
 		}

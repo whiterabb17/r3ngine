@@ -160,6 +160,11 @@ export interface EmailSecurityConfig {
 // Screenshot has no settings the task reads; presence in YAML = enabled.
 export type ScreenshotConfig = Record<string, never>;
 
+export interface PerformanceBenchmarkConfig {
+  max_urls: number;
+  timeout: number;
+}
+
 // ─── Tier 3+4: Recon & Fuzzing ───────────────────────────────────────────────
 
 export interface FetchUrlConfig {
@@ -423,6 +428,7 @@ export interface EngineConfig {
   port_scan: SectionState<PortScanConfig>;
   email_security: SectionState<EmailSecurityConfig>;
   screenshot: SectionState<ScreenshotConfig>;
+  performance_benchmark: SectionState<PerformanceBenchmarkConfig>;
   // Tier 3+4
   fetch_url: SectionState<FetchUrlConfig>;
   web_api_discovery: SectionState<WebApiDiscoveryConfig>;
@@ -532,6 +538,7 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
     config: { mailbox_verification: true, timeout: 15, max_candidates: 200, delay_ms: 250, http_url: '' },
   },
   screenshot: { enabled: false, config: {} },
+  performance_benchmark: { enabled: false, config: { max_urls: 25, timeout: 60 } },
   fetch_url: {
     enabled: true,
     config: {

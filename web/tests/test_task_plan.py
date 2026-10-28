@@ -25,6 +25,7 @@ FULL_YAML = {
     },
     'fetch_url': {},
     'screenshot': {},
+    'performance_benchmark': {'max_urls': 25, 'timeout': 60},
     'dir_file_fuzz': {},
     'web_api_discovery': {},
     'waf_detection': {},
@@ -98,6 +99,13 @@ class TestBuildScanTaskPlan(SimpleTestCase):
         """Only discovery moved — harvest still runs alongside subdomain enumeration."""
         self.assertEqual(get_task_tier('vigolium_harvest'), 1)
         self.assertEqual(get_task_tier('subdomain_discovery'), 1)
+
+    def test_performance_benchmark_shares_tier_with_screenshot(self):
+        self.assertEqual(get_task_tier('performance_benchmark'), 3)
+        self.assertEqual(get_task_tier('performance_benchmark'), get_task_tier('screenshot'))
+        plan = build_scan_task_plan(FULL_TASKS, FULL_YAML)
+        names = [t['name'] for t in plan]
+        self.assertIn('performance_benchmark', names)
 
     def test_planned_vigolium_discovery_entry_carries_tier_2(self):
         plan = build_scan_task_plan(FULL_TASKS, FULL_YAML)

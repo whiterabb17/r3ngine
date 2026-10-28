@@ -256,6 +256,31 @@ def run_screenshot_activity(ctx: dict) -> bool:
     )
 
 
+@activity.defn(name="RunPerformanceBenchmarkActivity")
+def run_performance_benchmark_activity(ctx: dict) -> bool:
+    """Run Lighthouse performance benchmarks against default HTTP endpoints.
+
+    Runs in the same Tier 3 gather as screenshots. Delegates to
+    `performance_benchmark`.
+
+    Args:
+        ctx (dict): Temporal workflow context.
+
+    Returns:
+        bool: True on success.
+    """
+    from reNgine.tasks import performance_benchmark
+    activity.logger.info(
+        "[RunPerformanceBenchmarkActivity] scan_id=%s", ctx.get('scan_history_id')
+    )
+    return _run_task(
+        performance_benchmark,
+        ctx,
+        task_name='performance_benchmark',
+        description='Performance Benchmark',
+    )
+
+
 @activity.defn(name="RunFetchURLActivity")
 def run_fetch_url_activity(ctx: dict) -> bool:
     """Fetch and collect all URLs across the target using gau, waybackurls, etc.

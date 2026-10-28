@@ -500,6 +500,28 @@ describe('useEngineConfig settings moved to where the backend reads them', () =>
     expect(mappingAt(loadMapping(result.current.yaml), 'screenshot')).toEqual({ threads: 40 });
   });
 
+  it('round-trips performance_benchmark max_urls and timeout', () => {
+    const { result } = renderHook(() =>
+      useEngineConfig('performance_benchmark:\n  max_urls: 10\n  timeout: 45\n'),
+    );
+    expect(result.current.config.performance_benchmark.enabled).toBe(true);
+    expect(result.current.config.performance_benchmark.config).toEqual({
+      max_urls: 10,
+      timeout: 45,
+    });
+    act(() => result.current.updateSection('performance_benchmark', { max_urls: 30 }));
+    expect(mappingAt(loadMapping(result.current.yaml), 'performance_benchmark')).toEqual({
+      max_urls: 30,
+      timeout: 45,
+    });
+  });
+
+  it('omits performance_benchmark from YAML when disabled', () => {
+    const { result } = renderHook(() => useEngineConfig(''));
+    expect(result.current.config.performance_benchmark.enabled).toBe(false);
+    expect(mappingAt(loadMapping(result.current.yaml), 'performance_benchmark')).toBeUndefined();
+  });
+
   it('round-trips the DNS security options', () => {
     const { result } = renderHook(() => useEngineConfig('dns_security:\n  enable_dns_brute: true\n'));
     act(() => result.current.updateSection('dns_security', { amplification_threshold: 20 }));

@@ -164,6 +164,7 @@ from reNgine.temporal_activities import (
     parse_http_crawl_results_activity,
     run_port_scan_activity,
     run_screenshot_activity,
+    run_performance_benchmark_activity,
     run_fetch_url_activity,
     parse_enumeration_results_activity,
 
@@ -604,6 +605,7 @@ class Command(BaseCommand):
                 prepare_port_scan_activity,
                 parse_port_scan_results_activity,
                 run_screenshot_activity,
+                run_performance_benchmark_activity,
                 run_fetch_url_activity,
                 parse_enumeration_results_activity,
 

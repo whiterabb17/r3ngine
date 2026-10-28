@@ -295,6 +295,7 @@ def check_scan_alive_activity(scan_id: int, subscan_id: int = None) -> bool:
 _PERMITTED_GENERIC_TASKS = frozenset({
     "subdomain_discovery", "amass_intel_discovery", "firewall_vpn_scan",
     "dns_security", "osint", "spiderfoot_scan", "http_crawl", "port_scan", "screenshot",
+    "performance_benchmark",
     "fetch_url", "dir_file_fuzz", "web_api_discovery", "waf_detection",
     "secret_scanning", "vulnerability_scan", "waf_bypass",
     "nuclei_scan", "crlfuzz_scan", "dalfox_xss_scan", "s3scanner",
