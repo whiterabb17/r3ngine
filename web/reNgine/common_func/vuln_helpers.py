@@ -190,11 +190,37 @@ def save_vulnerability(vuln_data=None, scan_history=None, target_domain=None, de
 	return vuln, created
 
 
+def _parse_estimated_cvss_score(content):
+	"""Extract a 0.0–10.0 float from the first line of an Estimated CVSS section."""
+	if not content:
+		return None
+	first_line = content.strip().split('\n', 1)[0].strip()
+	# Allow optional surrounding text like "7.5" or "Score: 7.5"
+	match = re.search(r'(\d+(?:\.\d+)?)', first_line)
+	if not match:
+		return None
+	try:
+		score = float(match.group(1))
+	except (TypeError, ValueError):
+		return None
+	if 0.0 <= score <= 10.0:
+		return score
+	return None
+
+
 def parse_llm_vulnerability_report(report):
 	# Do not globally strip '**' as we want to preserve markdown bolding in the Remediation playbook.
 	data = {}
 	# Split on the main headers, optionally allowing markdown bold/italic asterisks or header hashes around them.
-	sections = re.split(r'\n(?=[#\s\*]*(?:Description|Impact|Remediation|References)[#\s\*]*\s*:)', report.strip(), flags=re.IGNORECASE)
+	# "Estimated CVSS Score" / "CVSS Score" must be matched before bare section names that share prefixes.
+	_SECTION_HEADER = (
+		r'(?:Estimated\s+CVSS\s+Score|CVSS\s+Score|Description|Impact|Remediation|References)'
+	)
+	sections = re.split(
+		rf'\n(?=[#\s\*]*{_SECTION_HEADER}[#\s\*]*\s*:)',
+		report.strip(),
+		flags=re.IGNORECASE,
+	)
 
 	for section in sections:
 		if not section.strip():
@@ -202,24 +228,37 @@ def parse_llm_vulnerability_report(report):
 
 		# Accept headers with or without asterisks/hashes, and with or without spaces.
 		match = re.match(
-			r'^[#\s\*]*(Description|Impact|Remediation|References)[#\s\*]*\s*:\s*(.*)',
+			rf'^[#\s\*]*{_SECTION_HEADER}[#\s\*]*\s*:\s*(.*)',
 			section.strip(),
 			re.DOTALL | re.IGNORECASE,
 		)
 		if not match:
 			continue
 
-		section_title = match.group(1).title()
-		content = match.group(2).strip()
+		header_match = re.match(
+			rf'^[#\s\*]*({_SECTION_HEADER})[#\s\*]*\s*:',
+			section.strip(),
+			re.IGNORECASE,
+		)
+		if not header_match:
+			continue
 
-		if section_title == 'Description':
+		raw_title = re.sub(r'\s+', ' ', header_match.group(1).strip())
+		normalized = raw_title.lower()
+		content = match.group(1).strip()
+
+		if normalized == 'description':
 			data['description'] = content
-		elif section_title == 'Impact':
+		elif normalized == 'impact':
 			data['impact'] = content
-		elif section_title == 'Remediation':
+		elif normalized == 'remediation':
 			data['remediation'] = content
-		elif section_title == 'References':
+		elif normalized == 'references':
 			data['references'] = [ref.strip() for ref in content.split('\n') if ref.strip()]
+		elif normalized in ('estimated cvss score', 'cvss score'):
+			score = _parse_estimated_cvss_score(content)
+			if score is not None:
+				data['estimated_cvss_score'] = score
 
 	return data
 

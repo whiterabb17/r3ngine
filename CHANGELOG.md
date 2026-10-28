@@ -12,6 +12,11 @@
   - Execution hardening: DNS pin against rebinding, SSRF-safe redirect hop re-checks, shared cookie jar on `authz_status_delta`, blank `allowed_paths` rejected, abort-wins row locks, `cookie_value` audit redaction.
   - Operator privilege locked to JWT/UI via `resolve_is_operator` (MCP body flags cannot forge operator) for safe-poc, attack-path proposals, and follow-ups.
 
+- **LLM estimated CVSS for unscored findings**:
+  - GPT vulnerability reports also emit an `Estimated CVSS Score`; when `cvss_score` is null (e.g. WPTaint / Vigolium without a tool score), the estimate is persisted with `cvss_estimated=True` (`startScan` migration `0071`).
+  - Severity mid-band fallback when the model omits a score; tool/NVD scores are never overwritten.
+  - Finding UIs show `X.X (est.)` for estimated scores.
+
 - **Large-scan resilience (PR #135)**:
   - Tier 1–6 tool failures are isolated (`_isolated_tool`): one failed tool no longer aborts `MasterScanWorkflow`; Tier 7 still runs and the tool’s own timeline row keeps the failure.
   - Tools stop shortly before their Temporal attempt `start_to_close` / `schedule_to_close` limit; partial results are kept; the row shows a clear time-limit message; stop then fail is non-retryable so Temporal does not restart hours of work.
@@ -57,7 +62,7 @@
 
 #### Notes
 
-- Existing installs: run `make migrate` for `startScan.0070` and `mcp.0008` (SAFE PoC). Rebuild/restart **web** and the Temporal **python orchestrator** so chunked/dedup/`SafePocWorkflow` activities register. Pair with **r3ngine-mcp v1.5.0**.
+- Existing installs: run `make migrate` for `startScan.0070`, `startScan.0071` (estimated CVSS), and `mcp.0008` (SAFE PoC). Rebuild/restart **web** and the Temporal **python orchestrator** so chunked/dedup/`SafePocWorkflow` activities register. Pair with **r3ngine-mcp v1.5.0**.
 - Open follow-ups: `max_batches` is backend-clamped only (not yet in the engine UI); redirect-root dedup can skip in-scope hosts by design when root redirects to another live root.
 
 ### [v3.7.8] - 2026-10-01

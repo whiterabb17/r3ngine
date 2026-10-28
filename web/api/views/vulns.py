@@ -592,6 +592,8 @@ Extracted Results: {', '.join(vuln.extracted_results) if vuln.extracted_results 
 		if cvss_score is not None and str(cvss_score).replace('.', '', 1).isdigit():
 			try:
 				vuln.cvss_score = float(cvss_score)
+				# Accepted AI/manual CVSS is still an estimate unless a tool/NVD already set it.
+				vuln.cvss_estimated = True
 			except ValueError:
 				pass
 

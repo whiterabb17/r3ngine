@@ -154,6 +154,10 @@ PORT_SCAN = 'port_scan'
 RATE_LIMIT = 'rate_limit'
 RETRIES = 'retries'
 SCREENSHOT = 'screenshot'
+PERFORMANCE_BENCHMARK = 'performance_benchmark'
+PERFORMANCE_BENCHMARK_MAX_URLS = 'max_urls'
+PERFORMANCE_BENCHMARK_DEFAULT_MAX_URLS = 25
+PERFORMANCE_BENCHMARK_DEFAULT_TIMEOUT = 60
 SUBDOMAIN_DISCOVERY = 'subdomain_discovery'
 STOP_ON_ERROR = 'stop_on_error'
 ENABLE_HTTP_CRAWL = 'enable_http_crawl'
@@ -885,14 +889,18 @@ A detailed playbook containing prioritized, actionable steps to address the vuln
 References:
 Relevant, authoritative sources supporting your analysis, such as: Official CVE database entries, Vendor security advisories, Respected security research publications, Applicable industry standards or guidelines
 
+Estimated CVSS Score:
+A single CVSS v3.1 base score as a float from 0.0 to 10.0 (e.g. 7.5). This is a speculative estimate when no official score is available. Put ONLY the numeric score on the first line after the header.
+
 
 Ensure that:
-1. Each section (Description, Impact, Remediation, References) is separated by ONLY ONE blank line and no multiple new lines. The content must be immediately after the section title.
+1. Each section (Description, Impact, Remediation, References, Estimated CVSS Score) is separated by ONLY ONE blank line and no multiple new lines. The content must be immediately after the section title.
 2. Do not make title as bold, italic or underline. It must be Title ending with a colon. Example: Description:
 3. All URLs in the 'references' section begin with 'http://' or 'https://'.
 4. Remediation steps should be specific and actionable and should not contain any ambiguous or general recommendations. Format the remediation sub-sections clearly using bold text (e.g. **Short-Term Strategy:**) and bullet points.
 5. Refrain from including any personal opinions or subjective assessments in your report.
-6. CRITICAL: Do NOT include any conversational follow-up questions or offers of assistance (such as "Would you like to include a longer brief?" or "Let me know if you need more details"). Output ONLY the report content.
+6. Estimated CVSS Score must be a single float between 0.0 and 10.0 on the first content line.
+7. CRITICAL: Do NOT include any conversational follow-up questions or offers of assistance (such as "Would you like to include a longer brief?" or "Let me know if you need more details"). Output ONLY the report content.
 """
 
 

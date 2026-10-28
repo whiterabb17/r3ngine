@@ -618,6 +618,7 @@ class GPTVulnerabilityReport(models.Model):
 	description = models.TextField(null=True, blank=True)
 	impact = models.TextField(null=True, blank=True)
 	remediation = models.TextField(null=True, blank=True)
+	estimated_cvss_score = models.FloatField(null=True, blank=True, default=None)
 	references = models.ManyToManyField('VulnerabilityReference', related_name='report_reference', blank=True)
 
 	def __str__(self):
@@ -849,6 +850,10 @@ class Vulnerability(models.Model):
 
 	cvss_metrics = models.CharField(max_length=500, null=True, blank=True)
 	cvss_score = models.FloatField(null=True, blank=True, default=None)
+	cvss_estimated = models.BooleanField(
+		default=False,
+		help_text='True when cvss_score was filled by LLM/severity-band estimate rather than a tool or NVD',
+	)
 	curl_command = models.CharField(max_length=15000, null=True, blank=True)
 	type = models.CharField(max_length=100, null=True, blank=True)
 	http_url = models.CharField(max_length=10000, null=True)
