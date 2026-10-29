@@ -48,6 +48,8 @@ _TASK_TITLES = {
     'vigolium_scan':              'Vigolium Vulnerability Scan',
     'cpanel_scan':                'cPanel Scanner',
     'react2shell_scan':           'React2Shell Scanner',
+    'php2shell_scan':             'PHP2Shell Scanner',
+    'node2shell_scan':            'Node2Shell Scanner',
     'waf_bypass':                 'WAF Bypass',
 
     # Tier 7 (always present)
@@ -101,6 +103,8 @@ _TASK_TIER = {
     'vigolium_scan':         6,
     'cpanel_scan':           6,
     'react2shell_scan':      6,
+    'php2shell_scan':        6,
+    'node2shell_scan':       6,
     'waf_bypass':            6,
 
     # Runtime-only tasks: never part of the planned list, but their activity rows
@@ -374,6 +378,12 @@ def build_scan_task_plan(tasks: list, yaml_configuration: dict, is_subscan: bool
         react_cfg = vuln_cfg.get('react_scanner') or {}
         if react_cfg.get('run_react2shell', True):
             add('react2shell_scan')
+        php_cfg = vuln_cfg.get('php_scanner') or {}
+        if php_cfg.get('run_php2shell', True):
+            add('php2shell_scan')
+        node_cfg = vuln_cfg.get('node_scanner') or {}
+        if node_cfg.get('run_node2shell', True):
+            add('node2shell_scan')
 
     # Tier 7 — always run finalisation regardless of which tiers ran
     add('correlate_vulnerabilities')

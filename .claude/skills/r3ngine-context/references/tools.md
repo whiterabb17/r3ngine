@@ -209,6 +209,8 @@ Tools compiled into the Docker image and invoked via Temporal activities (Python
 |------|-------------|--------|
 | **cpanel2shell-scanner** | cPanel shell upload scanner | [assetnote/cpanel2shell-scanner](https://github.com/assetnote/cpanel2shell-scanner) |
 | **react2shell-scanner** | React shell upload detection | [assetnote/react2shell-scanner](https://github.com/assetnote/react2shell-scanner) |
+| **php2shell-scanner** | De-fanged PHP2Shell detection (CVE-2026-109618 / CVE-2026-109619) | [assetnote/php2shell-scanner](https://github.com/assetnote/php2shell-scanner) |
+| **node2shell-scanner** | De-fanged Node2Shell detection (CVE-2026-111497) | [assetnote/node2shell-scanner](https://github.com/assetnote/node2shell-scanner) |
 | **acunetix-python** | Acunetix API integration | [WazeHell/acunetix-python](https://github.com/WazeHell/acunetix-python) |
 
 ---

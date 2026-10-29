@@ -24,7 +24,7 @@ from reNgine.tasks.llm import get_vulnerability_gpt_report, add_gpt_description_
 from reNgine.tasks.crawl import parse_curl_output
 from reNgine.tasks.notifications import send_hackerone_report
 from reNgine.tasks.acunetix import acunetix_scan
-from reNgine.tasks.vulnerability import cpanel_scan, react2shell_scan
+from reNgine.tasks.vulnerability import cpanel_scan, react2shell_scan, php2shell_scan, node2shell_scan
 from reNgine.tasks.wpscan import wpscan_scan
 from reNgine.nuclei_batch_utils import build_tag_batches
 from startScan.models import *
@@ -129,7 +129,10 @@ def vulnerability_scan(self, urls=[], ctx={}, description=None):
 	# Note: vulnerability_scan is bypassed by RunVulnerabilityScanActivity in Temporal.
 	# This path handles any direct calls by dispatching each scanner sequentially.
 	vuln_config = config.get(VULNERABILITY_SCAN) or {}
-	from reNgine.definitions import RUN_NUCLEI, RUN_CRLFUZZ, RUN_DALFOX, RUN_S3SCANNER, RUN_ACUNETIX, RUN_WPSCAN, RUN_CPANEL2SHELL, RUN_REACT2SHELL
+	from reNgine.definitions import (
+		RUN_NUCLEI, RUN_CRLFUZZ, RUN_DALFOX, RUN_S3SCANNER, RUN_ACUNETIX, RUN_WPSCAN,
+		RUN_CPANEL2SHELL, RUN_REACT2SHELL, RUN_PHP2SHELL, RUN_NODE2SHELL,
+	)
 
 	if vuln_config.get(RUN_NUCLEI, True):
 		nuclei_scan(self, urls=urls, ctx=ctx, description='Nuclei Scan')
@@ -152,6 +155,12 @@ def vulnerability_scan(self, urls=[], ctx={}, description=None):
 	react_cfg = vuln_config.get('react_scanner', {})
 	if react_cfg.get(RUN_REACT2SHELL, True):
 		react2shell_scan(self, ctx=ctx, description='React Vulnerability Scan')
+	php_cfg = vuln_config.get('php_scanner', {})
+	if php_cfg.get(RUN_PHP2SHELL, True):
+		php2shell_scan(self, ctx=ctx, description='PHP2Shell Vulnerability Scan')
+	node_cfg = vuln_config.get('node_scanner', {})
+	if node_cfg.get(RUN_NODE2SHELL, True):
+		node2shell_scan(self, ctx=ctx, description='Node2Shell Vulnerability Scan')
 	semgrep_scan(self, ctx=ctx, mode='vulnerability', description='Semgrep Vulnerability Scan')
 	
 	if vuln_config.get('run_smugglex', True):

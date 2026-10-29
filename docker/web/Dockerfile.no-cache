@@ -380,6 +380,14 @@ RUN git clone --depth 1 https://github.com/assetnote/react2shell-scanner /usr/sr
     pip3 install --no-cache-dir -r /usr/src/github/react2shell-scanner/requirements.txt && \
     rm -rf /usr/src/github/react2shell-scanner/.git
 
+RUN git clone --depth 1 https://github.com/assetnote/php2shell-scanner /usr/src/github/php2shell-scanner && \
+    pip3 install --no-cache-dir -r /usr/src/github/php2shell-scanner/requirements.txt && \
+    rm -rf /usr/src/github/php2shell-scanner/.git
+
+RUN git clone --depth 1 https://github.com/assetnote/node2shell-scanner /usr/src/github/node2shell-scanner && \
+    pip3 install --no-cache-dir -r /usr/src/github/node2shell-scanner/requirements.txt && \
+    rm -rf /usr/src/github/node2shell-scanner/.git
+
 RUN git clone --depth 1 https://github.com/UnaPibaGeek/ctfr /usr/src/github/ctfr && \
     pip3 install --no-cache-dir -r /usr/src/github/ctfr/requirements.txt && \
     rm -rf /usr/src/github/ctfr/.git

@@ -300,6 +300,7 @@ _PERMITTED_GENERIC_TASKS = frozenset({
     "secret_scanning", "vulnerability_scan", "waf_bypass",
     "nuclei_scan", "crlfuzz_scan", "dalfox_xss_scan", "s3scanner",
     "acunetix_scan", "cpanel_scan", "wpscan_scan", "react2shell_scan",
+    "php2shell_scan", "node2shell_scan",
     "semgrep_scan", "correlate_vulnerabilities", "calculate_risk_scores",
     "generate_impact_assessment", "run_apme", "attack_path_modeling",
     "post_crawl_osint",

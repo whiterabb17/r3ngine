@@ -4,6 +4,13 @@
 
 #### Added
 
+- **PHP2Shell / Node2Shell vulnerability scanners (Tier 6)**:
+  - Assetnote de-fanged detectors for [php2shell](https://github.com/assetnote/php2shell-scanner) (CVE-2026-109618 / CVE-2026-109619) and [node2shell](https://github.com/assetnote/node2shell-scanner) (CVE-2026-111497) — detection only, no PoC/command execution.
+  - Installed like cpanel2shell (`git clone` + pip into `/usr/src/github/…` in the web image / `internal_tools.sh`); registered as `InstalledExternalTool` fixtures.
+  - Temporal activities `RunPhp2ShellActivity` / `RunNode2ShellActivity` on the python orchestrator; scheduled in `NucleiPlannerWorkflow` Stage 2; timeline rows via `task_plan` (`php2shell_scan` / `node2shell_scan`, Tier 6).
+  - Engine YAML / editor toggles: `vulnerability_scan.php_scanner.run_php2shell` and `vulnerability_scan.node_scanner.run_node2shell` (on by default). Tech-gated to PHP or exact Node/Express/Next.js/NestJS fingerprints.
+  - Requires web image rebuild for the scanner clones and a Temporal **python orchestrator** restart so the new activities register.
+
 - **Lighthouse performance benchmarking**:
   - Opt-in engine task `performance_benchmark` runs in the same Tier 3 wave as screenshots (MasterScan/SubScan) and alongside screenshots in assessment EnumerationWorkflow.
   - Persists per-URL scores and Core Web Vitals on `PerformanceBenchmark` (`startScan` migration `0072`); hard-caps `max_urls` (50) / timeout (120s) under an 8h activity budget; retries clear prior rows for the scan scope.
@@ -68,7 +75,7 @@
 
 #### Notes
 
-- Existing installs: run `make migrate` for `startScan.0070`, `startScan.0071` (estimated CVSS), and `mcp.0008` (SAFE PoC). Rebuild/restart **web** and the Temporal **python orchestrator** so chunked/dedup/`SafePocWorkflow` activities register. Pair with **r3ngine-mcp v1.5.0**.
+- Existing installs: run `make migrate` for `startScan.0070`, `startScan.0071` (estimated CVSS), and `mcp.0008` (SAFE PoC). Rebuild/restart **web** and the Temporal **python orchestrator** so chunked/dedup/`SafePocWorkflow` activities register — and so php2shell/node2shell binaries and activities are present. Pair with **r3ngine-mcp v1.5.0**.
 - Open follow-ups: `max_batches` is backend-clamped only (not yet in the engine UI); redirect-root dedup can skip in-scope hosts by design when root redirects to another live root.
 
 ### [v3.7.8] - 2026-10-01

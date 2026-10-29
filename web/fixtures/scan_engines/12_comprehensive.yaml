@@ -252,6 +252,10 @@
           run_cpanel2shell: true
           cpanel_user_wordlist: /usr/src/wordlist/cpanel_users.txt
           proxy_type: rotating
+        php_scanner:
+          run_php2shell: true
+        node_scanner:
+          run_node2shell: true
       vigolium_discovery:
         run_vigolium_discovery: true
         strategy: balanced

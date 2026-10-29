@@ -167,6 +167,8 @@ export const FORM_OWNED_KEYS: Readonly<Record<SectionKey | keyof GlobalConfig | 
     s3scanner: owned('threads', 'providers'),
     cpanel_scanner: owned('run_cpanel2shell', 'cpanel_user_wordlist', 'proxy_type'),
     react_scanner: owned('run_react2shell'),
+    php_scanner: owned('run_php2shell'),
+    node_scanner: owned('run_node2shell'),
     vigolium: owned(
       ...VIGOLIUM_STAGE, 'run_phase_a', 'run_phase_b', 'scope_origin', 'skip_spidering',
     ),
@@ -478,6 +480,8 @@ export function serialiseConfigToYaml(config: EngineConfig, leftovers: Leftovers
     if (c.run_dalfox) s.dalfox = dalfoxYaml(c.dalfox);
     if (c.run_s3scanner) s.s3scanner = s3scannerYaml(c.s3scanner);
     s.react_scanner = { run_react2shell: c.run_react2shell };
+    s.php_scanner = { run_php2shell: c.run_php2shell };
+    s.node_scanner = { run_node2shell: c.run_node2shell };
     s.cpanel_scanner = { run_cpanel2shell: c.cpanel_scanner.run_cpanel2shell, cpanel_user_wordlist: c.cpanel_scanner.cpanel_user_wordlist, proxy_type: c.cpanel_scanner.proxy_type };
     if (c.run_vigolium) s.vigolium = { strategy: c.vigolium.strategy, concurrency: c.vigolium.concurrency, rate_limit: c.vigolium.rate_limit, timeout: c.vigolium.timeout, run_phase_a: c.vigolium.run_phase_a, run_phase_b: c.vigolium.run_phase_b, scope_origin: c.vigolium.scope_origin, skip_spidering: c.vigolium.skip_spidering };
     // Tier-2 live-subdomain submission — independent of run_acunetix (Tier 6).
@@ -870,6 +874,8 @@ function parseYamlToConfig(yamlStr: string): EngineConfig {
         run_vigolium: (r.run_vigolium as boolean) ?? true,
         run_semgrep: (r.run_semgrep as boolean) ?? (asMapping(raw.leaks_and_secrets).run_semgrep as boolean) ?? true,
         run_react2shell: (asMapping(r.react_scanner).run_react2shell as boolean) ?? true,
+        run_php2shell: (asMapping(r.php_scanner).run_php2shell as boolean) ?? true,
+        run_node2shell: (asMapping(r.node_scanner).run_node2shell as boolean) ?? true,
         run_post_scan_processing: (r.run_post_scan_processing as boolean) ?? true,
         // The scan tasks fall back to the engine-wide values for these.
         concurrency: (r.concurrency as number) ?? global.threads,

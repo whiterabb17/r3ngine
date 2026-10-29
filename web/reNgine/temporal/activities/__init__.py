@@ -163,6 +163,8 @@ from reNgine.temporal.activities.vuln_scan import (  # noqa: E402
     run_wpscan_activity,
     run_wptaint_scan_activity,
     run_react2shell_activity,
+    run_php2shell_activity,
+    run_node2shell_activity,
     run_semgrep_activity,
     run_vigolium_scan_activity,
     run_vigolium_harvest_activity,

@@ -480,6 +480,20 @@ describe('useEngineConfig settings moved to where the backend reads them', () =>
     expect(mappingAt(vuln, 'react_scanner')).toEqual({ run_react2shell: false });
   });
 
+  it('writes php2shell under php_scanner', () => {
+    const { result } = renderHook(() => useEngineConfig('vulnerability_scan:\n  run_nuclei: true\n'));
+    act(() => result.current.updateSection('vulnerability_scan', { run_php2shell: false }));
+    const vuln = mappingAt(loadMapping(result.current.yaml), 'vulnerability_scan');
+    expect(mappingAt(vuln, 'php_scanner')).toEqual({ run_php2shell: false });
+  });
+
+  it('writes node2shell under node_scanner', () => {
+    const { result } = renderHook(() => useEngineConfig('vulnerability_scan:\n  run_nuclei: true\n'));
+    act(() => result.current.updateSection('vulnerability_scan', { run_node2shell: false }));
+    const vuln = mappingAt(loadMapping(result.current.yaml), 'vulnerability_scan');
+    expect(mappingAt(vuln, 'node_scanner')).toEqual({ run_node2shell: false });
+  });
+
   it('writes the OSINT breach lookups under osint.leaks_and_secrets', () => {
     const { result } = renderHook(() => useEngineConfig('osint:\n  discover: [emails]\n'));
     act(() => result.current.updateSection('osint', { leaklookup: true }));

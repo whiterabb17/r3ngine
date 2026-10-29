@@ -238,8 +238,10 @@ Child workflow that orchestrates the full vulnerability scanning pipeline. Spawn
 | 6 | CPanel Scanner | `cpanel_scanner.run_cpanel2shell: true` |
 | 7 | WPScan | `run_wpscan: true` |
 | 8 | React2Shell | `react_scanner.run_react2shell: true` |
-| 9 | Semgrep | `leaks_and_secrets.run_semgrep: true` |
-| 10 | Vigolium | `run_vigolium: true` |
+| 9 | PHP2Shell | `php_scanner.run_php2shell: true` |
+| 10 | Node2Shell | `node_scanner.run_node2shell: true` |
+| 11 | Semgrep | `leaks_and_secrets.run_semgrep: true` / `run_semgrep: true` |
+| 12 | Vigolium | `run_vigolium: true` |
 
 Nuclei runs **per-severity** — one activity execution per severity level in `yaml_configuration.vulnerability_scan.nuclei.severity`.
 

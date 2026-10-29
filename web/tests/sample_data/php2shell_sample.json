@@ -1,0 +1,25 @@
+{
+  "scan_time": "2026-10-29T12:00:00+00:00",
+  "total_results": 1,
+  "results": [
+    {
+      "host": "https://php.example.com",
+      "vulnerable": true,
+      "verdict": "VULNERABLE",
+      "status_code": 500,
+      "error": null,
+      "reason": "Empty HTTP 500 differential after multipart probe (PHP-FPM worker failure signature).",
+      "sapi": "fpm",
+      "powered_by": "PHP/8.2.10",
+      "tested_url": "https://php.example.com/index.php",
+      "timestamp": "2026-10-29T12:00:00+00:00"
+    },
+    {
+      "host": "https://safe.example.com",
+      "vulnerable": false,
+      "verdict": "FIXED",
+      "reason": "Advertised PHP version is patched.",
+      "tested_url": "https://safe.example.com/index.php"
+    }
+  ]
+}

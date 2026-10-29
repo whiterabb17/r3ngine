@@ -949,3 +949,37 @@
     is_github_cloned: false
     github_clone_path: null
     subdomain_gathering_command: null
+- model: scanEngine.installedexternaltool
+  pk: 55
+  fields:
+    logo_url: null
+    name: php2shell-scanner
+    description: Assetnote de-fanged high-fidelity scanner for php2shell (CVE-2026-109618 and CVE-2026-109619). Detection only; does not execute a PoC.
+    github_url: https://github.com/assetnote/php2shell-scanner
+    license_url: https://github.com/assetnote/php2shell-scanner/blob/master/LICENSE
+    version_lookup_command: python3 /usr/src/github/php2shell-scanner/scanner.py --help
+    update_command: cd /usr/src/github/php2shell-scanner && git pull
+    install_command: git clone https://github.com/assetnote/php2shell-scanner /usr/src/github/php2shell-scanner
+    version_match_regex: '(?i:v)?\d+\.\d+(?:\.\d+)*'
+    is_default: true
+    is_subdomain_gathering: false
+    is_github_cloned: true
+    github_clone_path: /usr/src/github/php2shell-scanner
+    subdomain_gathering_command: null
+- model: scanEngine.installedexternaltool
+  pk: 56
+  fields:
+    logo_url: null
+    name: node2shell-scanner
+    description: Assetnote de-fanged high-fidelity scanner for node2shell (CVE-2026-111497). Detection only; does not execute a command.
+    github_url: https://github.com/assetnote/node2shell-scanner
+    license_url: https://github.com/assetnote/node2shell-scanner/blob/master/LICENSE
+    version_lookup_command: python3 /usr/src/github/node2shell-scanner/scanner.py --help
+    update_command: cd /usr/src/github/node2shell-scanner && git pull
+    install_command: git clone https://github.com/assetnote/node2shell-scanner /usr/src/github/node2shell-scanner
+    version_match_regex: '(?i:v)?\d+\.\d+(?:\.\d+)*'
+    is_default: true
+    is_subdomain_gathering: false
+    is_github_cloned: true
+    github_clone_path: /usr/src/github/node2shell-scanner
+    subdomain_gathering_command: null

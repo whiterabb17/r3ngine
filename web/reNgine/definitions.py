@@ -63,6 +63,8 @@ TOOL_COLORS = {
     'theharvester': COLOR_BLUE,
     'spiderfoot': COLOR_MAGENTA,
     'cpanel2shell-scanner': COLOR_RED,
+    'php2shell-scanner': COLOR_RED,
+    'node2shell-scanner': COLOR_RED,
     'h8mail': COLOR_PURPLE,
     'baddns': COLOR_CYAN,
     'betterleaks': COLOR_RED,
@@ -207,6 +209,8 @@ CPANEL_SCANNER_PROXY_TYPE = 'proxy_type'
 CPANEL_SCANNER_DEFAULT_WORDLIST = '/usr/src/wordlist/cpanel_users.txt'
 
 RUN_REACT2SHELL = 'run_react2shell'
+RUN_PHP2SHELL = 'run_php2shell'
+RUN_NODE2SHELL = 'run_node2shell'
 USE_WORDFENCE_CANDIDATE = 'use_wordfence_candidate'
 
 BADDNS = 'baddns'
@@ -1061,6 +1065,8 @@ GOFUZZ_EXEC_PATH = '/usr/src/github/goofuzz/GooFuzz'
 # Auth Brute-Force Paths
 BRUTUS_EXEC_PATH = '/usr/local/bin/brutus'
 REACT2SHELL_PATH = '/usr/src/github/react2shell-scanner/scanner.py'
+PHP2SHELL_PATH = '/usr/src/github/php2shell-scanner/scanner.py'
+NODE2SHELL_PATH = '/usr/src/github/node2shell-scanner/scanner.py'
 PROXYCHAINS_EXEC_PATH = '/usr/bin/proxychains4'
 AUTH_WORDLIST_PATH = '/usr/src/wordlist/auth'
 DEFAULT_AUTH_USER_WORDLIST = 'top_default_usernames.txt'

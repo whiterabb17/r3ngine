@@ -1303,6 +1303,28 @@ class NucleiPlannerWorkflow:
                     task_queue="python-orchestrator-queue"
                 )
 
+            php_cfg = vuln_config.get('php_scanner', {})
+            if php_cfg.get('run_php2shell', True):
+                await workflow.execute_activity(
+                    "RunPhp2ShellActivity",
+                    ctx,
+                    start_to_close_timeout=timedelta(hours=2),
+                    heartbeat_timeout=timedelta(minutes=5),
+                    retry_policy=_RETRY_SCANNER,
+                    task_queue="python-orchestrator-queue"
+                )
+
+            node_cfg = vuln_config.get('node_scanner', {})
+            if node_cfg.get('run_node2shell', True):
+                await workflow.execute_activity(
+                    "RunNode2ShellActivity",
+                    ctx,
+                    start_to_close_timeout=timedelta(hours=2),
+                    heartbeat_timeout=timedelta(minutes=5),
+                    retry_policy=_RETRY_SCANNER,
+                    task_queue="python-orchestrator-queue"
+                )
+
             # vulnerability_scan.run_semgrep is what the engine editor writes; the
             # top-level leaks_and_secrets.run_semgrep is the older spelling.
             leaks_config = yaml_config.get('leaks_and_secrets') or {}

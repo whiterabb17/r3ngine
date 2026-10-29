@@ -372,6 +372,10 @@ export interface VulnerabilityScanConfig {
   run_semgrep: boolean;
   /** vulnerability_scan.react_scanner.run_react2shell */
   run_react2shell: boolean;
+  /** vulnerability_scan.php_scanner.run_php2shell */
+  run_php2shell: boolean;
+  /** vulnerability_scan.node_scanner.run_node2shell */
+  run_node2shell: boolean;
   /** Dedup, OpenAPI extraction and GraphQL dispatch after the Tier 6 tools. */
   run_post_scan_processing: boolean;
   /** Nuclei `-c`; a missing key falls back to the engine-wide threads. */
@@ -593,7 +597,8 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
       run_nuclei: true, run_dalfox: false, run_crlfuzz: false, run_s3scanner: true,
       run_acunetix: true, run_wpscan: true, run_wptaint_scan: true, run_smugglex: true,
       run_second_order: true, run_nuclei_dast: true, run_vigolium: true,
-      run_semgrep: true, run_react2shell: true, run_post_scan_processing: true,
+      run_semgrep: true, run_react2shell: true, run_php2shell: true, run_node2shell: true,
+      run_post_scan_processing: true,
       concurrency: 50, rate_limit: 150, retries: 1,
       intensity: 'normal', fetch_gpt_report: true, enable_http_crawl: true,
       wpscan_enumeration: 'vp,vt,u', wpscan_detection_mode: 'mixed',

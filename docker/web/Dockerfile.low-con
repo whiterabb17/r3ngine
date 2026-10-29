@@ -529,6 +529,16 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     rm -rf /usr/src/github/react2shell-scanner/.git
 
 RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/assetnote/php2shell-scanner /usr/src/github/php2shell-scanner && \
+    pip3 install -r /usr/src/github/php2shell-scanner/requirements.txt && \
+    rm -rf /usr/src/github/php2shell-scanner/.git
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/assetnote/node2shell-scanner /usr/src/github/node2shell-scanner && \
+    pip3 install -r /usr/src/github/node2shell-scanner/requirements.txt && \
+    rm -rf /usr/src/github/node2shell-scanner/.git
+
+RUN --mount=type=cache,target=/root/.cache/pip \
     git clone --depth 1 https://github.com/UnaPibaGeek/ctfr /usr/src/github/ctfr && \
     pip3 install -r /usr/src/github/ctfr/requirements.txt && \
     rm -rf /usr/src/github/ctfr/.git

@@ -98,6 +98,7 @@ SCAN_PIPELINE_DEFINITION = [
             'vulnerability_scan', 'nuclei_scan', 'dalfox_xss_scan', 'crlfuzz_scan',
             's3scanner', 'waf_bypass', 'acunetix_scan', 'wpscan_scan',
             'vigolium_scan', 'cpanel_scan', 'react2shell_scan',
+            'php2shell_scan', 'node2shell_scan',
         ]
     },
     {

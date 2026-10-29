@@ -388,6 +388,20 @@ def run_react2shell_activity(ctx: dict) -> bool:
     return _run_task(react2shell_scan, ctx, task_name='react2shell_scan', description='React Vulnerability Scan')
 
 
+@activity.defn(name="RunPhp2ShellActivity")
+def run_php2shell_activity(ctx: dict) -> bool:
+    from reNgine.tasks.vulnerability import php2shell_scan
+    activity.logger.info("[RunPhp2ShellActivity] scan_id=%s", ctx.get('scan_history_id'))
+    return _run_task(php2shell_scan, ctx, task_name='php2shell_scan', description='PHP2Shell Vulnerability Scan')
+
+
+@activity.defn(name="RunNode2ShellActivity")
+def run_node2shell_activity(ctx: dict) -> bool:
+    from reNgine.tasks.vulnerability import node2shell_scan
+    activity.logger.info("[RunNode2ShellActivity] scan_id=%s", ctx.get('scan_history_id'))
+    return _run_task(node2shell_scan, ctx, task_name='node2shell_scan', description='Node2Shell Vulnerability Scan')
+
+
 @activity.defn(name="RunSemgrepActivity")
 def run_semgrep_activity(ctx: dict) -> bool:
     from reNgine.tasks import semgrep_scan
