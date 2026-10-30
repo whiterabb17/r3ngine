@@ -23,7 +23,7 @@ $(info Using: $(shell echo "$(DOCKER_COMPOSE)"))
 
 # --------------------------
 
-.PHONY: setup certs up devup build username pull down stop restart rm logs fullupgrade erase install-mcp update-mcp backup restore up-tor stop-tor up-ollama stop-ollama
+.PHONY: setup certs up start devup build username pull down stop restart rm logs fullupgrade erase install-mcp update-mcp backup restore up-tor stop-tor up-ollama stop-ollama
 
 certs:		    ## Generate certificates.
 	@${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} --env-file .env -f docker/docker-compose.setup.yml run --rm certs
@@ -39,6 +39,9 @@ update-mcp:		## Pull latest r3ngine-mcp and re-run setup (--update).
 
 up:				## Build and start all services in production mode.
 	DEBUG=0 ${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} up -d --build ${SERVICES}
+
+start:			## Start all services from existing images (no rebuild).
+	DEBUG=0 ${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} up -d ${SERVICES}
 
 up-worker:		## Build and start the remote worker.
 	DEBUG=0 ${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} --env-file .env -f docker/docker-compose.worker.yml up -d --build

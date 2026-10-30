@@ -89,7 +89,7 @@ RUN CGO_ENABLED=0 GO111MODULE=on go build -ldflags="-s -w" -o /usr/local/bin/r3n
 FROM golang:1.26-bookworm AS vigolium-builder
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl git make unzip && \
+    apt-get install -y --no-install-recommends curl git make unzip file && \
     rm -rf /var/lib/apt/lists/*
 
 # Install bun (needed for vigolium-audit and jsscan embedded binary builds)

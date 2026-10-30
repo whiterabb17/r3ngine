@@ -131,7 +131,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM golang:1.26-bookworm AS vigolium-builder
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl git make unzip && \
+    apt-get install -y --no-install-recommends curl git make unzip file && \
     rm -rf /var/lib/apt/lists/*
 
 # Install bun (needed for vigolium-audit and jsscan embedded binary builds).
