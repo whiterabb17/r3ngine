@@ -25,6 +25,7 @@ from reNgine.utils.logger import get_module_logger, format_exception_for_log
 from reNgine.common_func import get_interesting_subdomains, clean_semgrep_check_id, categorize_secret_type
 from reNgine.stress.report_builder import StressReportBuilder
 from startScan.models import ScanHistory, Subdomain, Vulnerability, VulnerabilityHistory, IpAddress, ScanReport, StressTestResult, Parameter, EmailBreach, CredResult, SecretLeak, EndPoint, DirectoryScan, DirectoryFile, S3Bucket, Waf, Technology, IdentityInfraDiscovery, APIIntelligenceProfile, Exposure, MetaFinderDocument, Dork, CertificateIntelligence, Employee
+from reNgine.report_performance import build_performance_context
 from scanEngine.models import VulnerabilityReportSetting
 
 logger = get_module_logger(__name__)
@@ -154,6 +155,7 @@ def generate_report_task(report_id):
         include_dorks_metadata = params.get('include_dorks_metadata') in [True, 'True', 'true']
         include_certificates = params.get('include_certificates') in [True, 'True', 'true']
         include_employees = params.get('include_employees') in [True, 'True', 'true']
+        include_performance_benchmarking = params.get('include_performance_benchmarking') in [True, 'True', 'true']
 
         comments = params.get('comments', '')
 
@@ -483,6 +485,11 @@ def generate_report_task(report_id):
             'certificates_count': certificates_data.count() if include_certificates else 0,
             'employees_data': employees_data,
             'employees_count': employees_data.count() if include_employees else 0,
+            'include_performance_benchmarking': include_performance_benchmarking,
+            'performance_context': (
+                build_performance_context(scan)
+                if include_performance_benchmarking else None
+            ),
         }
 
         # Stress Test Aggregation for context

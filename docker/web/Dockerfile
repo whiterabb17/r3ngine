@@ -116,7 +116,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM golang:1.26-bookworm AS vigolium-builder
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl git make unzip && \
+    apt-get install -y --no-install-recommends curl git make unzip file && \
     rm -rf /var/lib/apt/lists/*
 
 # Install bun (needed for vigolium-audit and jsscan embedded binary builds).
@@ -334,7 +334,7 @@ ENV PATH="/root/.local/bin:${PATH}"
 RUN --mount=type=cache,target=/root/.npm \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
-    npm install -g retire && \
+    npm install -g retire lighthouse && \
     rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
@@ -442,6 +442,16 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     git clone --depth 1 https://github.com/assetnote/react2shell-scanner /usr/src/github/react2shell-scanner && \
     pip3 install -r /usr/src/github/react2shell-scanner/requirements.txt && \
     rm -rf /usr/src/github/react2shell-scanner/.git
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/assetnote/php2shell-scanner /usr/src/github/php2shell-scanner && \
+    pip3 install -r /usr/src/github/php2shell-scanner/requirements.txt && \
+    rm -rf /usr/src/github/php2shell-scanner/.git
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/assetnote/node2shell-scanner /usr/src/github/node2shell-scanner && \
+    pip3 install -r /usr/src/github/node2shell-scanner/requirements.txt && \
+    rm -rf /usr/src/github/node2shell-scanner/.git
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     git clone --depth 1 https://github.com/UnaPibaGeek/ctfr /usr/src/github/ctfr && \

@@ -15410,6 +15410,11 @@ export interface components {
             cvss_metrics?: string | null;
             /** Cvss score */
             cvss_score?: number | null;
+            /**
+             * Cvss estimated
+             * True when cvss_score was filled by LLM/severity-band estimate rather than a tool or NVD
+             */
+            cvss_estimated?: boolean;
             /** Curl command */
             curl_command?: string | null;
             /** Type */

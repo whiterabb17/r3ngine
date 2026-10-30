@@ -27,6 +27,7 @@ _TASK_TITLES = {
     'fetch_url':                  'URL Fetching',
     'http_crawl_bridge':          'HTTP Crawl Bridge',
     'screenshot':                 'Screenshot Capture',
+    'performance_benchmark':      'Performance Benchmark (Lighthouse)',
     'param_discovery':            'Parameter Discovery (CPDE)',
     'web_api_discovery':          'Web API Discovery',
     # Tier 4
@@ -47,6 +48,8 @@ _TASK_TITLES = {
     'vigolium_scan':              'Vigolium Vulnerability Scan',
     'cpanel_scan':                'cPanel Scanner',
     'react2shell_scan':           'React2Shell Scanner',
+    'php2shell_scan':             'PHP2Shell Scanner',
+    'node2shell_scan':            'Node2Shell Scanner',
     'waf_bypass':                 'WAF Bypass',
 
     # Tier 7 (always present)
@@ -79,6 +82,7 @@ _TASK_TIER = {
     'fetch_url':             3,
     'http_crawl_bridge':     3,
     'screenshot':            3,
+    'performance_benchmark': 3,
     'param_discovery':       3,
     'web_api_discovery':     3,
     'dir_file_fuzz':         4,
@@ -99,6 +103,8 @@ _TASK_TIER = {
     'vigolium_scan':         6,
     'cpanel_scan':           6,
     'react2shell_scan':      6,
+    'php2shell_scan':        6,
+    'node2shell_scan':       6,
     'waf_bypass':            6,
 
     # Runtime-only tasks: never part of the planned list, but their activity rows
@@ -143,7 +149,7 @@ _TIER1_TO_5 = [
     'dns_security', 'osint', 'spiderfoot_scan', 'baddns',
     'vigolium_harvest',
     'http_crawl', 'port_scan', 'vigolium_discovery',
-    'fetch_url', 'screenshot', 'param_discovery',
+    'fetch_url', 'screenshot', 'performance_benchmark', 'param_discovery',
     'http_crawl_bridge',
     'dir_file_fuzz', 'post_crawl_osint',
     'web_api_discovery', 'waf_detection', 'secret_scanning',
@@ -201,6 +207,7 @@ RETRYABLE_TASK_NAMES = frozenset({
     'vigolium_scan',
     'fetch_url',
     'screenshot',
+    'performance_benchmark',
     'web_api_discovery',
     'param_discovery',
     'dir_file_fuzz',
@@ -371,6 +378,12 @@ def build_scan_task_plan(tasks: list, yaml_configuration: dict, is_subscan: bool
         react_cfg = vuln_cfg.get('react_scanner') or {}
         if react_cfg.get('run_react2shell', True):
             add('react2shell_scan')
+        php_cfg = vuln_cfg.get('php_scanner') or {}
+        if php_cfg.get('run_php2shell', True):
+            add('php2shell_scan')
+        node_cfg = vuln_cfg.get('node_scanner') or {}
+        if node_cfg.get('run_node2shell', True):
+            add('node2shell_scan')
 
     # Tier 7 — always run finalisation regardless of which tiers ran
     add('correlate_vulnerabilities')

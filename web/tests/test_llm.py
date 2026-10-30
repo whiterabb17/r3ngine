@@ -353,3 +353,44 @@ class TestLLMClientRetries(TestCase):
             complete('anthropic', api_key='k', model='m', system='s', user='u', max_tokens=20)
         self.assertEqual(mock_post.call_args_list[0].kwargs['json']['max_tokens'], 4096)
         self.assertEqual(mock_post.call_args_list[1].kwargs['json']['max_tokens'], 20)
+
+
+class TestParseLlmVulnerabilityReportCvss(TestCase):
+    """Estimated CVSS section parsing for GPT vulnerability reports."""
+
+    def test_parses_estimated_cvss_score_section(self):
+        from reNgine.common_func.vuln_helpers import parse_llm_vulnerability_report
+
+        report = (
+            "Description:\n"
+            "Reflected XSS in transaction param.\n"
+            "\n"
+            "Impact:\n"
+            "Session theft.\n"
+            "\n"
+            "Remediation:\n"
+            "**Short-Term Strategy:** Escape output.\n"
+            "\n"
+            "References:\n"
+            "https://owasp.org/xss\n"
+            "\n"
+            "Estimated CVSS Score:\n"
+            "7.5\n"
+        )
+        data = parse_llm_vulnerability_report(report)
+        self.assertEqual(data.get('estimated_cvss_score'), 7.5)
+        self.assertIn('Reflected XSS', data.get('description', ''))
+        self.assertTrue(data.get('impact'))
+
+    def test_parses_cvss_score_alias_and_rejects_out_of_range(self):
+        from reNgine.common_func.vuln_helpers import parse_llm_vulnerability_report
+
+        aliased = parse_llm_vulnerability_report(
+            "Description:\nx\n\nCVSS Score:\n6.1 maybe\n"
+        )
+        self.assertEqual(aliased.get('estimated_cvss_score'), 6.1)
+
+        out_of_range = parse_llm_vulnerability_report(
+            "Description:\nx\n\nEstimated CVSS Score:\n11.0\n"
+        )
+        self.assertNotIn('estimated_cvss_score', out_of_range)

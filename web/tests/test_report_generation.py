@@ -32,7 +32,7 @@ class ReportGenerationTest(TransactionTestCase):
         self.mock_to_image = _stub_chart_render(self)
 
         # Create dependencies
-        self.domain = Domain.objects.create(name="defijn.io")
+        self.domain = Domain.objects.create(name="example.txt")
         self.engine = EngineType.objects.create(engine_name="Test Engine")
         
         # Ensure OpSec and Proxy records exist to prevent DB errors

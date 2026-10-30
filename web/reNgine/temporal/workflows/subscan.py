@@ -76,6 +76,11 @@ _SUBSCAN_DISPATCH = {
         "timeout": timedelta(hours=1),
         "args_builder": lambda ctx: [ctx, "screenshot", "Screenshot", {}],
     },
+    "performance_benchmark": {
+        "activity": "RunGenericTaskActivity",
+        "timeout": timedelta(hours=8),
+        "args_builder": lambda ctx: [ctx, "performance_benchmark", "Performance Benchmark", {}],
+    },
     "waf_detection": {
         "activity": "RunGenericTaskActivity",
         "timeout": timedelta(minutes=30),
@@ -572,10 +577,11 @@ class SubScanWorkflow:
                 # TIER 2: HTTP Crawl & Port Scan + vigolium discovery — populates endpoint DB for Tiers 3+.
                 # vigolium_discovery runs here (not Tier 1) so it targets all enumerated subdomains.
                 [t for t in active_tasks if t in {"http_crawl", "port_scan", "vigolium_discovery"}],
-                # TIER 3: URL Fetching + Screenshot — both depend only on Tier 2 http_crawl;
-                # screenshot does NOT depend on fetch_url output so they run concurrently.
+                # TIER 3: URL Fetching + Screenshot + Performance Benchmark —
+                # all depend only on Tier 2 http_crawl; screenshot /
+                # performance_benchmark do NOT depend on fetch_url so they run concurrently.
                 # vigolium spidering runs as part of fetch_url (uses_tools: [vigolium]).
-                [t for t in active_tasks if t in {"fetch_url", "screenshot"}],
+                [t for t in active_tasks if t in {"fetch_url", "screenshot", "performance_benchmark"}],
                 # TIER 3a: HTTP Crawl Bridge — crawls new/dead endpoints from fetch_url
                 [t for t in active_tasks if t == "http_crawl_bridge"],
                 # TIER 3b: Web API Discovery — runs before CPDE so kiterunner output is available.
@@ -601,7 +607,8 @@ class SubScanWorkflow:
                     "dns_security", "osint", "spiderfoot_scan", "baddns",
                     "vigolium_harvest",
                     "http_crawl", "port_scan", "vigolium_discovery",
-                    "fetch_url", "screenshot", "dir_file_fuzz", "post_crawl_osint",
+                    "fetch_url", "screenshot", "performance_benchmark",
+                    "dir_file_fuzz", "post_crawl_osint",
                     "web_api_discovery", "waf_detection",
                     "secret_scanning", "vulnerability_scan", "waf_bypass",
                     "vigolium_analysis", "vigolium_scan", "param_discovery",

@@ -77,7 +77,7 @@ const PIPELINE_STAGES: PipelineStage[] = [
     label: 'URL Fetching & Screenshot',
     tier: 3,
     description: 'gau, waybackurls, gowitness',
-    anchors: ['fetch_url', 'screenshot'],
+    anchors: ['fetch_url', 'screenshot', 'performance_benchmark'],
   },
   {
     key: 'dir_file_fuzz',

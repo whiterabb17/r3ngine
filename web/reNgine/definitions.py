@@ -63,6 +63,8 @@ TOOL_COLORS = {
     'theharvester': COLOR_BLUE,
     'spiderfoot': COLOR_MAGENTA,
     'cpanel2shell-scanner': COLOR_RED,
+    'php2shell-scanner': COLOR_RED,
+    'node2shell-scanner': COLOR_RED,
     'h8mail': COLOR_PURPLE,
     'baddns': COLOR_CYAN,
     'betterleaks': COLOR_RED,
@@ -154,6 +156,13 @@ PORT_SCAN = 'port_scan'
 RATE_LIMIT = 'rate_limit'
 RETRIES = 'retries'
 SCREENSHOT = 'screenshot'
+PERFORMANCE_BENCHMARK = 'performance_benchmark'
+PERFORMANCE_BENCHMARK_MAX_URLS = 'max_urls'
+PERFORMANCE_BENCHMARK_DEFAULT_MAX_URLS = 25
+PERFORMANCE_BENCHMARK_DEFAULT_TIMEOUT = 60
+# Hard caps so max_urls * (timeout+30) stays under the 8h activity budget.
+PERFORMANCE_BENCHMARK_HARD_MAX_URLS = 50
+PERFORMANCE_BENCHMARK_HARD_MAX_TIMEOUT = 120
 SUBDOMAIN_DISCOVERY = 'subdomain_discovery'
 STOP_ON_ERROR = 'stop_on_error'
 ENABLE_HTTP_CRAWL = 'enable_http_crawl'
@@ -200,6 +209,8 @@ CPANEL_SCANNER_PROXY_TYPE = 'proxy_type'
 CPANEL_SCANNER_DEFAULT_WORDLIST = '/usr/src/wordlist/cpanel_users.txt'
 
 RUN_REACT2SHELL = 'run_react2shell'
+RUN_PHP2SHELL = 'run_php2shell'
+RUN_NODE2SHELL = 'run_node2shell'
 USE_WORDFENCE_CANDIDATE = 'use_wordfence_candidate'
 
 BADDNS = 'baddns'
@@ -885,14 +896,18 @@ A detailed playbook containing prioritized, actionable steps to address the vuln
 References:
 Relevant, authoritative sources supporting your analysis, such as: Official CVE database entries, Vendor security advisories, Respected security research publications, Applicable industry standards or guidelines
 
+Estimated CVSS Score:
+A single CVSS v3.1 base score as a float from 0.0 to 10.0 (e.g. 7.5). This is a speculative estimate when no official score is available. Put ONLY the numeric score on the first line after the header.
+
 
 Ensure that:
-1. Each section (Description, Impact, Remediation, References) is separated by ONLY ONE blank line and no multiple new lines. The content must be immediately after the section title.
+1. Each section (Description, Impact, Remediation, References, Estimated CVSS Score) is separated by ONLY ONE blank line and no multiple new lines. The content must be immediately after the section title.
 2. Do not make title as bold, italic or underline. It must be Title ending with a colon. Example: Description:
 3. All URLs in the 'references' section begin with 'http://' or 'https://'.
 4. Remediation steps should be specific and actionable and should not contain any ambiguous or general recommendations. Format the remediation sub-sections clearly using bold text (e.g. **Short-Term Strategy:**) and bullet points.
 5. Refrain from including any personal opinions or subjective assessments in your report.
-6. CRITICAL: Do NOT include any conversational follow-up questions or offers of assistance (such as "Would you like to include a longer brief?" or "Let me know if you need more details"). Output ONLY the report content.
+6. Estimated CVSS Score must be a single float between 0.0 and 10.0 on the first content line.
+7. CRITICAL: Do NOT include any conversational follow-up questions or offers of assistance (such as "Would you like to include a longer brief?" or "Let me know if you need more details"). Output ONLY the report content.
 """
 
 
@@ -1050,6 +1065,8 @@ GOFUZZ_EXEC_PATH = '/usr/src/github/goofuzz/GooFuzz'
 # Auth Brute-Force Paths
 BRUTUS_EXEC_PATH = '/usr/local/bin/brutus'
 REACT2SHELL_PATH = '/usr/src/github/react2shell-scanner/scanner.py'
+PHP2SHELL_PATH = '/usr/src/github/php2shell-scanner/scanner.py'
+NODE2SHELL_PATH = '/usr/src/github/node2shell-scanner/scanner.py'
 PROXYCHAINS_EXEC_PATH = '/usr/bin/proxychains4'
 AUTH_WORDLIST_PATH = '/usr/src/wordlist/auth'
 DEFAULT_AUTH_USER_WORDLIST = 'top_default_usernames.txt'

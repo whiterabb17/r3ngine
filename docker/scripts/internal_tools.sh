@@ -278,6 +278,20 @@ log "Acquiring shared-volume lock (${SHARED_LOCK})..."
     fi
     pip3 install -q -r /usr/src/github/react2shell-scanner/requirements.txt
 
+    # PHP2Shell scanner (Assetnote de-fanged detection for CVE-2026-109618 / CVE-2026-109619)
+    if clone_repo php2shell-scanner https://github.com/assetnote/php2shell-scanner; then
+        pip3 install -q -r /usr/src/github/php2shell-scanner/requirements.txt
+        rm -rf /usr/src/github/php2shell-scanner/.git
+        log_done
+    fi
+
+    # Node2Shell scanner (Assetnote de-fanged detection for CVE-2026-111497)
+    if clone_repo node2shell-scanner https://github.com/assetnote/node2shell-scanner; then
+        pip3 install -q -r /usr/src/github/node2shell-scanner/requirements.txt
+        rm -rf /usr/src/github/node2shell-scanner/.git
+        log_done
+    fi
+
     # ctfr
     if clone_repo ctfr https://github.com/UnaPibaGeek/ctfr; then
         pip3 install -q -r /usr/src/github/ctfr/requirements.txt

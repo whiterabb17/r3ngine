@@ -4,6 +4,19 @@
 
 #### Added
 
+- **PHP2Shell / Node2Shell vulnerability scanners (Tier 6)**:
+  - Assetnote de-fanged detectors for [php2shell](https://github.com/assetnote/php2shell-scanner) (CVE-2026-109618 / CVE-2026-109619) and [node2shell](https://github.com/assetnote/node2shell-scanner) (CVE-2026-111497) — detection only, no PoC/command execution.
+  - Installed like cpanel2shell (`git clone` + pip into `/usr/src/github/…` in the web image / `internal_tools.sh`); registered as `InstalledExternalTool` fixtures.
+  - Temporal activities `RunPhp2ShellActivity` / `RunNode2ShellActivity` on the python orchestrator; scheduled in `NucleiPlannerWorkflow` Stage 2; timeline rows via `task_plan` (`php2shell_scan` / `node2shell_scan`, Tier 6).
+  - Engine YAML / editor toggles: `vulnerability_scan.php_scanner.run_php2shell` and `vulnerability_scan.node_scanner.run_node2shell` (on by default). Tech-gated to PHP or exact Node/Express/Next.js/NestJS fingerprints.
+  - Requires web image rebuild for the scanner clones and a Temporal **python orchestrator** restart so the new activities register.
+
+- **Lighthouse performance benchmarking**:
+  - Opt-in engine task `performance_benchmark` runs in the same Tier 3 wave as screenshots (MasterScan/SubScan) and alongside screenshots in assessment EnumerationWorkflow.
+  - Persists per-URL scores and Core Web Vitals on `PerformanceBenchmark` (`startScan` migration `0072`); hard-caps `max_urls` (50) / timeout (120s) under an 8h activity budget; retries clear prior rows for the scan scope.
+  - Scan report Technical Mode checkbox **Performance Benchmarking** adds a PDF section (Lighthouse KPIs + httpx probe latency); AI export includes a compact `performance_benchmarking` slice.
+  - Requires web image rebuild for the global `lighthouse` npm package and `make migrate` for `0072`.
+
 - **SAFE PoC agent (MCP)**:
   - Propose → operator approve → Temporal `SafePocWorkflow` for catalog-only probes (`marker_reflect`, `calc_echo`, `authz_status_delta`, `open_redirect_safe`, `flag_canary_read`).
   - `SafePocAttempt` model + migration `mcp.0008` + `/api/mcp/safe-poc/` views; results nest under `Vulnerability.agent_enrichment.poc` (never freeform `ValidationResult.payload`).
@@ -11,6 +24,11 @@
   - Direct run returns **410**; PoC success does **not** auto-set `verified`.
   - Execution hardening: DNS pin against rebinding, SSRF-safe redirect hop re-checks, shared cookie jar on `authz_status_delta`, blank `allowed_paths` rejected, abort-wins row locks, `cookie_value` audit redaction.
   - Operator privilege locked to JWT/UI via `resolve_is_operator` (MCP body flags cannot forge operator) for safe-poc, attack-path proposals, and follow-ups.
+
+- **LLM estimated CVSS for unscored findings**:
+  - GPT vulnerability reports also emit an `Estimated CVSS Score`; when `cvss_score` is null (e.g. WPTaint / Vigolium without a tool score), the estimate is persisted with `cvss_estimated=True` (`startScan` migration `0071`).
+  - Severity mid-band fallback when the model omits a score; tool/NVD scores are never overwritten.
+  - Finding UIs show `X.X (est.)` for estimated scores.
 
 - **Large-scan resilience (PR #135)**:
   - Tier 1–6 tool failures are isolated (`_isolated_tool`): one failed tool no longer aborts `MasterScanWorkflow`; Tier 7 still runs and the tool’s own timeline row keeps the failure.
@@ -57,7 +75,7 @@
 
 #### Notes
 
-- Existing installs: run `make migrate` for `startScan.0070` and `mcp.0008` (SAFE PoC). Rebuild/restart **web** and the Temporal **python orchestrator** so chunked/dedup/`SafePocWorkflow` activities register. Pair with **r3ngine-mcp v1.5.0**.
+- Existing installs: run `make migrate` for `startScan.0070`, `startScan.0071` (estimated CVSS), and `mcp.0008` (SAFE PoC). Rebuild/restart **web** and the Temporal **python orchestrator** so chunked/dedup/`SafePocWorkflow` activities register — and so php2shell/node2shell binaries and activities are present. Pair with **r3ngine-mcp v1.5.0**.
 - Open follow-ups: `max_batches` is backend-clamped only (not yet in the engine UI); redirect-root dedup can skip in-scope hosts by design when root redirects to another live root.
 
 ### [v3.7.8] - 2026-10-01

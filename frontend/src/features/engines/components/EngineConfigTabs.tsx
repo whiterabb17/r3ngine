@@ -16,6 +16,7 @@ import { HttpCrawlSection } from './sections/HttpCrawlSection';
 import { PortScanSection } from './sections/PortScanSection';
 import { EmailSecuritySection } from './sections/EmailSecuritySection';
 import { ScreenshotSection } from './sections/ScreenshotSection';
+import { PerformanceBenchmarkSection } from './sections/PerformanceBenchmarkSection';
 import { FetchUrlSection } from './sections/FetchUrlSection';
 import { WebApiDiscoverySection } from './sections/WebApiDiscoverySection';
 import { ParamDiscoverySection } from './sections/ParamDiscoverySection';
@@ -184,6 +185,12 @@ export const EngineConfigTabs: React.FC<EngineConfigTabsProps> = ({ state, avail
             <ScreenshotSection
               enabled={config.screenshot.enabled}
               onToggle={(v) => toggleSection('screenshot', v)}
+            />
+            <PerformanceBenchmarkSection
+              config={config.performance_benchmark.config}
+              enabled={config.performance_benchmark.enabled}
+              onToggle={(v) => toggleSection('performance_benchmark', v)}
+              onChange={(p) => updateSection('performance_benchmark', p)}
             />
           </Box>
         )}

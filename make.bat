@@ -2,9 +2,12 @@
 
 :: Credits: https://github.com/ninjhacks
 
-:: Compose v5 defaults to `docker buildx bake`. On Docker Desktop for Windows
-:: that talks to BuildKit over a TLS gRPC session and commonly fails with:
+:: Match Makefile: use BuildKit for layer/cache mounts and parallel stage builds.
+:: Keep COMPOSE_BAKE=false — Compose v5's bake backend talks to BuildKit over a
+:: TLS gRPC session on Docker Desktop for Windows and commonly fails with:
 ::   failed to compute cache key: failed to copy: local error: tls: bad record MAC
+set DOCKER_BUILDKIT=1
+set COMPOSE_DOCKER_CLI_BUILD=1
 set COMPOSE_BAKE=false
 
 set COMPOSE_ALL_FILES=--env-file .env -f docker/docker-compose.yml
@@ -30,6 +33,8 @@ if "%1" == "install-mcp" node scripts\install-mcp.mjs %2 %3 %4 %5 %6 %7 %8 %9
 if "%1" == "update-mcp" node scripts\install-mcp.mjs --update %2 %3 %4 %5 %6 %7 %8 %9
 :: Build and start all services in production mode.
 if "%1" == "up" set DEBUG=0 && %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% up -d --build %SERVICES%
+:: Start all services from existing images (no rebuild).
+if "%1" == "start" set DEBUG=0 && %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% up -d %SERVICES%
 :: Build and start all services in development mode.
 if "%1" == "devup" set DEBUG=1 && %DOCKER_COMPOSE% %COMPOSE_DEV_FILES% up -d --build %SERVICES%
 :: Optional services (compose profiles). This script does not read COMPOSE_PROFILES
@@ -286,6 +291,7 @@ echo   setup            Generate certificates.
 echo   install-mcp      Clone r3ngine-mcp (if needed) and run its Node setup script.
 echo   update-mcp       Pull latest r3ngine-mcp and re-run setup (--update).
 echo   up               Build and start all services in production mode.
+echo   start            Start all services from existing images (no rebuild).
 echo   up-worker        Build and start the remote worker.
 echo   down-worker      Stop the remote worker.
 echo   devup            Build and start all services in development mode.
