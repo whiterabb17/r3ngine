@@ -531,9 +531,13 @@ describe('useEngineConfig settings moved to where the backend reads them', () =>
   });
 
   it('omits performance_benchmark from YAML when disabled', () => {
-    const { result } = renderHook(() => useEngineConfig(''));
+    const { result } = renderHook(() =>
+      useEngineConfig('performance_benchmark:\n  max_urls: 10\n  timeout: 45\n'),
+    );
+    expect(result.current.config.performance_benchmark.enabled).toBe(true);
+    act(() => result.current.toggleSection('performance_benchmark', false));
     expect(result.current.config.performance_benchmark.enabled).toBe(false);
-    expect(mappingAt(loadMapping(result.current.yaml), 'performance_benchmark')).toBeUndefined();
+    expect(loadMapping(result.current.yaml)).not.toHaveProperty('performance_benchmark');
   });
 
   it('round-trips the DNS security options', () => {
