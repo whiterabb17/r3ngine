@@ -14,34 +14,44 @@ export const LogoutPage: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <Box sx={{ 
+    <Box sx={{
       minHeight: '100vh',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundImage: 'url("/staticfiles/img/neon_city.png")',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
       position: 'relative',
-      '&::before': {
-        content: '""',
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        bgcolor: 'rgba(0, 0, 0, 0.7)',
-        backdropFilter: 'blur(8px)'
-      }
+      overflow: 'hidden',
     }}>
-      <Paper elevation={24} sx={{ 
+      {/* Blur only the background image — never the logout card */}
+      <Box
+        aria-hidden
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: 'url("/staticfiles/img/neon_city.png")',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          filter: 'blur(8px)',
+          transform: 'scale(1.08)',
+          zIndex: 0,
+        }}
+      />
+      <Box
+        aria-hidden
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          bgcolor: 'rgba(0, 0, 0, 0.7)',
+          zIndex: 0,
+        }}
+      />
+      <Paper elevation={24} sx={{
         position: 'relative',
         zIndex: 1,
         width: '100%',
         maxWidth: 450,
-        bgcolor: 'rgba(10, 10, 15, 0.9)',
-        backdropFilter: 'blur(20px)',
+        bgcolor: 'rgba(10, 10, 15, 0.94)',
         border: '1px solid rgba(0, 243, 255, 0.3)',
         borderRadius: 4,
         p: 5,

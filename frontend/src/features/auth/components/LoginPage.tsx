@@ -72,29 +72,39 @@ export const LoginPage: React.FC = () => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundImage: 'url("/staticfiles/img/neon_city.png")',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
       position: 'relative',
-      '&::before': {
-        content: '""',
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        bgcolor: 'rgba(0, 0, 0, 0.6)',
-        backdropFilter: 'blur(4px)'
-      }
+      overflow: 'hidden',
     }}>
+      {/* Blur only the background image — never the login card */}
+      <Box
+        aria-hidden
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: 'url("/staticfiles/img/neon_city.png")',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          filter: 'blur(8px)',
+          transform: 'scale(1.08)',
+          zIndex: 0,
+        }}
+      />
+      <Box
+        aria-hidden
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          bgcolor: 'rgba(0, 0, 0, 0.6)',
+          zIndex: 0,
+        }}
+      />
       <Paper elevation={24} sx={{
         position: 'relative',
         zIndex: 1,
         width: '100%',
         maxWidth: 400,
-        bgcolor: 'rgba(10, 10, 15, 0.9)',
-        backdropFilter: 'blur(12px)',
+        bgcolor: 'rgba(10, 10, 15, 0.94)',
         border: '1px solid rgba(255, 255, 255, 0.1)',
         borderRadius: 4,
         overflow: 'hidden',
