@@ -91,28 +91,46 @@ def _resolve_scoped_http_targets(self, urls, ctx):
 
 # Merged second-order config — covers takeover, CDN, JS, parameter, and title detection.
 # Written to disk before each scan run so we never depend on a GitHub download.
+# Shape must match mhmdiaa/second-order Configuration:
+#   LogNon200Queries / LogQueries -> map[tag]attribute (NOT CSS-selector arrays)
+#   LogInline -> []string of tags
 _SECOND_ORDER_MERGED_CONFIG: dict = {
     # Non-200 external URLs — primary takeover/hijacking signal (HIGH severity)
-    "LogNon200Queries": [
-        "img[src]", "script[src]", "link[href]", "form[action]",
-        "iframe[src]", "a[href]", "object[data]", "source[src]",
-        "frame[src]", "embed[src]", "area[href]", "base[href]",
-    ],
+    "LogNon200Queries": {
+        "img": "src",
+        "script": "src",
+        "link": "href",
+        "form": "action",
+        "iframe": "src",
+        "a": "href",
+        "object": "data",
+        "source": "src",
+        "frame": "src",
+        "embed": "src",
+        "area": "href",
+        "base": "href",
+        "svg": "src",
+    },
     # All external attribute references — recon / SSRF vector discovery (INFO)
-    "LogQueries": [
-        "img[src]", "script[src]", "link[href]", "form[action]",
-        "input[name]", "input[value]", "meta[content]", "meta[name]",
-        "iframe[src]", "a[href]", "object[data]", "source[src]",
-        "frame[src]", "embed[src]", "area[href]", "base[href]",
-    ],
+    # One attribute per tag (Go map[string]string); prefer name/content for forms/meta.
+    "LogQueries": {
+        "img": "src",
+        "script": "src",
+        "link": "href",
+        "form": "action",
+        "input": "name",
+        "meta": "content",
+        "iframe": "src",
+        "a": "href",
+        "object": "data",
+        "source": "src",
+        "frame": "src",
+        "embed": "src",
+        "area": "href",
+        "base": "href",
+    },
     # Inline content — JS and title analysis (INFO)
     "LogInline": ["script", "title", "noscript", "style"],
-    "Headers": {
-        "User-Agent": (
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
-    },
 }
 
 def vulnerability_scan(self, urls=[], ctx={}, description=None):
@@ -1560,9 +1578,8 @@ def smugglex_scan(self, urls=[], ctx={}, description=None):
 def second_order_scan(self, urls=[], ctx={}, description=None):
 	"""Second Order Scan — runs the second-order Go tool against each target URL.
 
-	Writes the embedded merged config (_SECOND_ORDER_MERGED_CONFIG) covering 5 detection
-	modes: LogNon200Queries, LogQueries (img/script/link/form/input/meta),
-	LogInline (script/title/noscript/style), and custom headers.
+	Writes the embedded merged config (_SECOND_ORDER_MERGED_CONFIG) covering
+	LogNon200Queries / LogQueries (tag→attribute maps) and LogInline (tag list).
 
 	Produces up to 3 output files per run:
 	  attributes.json               -> LogQueries  (INFO severity)
