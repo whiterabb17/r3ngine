@@ -191,6 +191,13 @@ class TestSecondOrderScan(TestCase):
         self.assertIn('LogNon200Queries', cfg)
         self.assertIn('LogQueries', cfg)
         self.assertIn('LogInline', cfg)
+        # mhmdiaa/second-order expects map[tag]attribute, not CSS-selector arrays
+        self.assertIsInstance(cfg['LogNon200Queries'], dict)
+        self.assertIsInstance(cfg['LogQueries'], dict)
+        self.assertIsInstance(cfg['LogInline'], list)
+        self.assertEqual(cfg['LogNon200Queries'].get('script'), 'src')
+        self.assertEqual(cfg['LogQueries'].get('input'), 'name')
+        self.assertIn('title', cfg['LogInline'])
 
     def test_subscan_falls_back_to_subdomain_not_apex(self):
         """Empty urls + subdomain ctx must target the subdomain, not the apex domain."""
