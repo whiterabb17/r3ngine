@@ -786,7 +786,7 @@ def web_api_discovery(self, urls=[], ctx={}, description=None):
 		julius_out = f"{results_dir}/julius.jsonl"
 		with open(targets_file, 'w') as _f:
 			_f.write('\n'.join(urls))
-		_julius_cmd = f"cat {targets_file} | julius probe - -o jsonl --no-banner | tee {julius_out}"
+		_julius_cmd = f"cat {targets_file} | julius probe - -o jsonl | tee {julius_out}"
 		_, _julius_output = run_command(_julius_cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
 		_tls_error_sigs = ('x509: certificate', 'tls: failed to verify certificate', 'certificate verify failed')
 		if any(sig in _julius_output for sig in _tls_error_sigs):
