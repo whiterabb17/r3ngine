@@ -260,6 +260,7 @@ def _run_email_security_sync(ctx: dict) -> dict:
     from startScan.models import ScanHistory, Subdomain
     from reNgine.tasks.email_security import (
         check_spf, check_dmarc, check_dkim, assess_spoofability,
+        dmarc_is_enforcing,
         swaks_relay_test, swaks_starttls_check,
         check_ssl_cert, SMTP_PORTS,
     )
@@ -328,26 +329,51 @@ def _run_email_security_sync(ctx: dict) -> dict:
             logger.error('[EMAIL_SECURITY] save_vulnerability failed for %s: %s', name, exc)
 
     try:
-            # DNS checks (always run against the root domain)
+            # DNS checks (always run against the root domain).
+            # Inconclusive lookups (timeout/SERVFAIL) must NOT become "Missing"
+            # findings — that was the Azure/M365 false-positive pattern.
             spf = check_spf(domain_name)
             dmarc = check_dmarc(domain_name)
             dkim = check_dkim(domain_name)
 
-            if not spf['found']:
+            if not spf.get('lookup_ok', True):
+                logger.warning(
+                    '[EMAIL_SECURITY] SPF lookup inconclusive for %s — skipping SPF findings',
+                    domain_name,
+                )
+            elif not spf['found']:
                 _vuln('SPF Record Missing', 3,
                       'No SPF TXT record found for %s.' % domain_name)
             elif spf['weak']:
-                _vuln('SPF Weak Policy', 2,
-                      'SPF record for %s uses +all or ~all: %s' % (domain_name, spf['record']))
+                # M365/Google commonly publish ~all with DMARC p=reject/quarantine.
+                # Softfail alone is not a medium finding when DMARC is enforcing.
+                if dmarc_is_enforcing(dmarc):
+                    logger.info(
+                        '[EMAIL_SECURITY] SPF softfail for %s ignored — DMARC policy=%s',
+                        domain_name, dmarc.get('policy'),
+                    )
+                else:
+                    _vuln('SPF Weak Policy', 2,
+                          'SPF record for %s uses +all or ~all: %s' % (domain_name, spf['record']))
 
-            if not dmarc['found']:
+            if not dmarc.get('lookup_ok', True):
+                logger.warning(
+                    '[EMAIL_SECURITY] DMARC lookup inconclusive for %s — skipping DMARC findings',
+                    domain_name,
+                )
+            elif not dmarc['found']:
                 _vuln('DMARC Record Missing', 3,
                       'No DMARC record found at _dmarc.%s.' % domain_name)
             elif dmarc['policy'] == 'none':
                 _vuln('DMARC Policy Not Enforced (p=none)', 2,
                       'DMARC for %s uses p=none — monitoring only.' % domain_name)
 
-            if not dkim['found']:
+            if not dkim.get('lookup_ok', True):
+                logger.warning(
+                    '[EMAIL_SECURITY] DKIM lookup inconclusive for %s — skipping DKIM findings',
+                    domain_name,
+                )
+            elif not dkim['found']:
                 _vuln('DKIM Record Missing', 2,
                       'No DKIM record found for %s across common selectors.' % domain_name)
 

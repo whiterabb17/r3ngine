@@ -11,7 +11,6 @@ import logging
 import os
 
 from reNgine.utils.task import run_command
-from startScan.models import OsintStaging
 from targetApp.models import Domain
 from scanEngine.models import Proxy
 from reNgine.common_func import get_random_proxy
@@ -75,18 +74,21 @@ def run_spoofcheck(self, host: str, scan_history, results_dir: str) -> None:
         return
 
     domain_obj = Domain.objects.filter(name=host).first()
+    target_domain_id = (
+        domain_obj.id if domain_obj else getattr(scan_history, 'domain_id', None)
+    )
 
-    OsintStaging.objects.update_or_create(
-        scan_history=scan_history,
-        target_domain=domain_obj,
+    from reNgine.osint.staging_queue import enqueue_and_flush_osint_staging
+
+    enqueue_and_flush_osint_staging(
+        scan_history_id=scan_history.id,
+        target_domain_id=target_domain_id,
         osint_type='domain_security',
         content=host,
-        defaults={
-            'source': 'spoofy',
-            'confidence': 95,
-            'metadata': {'spoofcheck': result},
-            'status': 'pending',
-        },
+        source='spoofy',
+        confidence=95,
+        metadata={'spoofcheck': result},
+        status='pending',
     )
 
     logger.info(

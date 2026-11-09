@@ -68,6 +68,14 @@
 
 #### Fixed
 
+- **OsintStaging Redis queue + dedupe**:
+  - Concurrent gosearch / SpiderFoot / Spoofy writers enqueue into Redis (`osint:staging:pending:{scan_id}`) keyed by `(osint_type, content)` before any DB write; flush under a Redis lock upserts rows and collapses legacy duplicates.
+  - Re-flush no longer resets `validated` / `ignored` triage back to `pending`; missing `target_domain_id` falls back to the scan domain.
+
+- **Email security DNS hardening**:
+  - Transient DNS failures (timeout / SERVFAIL) are inconclusive — no longer reported as missing SPF/DMARC/DKIM.
+  - Multi-string TXT rdata is joined correctly; weak SPF softfail is suppressed when DMARC is enforcing (`reject` / `quarantine`).
+
 - **Acunetix scan outcomes (PR #133, merge caveats)**:
   - Import findings when an AWVS scan ends `completed`, `failed`, or `aborted`; `failed` still fails the step (retry starts a new scan).
   - Reuse an in-progress or completed AWVS scan for the same target during this scan history; **failed and operator-aborted scans are not reused** so an explicit retry starts fresh.

@@ -11,6 +11,8 @@ class TestSpiderfootBatchEnrichment(TestCase):
     """Integration tests: _process_spiderfoot_batch → OsintStaging.metadata enrichment."""
 
     def setUp(self):
+        from tests.redis_fakes import patch_osint_staging_redis
+        patch_osint_staging_redis(self)
         self.domain = Domain.objects.create(name='parser-test.com')
         engine = EngineType.objects.create(engine_name='TestEngine')
         self.scan = ScanHistory.objects.create(
@@ -75,7 +77,8 @@ class TestSpiderfootBatchEnrichment(TestCase):
         self.assertEqual(staging.metadata.get('phone_number'), '+1-555-000-0000')
 
     def test_social_event_stores_platform(self):
-        events = [self._make_event('Social', 'https://linkedin.com/in/test-user')]
+        # Synthetic fixture path only — no real profile identifiers.
+        events = [self._make_event('Social', 'https://linkedin.com/in/example-fixture')]
         self._run_batch(events)
         staging = OsintStaging.objects.filter(scan_history=self.scan, osint_type='Social').first()
         self.assertIsNotNone(staging)

@@ -647,17 +647,17 @@ def _process_spiderfoot_batch(self, batch, ctx, host):
                         "iocs": event.get("iocs"),
                     }
                     enriched_meta = _enrich_metadata(event, base_meta)
-                    OsintStaging.objects.update_or_create(
-                        scan_history=self.scan,
-                        target_domain=self.domain,
+                    from reNgine.osint.staging_queue import enqueue_osint_staging
+
+                    enqueue_osint_staging(
+                        scan_history_id=self.scan.id,
+                        target_domain_id=self.domain.id,
                         content=e_data,
                         osint_type=osint_type,
-                        defaults={
-                            "source": event.get("source", "SpiderFoot"),
-                            "confidence": confidence,
-                            "metadata": enriched_meta,
-                            "status": "pending",
-                        },
+                        source=event.get("source", "SpiderFoot"),
+                        confidence=confidence,
+                        metadata=enriched_meta,
+                        status="pending",
                     )
                 else:
                     # Discard low confidence noise
@@ -668,8 +668,13 @@ def _process_spiderfoot_batch(self, batch, ctx, host):
                         confidence,
                     )
 
+        from reNgine.osint.staging_queue import flush_osint_staging
+
+        flushed = flush_osint_staging(self.scan.id)
         logger.warning(
-            "Processed batch of %d SpiderFoot findings with validation.", len(batch)
+            "Processed batch of %d SpiderFoot findings with validation (%d staging flushed).",
+            len(batch),
+            flushed,
         )
     except Exception as e:
         logger.error("Error processing SpiderFoot batch: %s", e)
