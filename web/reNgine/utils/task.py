@@ -164,6 +164,67 @@ def _subprocess_abort_watchdog(proc, scan_id):
             logger.debug("[_subprocess_abort_watchdog] Poll error: %s", e)
 
 
+def _subprocess_timeout_watchdog(proc, timeout_sec, cancel_event, cmd, scan_id=None, close_stdout_on_stop=True):
+    """Kill a quiet/hung subprocess when its wall-clock limit or cancel fires.
+
+    ``run_command`` used to start its timeout only after stdout EOF, so tools
+    that emit little or no stdout (e.g. smugglex --json -o file) could block
+    forever on readline() past Temporal's activity time limit. ``stream_command``
+    already had this watchdog; keep both paths aligned.
+
+    Args:
+        proc: Popen instance started with ``preexec_fn=os.setsid``.
+        timeout_sec: Hard wall-clock limit from process start.
+        cancel_event: Threading event set by ``_run_task`` on abort / soft
+            Temporal time limit (may be None outside an activity).
+        cmd: Command string for log redaction only.
+        scan_id: Optional ScanHistory pk — also stop when the scan is aborted.
+        close_stdout_on_stop: Close stdout after kill so a blocked readline()
+            in the caller unblocks even if the pipe did not drop.
+    """
+    import time
+
+    deadline = time.monotonic() + max(1, int(timeout_sec or 0) or 1)
+    stopped = False
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            return
+        if cancel_event is not None and cancel_event.is_set():
+            stopped = True
+            break
+        if scan_id and is_scan_aborted(scan_id):
+            stopped = True
+            break
+        time.sleep(2)
+
+    if proc.poll() is not None:
+        return
+
+    if stopped:
+        logger.warning(
+            "Watchdog: task is stopping (abort or time limit). Killing process: %s",
+            redact_proxy_credentials(cmd),
+        )
+    else:
+        logger.error(
+            "Watchdog: Command timed out after %s seconds. Killing process: %s",
+            timeout_sec,
+            redact_proxy_credentials(cmd),
+        )
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (ProcessLookupError, OSError):
+        pass
+    except Exception as ex:
+        logger.error("Watchdog: Failed to kill process: %s", ex)
+
+    if proc.stdout and (close_stdout_on_stop or not stopped):
+        try:
+            proc.stdout.close()
+        except OSError:
+            pass
+
+
 def get_tool_color(cmd):
     """Returns the ANSI color code for a given command based on the tool name."""
     sanitized = sanitize_command_for_db(cmd)
@@ -280,6 +341,17 @@ def run_command(
     color = get_tool_color(cmd)
     logger.debug("%s%s%s", color, redact_proxy_credentials(cmd), COLOR_RESET)
 
+    # Set by _run_task on abort / soft Temporal time limit. Checked here (calling
+    # thread) because the cancel event is thread-local — same guard as stream_command.
+    from reNgine.temporal.activities.core import _task_cancel_local
+    cancel_event = getattr(_task_cancel_local, 'cancel_event', None)
+    if cancel_event is not None and cancel_event.is_set():
+        logger.warning(
+            "[run_command] Task is stopping — not starting: %s",
+            redact_proxy_credentials(cmd),
+        )
+        return -1, ''
+
     conf_path = None
     if proxy:
         proxy_manager = ProxychainsWrapper()
@@ -382,7 +454,9 @@ def run_command(
             output = f"Error executing remote command: {e}"
             return_code = 127
     else:
-        # Run the command using subprocess locally for other tools
+        # Run the command using subprocess locally for other tools.
+        # Honor Temporal soft time-limits / abort the same way stream_command does:
+        # a quiet tool (little or no stdout) must not block past timeout on readline().
         popen = None
         try:
             popen = subprocess.Popen(
@@ -399,6 +473,13 @@ def run_command(
             output = ''
             _run_cmd_line_count = 0
             _run_cmd_aborted = False
+            _watchdog_thread = threading.Thread(
+                target=_subprocess_timeout_watchdog,
+                args=(popen, timeout, cancel_event, cmd),
+                kwargs={'scan_id': scan_id, 'close_stdout_on_stop': True},
+                daemon=True,
+            )
+            _watchdog_thread.start()
             # Heartbeat and abort polling run on a timer rather than every Nth
             # line, so a chatty tool does not issue one SELECT per 10 lines.
             _last_poll = _time.monotonic()
@@ -414,28 +495,39 @@ def run_command(
                     continue
                 _last_poll = _now
                 activity_heartbeat_safe(f"Command executing... line {_run_cmd_line_count}")
-                if is_scan_aborted(scan_id):
-                    logger.warning("[run_command] Scan %s aborted — killing subprocess.", scan_id)
+                if (cancel_event is not None and cancel_event.is_set()) or is_scan_aborted(scan_id):
+                    logger.warning("[run_command] Scan %s stopping — killing subprocess.", scan_id)
                     try:
                         os.killpg(os.getpgid(popen.pid), signal.SIGKILL)
                     except (ProcessLookupError, OSError):
                         pass
                     _run_cmd_aborted = True
                     break
-            popen.stdout.close()
-            if _run_cmd_aborted:
+            try:
+                popen.stdout.close()
+            except OSError:
+                pass
+            # Watchdog may kill on DB abort while the main thread was blocked on
+            # readline (quiet tools). Treat abort the same as cancel_event so we
+            # never mis-label an abort as timeout (124).
+            _aborted = (
+                _run_cmd_aborted
+                or (cancel_event is not None and cancel_event.is_set())
+                or is_scan_aborted(scan_id)
+            )
+            if _aborted:
                 return_code = -1
             else:
-                # Replace bare 7200 s wait with a polling loop so abort is
-                # detected even if the process is slow to produce output.
-                _deadline = _time.monotonic() + timeout
+                # Watchdog already enforced the wall-clock limit from start; this
+                # wait only reaps the child (and catches late aborts).
+                _deadline = _time.monotonic() + 30
                 _timed_out = False
                 while True:
                     try:
                         popen.wait(timeout=10)
                         break
                     except subprocess.TimeoutExpired:
-                        if is_scan_aborted(scan_id):
+                        if (cancel_event is not None and cancel_event.is_set()) or is_scan_aborted(scan_id):
                             logger.warning("[run_command] Scan %s aborted during wait — killing.", scan_id)
                             try:
                                 os.killpg(os.getpgid(popen.pid), signal.SIGKILL)
@@ -446,9 +538,13 @@ def run_command(
                         if _time.monotonic() > _deadline:
                             _timed_out = True
                             break
-                if _run_cmd_aborted:
+                if (
+                    _run_cmd_aborted
+                    or (cancel_event is not None and cancel_event.is_set())
+                    or is_scan_aborted(scan_id)
+                ):
                     return_code = -1
-                elif _timed_out:
+                elif _timed_out or popen.poll() is None:
                     try:
                         os.killpg(os.getpgid(popen.pid), signal.SIGKILL)
                     except (ProcessLookupError, OSError):
@@ -456,7 +552,14 @@ def run_command(
                     return_code = 124  # Timeout
                     output += "\nCommand timed out."
                 else:
-                    return_code = popen.returncode
+                    # Watchdog SIGKILL → typically negative returncode; treat
+                    # wall-clock kills as timeout when abort/cancel was not set.
+                    rc = popen.returncode
+                    if rc is not None and rc < 0 and timeout:
+                        return_code = 124
+                        output += "\nCommand timed out."
+                    else:
+                        return_code = rc
         except Exception as e:
             logger.error("Error executing command %s: %s", cmd, str(e))
             output = f"Error executing command: {str(e)}"
