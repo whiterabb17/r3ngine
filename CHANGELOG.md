@@ -2,6 +2,13 @@
 
 ### [v3.7.9] - 2026-10-09
 
+#### Fixed
+
+- **Mobile LAN login**: nginx `:8082` now proxies `/mapi/` and `/ws/` over cleartext instead of 308-upgrading everything to HTTPS. Real devices on the local network were failing login because `8000` is loopback-only and the self-signed `:443` cert is rejected by the phone. Use `http://<lan-ip>:8082` in the app. Reload the proxy after pulling (`docker exec r3ngine-proxy-1 nginx -s reload`).
+- **SpiderFoot staging flush**: `_process_spiderfoot_batch` always drains Redis pending staging in `finally`, plus an end-of-task safety-net flush, so a mid-batch DB failure cannot leave moderate-confidence rows invisible.
+- **Julius TLS retry**: drop invalid `--no-banner` from the insecure retry command so certificate-error retries still produce `julius.jsonl`.
+- **Lighthouse cancel/abort**: `performance_benchmark` runs Lighthouse via `run_command` (watchdog + `cancel_event`) and stops the URL loop on abort instead of waiting out raw `subprocess.run` timeouts.
+
 #### Added
 
 - **PHP2Shell / Node2Shell vulnerability scanners (Tier 6)**:

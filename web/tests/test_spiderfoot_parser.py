@@ -104,3 +104,40 @@ class TestSpiderfootBatchEnrichment(TestCase):
         staging = OsintStaging.objects.filter(scan_history=self.scan, osint_type='Hosting').first()
         self.assertIsNotNone(staging)
         self.assertEqual(staging.metadata.get('co_hosted_domain'), 'co-tenant.example.net')
+
+    def test_flush_runs_when_persist_raises_after_enqueue(self):
+        """Redis staging enqueued before a DB failure must still be flushed."""
+        from reNgine.tasks.osint import _process_spiderfoot_batch
+
+        class FakeSelf:
+            scan = self.scan
+            domain = self.domain
+            scan_id = self.scan.id
+            activity_id = None
+
+        events = [
+            self._make_event('Phone', '+1-555-111-1111', confidence=65),
+            self._make_event(
+                'SSL',
+                "CN=api.parser-test.com, O=Let's Encrypt, C=US",
+                source_data='api.parser-test.com',
+                sf_type='SSL_CERTIFICATE_ISSUED_TO',
+                confidence=95,
+            ),
+        ]
+
+        with patch(
+            'reNgine.tasks.osint.spiderfoot.persist_osint_item',
+            side_effect=RuntimeError('persist boom'),
+        ):
+            _process_spiderfoot_batch(FakeSelf(), events, {}, 'parser-test.com')
+
+        staging = OsintStaging.objects.filter(
+            scan_history=self.scan,
+            osint_type='Phone',
+            content='+1-555-111-1111',
+        ).first()
+        self.assertIsNotNone(
+            staging,
+            'moderate-confidence enqueue must flush even when a later persist fails',
+        )

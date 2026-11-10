@@ -793,7 +793,7 @@ def web_api_discovery(self, urls=[], ctx={}, description=None):
 			logger.warning('[WEB_API] Julius: TLS certificate error detected, retrying with --insecure')
 			if os.path.exists(julius_out):
 				os.remove(julius_out)
-			_julius_cmd = f"cat {targets_file} | julius probe - --insecure -o jsonl --no-banner | tee {julius_out}"
+			_julius_cmd = f"cat {targets_file} | julius probe - --insecure -o jsonl | tee {julius_out}"
 			run_command(_julius_cmd, shell=True, cwd=results_dir, scan_id=self.scan_id, activity_id=self.activity_id)
 		if os.path.exists(julius_out):
 			try:
