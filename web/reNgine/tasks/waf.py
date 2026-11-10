@@ -160,6 +160,12 @@ def waf_bypass(self, ctx={}, description=None):
 		)
 
 		if findings:
-			logger.info("Found %s potential WAF bypasses for %s", len(findings), subdomain.name)
+			logger.info(
+				"Persisted %s validated WAF bypass finding(s) for %s",
+				len(findings),
+				subdomain.name,
+			)
+		else:
+			logger.info("No validated WAF bypasses for %s", subdomain.name)
 
 	return True
