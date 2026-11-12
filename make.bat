@@ -70,8 +70,8 @@ if "%1" == "username" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% exec web python3 mana
 :: Change Password
 if "%1" == "changepassword" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% exec web python3 manage.py changepassword
 if "%1" == "changepass" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% exec web python3 manage.py changepassword
-:: Apply migrations
-if "%1" == "makemigrations" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% exec web python3 manage.py makemigrations
+:: Create migration files for model changes
+if "%1" == "makemigrations" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% exec web python3 manage.py makemigrations %2
 :: Apply migrations
 if "%1" == "migrate" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% exec web python3 manage.py migrate
 :: Pull Docker images.
@@ -305,6 +305,7 @@ echo   build-clean      Rebuild ALL services from scratch (no cache).
 echo   restart-apps     Restart only web, temporal-python-orchestrator, and temporal-go-executor.
 echo   username         Generate Username (Use only after make up).
 echo   changepassword   Change password for user
+echo   makemigrations   Create migration files (optional app: make.bat makemigrations startScan)
 echo   migrate          Apply migrations
 echo   pull             Pull Docker images.
 echo   down             Down all services.

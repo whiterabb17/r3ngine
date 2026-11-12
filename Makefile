@@ -98,6 +98,9 @@ changepassword:	## Change password for user
 temporal-upgrade:	## Step the Temporal database through each server release (stop temporal and the workers first).
 	@COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) bash scripts/temporal_upgrade.sh
 
+makemigrations:		## Create migration files (optional: make makemigrations APP=startScan)
+	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} exec web python3 manage.py makemigrations $(APP)
+
 migrate:		## Apply migrations
 	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} exec web python3 manage.py migrate
 
