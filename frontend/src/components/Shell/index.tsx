@@ -78,6 +78,7 @@ import { useUnreadCount } from '../../features/notifications/api';
 import { ScanHistoryDrawer } from '../../features/scans/components/ScanHistoryDrawer';
 import { CheckForUpdateModal } from '../../features/settings/components/CheckForUpdateModal';
 import { useProxySettings, useRengineUpdateCheck, useTorStatus, useTorExitIP } from '../../features/settings/api';
+import { CopilotFab } from '../../features/copilot';
 import { HeaderThemeSwitcher } from './HeaderThemeSwitcher';
 
 const drawerWidth = 260;
@@ -174,6 +175,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
         { title: 'Tool Settings', path: `/${projectSlug}/settings/tool-settings` },
         { title: 'API Vault', path: `/${projectSlug}/settings/api-vault` },
         { title: 'LLM Toolkit', path: `/${projectSlug}/settings/llm-toolkit` },
+        { title: 'Assessment Copilot', path: `/${projectSlug}/settings/copilot` },
         { title: 'Tool Arsenal', path: `/${projectSlug}/settings/tools-arsenal` },
         { title: 'Report Settings', path: `/${projectSlug}/settings/report-settings` },
         { title: 'reNgine Settings', path: `/${projectSlug}/settings/rengine-settings` },
@@ -1206,6 +1208,7 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
             {children}
           </Box>
         </Box>
+        <CopilotFab />
       </Box>
     </Box>
   );

@@ -96,16 +96,17 @@ Graph database for:
 
 ## Optional Services (compose profiles)
 
-Two services are opt-in and sit behind compose `profiles` in
-`docker/docker-compose.yml`. Set `COMPOSE_PROFILES=tor,ollama` in `.env` and the
+Optional services sit behind compose `profiles` in
+`docker/docker-compose.yml`. Set `COMPOSE_PROFILES=tor,ollama,copilot` in `.env` and the
 Makefile includes them in `make up`, `make stop`, `make logs`, …; `make up-tor` /
-`make up-ollama` start one without editing `.env` (`make.bat` has the same
+`make up-ollama` / `make up-copilot` start one without editing `.env` (`make.bat` has the same
 targets, since it cannot read `.env`).
 
 | Service | Profile | Used by | The app's view of it |
 |---|---|---|---|
 | `tor` (built from `web/tor/`) | `tor` | "TOR Mode" in Settings → Proxy; `TorNewCircuitActivity` between scan phases | `reNgine/tor_manager.py` — TCP probe of `tor:9050`, NEWNYM over `tor:9051` with `TOR_CONTROL_PASSWORD` |
 | `ollama` (built from `docker/ollama/`, `OLLAMA_DOCKERFILE` picks the GPU variant) | `ollama` | LLM Toolkit local models (`http://ollama:11434`) | `reNgine/ollama_manager.py` — `GET /api/version` |
+| `assessment-ollama` + `assessment-copilot` (built from `docker/ollama/` and `docker/assessment-copilot/`) | `copilot` | Assessment Copilot (chat, SAFE PoC / follow-up proposals; separate from AI Hub) | `ASSESSMENT_COPILOT_URL` (`http://assessment-copilot:8091`); see `documents/assessment-copilot.md` |
 
 The application never starts or stops these containers. When a service is
 down, the UI (TOR Mode card, Ollama service status) shows the `hint` from the

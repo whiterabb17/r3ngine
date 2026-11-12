@@ -47,6 +47,10 @@ if "%1" == "stop-tor" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% stop tor
 if "%1" == "up-ollama" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% up -d --build ollama
 :: Stop the optional Ollama service.
 if "%1" == "stop-ollama" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% stop ollama
+:: Build and start Assessment Copilot (separate from AI Hub Ollama).
+if "%1" == "up-copilot" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% up -d --build assessment-ollama assessment-copilot
+:: Stop Assessment Copilot services.
+if "%1" == "stop-copilot" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% stop assessment-copilot assessment-ollama
 :: Build and start the remote worker.
 if "%1" == "up-worker" set DEBUG=0 && %DOCKER_COMPOSE% --env-file .env -f docker/docker-compose.worker.yml up -d --build
 :: Stop the remote worker.

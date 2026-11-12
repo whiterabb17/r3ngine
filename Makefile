@@ -10,10 +10,13 @@ COMPOSE_PREFIX_CMD := DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 COMPOSE_BAKE=
 
 COMPOSE_ALL_FILES := --env-file .env -f docker/docker-compose.yml
 COMPOSE_DEV_FILES := --env-file .env -f docker/docker-compose.dev.yml
-# Optional services sit behind compose profiles. COMPOSE_PROFILES=tor,ollama
+# Optional services sit behind compose profiles. COMPOSE_PROFILES=tor,ollama,copilot
 # (in .env, or in the environment) adds them to every target that names
-# services; `make up-tor` / `make up-ollama` start one without touching .env.
-PROFILE_SERVICES  := $(foreach s,tor ollama,$(if $(findstring $(s),$(COMPOSE_PROFILES)),$(s)))
+# services; `make up-tor` / `make up-ollama` / `make up-copilot` start one
+# without touching .env. Profile "copilot" expands to assessment-ollama +
+# assessment-copilot service names for compose up/stop.
+PROFILE_SERVICES  := $(foreach s,tor ollama,$(if $(findstring $(s),$(COMPOSE_PROFILES)),$(s))) \
+	$(if $(findstring copilot,$(COMPOSE_PROFILES)),assessment-ollama assessment-copilot)
 SERVICES          := db web proxy redis neo4j temporal temporal-python-orchestrator temporal-go-executor $(PROFILE_SERVICES)
 PG_VOLUME         := $(COMPOSE_PROJECT_NAME)_postgres_data
 
@@ -23,7 +26,7 @@ $(info Using: $(shell echo "$(DOCKER_COMPOSE)"))
 
 # --------------------------
 
-.PHONY: setup certs up start devup build username pull down stop restart rm logs fullupgrade erase install-mcp update-mcp backup restore up-tor stop-tor up-ollama stop-ollama
+.PHONY: setup certs up start devup build username pull down stop restart rm logs fullupgrade erase install-mcp update-mcp backup restore up-tor stop-tor up-ollama stop-ollama up-copilot stop-copilot
 
 certs:		    ## Generate certificates.
 	@${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} --env-file .env -f docker/docker-compose.setup.yml run --rm certs
@@ -60,6 +63,12 @@ up-ollama:		## Build and start the optional Ollama service (LLM Toolkit local mo
 
 stop-ollama:		## Stop the optional Ollama service.
 	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} stop ollama
+
+up-copilot:		## Build and start Assessment Copilot (assessment-ollama + assessment-copilot).
+	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} up -d --build assessment-ollama assessment-copilot
+
+stop-copilot:		## Stop Assessment Copilot services.
+	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} stop assessment-copilot assessment-ollama
 
 devup:				## Build and start all services in development mode.
 	DEBUG=1 ${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_DEV_FILES} up -d --build ${SERVICES}
