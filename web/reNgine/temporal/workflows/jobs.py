@@ -623,3 +623,22 @@ class SafePocWorkflow:
             task_queue="python-orchestrator-queue",
         )
         return {'attempt_id': attempt_id, **(result or {})}
+
+
+@workflow.defn(name="CopilotIndexWorkflow")
+class CopilotIndexWorkflow:
+    """Best-effort index of a completed scan into Assessment Copilot memory.
+
+    Failures are swallowed by the activity; this workflow must never block or
+    fail the parent MasterScanWorkflow (started as a fire-and-forget child).
+    """
+
+    @workflow.run
+    async def run(self, scan_history_id: int) -> dict:
+        return await workflow.execute_activity(
+            "IndexScanForCopilotActivity",
+            args=[scan_history_id],
+            start_to_close_timeout=timedelta(minutes=10),
+            retry_policy=RetryPolicy(maximum_attempts=2),
+            task_queue="python-orchestrator-queue",
+        )

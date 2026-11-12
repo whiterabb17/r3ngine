@@ -1,3 +1,5 @@
+import hashlib
+import json
 import os
 import re
 import markdown
@@ -91,6 +93,43 @@ def build_vuln_context(scan, ignore_info=False):
         'grouped_vulners_findings': grouped_vulners_findings,
         'unique_vulnerabilities': list(non_vulners_unique) + vulners_unique,
     }
+
+
+def _attack_path_remediation_fingerprint(chain: dict) -> str:
+    """Stable hash of the chain slice that drives LLM remediation text."""
+    payload = {
+        'path_id': (chain or {}).get('apme_path_id'),
+        'risk': (chain or {}).get('risk'),
+        'score': (chain or {}).get('score'),
+        'steps': (chain or {}).get('steps') or [],
+        'potential_impact': (chain or {}).get('potential_impact'),
+    }
+    encoded = json.dumps(payload, sort_keys=True, default=str, separators=(',', ':'))
+    return hashlib.sha256(encoded.encode('utf-8')).hexdigest()
+
+
+def _sanitize_llm_html(html: str) -> str:
+    """Keep LLM HTML fragments from breaking the report document tree.
+
+    WeasyPrint drops later sections (notably #conclusion) when earlier |safe
+    fragments inject document/section closers or collide with TOC anchor ids.
+    """
+    if not html:
+        return ''
+    cleaned = re.sub(
+        r'</?(?:html|head|body|meta|link|script|style|article|section|main|header|footer|nav)(?:\s[^>]*)?>',
+        '',
+        html,
+        flags=re.I,
+    )
+    # Remove fragment-level anchors that would collide with report TOC ids.
+    cleaned = re.sub(
+        r'\sid=(["\'])(conclusion|executive-summary|risk-overview|finding-summary|detailed-findings|attack-paths|attack-surface-map|recon-findings|assessment-timeline)\1',
+        '',
+        cleaned,
+        flags=re.I,
+    )
+    return cleaned
 
 
 def _normalize_llm_markdown(text: str) -> str:
@@ -291,11 +330,23 @@ def generate_report_task(report_id):
                 .select_related('vulnerability')
                 .order_by('-remediation_priority')
             )
+            cached_remediation_count = 0
             for a in assessments:
                 chain = a.potential_attack_chain or {}
                 if not chain.get('apme_path_id'):
                     continue
+                fingerprint = _attack_path_remediation_fingerprint({
+                    **chain,
+                    'potential_impact': a.potential_impact,
+                })
+                cached = (a.llm_report_remediation or '').strip()
+                cached_fp = (a.llm_report_remediation_fingerprint or '').strip()
+                if cached and cached_fp == fingerprint:
+                    cached_remediation_count += 1
+                else:
+                    cached = ''
                 attack_paths.append({
+                    'assessment_id': a.id,
                     'path_id': chain.get('apme_path_id'),
                     'risk': chain.get('risk', 'unknown'),
                     'score': chain.get('score', 0.0),
@@ -304,9 +355,16 @@ def generate_report_task(report_id):
                     'potential_impact': a.potential_impact,
                     'remediation_priority': a.remediation_priority,
                     'vuln_remediation': (a.vulnerability.remediation or '') if a.vulnerability_id and a.vulnerability else '',
-                    'remediation': '',
+                    'remediation_fingerprint': fingerprint,
+                    # Prefer scan-persisted LLM remediation so regenerating the
+                    # same scan report does not re-call the model. Fingerprint
+                    # mismatch forces regen when the chain changed.
+                    'remediation': cached,
                 })
-            logger.log_line("[REPORT]", "FETCH", "attack paths: %d" % len(attack_paths))
+            logger.log_line(
+                "[REPORT]", "FETCH",
+                "attack paths: %d (cached remediations: %d)" % (len(attack_paths), cached_remediation_count),
+            )
         else:
             logger.log_line("[REPORT]", "SKIP", "attack paths (template=%s include=%s)" % (report_template, include_attack_paths))
 
@@ -372,19 +430,41 @@ def generate_report_task(report_id):
         else:
             logger.log_line("[REPORT]", "SKIP", "S3 buckets")
 
-        waf_data = Waf.objects.none()
+        # Waf/Technology are M2M on Subdomain (no url/subdomain FK on the models).
+        # Flatten to rows that include the related host so report templates can
+        # populate Target URL / Target columns.
+        waf_data = []
         if include_waf:
             logger.log_line("[REPORT]", "FETCH", "loading WAF data")
-            waf_data = Waf.objects.filter(waf__in=subdomains).distinct().order_by('manufacturer')
-            logger.log_line("[REPORT]", "FETCH", "WAF entries: %d" % waf_data.count())
+            for sub in subdomains.prefetch_related('waf'):
+                target_url = (sub.http_url or '').strip() or (sub.name or '').strip() or '-'
+                for waf in sub.waf.all():
+                    waf_data.append({
+                        'name': waf.name,
+                        'manufacturer': waf.manufacturer or waf.name or 'Generic',
+                        'url': target_url,
+                        'target': sub.name or target_url,
+                    })
+            waf_data.sort(key=lambda row: ((row.get('manufacturer') or ''), (row.get('url') or '')))
+            logger.log_line("[REPORT]", "FETCH", "WAF entries: %d" % len(waf_data))
         else:
             logger.log_line("[REPORT]", "SKIP", "WAF data")
 
-        technologies_data = Technology.objects.none()
+        technologies_data = []
         if include_technologies:
             logger.log_line("[REPORT]", "FETCH", "loading technologies")
-            technologies_data = Technology.objects.filter(technologies__in=subdomains).distinct().order_by('name')
-            logger.log_line("[REPORT]", "FETCH", "technologies: %d" % technologies_data.count())
+            for sub in subdomains.prefetch_related('technologies'):
+                target = (sub.name or '').strip() or (sub.http_url or '').strip() or '-'
+                for tech in sub.technologies.all():
+                    if not tech.name:
+                        continue
+                    technologies_data.append({
+                        'name': tech.name,
+                        'target': target,
+                        'url': (sub.http_url or '').strip() or target,
+                    })
+            technologies_data.sort(key=lambda row: ((row.get('name') or ''), (row.get('target') or '')))
+            logger.log_line("[REPORT]", "FETCH", "technologies: %d" % len(technologies_data))
         else:
             logger.log_line("[REPORT]", "SKIP", "technologies")
 
@@ -468,9 +548,9 @@ def generate_report_task(report_id):
             's3_buckets_data': s3_buckets_data,
             's3_buckets_count': s3_buckets_data.count() if include_s3_buckets else 0,
             'waf_data': waf_data,
-            'waf_count': waf_data.count() if include_waf else 0,
+            'waf_count': len(waf_data) if include_waf else 0,
             'technologies_data': technologies_data,
-            'technologies_count': technologies_data.count() if include_technologies else 0,
+            'technologies_count': len(technologies_data) if include_technologies else 0,
             'api_intel': api_intel,
             'api_intel_count': api_intel.count() if include_api_intelligence else 0,
             'identity_intel': identity_intel,
@@ -603,24 +683,24 @@ def generate_report_task(report_id):
                             llm_context += f"- {g['display_name']}: {g['count']} CVE(s), Max CVSS {g['max_cvss']}, Severity: {sev}\n"
 
                 logger.log_line("[REPORT]", "LLM", "generating overview section")
-                data['llm_overview'] = markdown.markdown(
+                data['llm_overview'] = _sanitize_llm_html(markdown.markdown(
                     _normalize_llm_markdown(llm_gen.generate_overview(llm_context)),
                     extensions=['extra', 'nl2br', 'sane_lists'],
-                )
+                ))
                 logger.log_line("[REPORT]", "LLM", "overview done (%d chars)" % len(data['llm_overview']))
 
                 logger.log_line("[REPORT]", "LLM", "generating executive brief section")
-                data['llm_executive_brief'] = markdown.markdown(
+                data['llm_executive_brief'] = _sanitize_llm_html(markdown.markdown(
                     _normalize_llm_markdown(llm_gen.generate_executive_brief(llm_context)),
                     extensions=['extra', 'nl2br', 'sane_lists'],
-                )
+                ))
                 logger.log_line("[REPORT]", "LLM", "executive brief done (%d chars)" % len(data['llm_executive_brief']))
 
                 logger.log_line("[REPORT]", "LLM", "generating conclusion section")
-                data['llm_conclusion'] = markdown.markdown(
+                data['llm_conclusion'] = _sanitize_llm_html(markdown.markdown(
                     _normalize_llm_markdown(llm_gen.generate_conclusion(llm_context)),
                     extensions=['extra', 'nl2br', 'sane_lists'],
-                )
+                ))
                 logger.log_line("[REPORT]", "LLM", "conclusion done (%d chars)" % len(data['llm_conclusion']))
 
                 logger.log_line("[REPORT]", "LLM", "generating missing vulnerability details")
@@ -644,8 +724,15 @@ def generate_report_task(report_id):
                     data['unique_vulnerabilities'] = vuln_ctx['unique_vulnerabilities']
 
                 if attack_paths:
-                    logger.log_line("[REPORT]", "LLM", "generating attack path remediation (%d paths)" % len(attack_paths))
-                    for path in attack_paths:
+                    from startScan.models import ImpactAssessment as ImpactAssessmentModel
+                    to_generate = [p for p in attack_paths if not (p.get('remediation') or '').strip()]
+                    logger.log_line(
+                        "[REPORT]", "LLM",
+                        "attack path remediation: %d cached, %d to generate" % (
+                            len(attack_paths) - len(to_generate), len(to_generate),
+                        ),
+                    )
+                    for path in to_generate:
                         path_ctx = "Risk Level: %s (Score: %s)\n" % (path['risk'].upper(), path['score'])
                         path_ctx += "Potential Impact: %s\n" % (path['potential_impact'] or 'Not specified')
                         path_ctx += "Attack Steps:\n"
@@ -661,11 +748,17 @@ def generate_report_task(report_id):
                             path_ctx += line + "\n"
                         try:
                             raw = llm_gen.generate_path_remediation(path['path_id'], path_ctx)
-                            path['remediation'] = markdown.markdown(
+                            path['remediation'] = _sanitize_llm_html(markdown.markdown(
                                 _normalize_llm_markdown(raw or ''),
                                 extensions=['extra', 'nl2br', 'sane_lists'],
-                            )
-                            logger.log_line("[REPORT]", "LLM", "remediation done for path %s (%d chars)" % (path['path_id'], len(path['remediation'])))
+                            ))
+                            assessment_id = path.get('assessment_id')
+                            if assessment_id and path['remediation']:
+                                ImpactAssessmentModel.objects.filter(pk=assessment_id).update(
+                                    llm_report_remediation=path['remediation'],
+                                    llm_report_remediation_fingerprint=path.get('remediation_fingerprint') or '',
+                                )
+                            logger.log_line("[REPORT]", "LLM", "remediation done for path %s (%d chars, persisted)" % (path['path_id'], len(path['remediation'])))
                         except Exception as e:
                             logger.log_line("[REPORT]", "ERROR", "remediation failed for path %s: %s" % (path['path_id'], format_exception_for_log(e)), level="error")
 
@@ -737,6 +830,14 @@ def generate_report_task(report_id):
 
         logger.log_line("[REPORT]", "RENDER", "rendering HTML template: %s" % report_template)
         html = template.render(data)
+        if report_template in ('enterprise', 'cyber_pro') and (
+            'id="conclusion"' not in html and "id='conclusion'" not in html
+        ):
+            logger.log_line(
+                "[REPORT]", "ERROR",
+                "rendered HTML is missing id=\"conclusion\" — TOC/WeasyPrint anchors will fail",
+                level="error",
+            )
         logger.log_line("[REPORT]", "RENDER", "HTML rendered (%d bytes), starting WeasyPrint PDF generation" % len(html))
 
         pdf = HTML(string=html, url_fetcher=secure_url_fetcher).write_pdf()

@@ -190,7 +190,7 @@ Agents (and the Subdomains tab **Run single tool** modal) can:
 1. **`r3ngine_list_capabilities` / `r3ngine_get_engine_detail`** — which pipeline tools and workflows are allowed for an asset kind / engine.
 2. **`r3ngine_get_tool_args`** — host-local CLI schema for a tool (installed binary `--help`, versioned DB cache; seed fallback when the binary is missing). Call this before inventing flags.
 3. **`r3ngine_run_tool`** — start one pipeline tool on a subdomain, endpoint, or URL. Optional `tool_args` must match the schema (denylisted retargeting / filesystem flags; no free-form shell). Timeline rows are namespaced `single_tool_<task>` so they never collide with master-scan claim / tier-retry / resume.
-4. **Follow-up plans** — `propose` → optional `update` → operator `approve` / `abort` / `retry`; detail payloads may include capped `suggested_followups`.
+4. **Follow-up plans** — `propose` → optional `update` → operator `approve` / `abort` / `retry`; detail payloads may include capped `suggested_followups`. Each `run_tool` step may include validated `tool_args` (same schema as `r3ngine_run_tool`). Django/REST accept `tool_args`; keep the MCP sidecar propose/update JSON schemas in sync so agents do not drop the field.
 5. **Attack-path proposals** — `r3ngine_propose_attack_path` → optional update → operator approve/abort (enrich/create/update/dismiss/APME queue).
 6. **SAFE PoC** — `r3ngine_propose_safe_poc` → optional update → operator approve/abort (catalog templates only).
 7. **OSINT staging** — `r3ngine_list_osint_staging` / `r3ngine_verify_osint_staging` with `agent_verified` badges in the UI.

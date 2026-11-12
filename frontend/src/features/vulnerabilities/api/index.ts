@@ -314,10 +314,32 @@ export const useImpactAssessment = (projectSlug: string, vulnId: number | null) 
   });
 };
 
+export interface ExploitSourceRelatedItem {
+  reporter?: string | null;
+  title: string;
+  published?: string | null;
+  family?: string | null;
+  url?: string | null;
+}
+
+export interface ExploitSourceMeta {
+  title?: string | null;
+  description?: string | null;
+  risk_label?: string | null;
+  scores?: {
+    ai?: string;
+    cvss?: string;
+    epss?: string;
+  };
+  tags?: string[];
+  related?: ExploitSourceRelatedItem[];
+}
+
 export interface FetchExploitSourceResponse {
   status: boolean;
   content?: string;
   error?: string;
+  meta?: ExploitSourceMeta | null;
 }
 
 export const useFetchExploitSource = () => {

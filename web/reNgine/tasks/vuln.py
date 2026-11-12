@@ -19,6 +19,8 @@ from reNgine.tasks.parsers import (
 	parse_dalfox_result,
 	parse_crlfuzz_result,
 	parse_s3scanner_result,
+	s3_bucket_public_issues,
+	build_s3_bucket_misconfig_vuln,
 )
 from reNgine.tasks.llm import get_vulnerability_gpt_report, add_gpt_description_db
 from reNgine.tasks.crawl import parse_curl_output
@@ -1030,6 +1032,41 @@ def crlfuzz_scan(self, urls=[], ctx={}, description=None):
 	return results
 
 
+def _persist_s3_bucket_misconfig_finding(task, scan_history, bucket_result):
+	"""Create a Vulnerability row when s3scanner reports public ACL misconfig."""
+	issues = s3_bucket_public_issues(bucket_result)
+	vuln_data = build_s3_bucket_misconfig_vuln(bucket_result, issues=issues)
+	if not vuln_data or not scan_history:
+		return None
+
+	dedup_fields = vuln_data.pop('dedup_fields')
+	bucket_name = (bucket_result.get('name') or '').strip()
+	subdomain = None
+	if bucket_name:
+		subdomain = Subdomain.objects.filter(
+			scan_history=scan_history,
+			name=bucket_name,
+		).first()
+
+	vuln, created = save_vulnerability(
+		vuln_data,
+		scan_history=scan_history,
+		target_domain=getattr(task, 'domain', None),
+		subdomain=subdomain,
+		subscan=getattr(task, 'subscan', None),
+		dedup_fields=dedup_fields,
+	)
+	logger.info(
+		"s3scanner misconfig finding %s bucket=%s provider=%s issues=%s created=%s",
+		getattr(vuln, 'id', None),
+		bucket_name,
+		bucket_result.get('provider'),
+		','.join(issues),
+		created,
+	)
+	return vuln
+
+
 def s3scanner(self, ctx={}, description=None):
 	"""Bucket Scanner
 
@@ -1060,7 +1097,9 @@ def s3scanner(self, ctx={}, description=None):
 			if line.get('bucket', {}).get('exists', 0) == 1:
 				result = parse_s3scanner_result(line)
 				s3bucket, created = S3Bucket.objects.get_or_create(**result)
-				scan_history.buckets.add(s3bucket)
+				if scan_history:
+					scan_history.buckets.add(s3bucket)
+					_persist_s3_bucket_misconfig_finding(self, scan_history, result)
 				logger.info("s3 bucket added %s-%s-%s", result['provider'], result['name'], result['region'])
 
 

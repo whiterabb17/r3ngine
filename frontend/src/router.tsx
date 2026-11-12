@@ -47,6 +47,7 @@ const ToolSettingsPage = lazyRouteComponent(() => import("./features/settings").
 const ToolArsenalPage = lazyRouteComponent(() => import("./features/settings").then(m => ({ default: m.ToolArsenalPage })));
 const ApiVaultPage = lazyRouteComponent(() => import("./features/settings").then(m => ({ default: m.ApiVaultPage })));
 const LlmToolkitPage = lazyRouteComponent(() => import("./features/settings").then(m => ({ default: m.LlmToolkitPage })));
+const CopilotSettingsPage = lazyRouteComponent(() => import("./features/copilot").then(m => ({ default: m.CopilotSettingsPage })));
 const ReportSettingsPage = lazyRouteComponent(() => import("./features/settings").then(m => ({ default: m.ReportSettingsPage })));
 const ReNgineSettingsPage = lazyRouteComponent(() => import("./features/settings").then(m => ({ default: m.ReNgineSettingsPage })));
 const NotificationSettingsPage = lazyRouteComponent(() => import("./features/settings").then(m => ({ default: m.NotificationSettingsPage })));
@@ -375,6 +376,12 @@ const llmToolkitSettingsRoute = createRoute({
   component: LlmToolkitPage,
 });
 
+const copilotSettingsRoute = createRoute({
+  getParentRoute: () => projectRoute,
+  path: "settings/copilot",
+  component: CopilotSettingsPage,
+});
+
 const reportSettingsRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: "settings/report-settings",
@@ -620,6 +627,7 @@ const routeTree = rootRoute.addChildren([
     toolArsenalRoute,
     apiVaultSettingsRoute,
     llmToolkitSettingsRoute,
+    copilotSettingsRoute,
     reportSettingsRoute,
     rengineSettingsRoute,
     notificationSettingsRoute,

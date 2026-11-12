@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { Box, Typography, Grid, Paper, Tabs, Tab, Chip } from '@mui/material';
-import { Activity, Shield, BarChart2 } from 'lucide-react';
+import { Activity, Shield, BarChart2, Bot } from 'lucide-react';
 import { useAssessments } from '../api';
 import { useAssessmentStream } from '../hooks/useAssessmentStream';
 import { AssessmentControlPanel } from '../components/AssessmentControlPanel';
 import { AssessmentStatusTimeline } from '../components/AssessmentStatusTimeline';
 import { EvidencePage } from '../../evidence';
+import { AssessmentCopilotPanel } from '../../copilot';
 
 // -------------------------------------------------------------------------
 // Tab definitions
@@ -15,11 +16,12 @@ const TABS = [
   { value: 'execution', label: 'Execution', icon: <Activity size={14} /> },
   { value: 'evidence',  label: 'Evidence',  icon: <Shield size={14} /> },
   { value: 'metrics',   label: 'Metrics',   icon: <BarChart2 size={14} /> },
+  { value: 'copilot',   label: 'Copilot',   icon: <Bot size={14} /> },
 ];
 
 export const AssessmentExecutionDashboard: React.FC = () => {
-  const { id } = useParams({ from: '/$projectSlug/assessments/$id/execution' });
-  const [activeTab, setActiveTab] = useState<'execution' | 'evidence' | 'metrics'>('execution');
+  const { id, projectSlug } = useParams({ from: '/$projectSlug/assessments/$id/execution' });
+  const [activeTab, setActiveTab] = useState<'execution' | 'evidence' | 'metrics' | 'copilot'>('execution');
 
   // Use existing query to get initial status, fallback to finding by ID
   const { data: assessments, isLoading } = useAssessments();
@@ -133,6 +135,13 @@ export const AssessmentExecutionDashboard: React.FC = () => {
             Findings and vulnerability trends will appear here as the assessment progresses.
           </Typography>
         </Paper>
+      )}
+
+      {activeTab === 'copilot' && projectSlug && (
+        <AssessmentCopilotPanel
+          projectSlug={projectSlug}
+          assessmentId={typeof assessment.id === 'number' ? assessment.id : Number(assessment.id) || null}
+        />
       )}
     </Box>
   );

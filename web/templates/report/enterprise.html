@@ -195,7 +195,7 @@
             color: #1e293b;
         }
         .toc-page::after {
-            content: target-counter(attr(data-href), page);
+            content: target-counter(attr(data-href url), page);
         }
         /* Finding Summary Box */
         .risk-grid {
@@ -1064,11 +1064,11 @@
         {% endfor %}
     </article>
     {% endif %}
-    <!-- Final Conclusion -->
+    <!-- Final Conclusion — id must match TOC href="#conclusion" for WeasyPrint anchors -->
     <article class="page-break">
-        <h1>Conclusion & Next Steps</h1>
+        <h1 id="conclusion">Conclusion & Next Steps</h1>
         <div class="summary-content">
-            {% if enable_llm_report_generation %}
+            {% if enable_llm_report_generation and llm_conclusion %}
             {{ llm_conclusion | safe }}
             {% else %}
             <p>This security assessment has identified several areas for improvement in the security posture of <b>{{ scan_object.domain.name }}</b>. We recommend prioritizing the remediation of Critical and High severity findings as soon as possible.</p>

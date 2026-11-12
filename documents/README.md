@@ -18,6 +18,7 @@
 | [Scheduling](scheduling.md) | Temporal Schedules for periodic and clocked scans |
 | [WebSockets](websockets.md) | Real-time updates via Django Channels |
 | [LLM Integration](llm-integration.md) | AI/LLM features: impact assessment, APME, summaries |
+| [Assessment Copilot](assessment-copilot.md) | Local pentest co-pilot (SAFE PoC / validate / follow-ups); separate from AI Hub |
 | [Neo4j Integration](neo4j-integration.md) | Graph database integration and APME |
 | [Configuration](configuration.md) | Environment variables and engine YAML configuration |
 | [Docker Setup](docker-setup.md) | Container architecture and service definitions |
