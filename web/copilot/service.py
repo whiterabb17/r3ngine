@@ -175,7 +175,7 @@ def _extract_and_store_proposals(
         try:
             import json
             data = json.loads(raw)
-        except Exception:
+        except (json.JSONDecodeError, TypeError, ValueError):
             continue
         if not isinstance(data, dict):
             continue

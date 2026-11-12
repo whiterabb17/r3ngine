@@ -119,7 +119,8 @@ class FollowupPlanServiceTests(TestCase):
             }
         ]
         normalized = normalize_steps(steps)
-        self.assertEqual(normalized[0].get('tool_args'), {'-p': '80,443'})
+        # validate_tool_args canonicalizes aliases (-p) to the schema name (ports).
+        self.assertEqual(normalized[0].get('tool_args'), {'ports': '80,443'})
 
     def test_propose_and_operator_lock(self):
         steps = [
@@ -321,7 +322,7 @@ class McpCapabilitiesApiTests(TestCase):
         }, format='json')
         self.assertEqual(res.status_code, 201, res.content)
         plan = res.json()['plan']
-        self.assertEqual(plan['steps'][0].get('tool_args'), {'-p': '443'})
+        self.assertEqual(plan['steps'][0].get('tool_args'), {'ports': '443'})
 
 
 class SubscanRetryParityTests(TestCase):

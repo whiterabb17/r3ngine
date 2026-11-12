@@ -63,8 +63,11 @@ class CopilotGatewayTests(TestCase):
         }, format='json')
         self.assertEqual(res.status_code, 201, res.content)
         sid = res.json()['id']
-        res = self.client.get(f'/api/copilot/sessions/{sid}/')
-        self.assertEqual(res.status_code, 200)
+        res = self.client.get(
+            f'/api/copilot/sessions/{sid}/',
+            {'project_slug': 'copilot-project'},
+        )
+        self.assertEqual(res.status_code, 200, res.content)
         self.assertEqual(res.json()['title'], 'Engagement chat')
         res = self.client.get('/api/copilot/sessions/', {'project_slug': 'copilot-project'})
         self.assertEqual(res.status_code, 200)
