@@ -26,7 +26,7 @@
 
 #### Added
 
-- **s3scanner misconfigured buckets as findings**: public ACL hits (`perm_all_users_*`) now also create `Vulnerability` rows (`source=s3scanner`, template `s3scanner-public-acl`) alongside the existing `S3Bucket` association — write/full-control → high, read → medium — so buckets show up in the findings list without a separate buckets-only view.
+- **s3scanner misconfigured buckets as findings**: public ACL hits (`perm_all_users_*`) now also create `Vulnerability` rows (`source=s3scanner`, template `s3scanner-public-acl`) alongside the existing `S3Bucket` association — write/full-control → high, read → medium — so buckets show up in the findings list without a separate buckets-only view. `save_vulnerability` only registers `AuthCandidate` for `http`/`https` URLs so `s3://…` bucket findings (e.g. names containing `admin`) do not spawn bogus brute-force targets.
 
 - **PHP2Shell / Node2Shell vulnerability scanners (Tier 6)**:
   - Assetnote de-fanged detectors for [php2shell](https://github.com/assetnote/php2shell-scanner) (CVE-2026-109618 / CVE-2026-109619) and [node2shell](https://github.com/assetnote/node2shell-scanner) (CVE-2026-111497) — detection only, no PoC/command execution.
