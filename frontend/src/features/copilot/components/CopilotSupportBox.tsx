@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -58,7 +58,10 @@ export const CopilotSupportBox: React.FC<Props> = ({
 
   const { data: status } = useCopilotStatus(projectSlug);
   const { data: sessions } = useCopilotSessions(projectSlug);
-  const { data: session } = useCopilotSession(projectSlug, sessionId);
+  // Prefer an explicit selection; otherwise fall back to the newest session
+  // without syncing into state from an effect (react-hooks/set-state-in-effect).
+  const activeSessionId = sessionId ?? sessions?.[0]?.id ?? null;
+  const { data: session } = useCopilotSession(projectSlug, activeSessionId);
   const createSession = useCreateCopilotSession(projectSlug);
   const chat = useCopilotChat(projectSlug);
   const { data: proposals } = useCopilotProposals(projectSlug, 'pending');
@@ -71,14 +74,8 @@ export const CopilotSupportBox: React.FC<Props> = ({
     ...(assessmentId != null ? { assessment_id: assessmentId } : {}),
   };
 
-  useEffect(() => {
-    if (!sessionId && sessions && sessions.length > 0) {
-      setSessionId(sessions[0].id);
-    }
-  }, [sessions, sessionId]);
-
   const ensureSession = async () => {
-    if (sessionId) return sessionId;
+    if (activeSessionId) return activeSessionId;
     const created = await createSession.mutateAsync(sessionDefaults);
     setSessionId(created.id);
     return created.id;
@@ -143,7 +140,7 @@ export const CopilotSupportBox: React.FC<Props> = ({
           <Box sx={{ px: 1.5, py: 1, display: 'flex', gap: 1, alignItems: 'center' }}>
             <FormControl size="small" sx={{ flex: 1, minWidth: 0 }}>
               <Select
-                value={sessionId ?? ''}
+                value={activeSessionId ?? ''}
                 displayEmpty
                 onChange={(e) => setSessionId(Number(e.target.value) || null)}
                 sx={{ fontSize: '0.75rem' }}
