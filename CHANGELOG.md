@@ -1,5 +1,19 @@
 # Changelog
 
+### [v3.8.0] - 2026-11-12
+
+#### Added
+
+- **Assessment Copilot (local pentest LLM)**:
+  - Separate compose profile `copilot` with `assessment-ollama` + `assessment-copilot` sidecar — fully isolated from AI Hub / LLM Toolkit enrichment (`LLMConfig` / Hub `ollama` untouched).
+  - Django `copilot` app: project settings (memory scope project/org/global/tiered), saved chat sessions, and operator-gated action proposals (validate, SAFE PoC, follow-up, remediation).
+  - Approve delegates into existing `SafePocAttempt` / `FollowupPlan` / `agent_enrichment` + `Vulnerability.remediation` paths so current reporting picks up proof and remediations; never auto-sets `verified`.
+  - Temporal best-effort indexing after scan complete (`CopilotIndexWorkflow` / `IndexScanForCopilotActivity`, fire-and-forget).
+  - UI: assessment dashboard Copilot tab, global bottom-right FAB support box (Chat with save/switch conversations + Proposals approve/reject), Settings → Assessment Copilot.
+  - Follow-up `run_tool` steps round-trip validated `tool_args` (REST/MCP Django path); docs note sidecar schema sync.
+  - Docs: `documents/assessment-copilot.md`. Metasploit module integration deferred to v2.
+  - Enable with `make up-copilot` or `COMPOSE_PROFILES=...,copilot`; migrate `copilot.0001_initial`.
+
 ### [v3.7.9] - 2026-10-09
 
 #### Fixed
@@ -11,6 +25,8 @@
 - **Lighthouse cancel/abort**: `performance_benchmark` runs Lighthouse via `run_command` (watchdog + `cancel_event`) and stops the URL loop on abort instead of waiting out raw `subprocess.run` timeouts.
 
 #### Added
+
+- **s3scanner misconfigured buckets as findings**: public ACL hits (`perm_all_users_*`) now also create `Vulnerability` rows (`source=s3scanner`, template `s3scanner-public-acl`) alongside the existing `S3Bucket` association — write/full-control → high, read → medium — so buckets show up in the findings list without a separate buckets-only view.
 
 - **PHP2Shell / Node2Shell vulnerability scanners (Tier 6)**:
   - Assetnote de-fanged detectors for [php2shell](https://github.com/assetnote/php2shell-scanner) (CVE-2026-109618 / CVE-2026-109619) and [node2shell](https://github.com/assetnote/node2shell-scanner) (CVE-2026-111497) — detection only, no PoC/command execution.
