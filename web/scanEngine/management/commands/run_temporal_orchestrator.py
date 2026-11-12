@@ -307,7 +307,8 @@ _STARTUP_SYNC_TASKS = [
     ("sync_semgrep_rules", 30, False),
     ("recover_stuck_scans", 30, True),
     ("sync_cve_data", 300, False),
-    ("sync_epss_data", 10, False),
+    # EPSS full-catalog sync is daily at 08:00 only — avoid stacking a
+    # ~200k-row upsert with recover/CVE work on every orchestrator restart.
 ]
 
 

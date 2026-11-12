@@ -42,7 +42,8 @@ from api.serializers.domains import (
     DomainSerializer, OrganizationSerializer, OrganizationTargetsSerializer,
 )
 from api.serializers.scans import (
-    SubScanResultSerializer, SubScanSerializer, CommandSerializer, ScanHistorySerializer,
+    SubScanResultSerializer, SubScanSerializer, SubScanStatusSerializer,
+    CommandSerializer, ScanHistorySerializer, ScanHistoryListSerializer,
     ScanActivitySerializer,
 )
 from api.serializers.recon_notes import ReconNoteSerializer

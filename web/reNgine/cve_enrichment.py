@@ -248,12 +248,15 @@ class CVEEnrichmentService:
 
     def sync_epss_catalog(self) -> Dict[str, int]:
         """
-        Synchronize local EpssFeedData records with the official EPSS data feed.
-        Downloads the gzipped CSV from FIRST/Cyentia, drops the old table, and inserts
-        the fresh batch.
+        Synchronize local EpssFeedData with the official EPSS feed.
+
+        Upserts by primary key (cve_id) so we avoid a full-table DELETE + reload
+        that floods WAL and fights Temporal history writes on a shared disk.
+        Rows not seen in this sync (stale CVEs) are removed afterward.
         """
         logger.info("Synchronizing EPSS catalog...")
         from startScan.models import EpssFeedData
+        from django.utils import timezone
         import gzip
         import csv
         import io
@@ -262,58 +265,99 @@ class CVEEnrichmentService:
             response = requests.get(self.EPSS_FEED_URL, timeout=30)
             response.raise_for_status()
 
-            # Read and decompress
-            with gzip.GzipFile(fileobj=io.BytesIO(response.content)) as gz:
-                content = gz.read().decode('utf-8')
-
-            # The EPSS CSV has a few metadata lines starting with '#', so filter them out
-            lines = content.splitlines()
-            data_lines = [line for line in lines if not line.startswith('#')]
-
-            if not data_lines:
-                logger.error("EPSS CSV feed is empty or invalid.")
-                return {'inserted': 0, 'errors': 1}
-
-            # Typically the first non-comment line is the header: cve,epss,percentile
-            # Ensure we are skipping the header by checking the first line
-            if "cve" in data_lines[0].lower():
-                data_lines.pop(0)
-
-            # Parse rows
-            reader = csv.reader(data_lines)
-            batch = []
+            sync_started = timezone.now()
+            prior_count = EpssFeedData.objects.count()
+            batch: list = []
             batch_size = 10000
+            upserted_count = 0
+            header_seen = False
 
-            # Truncate old data
-            EpssFeedData.objects.all().delete()
-            
-            inserted_count = 0
+            with gzip.GzipFile(fileobj=io.BytesIO(response.content)) as gz:
+                text_stream = io.TextIOWrapper(gz, encoding='utf-8', newline='')
+                reader = csv.reader(
+                    line for line in text_stream if line and not line.startswith('#')
+                )
 
-            for row in reader:
-                if len(row) >= 3:
+                for row in reader:
+                    if not header_seen:
+                        header_seen = True
+                        if row and 'cve' in row[0].lower():
+                            continue
+
+                    if len(row) < 3:
+                        continue
                     cve_id = row[0].strip()
+                    if not cve_id:
+                        continue
                     try:
                         epss_score = float(row[1])
-                        epss_percentile = float(row[2]) * 100.0  # Convert to percentage format like API
-                        batch.append(EpssFeedData(
-                            cve_id=cve_id,
-                            epss_score=epss_score,
-                            epss_percentile=epss_percentile
-                        ))
+                        # Convert to percentage format like the FIRST API
+                        epss_percentile = float(row[2]) * 100.0
                     except ValueError:
                         continue
 
-                if len(batch) >= batch_size:
-                    EpssFeedData.objects.bulk_create(batch, ignore_conflicts=True)
-                    inserted_count += len(batch)
-                    batch = []
+                    batch.append(EpssFeedData(
+                        cve_id=cve_id,
+                        epss_score=epss_score,
+                        epss_percentile=epss_percentile,
+                        date_fetched=sync_started,
+                    ))
+
+                    if len(batch) >= batch_size:
+                        EpssFeedData.objects.bulk_create(
+                            batch,
+                            update_conflicts=True,
+                            unique_fields=['cve_id'],
+                            update_fields=['epss_score', 'epss_percentile', 'date_fetched'],
+                        )
+                        upserted_count += len(batch)
+                        batch = []
 
             if batch:
-                EpssFeedData.objects.bulk_create(batch, ignore_conflicts=True)
-                inserted_count += len(batch)
+                EpssFeedData.objects.bulk_create(
+                    batch,
+                    update_conflicts=True,
+                    unique_fields=['cve_id'],
+                    update_fields=['epss_score', 'epss_percentile', 'date_fetched'],
+                )
+                upserted_count += len(batch)
 
-            logger.info("EPSS catalog sync complete: %s records inserted.", inserted_count)
-            return {'inserted': inserted_count, 'errors': 0}
+            # Never wipe the table on an empty/header-only feed.
+            if upserted_count == 0:
+                logger.error("EPSS CSV feed is empty or invalid.")
+                return {'inserted': 0, 'errors': 1}
+
+            # A truncated gzip can still parse some rows. Refuse stale-delete
+            # unless this sync is within ~10% of the prior catalog size (first
+            # fill when the table was empty always proceeds).
+            min_full_catalog = int(prior_count * 0.9) if prior_count else 0
+            if prior_count and upserted_count < min_full_catalog:
+                logger.error(
+                    "EPSS feed looks truncated (%s upserted vs %s prior); "
+                    "skipping stale delete to preserve existing catalog.",
+                    upserted_count,
+                    prior_count,
+                )
+                return {
+                    'inserted': upserted_count,
+                    'deleted': 0,
+                    'errors': 1,
+                }
+
+            stale_deleted, _ = EpssFeedData.objects.filter(
+                date_fetched__lt=sync_started
+            ).delete()
+
+            logger.info(
+                "EPSS catalog sync complete: %s records upserted, %s stale removed.",
+                upserted_count,
+                stale_deleted,
+            )
+            return {
+                'inserted': upserted_count,
+                'deleted': stale_deleted,
+                'errors': 0,
+            }
 
         except Exception as e:
             logger.error("Failed to synchronize EPSS catalog: %s", e)

@@ -27,6 +27,31 @@ services:
         reservations:
           memory: 512M
 
+  # Temporal persistence is isolated from the Django app DB (same as prod compose).
+  db-temporal:
+    restart: always
+    image: "postgres:16-alpine"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=temporal
+    volumes:
+      - postgres_temporal_data:/var/lib/postgresql/data/
+    networks:
+      - r3ngine_network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d temporal" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+
   redis:
     restart: always
     image: "redis:8.10-alpine"
@@ -218,11 +243,11 @@ services:
       - DB_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PWD=${POSTGRES_PASSWORD}
-      - POSTGRES_SEEDS=db
+      - POSTGRES_SEEDS=db-temporal
     volumes:
       - ./temporal/setup-schema.sh:/scripts/setup-schema.sh:ro
     depends_on:
-      db:
+      db-temporal:
         condition: service_healthy
     networks:
       - r3ngine_network
@@ -237,11 +262,11 @@ services:
       - DB_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PWD=${POSTGRES_PASSWORD}
-      - POSTGRES_SEEDS=db
+      - POSTGRES_SEEDS=db-temporal
     volumes:
       - ./temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
     depends_on:
-      db:
+      db-temporal:
         condition: service_healthy
       temporal-schema:
         condition: service_completed_successfully
@@ -396,6 +421,8 @@ volumes:
     name: r3ngine_tool_config
   postgres_data:
     name: r3ngine_postgres_data
+  postgres_temporal_data:
+    name: r3ngine_postgres_temporal_data
   gf_patterns:
     name: r3ngine_gf_patterns
   nuclei_templates:

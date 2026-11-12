@@ -14,7 +14,8 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from api.serializers import ScanHistorySerializer, SubScanSerializer
+from api.serializers import ScanHistoryListSerializer, ScanHistorySerializer
+from api.serializers.scans import SubScanStatusSerializer
 from api.views import ScanStatus
 from dashboard.models import Project
 from reNgine.definitions import RUNNING_TASK, SUCCESS_TASK
@@ -69,13 +70,13 @@ class ScanStatusQueryCountTests(TestCase):
 	def _scan_cost(self):
 		queryset = ScanStatus()._scan_queryset(SLUG).filter(scan_status=RUNNING_TASK)
 		with CaptureQueriesContext(connection) as captured:
-			ScanHistorySerializer(queryset, many=True).data
+			ScanHistoryListSerializer(queryset, many=True).data
 		return len(captured)
 
 	def _task_cost(self):
 		queryset = ScanStatus()._task_queryset(SLUG).filter(status=RUNNING_TASK)
 		with CaptureQueriesContext(connection) as captured:
-			SubScanSerializer(queryset, many=True).data
+			SubScanStatusSerializer(queryset, many=True).data
 		return len(captured)
 
 	def test_scan_serialization_cost_is_flat(self):
@@ -88,7 +89,7 @@ class ScanStatusQueryCountTests(TestCase):
 		self.assertEqual(
 			one, five,
 			f'serializing five scans cost {five} queries against {one} for one. '
-			'A ScanHistorySerializer method field has regressed into a per-row '
+			'A ScanHistoryListSerializer method field has regressed into a per-row '
 			'query, or an annotation was dropped from ScanStatus._scan_queryset.'
 		)
 
@@ -102,7 +103,7 @@ class ScanStatusQueryCountTests(TestCase):
 		self.assertEqual(
 			one, five,
 			f'serializing five subscans cost {five} queries against {one} for '
-			'one. A SubScanSerializer field has regressed into a per-row query, '
+			'one. A SubScanStatusSerializer field has regressed into a per-row query, '
 			'or a select_related was dropped from ScanStatus._task_queryset.'
 		)
 
@@ -111,7 +112,7 @@ class ScanStatusQueryCountTests(TestCase):
 		self._add_scans(1)
 		scan = ScanHistory.objects.get()
 
-		annotated = ScanHistorySerializer(
+		annotated = ScanHistoryListSerializer(
 			ScanStatus()._scan_queryset(SLUG).get(pk=scan.pk)
 		).data
 		plain = ScanHistorySerializer(ScanHistory.objects.get(pk=scan.pk)).data

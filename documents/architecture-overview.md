@@ -76,7 +76,7 @@ r3ngine is a modular, containerized reconnaissance and vulnerability assessment 
 ### `temporal` (Temporal Server)
 
 - **Version:** OSS Temporal Server
-- **Storage:** PostgreSQL (shared with Django)
+- **Storage:** Dedicated PostgreSQL (`db-temporal` / `r3ngine_postgres_temporal_data`), separate from the Django app DB (`db`). Isolates workflow `history_node` WAL from scan OLTP and catalog syncs.
 - **UI:** Available at `:8080` (Temporal Web UI)
 
 ### `redis`

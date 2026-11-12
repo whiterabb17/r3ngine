@@ -76,6 +76,19 @@ class ScanHistory(models.Model):
 	)
 	cfg_custom_dorks = models.TextField(blank=True, null=True)
 
+	class Meta:
+		indexes = [
+			# Project list/status polls: filter by domain + status, order by start.
+			models.Index(
+				fields=['domain', 'scan_status', '-start_scan_date'],
+				name='sh_domain_status_started_idx',
+			),
+			# Recent scans for a target (scan summary, history drawer).
+			models.Index(
+				fields=['domain', '-start_scan_date'],
+				name='sh_domain_started_idx',
+			),
+		]
 
 	def __str__(self):
 		return self.domain.name
