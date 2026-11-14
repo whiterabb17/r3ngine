@@ -567,7 +567,10 @@ def validate_tool_args(
         value = _coerce_value(entry, raw_val)
         if entry.get('type') == 'bool' and value is False:
             continue
-        sanitized[key] = value
+        # Always persist under the schema entry name (e.g. ports), not a
+        # stripped CLI form (p) or raw alias (-p), so round-trips stay stable.
+        canonical = (entry.get('name') or key).strip() or key
+        sanitized[canonical] = value
         flag = (entry.get('long_flag') or '').strip()
         # Empty long_flag => YAML-only knob (do not invent a CLI flag).
         if flag:

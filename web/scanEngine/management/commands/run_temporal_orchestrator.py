@@ -75,6 +75,8 @@ from reNgine.temporal_workflows import (
     SingleTaskRetryWorkflow,
     FollowupPlanWorkflow,
     SafePocWorkflow,
+    CopilotIndexWorkflow,
+    MsfAuxWorkflow,
     # Phase 2 — rengine-ng standalone workflows
     UserHuntWorkflow,
     URLBypassWorkflow,
@@ -130,6 +132,14 @@ from reNgine.temporal.activities.followups import (
 from reNgine.temporal.activities.safe_poc import (
     safe_poc_check_abort_activity,
     safe_poc_execute_activity,
+)
+from reNgine.temporal.activities.copilot_index import (
+    index_scan_for_copilot_activity,
+)
+from reNgine.temporal.activities.msf_aux import (
+    msf_aux_check_abort_activity,
+    msf_aux_execute_activity,
+    msf_aux_mark_failed_activity,
 )
 
 # Activities (all Python-side activities are registered here)
@@ -307,7 +317,8 @@ _STARTUP_SYNC_TASKS = [
     ("sync_semgrep_rules", 30, False),
     ("recover_stuck_scans", 30, True),
     ("sync_cve_data", 300, False),
-    ("sync_epss_data", 10, False),
+    # EPSS full-catalog sync is daily at 08:00 only — avoid stacking a
+    # ~200k-row upsert with recover/CVE work on every orchestrator restart.
 ]
 
 
@@ -745,6 +756,10 @@ class Command(BaseCommand):
                 followup_wait_workflow_activity,
                 safe_poc_check_abort_activity,
                 safe_poc_execute_activity,
+                index_scan_for_copilot_activity,
+                msf_aux_check_abort_activity,
+                msf_aux_execute_activity,
+                msf_aux_mark_failed_activity,
                 verify_evidence_integrity_activity,
                 
                 # Plugin lifecycle
@@ -781,7 +796,7 @@ class Command(BaseCommand):
                                  URLVulnWorkflow, URLAuthExtractWorkflow, AssessmentWorkflow,
                                  DiscoveryWorkflow, EnumerationWorkflow, AnalysisWorkflow,
                                  ValidationWorkflow, ReportingWorkflow]
-                all_workflows = [MasterScanWorkflow, NucleiPlannerWorkflow, SubScanWorkflow, StressTestWorkflow, StartupSyncWorkflow, ScheduledScanWorkflow, MonitoringWorkflow, GoExecutorTaskWorkflow, ApmeTaskWorkflow, RecalculateApmeWorkflow, CertificateResyncWorkflow, IdentityEnrichmentWorkflow, GeoLocalizeWorkflow, HackerOneImportWorkflow, HackerOneSyncBookmarkedWorkflow, ProxyFetchWorkflow, ToolProbeWorkflow, SingleTaskRetryWorkflow, FollowupPlanWorkflow, SafePocWorkflow] + _p2_workflows + plugin_workflows
+                all_workflows = [MasterScanWorkflow, NucleiPlannerWorkflow, SubScanWorkflow, StressTestWorkflow, StartupSyncWorkflow, ScheduledScanWorkflow, MonitoringWorkflow, GoExecutorTaskWorkflow, ApmeTaskWorkflow, RecalculateApmeWorkflow, CertificateResyncWorkflow, IdentityEnrichmentWorkflow, GeoLocalizeWorkflow, HackerOneImportWorkflow, HackerOneSyncBookmarkedWorkflow, ProxyFetchWorkflow, ToolProbeWorkflow, SingleTaskRetryWorkflow, FollowupPlanWorkflow, SafePocWorkflow, CopilotIndexWorkflow, MsfAuxWorkflow] + _p2_workflows + plugin_workflows
                 all_activities.extend(plugin_activities)
             except Exception as e:
                 logger.error("Failed to load dynamic plugin temporal exports: %s", e)
@@ -792,7 +807,7 @@ class Command(BaseCommand):
                                  URLVulnWorkflow, URLAuthExtractWorkflow, AssessmentWorkflow,
                                  DiscoveryWorkflow, EnumerationWorkflow, AnalysisWorkflow,
                                  ValidationWorkflow, ReportingWorkflow]
-                all_workflows = [MasterScanWorkflow, NucleiPlannerWorkflow, SubScanWorkflow, StressTestWorkflow, StartupSyncWorkflow, ScheduledScanWorkflow, MonitoringWorkflow, GoExecutorTaskWorkflow, ApmeTaskWorkflow, RecalculateApmeWorkflow, CertificateResyncWorkflow, IdentityEnrichmentWorkflow, GeoLocalizeWorkflow, HackerOneImportWorkflow, HackerOneSyncBookmarkedWorkflow, ProxyFetchWorkflow, ToolProbeWorkflow, SingleTaskRetryWorkflow, FollowupPlanWorkflow, SafePocWorkflow] + _p2_workflows
+                all_workflows = [MasterScanWorkflow, NucleiPlannerWorkflow, SubScanWorkflow, StressTestWorkflow, StartupSyncWorkflow, ScheduledScanWorkflow, MonitoringWorkflow, GoExecutorTaskWorkflow, ApmeTaskWorkflow, RecalculateApmeWorkflow, CertificateResyncWorkflow, IdentityEnrichmentWorkflow, GeoLocalizeWorkflow, HackerOneImportWorkflow, HackerOneSyncBookmarkedWorkflow, ProxyFetchWorkflow, ToolProbeWorkflow, SingleTaskRetryWorkflow, FollowupPlanWorkflow, SafePocWorkflow, CopilotIndexWorkflow, MsfAuxWorkflow] + _p2_workflows
 
             # -------------------------------------------------------------------
             # Start the Temporal Worker

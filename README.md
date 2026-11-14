@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="https://github.com/whiterabb17/r3ngine/releases" target="_blank">
-    <img src="https://img.shields.io/badge/version-v3.7.9-informational?&logo=none" alt="r3ngine Latest Version" />
+    <img src="https://img.shields.io/badge/version-v3.8.0-informational?&logo=none" alt="r3ngine Latest Version" />
   </a>
   &nbsp;
   <a href="https://www.gnu.org/licenses/gpl-3.0" target="_blank">
@@ -30,9 +30,9 @@
   </a>
 </p>
 
-<h3 align="center">r3ngine 3.7.9: SAFE PoC Agent &amp; Large-Scan Resilience</h3>
+<h3 align="center">r3ngine 3.8.0: Assessment Copilot</h3>
 <p>
-  r3ngine v3.7.9 adds the <b>SAFE PoC agent</b> — catalog-only probes via propose → operator approve → Temporal <code>SafePocWorkflow</code> (sidecar <b>v1.5.0</b>, specialist <code>r3ngine-safe-poc</code>). Templates stay server-side (<code>marker_reflect</code>, <code>calc_echo</code>, <code>authz_status_delta</code>, <code>open_redirect_safe</code>, <code>flag_canary_read</code>); direct run returns <b>410</b>; PoC success never auto-sets <code>verified</code>. This release also hardens large scans (isolated tool failures, batched directory fuzzing, duplicate-host skipping) and keeps MCP defense-in-depth: hashed keys, sessions, audit redaction, plugin-gated tools, and JWT/UI-only operator gates. Building off the original reNgine and further inspired by rengine-ng (Check out <a href="https://github.com/Security-Tools-Alliance/rengine-ng" target="_blank">rengine-ng v3</a> if you haven't!). Infrastructure remains <b>Django 5.2.3 LTS</b>, <b>PostgreSQL 16</b>, and <b>Gunicorn + Uvicorn ASGI</b>.
+  r3ngine v3.8.0 introduces the <b>Assessment Copilot</b> — a local pentest-focused LLM that runs beside the stack via sibling <code>r3ngine-copilot</code> (<code>make install-copilot</code> / <code>COMPOSE_PROFILES=copilot</code>), separate from AI Hub enrichment while sharing the stack <code>ollama</code> service. Operators chat from a global FAB or the assessment dashboard, save conversations, review Trace, and approve proposals (SAFE PoC, follow-up, validation, remediation, allowlisted Metasploit auxiliary/post) for client-ready proof. Tier 6 also gains a <b>nuclei hang watchdog</b> in the go-executor (stall / hang-monitor dump / wall-clock kill) with same-tag retry so stuck nuclei batches no longer burn the scan budget. Builds on v3.7.9’s SAFE PoC agent, large-scan resilience, and MCP defense-in-depth. Building off the original reNgine and further inspired by rengine-ng (Check out <a href="https://github.com/Security-Tools-Alliance/rengine-ng" target="_blank">rengine-ng v3</a> if you haven't!). Infrastructure remains <b>Django 5.2.3 LTS</b>, <b>PostgreSQL 16</b>, and <b>Gunicorn + Uvicorn ASGI</b>.
 </p>
 
 ![-----------------------------------------------------](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/aqua.png)
@@ -85,7 +85,7 @@ The plugin system supports dynamic installation, signed `.r3n` packages with Ed2
   </a>
   &nbsp;
   <a href="https://github.com/whiterabb17/r3ngine-mcp/releases" target="_blank">
-    <img src="https://img.shields.io/badge/compatible_with-r3ngine_v3.7.9+-warning.svg?logo=none" alt="Compatible with r3ngine v3.7.9+" />
+    <img src="https://img.shields.io/badge/compatible_with-r3ngine_v3.8.0+-warning.svg?logo=none" alt="Compatible with r3ngine v3.8.0+" />
   </a>
   &nbsp;
   <a href="https://modelcontextprotocol.io" target="_blank">
@@ -176,6 +176,8 @@ r3ngine is a production-grade web reconnaissance and vulnerability scanning plat
 🧠&nbsp;&nbsp; **CVE Intelligence**: automatic CVSS v3.1 scoring from NVD, EPSS exploitation probability from FIRST, and CISA KEV marking — enriched on every startup and queryable via the API.
 
 🤖&nbsp;&nbsp; **Local LLM Orchestration**: Run Ollama next to the stack as an opt-in compose service (`COMPOSE_PROFILES=ollama`) and manage its models from the LLM Toolkit dashboard to power offline vulnerability risk assessments, mitigation strategy generation, and intelligent reporting without leaving your infrastructure.
+
+🧭&nbsp;&nbsp; **Assessment Copilot**: Separate local pentest co-pilot (`COMPOSE_PROFILES=copilot` / `make up-copilot`) for gathering context, proposing validations, SAFE PoC evidence, follow-up tool pivots, and short/long remediations — with operator approve into existing persistence, a global FAB chat box, and an assessment dashboard panel. Distinct from AI Hub enrichment.
 
 📃&nbsp;&nbsp; **PDF Reports**: Full Scan, Vulnerability, and OSINT report types with customizable templates, executive summaries, LLM-generated impact narratives, and remediation priorities.
 

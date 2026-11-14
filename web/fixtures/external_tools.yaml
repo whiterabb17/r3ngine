@@ -819,12 +819,12 @@
     logo_url: https://testssl.sh/images/testssl.sh.png
     name: testssl.sh
     description: "testssl.sh is a comprehensive TLS/SSL testing tool that checks a server's service on any port for the support of TLS/SSL ciphers, protocols and cryptographic flaws. Covers BEAST, BREACH, POODLE, ROBOT, DROWN, Heartbleed, CRIME, LUCKY13, SWEET32, Logjam and FREAK."
-    github_url: https://github.com/drwetter/testssl.sh
-    license_url: https://github.com/drwetter/testssl.sh/blob/3.2/LICENSE
+    github_url: https://github.com/testssl/testssl.sh
+    license_url: https://github.com/testssl/testssl.sh/blob/3.2/LICENSE
     version_lookup_command: testssl.sh --version
     version_match_regex: "v?\\d+\\.\\d+"
-    install_command: "git clone --depth 1 https://github.com/drwetter/testssl.sh /usr/src/github/testssl.sh && chmod +x /usr/src/github/testssl.sh/testssl.sh"
-    update_command: "cd /usr/src/github/testssl.sh && git pull"
+    install_command: "git clone --depth 1 --branch 3.2 https://github.com/testssl/testssl.sh.git /usr/src/github/testssl.sh && chmod +x /usr/src/github/testssl.sh/testssl.sh"
+    update_command: "cd /usr/src/github/testssl.sh && git pull origin 3.2"
     is_default: true
     is_subdomain_gathering: false
     is_github_cloned: true

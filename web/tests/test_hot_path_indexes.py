@@ -15,12 +15,33 @@ No fixtures are created — these are schema-level assertions.
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 
-from startScan.models import CweId, ScanActivity, Vulnerability, VulnerabilityTags
+from startScan.models import (
+    CweId, ScanActivity, ScanHistory, Vulnerability, VulnerabilityTags,
+)
 
 
 def _index_map(model) -> dict:
     """Map ``{index name: tuple of fields}`` for a model's ``Meta.indexes``."""
     return {index.name: tuple(index.fields) for index in model._meta.indexes}
+
+
+class TestScanHistoryIndexes(TestCase):
+    """List/status poll filters on domain + status + start date."""
+
+    def setUp(self):
+        self.indexes = _index_map(ScanHistory)
+
+    def test_domain_status_started_index(self):
+        self.assertEqual(
+            self.indexes.get('sh_domain_status_started_idx'),
+            ('domain', 'scan_status', '-start_scan_date'),
+        )
+
+    def test_domain_started_index(self):
+        self.assertEqual(
+            self.indexes.get('sh_domain_started_idx'),
+            ('domain', '-start_scan_date'),
+        )
 
 
 class TestScanActivityIndexes(TestCase):

@@ -807,20 +807,21 @@ def update_vuln_validation_status(request, id):
     return JsonResponse({'status': False})
 
 
-# TODO Update function to use uc driver to fetch sources
-# to avoid the existing fetch errors of exploit and pocs
 def fetch_exploit_source(request, id):
     """Fetch and return the text content of a vulnerability's exploit URL.
 
     Uses undetected-chromedriver + Xvfb to bypass Cloudflare and similar bot
-    protection on packetstorm, githubexploit, seebug, 1337day, and exploit-db
-    pages.  Content is truncated to 50 000 characters by the scraper.
+    protection on packetstorm, githubexploit, seebug, 1337day, exploit-db,
+    and vulners pages.  Content is truncated to 50 000 characters by the scraper.
+    Vulners hosts may also return structured ``meta`` (title, scores, tags, related).
+
+    UC sessions are independent of HIBP scraping (no shared Chrome driver).
 
     Args:
         id (int): Vulnerability primary key.
 
     Returns:
-        JsonResponse: {status, content} on success or {status, error} on failure.
+        JsonResponse: {status, content, meta?} on success or {status, error} on failure.
     """
     from reNgine.osint.exploit_scraper import fetch_exploit_with_retries
 
@@ -841,10 +842,13 @@ def fetch_exploit_source(request, id):
 
     result = fetch_exploit_with_retries(vuln.exploit_url)
     if result.get('success'):
-        return JsonResponse({
+        payload = {
             'status': True,
-            'content': result['content']
-        })
+            'content': result['content'],
+        }
+        if result.get('meta') is not None:
+            payload['meta'] = result['meta']
+        return JsonResponse(payload)
     return JsonResponse({
         'status': False,
         'error': result.get('error', 'Unknown error fetching exploit source.')

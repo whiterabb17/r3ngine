@@ -7,6 +7,9 @@
 # changes nothing. Temporal only supports moving a database one minor release
 # at a time, so an older schema is not upgraded here: that is
 # scripts/temporal_upgrade.sh (documents/upgrading-infrastructure.md).
+#
+# POSTGRES_SEEDS is the Temporal Postgres host (compose service db-temporal),
+# not the Django app database (db).
 set -eu
 
 : "${POSTGRES_SEEDS:?POSTGRES_SEEDS is required}"

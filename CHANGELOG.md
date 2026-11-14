@@ -1,8 +1,46 @@
 # Changelog
 
-### [v3.7.9] - 2026-10-09
+### [v3.8.0] - 2026-11-14
 
 #### Added
+
+- **Assessment Copilot (local pentest LLM)**:
+  - Compose profile `copilot` with `assessment-copilot` sidecar (sibling repo `r3ngine-copilot`); inference reuses shared Hub `ollama` (`r3ngine-ollama`). Chat/proposal paths stay separate from AI Hub enrichment (`LLMConfig`).
+  - Django `copilot` app: project settings (memory scope project/org/global/tiered), saved chat sessions, and operator-gated action proposals (validate, SAFE PoC, follow-up, remediation).
+  - Approve delegates into existing `SafePocAttempt` / `FollowupPlan` / `agent_enrichment` + `Vulnerability.remediation` paths so current reporting picks up proof and remediations; never auto-sets `verified`.
+  - Temporal best-effort indexing after scan complete (`CopilotIndexWorkflow` / `IndexScanForCopilotActivity`, fire-and-forget).
+  - UI: assessment dashboard Copilot tab, global bottom-right FAB support box (Chat with save/switch conversations + Proposals approve/reject), Settings → Assessment Copilot.
+  - Follow-up `run_tool` steps round-trip validated `tool_args` (REST/MCP Django path); docs note sidecar schema sync.
+  - Docs: `documents/assessment-copilot.md`, `documents/assessment-copilot-msf.md`.
+  - Enable with `make install-copilot` / `make up-copilot` or `COMPOSE_PROFILES=...,ollama,copilot`; migrate `copilot` (incl. Trace + `MsfAuxAttempt`).
+  - Make targets: `install-copilot` clones sibling `r3ngine-copilot`, syncs MSF catalog into `web/copilot/data/`, enables `ollama`+`copilot`, starts shared ollama if down, builds/starts sidecar; `update-copilot` / `stop-copilot` MCP-style. Helpers: `scripts/install-copilot.mjs`, `scripts/copilot-stack.mjs`.
+  - **Copilot v2 MSF + Trace**: allowlisted `msf_module` proposals; recommend vs gated `MsfAuxWorkflow` (MSFRPC console-only); FAB Trace tab; plugin deep-link `Open in Metasploit`.
+  - MSF hardening: project-scoped vuln RHOSTS checks, execution claim (no duplicate RPC on retry), Temporal `maximum_attempts=1` + `MsfAuxMarkFailedActivity` on timeout, abort cancels workflow and polls console, option values reject control characters, recommend mode requires `vulnerability_id`.
+
+- **Nuclei hang watchdog (go-executor + tag retry)**:
+  - Go-executor stall detector for nuclei: kills the process group after `NUCLEI_STALL_TIMEOUT_SECONDS` (default 900) with no progress (idle lines or stuck `-stats`).
+  - Watches the scan `results_dir` for nuclei `-hang-monitor` dumps (`*-stacktrace-*.dump`, `crash-resume-file-*.dump`), kills on appearance, snips dump into stderr, and re-checks dumps after process exit so self-exits are not missed.
+  - Local wall-clock enforcement of `timeout_seconds` in go-executor (`WATCHDOG_TIMEOUT_KILL`) in addition to Temporal `start_to_close`.
+  - `nuclei_scan` retries the same tag batch on `WATCHDOG_STALL_KILL` up to `NUCLEI_HANG_MAX_ATTEMPTS` (default 2), then soft-skips so `NucleiPlannerWorkflow` continues to the next batch; wall-timeout kills soft-skip without retry.
+  - Env knobs: `NUCLEI_STALL_TIMEOUT_SECONDS`, `NUCLEI_HANG_MAX_ATTEMPTS`. Requires a **go-executor** image rebuild + recreate for the watchdog to be live.
+
+#### Fixed
+
+- **Hung nuclei tag batches no longer sit for hours**: processes that heartbeat but make no progress (0% CPU / empty stdout / hang-monitor dumps) are killed and retried instead of consuming the Tier 6 stage budget until soft cancel.
+
+### [v3.7.9] - 2026-10-09
+
+#### Fixed
+
+- **WAF bypass false positives**: header probes no longer persist on the first non-403 response. `WafBypassOrchestrator` now requires a blocked baseline, a clearly allowed candidate (not 5xx), and two confirmation rounds before creating `WafBypassFinding` rows; soft-block challenge pages (same HTTP status, different body) are supported.
+- **Mobile LAN login**: nginx `:8082` now proxies `/mapi/` and `/ws/` over cleartext instead of 308-upgrading everything to HTTPS. Real devices on the local network were failing login because `8000` is loopback-only and the self-signed `:443` cert is rejected by the phone. Use `http://<lan-ip>:8082` in the app. Reload the proxy after pulling (`docker exec r3ngine-proxy-1 nginx -s reload`).
+- **SpiderFoot staging flush**: `_process_spiderfoot_batch` always drains Redis pending staging in `finally`, plus an end-of-task safety-net flush, so a mid-batch DB failure cannot leave moderate-confidence rows invisible.
+- **Julius TLS retry**: drop invalid `--no-banner` from the insecure retry command so certificate-error retries still produce `julius.jsonl`.
+- **Lighthouse cancel/abort**: `performance_benchmark` runs Lighthouse via `run_command` (watchdog + `cancel_event`) and stops the URL loop on abort instead of waiting out raw `subprocess.run` timeouts.
+
+#### Added
+
+- **s3scanner misconfigured buckets as findings**: public ACL hits (`perm_all_users_*`) now also create `Vulnerability` rows (`source=s3scanner`, template `s3scanner-public-acl`) alongside the existing `S3Bucket` association — write/full-control → high, read → medium — so buckets show up in the findings list without a separate buckets-only view. `save_vulnerability` only registers `AuthCandidate` for `http`/`https` URLs so `s3://…` bucket findings (e.g. names containing `admin`) do not spawn bogus brute-force targets.
 
 - **PHP2Shell / Node2Shell vulnerability scanners (Tier 6)**:
   - Assetnote de-fanged detectors for [php2shell](https://github.com/assetnote/php2shell-scanner) (CVE-2026-109618 / CVE-2026-109619) and [node2shell](https://github.com/assetnote/node2shell-scanner) (CVE-2026-111497) — detection only, no PoC/command execution.
@@ -67,6 +105,19 @@
 - **Quieter local/CI tests (PR #135)**: console defaults to errors-only (~700 lines vs ~9,600); override with `RENGINE_TEST_LOG_LEVEL`.
 
 #### Fixed
+
+- **OsintStaging Redis queue + dedupe**:
+  - Concurrent gosearch / SpiderFoot / Spoofy writers enqueue into Redis (`osint:staging:pending:{scan_id}`) keyed by `(osint_type, content)` before any DB write; flush under a Redis lock upserts rows and collapses legacy duplicates.
+  - Re-flush no longer resets `validated` / `ignored` triage back to `pending`; missing `target_domain_id` falls back to the scan domain.
+
+- **Email security DNS hardening**:
+  - Transient DNS failures (timeout / SERVFAIL) are inconclusive — no longer reported as missing SPF/DMARC/DKIM.
+  - Multi-string TXT rdata is joined correctly; weak SPF softfail is suppressed when DMARC is enforcing (`reject` / `quarantine`).
+
+- **`run_command` time-limit / abort watchdog**:
+  - Quiet tools (e.g. smugglex writing only to `-o`) no longer block forever on `readline()` after Temporal soft `TIME_LIMIT`.
+  - Daemon watchdog kills the process group from start on wall-clock timeout, `cancel_event`, or scan abort, and closes stdout so the caller unblocks.
+  - DB abort is reported as return code `-1`, not mislabeled as timeout `124`.
 
 - **Acunetix scan outcomes (PR #133, merge caveats)**:
   - Import findings when an AWVS scan ends `completed`, `failed`, or `aborted`; `failed` still fails the step (retry starts a new scan).

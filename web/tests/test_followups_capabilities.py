@@ -106,6 +106,22 @@ class FollowupPlanServiceTests(TestCase):
         with self.assertRaises(FollowupError):
             normalize_steps(steps)
 
+    def test_normalize_steps_preserves_tool_args(self):
+        """Co-pilot / MCP propose path must round-trip tool_args on run_tool steps."""
+        steps = [
+            {
+                'kind': 'run_tool',
+                'tool': 'port_scan',
+                'asset_type': 'subdomain',
+                'asset_id': self.sub.id,
+                'scan_history_id': self.scan.id,
+                'tool_args': {'-p': '80,443'},
+            }
+        ]
+        normalized = normalize_steps(steps)
+        # validate_tool_args canonicalizes aliases (-p) to the schema name (ports).
+        self.assertEqual(normalized[0].get('tool_args'), {'ports': '80,443'})
+
     def test_propose_and_operator_lock(self):
         steps = [
             {
@@ -287,6 +303,26 @@ class McpCapabilitiesApiTests(TestCase):
         self.assertEqual(plan['status'], 'proposed')
         get_res = self.client.get(f"/api/mcp/followups/{plan['id']}/")
         self.assertEqual(get_res.status_code, 200)
+
+    def test_propose_followups_with_tool_args(self):
+        res = self.client.post('/api/mcp/followups/propose/', {
+            'project_slug': 'cap-project',
+            'scan_id': self.scan.id,
+            'rationale': 'targeted ports',
+            'steps': [
+                {
+                    'kind': 'run_tool',
+                    'tool': 'port_scan',
+                    'asset_type': 'subdomain',
+                    'asset_id': self.sub.id,
+                    'scan_history_id': self.scan.id,
+                    'tool_args': {'-p': '443'},
+                }
+            ],
+        }, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        plan = res.json()['plan']
+        self.assertEqual(plan['steps'][0].get('tool_args'), {'ports': '443'})
 
 
 class SubscanRetryParityTests(TestCase):

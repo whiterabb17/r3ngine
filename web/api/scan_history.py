@@ -1,20 +1,38 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from startScan.models import ScanHistory, EngineType, Domain
-from .serializers import ScanHistorySerializer
+from .serializers import ScanHistorySerializer, ScanHistoryListSerializer
 from .serializers.scans import with_scan_history_serializer_data
 import logging
 from reNgine.definitions import INTERNAL_ERROR_MESSAGE
 
 logger = logging.getLogger(__name__)
 
+
+class ScanHistoryPagePagination(PageNumberPagination):
+    # Match prior PAGE_SIZE capacity so ScanHistoryPage is not truncated;
+    # clients may still request a smaller page via page_size.
+    page_size = 500
+    page_size_query_param = 'page_size'
+    max_page_size = 500
+
+
 class ScanHistoryViewSet(viewsets.ModelViewSet):
     serializer_class = ScanHistorySerializer
+    pagination_class = ScanHistoryPagePagination
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ScanHistoryListSerializer
+        return ScanHistorySerializer
 
     def get_queryset(self):
-        queryset = with_scan_history_serializer_data(ScanHistory.objects.all()).order_by('-id')
+        queryset = with_scan_history_serializer_data(
+            ScanHistory.objects.all()
+        ).order_by('-start_scan_date')
         project = self.request.query_params.get('project')
         target_id = self.request.query_params.get('target_id')
         if project:

@@ -30,6 +30,8 @@ class TestRunSpoofcheck(TestCase):
         installed = patch('reNgine.osint.domain_security._spoofy_installed', return_value=True)
         installed.start()
         self.addCleanup(installed.stop)
+        from tests.redis_fakes import patch_osint_staging_redis
+        patch_osint_staging_redis(self)
         self.domain = Domain.objects.create(name='example-test.local')
         engine = EngineType.objects.create(
             engine_name='Test',

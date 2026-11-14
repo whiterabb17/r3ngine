@@ -76,7 +76,7 @@ r3ngine is a modular, containerized reconnaissance and vulnerability assessment 
 ### `temporal` (Temporal Server)
 
 - **Version:** OSS Temporal Server
-- **Storage:** PostgreSQL (shared with Django)
+- **Storage:** Dedicated PostgreSQL (`db-temporal` / `r3ngine_postgres_temporal_data`), separate from the Django app DB (`db`). Isolates workflow `history_node` WAL from scan OLTP and catalog syncs.
 - **UI:** Available at `:8080` (Temporal Web UI)
 
 ### `redis`
@@ -96,16 +96,17 @@ Graph database for:
 
 ## Optional Services (compose profiles)
 
-Two services are opt-in and sit behind compose `profiles` in
-`docker/docker-compose.yml`. Set `COMPOSE_PROFILES=tor,ollama` in `.env` and the
+Optional services sit behind compose `profiles` in
+`docker/docker-compose.yml`. Set `COMPOSE_PROFILES=tor,ollama,copilot` in `.env` and the
 Makefile includes them in `make up`, `make stop`, `make logs`, …; `make up-tor` /
-`make up-ollama` start one without editing `.env` (`make.bat` has the same
+`make up-ollama` / `make up-copilot` start one without editing `.env` (`make.bat` has the same
 targets, since it cannot read `.env`).
 
 | Service | Profile | Used by | The app's view of it |
 |---|---|---|---|
 | `tor` (built from `web/tor/`) | `tor` | "TOR Mode" in Settings → Proxy; `TorNewCircuitActivity` between scan phases | `reNgine/tor_manager.py` — TCP probe of `tor:9050`, NEWNYM over `tor:9051` with `TOR_CONTROL_PASSWORD` |
-| `ollama` (built from `docker/ollama/`, `OLLAMA_DOCKERFILE` picks the GPU variant) | `ollama` | LLM Toolkit local models (`http://ollama:11434`) | `reNgine/ollama_manager.py` — `GET /api/version` |
+| `ollama` (built from `docker/ollama/`, `OLLAMA_DOCKERFILE` picks the GPU variant) | `ollama` | LLM Toolkit + Assessment Copilot inference (`http://ollama:11434`) | `reNgine/ollama_manager.py` — `GET /api/version` |
+| `assessment-copilot` (built from sibling `../r3ngine-copilot`) | `copilot` | Assessment Copilot sidecar (chat, SAFE PoC / follow-up proposals; reuses shared `ollama`) | `ASSESSMENT_COPILOT_URL` (`http://assessment-copilot:8091`); see `documents/assessment-copilot.md` |
 
 The application never starts or stops these containers. When a service is
 down, the UI (TOR Mode card, Ollama service status) shows the `hint` from the

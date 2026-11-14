@@ -196,6 +196,34 @@ if [ ! -d "/usr/src/github/scipag_vulscan" ]; then
   ln -s /usr/src/github/scipag_vulscan /usr/share/nmap/scripts/vulscan
 fi
 
+# Assetnote *2shell scanners are baked into the image under /usr/src/github, but
+# the shared github_repos volume overlays that path and keeps whatever was on
+# the volume when it was first created. Ensure missing scanners land on the
+# volume here (internal_tools.sh is not used).
+mkdir -p /usr/src/github
+ensure_github_tool() {
+  # usage: ensure_github_tool <dir-name> <git-url>
+  local name="$1" url="$2"
+  if [ ! -f "/usr/src/github/${name}/scanner.py" ]; then
+    echo "Installing ${name} into github_repos volume..."
+    rm -rf "/usr/src/github/${name}"
+    if git clone --depth 1 "$url" "/usr/src/github/${name}"; then
+      if [ -f "/usr/src/github/${name}/requirements.txt" ]; then
+        pip3 install -q -r "/usr/src/github/${name}/requirements.txt" || \
+          echo "WARNING: pip install for ${name} failed; will retry next start"
+      fi
+      rm -rf "/usr/src/github/${name}/.git"
+    else
+      echo "WARNING: could not clone ${name}; will retry next start"
+      rm -rf "/usr/src/github/${name}"
+    fi
+  fi
+}
+ensure_github_tool cpanel2shell-scanner https://github.com/assetnote/cpanel2shell-scanner
+ensure_github_tool react2shell-scanner https://github.com/assetnote/react2shell-scanner
+ensure_github_tool php2shell-scanner https://github.com/assetnote/php2shell-scanner
+ensure_github_tool node2shell-scanner https://github.com/assetnote/node2shell-scanner
+
 if [ ! -f '/usr/local/bin/kr' ]; then
   echo "Installing kiterunner"
   cd /usr/src/github

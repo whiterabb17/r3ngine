@@ -76,6 +76,19 @@ class ScanHistory(models.Model):
 	)
 	cfg_custom_dorks = models.TextField(blank=True, null=True)
 
+	class Meta:
+		indexes = [
+			# Project list/status polls: filter by domain + status, order by start.
+			models.Index(
+				fields=['domain', 'scan_status', '-start_scan_date'],
+				name='sh_domain_status_started_idx',
+			),
+			# Recent scans for a target (scan summary, history drawer).
+			models.Index(
+				fields=['domain', '-start_scan_date'],
+				name='sh_domain_started_idx',
+			),
+		]
 
 	def __str__(self):
 		return self.domain.name
@@ -1034,6 +1047,11 @@ class ImpactAssessment(models.Model):
 	potential_impact = models.TextField(null=True, blank=True)
 	remediation_priority = models.IntegerField(default=1)
 	is_ai_generated = models.BooleanField(default=False)
+	# HTML from LLM report generation; reused across regenerations for the same scan.
+	llm_report_remediation = models.TextField(null=True, blank=True)
+	# SHA-256 of the attack-chain slice used to generate llm_report_remediation.
+	# Cleared implicitly when fingerprint mismatches on next report build.
+	llm_report_remediation_fingerprint = models.CharField(max_length=64, null=True, blank=True)
 
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)

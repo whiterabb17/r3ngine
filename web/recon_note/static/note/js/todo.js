@@ -378,9 +378,10 @@ function todoItem() {
 
 function populateScanHistory(project) {
   scan_history_select = document.getElementById('scanHistoryIDropdown');
-  $.getJSON(`/api/listScanHistory/?format=json&project=${project}`, function(data) {
-    for (var history in data){
-      history_object = data[history];
+  $.getJSON(`/api/listScanHistory/?format=json&project=${project}&limit=500`, function(data) {
+    var rows = Array.isArray(data) ? data : (data.results || []);
+    for (var i = 0; i < rows.length; i++) {
+      var history_object = rows[i];
       var option = document.createElement('option');
       option.value = history_object['id'];
       option.innerHTML = history_object['domain']['name'] + ' - Scanned ' + moment.utc(history_object['start_scan_date']).fromNow();

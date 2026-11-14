@@ -269,8 +269,8 @@ Against a throwaway `postgres:16-alpine`:
    workflow blocked on a signal, and a paused schedule. Schema: `temporal`
    1.10, `temporal_visibility` 1.1 (standard).
 2. Stopped it and ran `scripts/temporal_upgrade.sh` (the compose-style names
-   `<project>-db-1` / `<project>_r3ngine_network`, credentials read from the
-   container): every hop 1.23.1 … 1.31.3 became healthy; 7 visibility rows
+   `<project>-db-temporal-1` / `<project>_r3ngine_network`, credentials read from the
+   Temporal Postgres container): every hop 1.23.1 … 1.31.3 became healthy; 7 visibility rows
    carried over; final schema 1.19 / 1.14.
 3. `docker compose up` of this compose file: `temporal-schema` reported
    `schema 1.19, as expected` for both databases, `temporal` healthy,
@@ -306,14 +306,31 @@ running installs see no change. `docker/proxy/config/rengine.conf` passes
 `nginx -t` on it (with the IPv6 `listen` lines removed, as the test host has
 no IPv6).
 
-## PostgreSQL (`db`)
+## PostgreSQL (`db` and `db-temporal`)
 
-**Unchanged: `postgres:16-alpine`.** The tag already names the major version,
+**Unchanged image: `postgres:16-alpine`.** The tag already names the major version,
 and within a major PostgreSQL releases are bug and security fixes with the
 same on-disk format — pinning to a patch (16.15 today) would only hold those
 back. A major upgrade (16 → 17) needs `pg_upgrade` or dump/restore; see
-`scripts/pg_upgrade.sh` and `make fullupgrade`. The Temporal databases live in
-the same cluster, so they move with it.
+`scripts/pg_upgrade.sh` and `make fullupgrade`.
+
+Django uses the `db` service (`r3ngine_postgres_data`). Temporal uses a dedicated
+`db-temporal` service (`r3ngine_postgres_temporal_data`) so workflow history WAL
+does not share a disk with scan OLTP and EPSS catalog upserts. `temporal-schema`
+and `temporal` set `POSTGRES_SEEDS=db-temporal`.
+
+**Split from a shared install:** stopping Temporal and pointing it at an empty
+`db-temporal` volume loses prior workflow history unless you dump/restore the
+`temporal` and `temporal_visibility` databases from the old shared cluster first.
+App data on `db` is unchanged. Recreate is operator-directed (do not restart the
+stack solely to pick up compose until you intend to).
+
+**`pg_stat_statements` on `db`:** compose loads `shared_preload_libraries=pg_stat_statements`
+(requires a `db` recreate). After that, once per database:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+```
 
 ## Not changed
 
