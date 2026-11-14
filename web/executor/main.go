@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -22,10 +23,12 @@ import (
 )
 
 type ToolExecutionInput struct {
-	Command    []string `json:"command"`
-	ScanID     int      `json:"scan_id"`
-	CommandID  int      `json:"command_id"`
-	WorkingDir string   `json:"working_dir"`
+	Command             []string `json:"command"`
+	ScanID              int      `json:"scan_id"`
+	CommandID           int      `json:"command_id"`
+	WorkingDir          string   `json:"working_dir"`
+	TimeoutSeconds      int      `json:"timeout_seconds"`
+	StallTimeoutSeconds int      `json:"stall_timeout_seconds"`
 }
 
 type ToolExecutionResult struct {
@@ -85,12 +88,22 @@ func (a *Activities) SubprocessActivity(ctx context.Context, input ToolExecution
 		}, err
 	}
 
+	markers := newWatchdogMarkers()
+	progress := newProgressTracker(start)
+
+	watchDir := input.WorkingDir
+	if watchDir == "" {
+		if wd, err := os.Getwd(); err == nil {
+			watchDir = wd
+		}
+	}
+
 	killProcessGroup := func(reason string) {
 		if cmd.Process == nil {
 			return
 		}
 		activity.GetLogger(ctx).Warn("Force-killing subprocess group", "reason", reason, "pid", cmd.Process.Pid, "scan_id", input.ScanID)
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		_ = killProcessGroupPID(cmd.Process.Pid)
 	}
 
 	// Keep heartbeating to Temporal every 5 seconds to prevent activity timeout
@@ -136,6 +149,69 @@ func (a *Activities) SubprocessActivity(ctx context.Context, input ToolExecution
 	}
 	defer close(stopKillWatch)
 
+	// Wall-clock timeout: local kill even if Temporal cancel is delayed.
+	stopTimeoutWatch := make(chan struct{})
+	if input.TimeoutSeconds > 0 {
+		go func() {
+			timer := time.NewTimer(time.Duration(input.TimeoutSeconds) * time.Second)
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+				markers.AppendOnce(watchdogTimeoutKillMarker)
+				killProcessGroup("timeout_seconds")
+			case <-stopTimeoutWatch:
+				return
+			case <-ctx.Done():
+				return
+			}
+		}()
+	}
+	defer close(stopTimeoutWatch)
+
+	// Stall + hang-monitor dump watchdog (nuclei / when stall_timeout_seconds set).
+	stallArmed := input.StallTimeoutSeconds > 0
+	stopStallWatch := make(chan struct{})
+	seenDumps := make(map[string]struct{})
+	var stallWG sync.WaitGroup
+	if stallArmed {
+		stallLimit := time.Duration(input.StallTimeoutSeconds) * time.Second
+		stallWG.Add(1)
+		go func() {
+			defer stallWG.Done()
+			ticker := time.NewTicker(3 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					if watchDir != "" {
+						for _, dumpPath := range listNewHangMonitorDumps(watchDir, start, seenDumps) {
+							seenDumps[filepath.Base(dumpPath)] = struct{}{}
+							snip := snipFileHead(dumpPath, hangDumpSnipBytes)
+							activity.GetLogger(ctx).Warn(
+								"Nuclei hang-monitor dump detected",
+								"path", dumpPath,
+								"scan_id", input.ScanID,
+							)
+							markers.AppendText(fmt.Sprintf("[hang-monitor dump] %s\n%s", dumpPath, snip))
+							markers.AppendOnce(watchdogStallKillMarker)
+							killProcessGroup("hang-monitor dump")
+							return
+						}
+					}
+					if time.Since(progress.LastProgress()) >= stallLimit {
+						markers.AppendOnce(watchdogStallKillMarker)
+						killProcessGroup("stall watchdog")
+						return
+					}
+				case <-stopStallWatch:
+					return
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+	}
+
 	// Goroutine to read from pipe line-by-line and send to Redis stream
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -147,6 +223,7 @@ func (a *Activities) SubprocessActivity(ctx context.Context, input ToolExecution
 		scanner.Buffer(buf, 1024*1024) // 1MB maximum line buffer
 		for scanner.Scan() {
 			line := scanner.Text()
+			progress.ObserveLine(line, time.Now())
 			if a.rdb != nil && input.ScanID > 0 {
 				streamKey := fmt.Sprintf("scan:logs:%d", input.ScanID)
 				payload := RedisLogPayload{
@@ -179,21 +256,53 @@ func (a *Activities) SubprocessActivity(ctx context.Context, input ToolExecution
 	err := cmd.Wait()
 	pw.Close() // Trigger EOF for scanner
 	wg.Wait()  // Ensure all logs are read and streamed
+
+	// Stop the stall goroutine, then do a final dump scan so a hang-monitor
+	// dump written just before self-exit is not missed between 3s ticks.
+	if stallArmed {
+		close(stopStallWatch)
+		stallWG.Wait()
+		if watchDir != "" {
+			for _, dumpPath := range listNewHangMonitorDumps(watchDir, start, seenDumps) {
+				seenDumps[filepath.Base(dumpPath)] = struct{}{}
+				snip := snipFileHead(dumpPath, hangDumpSnipBytes)
+				activity.GetLogger(ctx).Warn(
+					"Nuclei hang-monitor dump detected after exit",
+					"path", dumpPath,
+					"scan_id", input.ScanID,
+				)
+				markers.AppendText(fmt.Sprintf("[hang-monitor dump] %s\n%s", dumpPath, snip))
+				markers.AppendOnce(watchdogStallKillMarker)
+			}
+		}
+	}
+
 	timeTaken := time.Since(start).Seconds()
 
 	var exitCode int
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
-			ws := exitError.Sys().(syscall.WaitStatus)
-			exitCode = ws.ExitStatus()
+			if ws, ok := exitError.Sys().(syscall.WaitStatus); ok {
+				exitCode = ws.ExitStatus()
+			} else {
+				exitCode = -1
+			}
 		} else {
 			exitCode = -2
 		}
 	}
 
+	stderrOut := stderrBuf.String()
+	if extra := markers.String(); extra != "" {
+		if stderrOut != "" && !strings.HasSuffix(stderrOut, "\n") {
+			stderrOut += "\n"
+		}
+		stderrOut += extra
+	}
+
 	return ToolExecutionResult{
 		Stdout:     stdoutBuf.String(),
-		Stderr:     stderrBuf.String(),
+		Stderr:     stderrOut,
 		ExitCode:   exitCode,
 		TimeTakenS: timeTaken,
 	}, nil

@@ -1,6 +1,6 @@
 # Changelog
 
-### [v3.8.0] - 2026-11-12
+### [v3.8.0] - 2026-11-14
 
 #### Added
 
@@ -14,6 +14,17 @@
   - Docs: `documents/assessment-copilot.md`. Metasploit module integration deferred to v2.
   - Enable with `make up-copilot` or `COMPOSE_PROFILES=...,copilot`; migrate `copilot.0001_initial`.
   - Make targets (listed in `make help` / `make.bat help`): `up-copilot` enables `COMPOSE_PROFILES=copilot` in `.env` then builds/starts; `update-copilot` rebuilds images and recreates containers only if they were running (MCP-style); `stop-copilot` stops containers but keeps the profile so a later `make up` / `make start` brings Copilot back. Shared helper: `scripts/copilot-stack.mjs`.
+
+- **Nuclei hang watchdog (go-executor + tag retry)**:
+  - Go-executor stall detector for nuclei: kills the process group after `NUCLEI_STALL_TIMEOUT_SECONDS` (default 900) with no progress (idle lines or stuck `-stats`).
+  - Watches the scan `results_dir` for nuclei `-hang-monitor` dumps (`*-stacktrace-*.dump`, `crash-resume-file-*.dump`), kills on appearance, snips dump into stderr, and re-checks dumps after process exit so self-exits are not missed.
+  - Local wall-clock enforcement of `timeout_seconds` in go-executor (`WATCHDOG_TIMEOUT_KILL`) in addition to Temporal `start_to_close`.
+  - `nuclei_scan` retries the same tag batch on `WATCHDOG_STALL_KILL` up to `NUCLEI_HANG_MAX_ATTEMPTS` (default 2), then soft-skips so `NucleiPlannerWorkflow` continues to the next batch; wall-timeout kills soft-skip without retry.
+  - Env knobs: `NUCLEI_STALL_TIMEOUT_SECONDS`, `NUCLEI_HANG_MAX_ATTEMPTS`. Requires a **go-executor** image rebuild + recreate for the watchdog to be live.
+
+#### Fixed
+
+- **Hung nuclei tag batches no longer sit for hours**: processes that heartbeat but make no progress (0% CPU / empty stdout / hang-monitor dumps) are killed and retried instead of consuming the Tier 6 stage budget until soft cancel.
 
 ### [v3.7.9] - 2026-10-09
 

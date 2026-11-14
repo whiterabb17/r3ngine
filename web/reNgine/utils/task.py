@@ -17,7 +17,8 @@ from startScan.models import ScanHistory, Email, Employee, Command, Subdomain, E
 from dashboard.models import SOCConfiguration
 from targetApp.models import Domain
 from reNgine.definitions import (
-    COLOR_RESET, COLOR_WHITE, COLOR_RED, TOOL_COLORS
+    COLOR_RESET, COLOR_WHITE, COLOR_RED, TOOL_COLORS,
+    NUCLEI_STALL_TIMEOUT_SECONDS,
 )
 from reNgine.common_func import (
     get_subdomain_from_url,
@@ -45,6 +46,33 @@ ROUTED_TOOLS = {
     'waybackurls', 'hakrawler', 'tlsx', 'katana', 'aquatone', 'nmap', 'vigolium',
     'sslscan', 'ike-scan', 'hping3', 'wrk', 'k6', 'brutus', 'wpscan'
 }
+
+
+def _go_executor_workflow_input(
+    command_str,
+    scan_history_id=0,
+    command_rec_id=0,
+    cwd='',
+    timeout=None,
+    tool='',
+):
+    """Build the GoExecutorTaskWorkflow input payload.
+
+    Nuclei gets stall_timeout_seconds so the go-executor idle / hang-monitor
+    dump watchdog can kill stuck process groups.
+    """
+    payload = {
+        'command': [command_str],
+        'scan_id': scan_history_id or 0,
+        'command_id': command_rec_id or 0,
+        'working_dir': cwd or '',
+        'executor_task_queue': go_executor_queue(),
+    }
+    if timeout is not None:
+        payload['timeout_seconds'] = timeout
+    if tool == 'nuclei':
+        payload['stall_timeout_seconds'] = NUCLEI_STALL_TIMEOUT_SECONDS
+    return payload
 
 
 def _execute_go_workflow(cmd, scan_id, command_obj_id, tool):
@@ -79,12 +107,12 @@ def _execute_go_workflow(cmd, scan_id, command_obj_id, tool):
         # share this process's scan_results volume.
         await client.start_workflow(
             "GoExecutorTaskWorkflow",
-            {
-                "command": [cmd],
-                "scan_id": scan_id or 0,
-                "command_id": command_obj_id or 0,
-                "executor_task_queue": go_executor_queue(),
-            },
+            _go_executor_workflow_input(
+                cmd,
+                scan_history_id=scan_id,
+                command_rec_id=command_obj_id,
+                tool=tool,
+            ),
             id=wf_id,
             task_queue=python_orchestrator_queue(),
         )
@@ -411,14 +439,14 @@ def run_command(
             # lands in the scan_results volume this process reads.
             result = await client.execute_workflow(
                 "GoExecutorTaskWorkflow",
-                {
-                    "command": [command_str],
-                    "scan_id": scan_history_id or 0,
-                    "command_id": command_rec_id or 0,
-                    "working_dir": cwd or "",
-                    "timeout_seconds": timeout,
-                    "executor_task_queue": go_executor_queue(),
-                },
+                _go_executor_workflow_input(
+                    command_str,
+                    scan_history_id=scan_history_id,
+                    command_rec_id=command_rec_id,
+                    cwd=cwd,
+                    timeout=timeout,
+                    tool=tool,
+                ),
                 id=f"go-exec-{tool}-{command_rec_id or int(time.time())}",
                 task_queue=python_orchestrator_queue()
             )
@@ -1176,14 +1204,14 @@ def stream_command(
 			# share this process's scan_results volume.
 			handle = await client.start_workflow(
 				"GoExecutorTaskWorkflow",
-				{
-					"command": [command_str],
-					"scan_id": scan_history_id or 0,
-					"command_id": command_rec_id or 0,
-					"working_dir": cwd or "",
-					"timeout_seconds": timeout,
-					"executor_task_queue": go_executor_queue(),
-				},
+				_go_executor_workflow_input(
+					command_str,
+					scan_history_id=scan_history_id,
+					command_rec_id=command_rec_id,
+					cwd=cwd,
+					timeout=timeout,
+					tool=tool,
+				),
 				id=workflow_id,
 				task_queue=python_orchestrator_queue()
 			)
