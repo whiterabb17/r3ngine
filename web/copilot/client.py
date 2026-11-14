@@ -35,9 +35,9 @@ def copilot_health() -> dict[str, Any]:
         data['reachable'] = True
         if data.get('status') != 'ok':
             data['hint'] = (
-                'Copilot is up but assessment-ollama may be down or empty. '
-                'Pull a model into assessment-ollama, e.g. '
-                '`docker exec <assessment-ollama> ollama pull qwen2.5:7b-instruct`.'
+                'Copilot is up but shared ollama may be down or empty. '
+                'Pull a model into ollama, e.g. '
+                '`docker exec <ollama> ollama pull qwen2.5:7b-instruct`.'
             )
         return data
     except requests.RequestException as exc:
@@ -59,6 +59,7 @@ def copilot_chat(
     scope: str = 'project',
     project_id: str | int | None = None,
     org_id: str | int | None = None,
+    boost_terms: list[str] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         'messages': messages,
@@ -68,6 +69,8 @@ def copilot_chat(
     }
     if model:
         payload['model'] = model
+    if boost_terms:
+        payload['boost_terms'] = list(boost_terms)[:40]
     try:
         resp = requests.post(
             f'{copilot_base_url()}/chat',

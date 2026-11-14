@@ -23,20 +23,46 @@ def _vuln_chunk(vuln: Vulnerability, project_slug: str) -> dict[str, Any]:
         f"Remediation: {(vuln.remediation or '')[:1000]}",
         f"Validation: {vuln.validation_status or ''} {vuln.validation_reason or ''}",
     ]
+    tags = ['vulnerability', f'severity:{vuln.severity}']
+    cve_names: list[str] = []
+    try:
+        for cve in vuln.cve_ids.all()[:8]:
+            name = getattr(cve, 'name', None) or str(cve)
+            if name:
+                cve_names.append(name)
+                text_parts.append(f"CVE: {name}")
+                tags.append(name)
+            pe = getattr(cve, 'public_exploits', None) or []
+            if pe:
+                text_parts.append(f"public_exploits: {len(pe)}")
+                tags.extend(['public_exploit', 'has_metasploit', 'msf_aux'])
+    except Exception:
+        logger.warning(
+            'copilot index CVE enrich failed vuln_id=%s',
+            getattr(vuln, 'id', None),
+            exc_info=True,
+        )
+    if enrichment.get('has_metasploit') or (enrichment.get('apme') or {}).get('has_metasploit'):
+        text_parts.append('has_metasploit: true')
+        tags.extend(['has_metasploit', 'msf_aux', 'metasploit'])
     if poc:
         text_parts.append(f"SAFE PoC: {poc}")
     if enrichment.get('remediation'):
         text_parts.append(f"Agent remediation: {enrichment.get('remediation')}")
+    if enrichment.get('msf_aux'):
+        text_parts.append(f"MSF aux: {enrichment.get('msf_aux')}")
+        tags.append('msf_aux')
     return {
         'id': f'vuln:{vuln.id}:scan:{vuln.scan_history_id}',
         'text': '\n'.join(text_parts),
         'scope': 'project',
         'project_id': project_slug,
-        'tags': ['vulnerability', f'severity:{vuln.severity}'],
+        'tags': tags,
         'meta': {
             'vulnerability_id': vuln.id,
             'scan_id': vuln.scan_history_id,
             'template_id': getattr(vuln, 'template_id', None),
+            'cve_ids': cve_names,
         },
     }
 

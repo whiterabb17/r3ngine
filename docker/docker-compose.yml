@@ -195,7 +195,7 @@ services:
       - TOR_CONTROL_PASSWORD=${TOR_CONTROL_PASSWORD:-}
       # Assessment Copilot sidecar (profile "copilot"); unused when down.
       - ASSESSMENT_COPILOT_URL=${ASSESSMENT_COPILOT_URL:-http://assessment-copilot:8091}
-      - ASSESSMENT_OLLAMA_URL=${ASSESSMENT_OLLAMA_URL:-http://assessment-ollama:11434}
+      - ASSESSMENT_OLLAMA_URL=${ASSESSMENT_OLLAMA_URL:-http://ollama:11434}
       - COPILOT_MODEL_DEFAULT=${COPILOT_MODEL_DEFAULT:-qwen2.5:7b-instruct}
     volumes:
       - ../web:/usr/src/app
@@ -401,42 +401,28 @@ services:
         reservations:
           memory: 2G
 
-  # Assessment Copilot (separate from AI Hub / ollama). Enable with
-  # COMPOSE_PROFILES=...,copilot or `make up-copilot`.
-  assessment-ollama:
-    profiles: ["copilot"]
-    build:
-      context: ./ollama
-      dockerfile: ${OLLAMA_DOCKERFILE:-Dockerfile}
-    image: r3ngine-assessment-ollama:latest
-    restart: always
-    logging: *default-logging
-    volumes:
-      - assessment_ollama_data:/root/.ollama
-    networks:
-      - r3ngine_network
-    deploy:
-      resources:
-        limits:
-          memory: 8G
-        reservations:
-          memory: 2G
-
+  # Assessment Copilot sidecar. Uses the shared `ollama` service (same image /
+  # volume as AI Hub). Enable with COMPOSE_PROFILES=...,copilot or
+  # `make install-copilot` / `make up-copilot` (starts ollama if it is down).
+  # Build context is a sibling checkout (see documents/assessment-copilot.md).
+  # Without the profile, a missing ../r3ngine-copilot would fail the build for
+  # the whole stack.
   assessment-copilot:
     profiles: ["copilot"]
     build:
-      context: ./assessment-copilot
-    image: r3ngine-assessment-copilot:latest
+      context: ../r3ngine-copilot
+      dockerfile: Dockerfile
+    image: r3ngine-copilot:latest
     restart: always
     logging: *default-logging
     environment:
-      - ASSESSMENT_OLLAMA_URL=${ASSESSMENT_OLLAMA_URL:-http://assessment-ollama:11434}
+      - ASSESSMENT_OLLAMA_URL=${ASSESSMENT_OLLAMA_URL:-http://ollama:11434}
       - COPILOT_MODEL_DEFAULT=${COPILOT_MODEL_DEFAULT:-qwen2.5:7b-instruct}
       - COPILOT_DATA_DIR=/data
     volumes:
       - assessment_copilot_data:/data
     depends_on:
-      - assessment-ollama
+      - ollama
     networks:
       - r3ngine_network
     deploy:
@@ -554,7 +540,7 @@ services:
       # TorNewCircuitActivity rotates circuits from here (profile "tor").
       - TOR_CONTROL_PASSWORD=${TOR_CONTROL_PASSWORD:-}
       - ASSESSMENT_COPILOT_URL=${ASSESSMENT_COPILOT_URL:-http://assessment-copilot:8091}
-      - ASSESSMENT_OLLAMA_URL=${ASSESSMENT_OLLAMA_URL:-http://assessment-ollama:11434}
+      - ASSESSMENT_OLLAMA_URL=${ASSESSMENT_OLLAMA_URL:-http://ollama:11434}
       - COPILOT_MODEL_DEFAULT=${COPILOT_MODEL_DEFAULT:-qwen2.5:7b-instruct}
     depends_on:
       temporal:
@@ -671,8 +657,6 @@ volumes:
     name: r3ngine_static_volume
   ollama_data:
     name: r3ngine_ollama_data
-  assessment_ollama_data:
-    name: r3ngine_assessment_ollama_data
   assessment_copilot_data:
     name: r3ngine_assessment_copilot_data
   neo4j_data:

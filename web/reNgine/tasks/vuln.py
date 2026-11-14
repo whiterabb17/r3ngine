@@ -43,6 +43,22 @@ def _nuclei_line_is_proxy_dead(line) -> bool:
 	return NUCLEI_PROXY_DEAD_MARKER in cleaned
 
 
+def _nuclei_line_is_hang_kill(line) -> bool:
+	"""Return True when go-executor killed nuclei for stall / hang-monitor dump."""
+	if not isinstance(line, str):
+		return False
+	cleaned = remove_ansi_escape_sequences(line)
+	return NUCLEI_HANG_KILL_MARKER in cleaned
+
+
+def _nuclei_line_is_timeout_kill(line) -> bool:
+	"""Return True when go-executor hit the wall-clock timeout_seconds kill."""
+	if not isinstance(line, str):
+		return False
+	cleaned = remove_ansi_escape_sequences(line)
+	return NUCLEI_TIMEOUT_KILL_MARKER in cleaned
+
+
 def _refresh_nuclei_proxy_file(proxies_file_path: str) -> bool:
 	"""Rewrite the nuclei proxy file from the current pool.
 
@@ -472,12 +488,15 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 
 	import json
 	proxy_dead_skip = False
-	for attempt in range(1, NUCLEI_PROXY_DEAD_MAX_ATTEMPTS + 1):
+	hang_skip = False
+	timeout_skip = False
+	proxy_attempts = 0
+	hang_attempts = 0
+	attempt = 0
+	# Independent hang / proxy-dead budgets — do not share one combined loop cap.
+	while True:
+		attempt += 1
 		if attempt > 1:
-			logger.warning(
-				'[NUCLEI] PROXY DEAD RETRY | scan_id=%s attempt=%d/%d — refreshing proxies',
-				self.scan_id, attempt, NUCLEI_PROXY_DEAD_MAX_ATTEMPTS,
-			)
 			if proxies_file_path:
 				# Prefer a fresh write from the configured pool. If the pool was
 				# emptied or unavailable, keep the existing file so transient
@@ -493,7 +512,7 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 						results = []
 						break
 					logger.warning(
-						'[NUCLEI] PROXY DEAD RETRY | scan_id=%s — pool empty, '
+						'[NUCLEI] RETRY | scan_id=%s — pool empty, '
 						'reusing existing proxy file',
 						self.scan_id,
 					)
@@ -518,8 +537,13 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 
 		results = []
 		proxy_dead = False
+		hang_killed = False
+		timeout_killed = False
+		# Per-scan CWD so hang-monitor dumps land under results_dir and the
+		# go-executor dump watcher does not see another scan's dumps.
 		line_source = stream_command(
 			cmd,
+			cwd=self.results_dir,
 			history_file=self.history_file,
 			scan_id=self.scan_id,
 			activity_id=self.activity_id)
@@ -531,6 +555,20 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 					logger.warning(
 						'[NUCLEI] PROXY DEAD | scan_id=%s attempt=%d/%d | %s',
 						self.scan_id, attempt, NUCLEI_PROXY_DEAD_MAX_ATTEMPTS,
+						remove_ansi_escape_sequences(line),
+					)
+				elif _nuclei_line_is_hang_kill(line):
+					hang_killed = True
+					logger.warning(
+						'[NUCLEI] HANG KILL | scan_id=%s attempt=%d/%d tags=%s | %s',
+						self.scan_id, hang_attempts + 1, NUCLEI_HANG_MAX_ATTEMPTS,
+						tags or '-', remove_ansi_escape_sequences(line),
+					)
+				elif _nuclei_line_is_timeout_kill(line):
+					timeout_killed = True
+					logger.warning(
+						'[NUCLEI] TIMEOUT KILL | scan_id=%s tags=%s | %s',
+						self.scan_id, tags or '-',
 						remove_ansi_escape_sequences(line),
 					)
 				continue
@@ -659,24 +697,63 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 				except Exception as e:
 					logger.warning("HackerOne report send failed for vuln %s: %s", vuln.id, e)
 
-		if not proxy_dead:
+		if timeout_killed:
+			logger.warning(
+				'[NUCLEI] TIMEOUT SKIP | scan_id=%s tags=%s — wall-clock kill, not retrying',
+				self.scan_id, tags or '-',
+			)
+			timeout_skip = True
+			results = []
 			break
 
-		if attempt >= NUCLEI_PROXY_DEAD_MAX_ATTEMPTS:
+		if hang_killed:
+			hang_attempts += 1
+			if hang_attempts >= NUCLEI_HANG_MAX_ATTEMPTS:
+				logger.warning(
+					'[NUCLEI] HANG SKIP | scan_id=%s tags=%s — gave up after %d hang kills',
+					self.scan_id, tags or '-', NUCLEI_HANG_MAX_ATTEMPTS,
+				)
+				hang_skip = True
+				results = []
+				break
 			logger.warning(
-				'[NUCLEI] PROXY DEAD SKIP | scan_id=%s — gave up after %d attempts',
-				self.scan_id, NUCLEI_PROXY_DEAD_MAX_ATTEMPTS,
+				'[NUCLEI] HANG KILL RETRY | scan_id=%s tags=%s attempt=%d/%d',
+				self.scan_id, tags or '-', hang_attempts + 1, NUCLEI_HANG_MAX_ATTEMPTS,
 			)
-			proxy_dead_skip = True
-			results = []
+			continue
 
+		if proxy_dead:
+			proxy_attempts += 1
+			if proxy_attempts >= NUCLEI_PROXY_DEAD_MAX_ATTEMPTS:
+				logger.warning(
+					'[NUCLEI] PROXY DEAD SKIP | scan_id=%s — gave up after %d attempts',
+					self.scan_id, NUCLEI_PROXY_DEAD_MAX_ATTEMPTS,
+				)
+				proxy_dead_skip = True
+				results = []
+				break
+			logger.warning(
+				'[NUCLEI] PROXY DEAD RETRY | scan_id=%s attempt=%d/%d — refreshing proxies',
+				self.scan_id, proxy_attempts + 1, NUCLEI_PROXY_DEAD_MAX_ATTEMPTS,
+			)
+			continue
+
+		break
+
+	_skip_note = ''
+	if proxy_dead_skip:
+		_skip_note = ' (skipped: all proxies dead)'
+	elif hang_skip:
+		_skip_note = ' (skipped: hang watchdog)'
+	elif timeout_skip:
+		_skip_note = ' (skipped: wall-clock timeout)'
 	logger.warning(
 		'[NUCLEI] DONE | scan_id=%s severity=%s tags=%s targets=%s findings=%d elapsed=%ss%s',
 		self.scan_id, severities_str or '-', tags or '-', _target_count,
 		len(results), round(time.time() - _nuclei_started, 1),
-		' (skipped: all proxies dead)' if proxy_dead_skip else '',
+		_skip_note,
 	)
-	if not results and not proxy_dead_skip:
+	if not results and not proxy_dead_skip and not hang_skip and not timeout_skip:
 		# Distinguishes "ran and matched nothing" from "never ran" — the two were
 		# indistinguishable in the log before, which is what made nuclei look broken.
 		logger.warning(

@@ -15,6 +15,7 @@ from copilot.models import (
     CopilotSession,
     CopilotSettings,
 )
+from copilot.trace import emit_trace, new_turn_id
 from startScan.models import Vulnerability
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,14 @@ _PROPOSAL_RE = re.compile(
     r'```proposal\s*(\{.*?\})\s*```',
     re.DOTALL | re.IGNORECASE,
 )
+
+_VALID_ACTION_TYPES = frozenset({
+    CopilotActionProposal.TYPE_VALIDATE,
+    CopilotActionProposal.TYPE_SAFE_POC,
+    CopilotActionProposal.TYPE_FOLLOWUP,
+    CopilotActionProposal.TYPE_REMEDIATION,
+    CopilotActionProposal.TYPE_MSF_MODULE,
+})
 
 
 class CopilotError(Exception):
@@ -86,6 +95,7 @@ def serialize_proposal(p: CopilotActionProposal) -> dict[str, Any]:
         'payload': p.payload or {},
         'safe_poc_attempt_id': p.safe_poc_attempt_id,
         'followup_plan_id': p.followup_plan_id,
+        'msf_aux_attempt_id': p.msf_aux_attempt_id,
         'result': p.result or {},
         'created_at': p.created_at.isoformat() if p.created_at else None,
         'decided_at': p.decided_at.isoformat() if p.decided_at else None,
@@ -110,6 +120,40 @@ def service_status(project_slug: str | None = None) -> dict[str, Any]:
     }
 
 
+def _boost_terms_for_session(session: CopilotSession) -> list[str]:
+    """CVE / APME / metasploit signals to bias sidecar retrieve toward MSF playbooks."""
+    terms: list[str] = ['msf_aux', 'metasploit', 'auxiliary']
+    if not session.scan_id:
+        return terms
+    vulns = (
+        Vulnerability.objects
+        .filter(scan_history_id=session.scan_id)
+        .prefetch_related('cve_ids')
+        .order_by('-severity')[:25]
+    )
+    for vuln in vulns:
+        for cve in vuln.cve_ids.all()[:5]:
+            name = getattr(cve, 'name', None) or str(cve)
+            if name:
+                terms.append(name)
+            pe = getattr(cve, 'public_exploits', None) or []
+            if pe:
+                terms.extend(['public_exploit', 'has_metasploit'])
+        enrichment = vuln.agent_enrichment or {}
+        if enrichment.get('has_metasploit') or (enrichment.get('apme') or {}).get('has_metasploit'):
+            terms.append('has_metasploit')
+    # de-dupe preserve order
+    seen: set[str] = set()
+    out: list[str] = []
+    for t in terms:
+        tl = t.lower()
+        if tl in seen:
+            continue
+        seen.add(tl)
+        out.append(t)
+    return out[:40]
+
+
 def chat(
     *,
     session: CopilotSession,
@@ -120,6 +164,7 @@ def chat(
     if not cfg.enabled:
         raise CopilotError('Assessment Copilot is disabled for this project', 403)
 
+    turn_id = new_turn_id()
     CopilotMessage.objects.create(
         session=session,
         role=CopilotMessage.ROLE_USER,
@@ -128,6 +173,7 @@ def chat(
     history = list(
         session.messages.order_by('created_at').values('role', 'content')[:40]
     )
+    boost_terms = _boost_terms_for_session(session)
     try:
         result = copilot_chat(
             history,
@@ -135,8 +181,17 @@ def chat(
             scope=cfg.memory_scope,
             project_id=session.project_slug,
             org_id=cfg.org_id or None,
+            boost_terms=boost_terms,
         )
     except CopilotClientError as exc:
+        emit_trace(
+            project_slug=session.project_slug,
+            session=session,
+            turn_id=turn_id,
+            event_type='error',
+            summary='sidecar chat failed',
+            payload={'error': str(exc)[:500]},
+        )
         raise CopilotError(str(exc), status=exc.status) from exc
 
     assistant = ((result.get('message') or {}).get('content')) or ''
@@ -149,17 +204,76 @@ def chat(
         session.title = content.strip()[:80]
     session.save(update_fields=['title', 'updated_at'])
 
+    trace = result.get('trace') if isinstance(result.get('trace'), dict) else {}
+    hits = trace.get('retrieve_hits') or []
+    if hits or result.get('memory_hits'):
+        emit_trace(
+            project_slug=session.project_slug,
+            session=session,
+            turn_id=turn_id,
+            event_type='retrieve',
+            summary=f"retrieve hits={result.get('memory_hits') or len(hits)}",
+            payload={
+                'memory_hits': result.get('memory_hits'),
+                'retrieve_hits': hits[:12],
+                'playbooks_used': (trace.get('playbooks_used') or [])[:12],
+                'boost_terms': boost_terms[:20],
+            },
+        )
+    for decision in (trace.get('decisions') or [])[:20]:
+        if isinstance(decision, dict):
+            emit_trace(
+                project_slug=session.project_slug,
+                session=session,
+                turn_id=turn_id,
+                event_type='decision',
+                summary=str(decision.get('summary') or decision.get('type') or 'decision')[:512],
+                payload=decision,
+            )
+        elif decision:
+            emit_trace(
+                project_slug=session.project_slug,
+                session=session,
+                turn_id=turn_id,
+                event_type='thought',
+                summary=str(decision)[:512],
+            )
+
     created_proposals = _extract_and_store_proposals(
         session=session,
         assistant_text=assistant,
         user=user,
+        turn_id=turn_id,
     )
     return {
         'session': serialize_session(session, include_messages=True),
         'reply': assistant,
         'memory_hits': result.get('memory_hits'),
         'model': result.get('model'),
+        'turn_id': turn_id,
+        'trace': trace,
         'proposals': [serialize_proposal(p) for p in created_proposals],
+    }
+
+
+def _normalize_msf_payload(details: dict[str, Any]) -> dict[str, Any]:
+    from copilot.msf_aux_catalog import MsfCatalogError, validate_module_options
+
+    module = str(details.get('module') or '').strip()
+    options = details.get('options') if isinstance(details.get('options'), dict) else {}
+    mode = str(details.get('mode') or 'recommend').strip().lower()
+    if mode not in ('recommend', 'run'):
+        raise CopilotError('msf_module mode must be recommend or run')
+    try:
+        entry, opts = validate_module_options(module, options)
+    except MsfCatalogError as exc:
+        raise CopilotError(str(exc), status=exc.status) from exc
+    return {
+        'module': str(entry['module']),
+        'options': opts,
+        'mode': mode,
+        'vulnerability_id': details.get('vulnerability_id'),
+        'rationale': str(details.get('rationale') or '')[:4000],
     }
 
 
@@ -168,6 +282,7 @@ def _extract_and_store_proposals(
     session: CopilotSession,
     assistant_text: str,
     user=None,
+    turn_id: str = '',
 ) -> list[CopilotActionProposal]:
     created: list[CopilotActionProposal] = []
     for match in _PROPOSAL_RE.finditer(assistant_text or ''):
@@ -180,14 +295,26 @@ def _extract_and_store_proposals(
         if not isinstance(data, dict):
             continue
         action_type = str(data.get('type') or '').strip().lower()
-        if action_type not in {
-            CopilotActionProposal.TYPE_VALIDATE,
-            CopilotActionProposal.TYPE_SAFE_POC,
-            CopilotActionProposal.TYPE_FOLLOWUP,
-            CopilotActionProposal.TYPE_REMEDIATION,
-        }:
+        if action_type not in _VALID_ACTION_TYPES:
             continue
         details = data.get('details') if isinstance(data.get('details'), dict) else {}
+        # Flatten top-level msf fields into details when model omits nested details.
+        if action_type == CopilotActionProposal.TYPE_MSF_MODULE:
+            for key in ('module', 'options', 'mode', 'vulnerability_id', 'rationale'):
+                if key in data and key not in details:
+                    details[key] = data[key]
+            try:
+                details = _normalize_msf_payload(details)
+            except CopilotError as exc:
+                emit_trace(
+                    project_slug=session.project_slug,
+                    session=session,
+                    turn_id=turn_id,
+                    event_type='error',
+                    summary=f'msf_module proposal rejected: {exc}',
+                    payload={'error': str(exc)},
+                )
+                continue
         vuln_id = details.get('vulnerability_id') or data.get('vulnerability_id')
         try:
             vuln_id = int(vuln_id) if vuln_id is not None else None
@@ -204,6 +331,15 @@ def _extract_and_store_proposals(
             rationale=str(data.get('rationale') or details.get('rationale') or '')[:4000],
             payload=details,
             created_by=user if getattr(user, 'is_authenticated', False) else None,
+        )
+        emit_trace(
+            project_slug=session.project_slug,
+            session=session,
+            turn_id=turn_id,
+            event_type='proposal',
+            summary=proposal.summary,
+            payload={'action_type': action_type, 'proposal_id': proposal.id},
+            proposal_id=proposal.id,
         )
         created.append(proposal)
     return created
@@ -222,16 +358,29 @@ def create_proposal(
     session_id: int | None = None,
     user=None,
 ) -> CopilotActionProposal:
-    if action_type not in {
-        CopilotActionProposal.TYPE_VALIDATE,
-        CopilotActionProposal.TYPE_SAFE_POC,
-        CopilotActionProposal.TYPE_FOLLOWUP,
-        CopilotActionProposal.TYPE_REMEDIATION,
-    }:
+    if action_type not in _VALID_ACTION_TYPES:
         raise CopilotError(f'invalid action_type: {action_type}')
     session = None
     if session_id:
         session = CopilotSession.objects.filter(pk=session_id, project_slug=project_slug).first()
+    payload = dict(payload or {})
+    if action_type == CopilotActionProposal.TYPE_MSF_MODULE:
+        payload = _normalize_msf_payload(payload)
+        if vulnerability_id is None and payload.get('vulnerability_id') is not None:
+            try:
+                vulnerability_id = int(payload['vulnerability_id'])
+            except (TypeError, ValueError):
+                vulnerability_id = None
+        from copilot.msf_aux import MsfAuxError, assert_rhosts_in_scope
+        try:
+            assert_rhosts_in_scope(
+                payload.get('options') or {},
+                project_slug=project_slug,
+                scan_id=scan_id,
+                vulnerability_id=vulnerability_id,
+            )
+        except MsfAuxError as exc:
+            raise CopilotError(str(exc), status=exc.status) from exc
     return CopilotActionProposal.objects.create(
         project_slug=project_slug,
         scan_id=scan_id,
@@ -241,7 +390,7 @@ def create_proposal(
         action_type=action_type,
         summary=(summary or action_type)[:512],
         rationale=(rationale or '')[:4000],
-        payload=payload or {},
+        payload=payload,
         created_by=user if getattr(user, 'is_authenticated', False) else None,
     )
 
@@ -310,6 +459,8 @@ def approve_proposal(proposal: CopilotActionProposal, *, user=None) -> CopilotAc
             result = _approve_validate(proposal, user=user)
         elif proposal.action_type == CopilotActionProposal.TYPE_REMEDIATION:
             result = _approve_remediation(proposal, user=user)
+        elif proposal.action_type == CopilotActionProposal.TYPE_MSF_MODULE:
+            result = _approve_msf_module(proposal, user=user)
         else:
             raise CopilotError(f'unsupported action_type: {proposal.action_type}')
     except CopilotError:
@@ -330,8 +481,17 @@ def approve_proposal(proposal: CopilotActionProposal, *, user=None) -> CopilotAc
     proposal.save(
         update_fields=[
             'status', 'result', 'decided_at', 'decided_by', 'updated_at',
-            'safe_poc_attempt_id', 'followup_plan_id',
+            'safe_poc_attempt_id', 'followup_plan_id', 'msf_aux_attempt_id',
         ]
+    )
+    emit_trace(
+        project_slug=proposal.project_slug,
+        session=proposal.session,
+        event_type='decision',
+        summary=f'approved {proposal.action_type}: {proposal.summary}'[:512],
+        payload={'proposal_id': proposal.id, 'result': result},
+        proposal_id=proposal.id,
+        msf_aux_attempt_id=proposal.msf_aux_attempt_id,
     )
     return proposal
 
@@ -468,4 +628,75 @@ def _approve_remediation(proposal: CopilotActionProposal, *, user=None) -> dict[
     return {
         'vulnerability_id': vuln.id,
         'remediation': enrichment['remediation'],
+    }
+
+
+def _approve_msf_module(proposal: CopilotActionProposal, *, user=None) -> dict[str, Any]:
+    from copilot.msf_aux import (
+        MsfAuxError,
+        assert_rhosts_in_scope,
+        approve_and_start,
+        nest_recommend_on_vuln,
+        propose_attempt,
+    )
+    from copilot.msf_aux_catalog import MsfCatalogError, validate_module_options
+
+    payload = dict(proposal.payload or {})
+    try:
+        entry, opts = validate_module_options(payload.get('module'), payload.get('options'))
+    except MsfCatalogError as exc:
+        raise CopilotError(str(exc), status=exc.status) from exc
+    mode = str(payload.get('mode') or 'recommend').lower()
+    vuln_id = proposal.vulnerability_id or payload.get('vulnerability_id')
+    try:
+        assert_rhosts_in_scope(
+            opts,
+            project_slug=proposal.project_slug,
+            scan_id=proposal.scan_id,
+            vulnerability_id=int(vuln_id) if vuln_id is not None else None,
+        )
+    except MsfAuxError as exc:
+        raise CopilotError(str(exc), status=exc.status) from exc
+
+    if mode == 'recommend':
+        if vuln_id is None:
+            raise CopilotError(
+                'msf_module recommend requires vulnerability_id so the '
+                'recommendation can be stored on agent_enrichment',
+                status=400,
+            )
+        blob = nest_recommend_on_vuln(
+            vulnerability_id=int(vuln_id),
+            project_slug=proposal.project_slug,
+            module=str(entry['module']),
+            options=opts,
+            rationale=proposal.rationale or payload.get('rationale') or '',
+        )
+        return {
+            'mode': 'recommend',
+            'module': entry['module'],
+            'options': opts,
+            'agent_enrichment': blob,
+        }
+
+    try:
+        attempt = propose_attempt(
+            project_slug=proposal.project_slug,
+            module=str(entry['module']),
+            options=opts,
+            vulnerability_id=int(vuln_id) if vuln_id is not None else None,
+            scan_id=proposal.scan_id,
+            rationale=proposal.rationale or payload.get('rationale') or '',
+            user=user,
+        )
+        attempt = approve_and_start(attempt, user=user)
+    except MsfAuxError as exc:
+        raise CopilotError(str(exc), status=exc.status) from exc
+    proposal.msf_aux_attempt_id = attempt.id
+    return {
+        'mode': 'run',
+        'msf_aux_attempt_id': attempt.id,
+        'module': attempt.module,
+        'status': attempt.status,
+        'workflow_id': attempt.temporal_workflow_id,
     }

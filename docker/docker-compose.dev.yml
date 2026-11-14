@@ -187,33 +187,24 @@ services:
       - r3ngine_network
     restart: always
 
-  # Optional: COMPOSE_PROFILES=copilot or `make up-copilot`.
-  assessment-ollama:
-    profiles: ["copilot"]
-    build:
-      context: ./ollama
-      dockerfile: ${OLLAMA_DOCKERFILE:-Dockerfile}
-    image: r3ngine-assessment-ollama:latest
-    volumes:
-      - assessment_ollama_data:/root/.ollama
-    networks:
-      - r3ngine_network
-    restart: always
-
+  # Optional: COMPOSE_PROFILES=copilot or `make install-copilot` / `make up-copilot`.
+  # Uses shared `ollama`. Build context is the sibling r3ngine-copilot checkout.
   assessment-copilot:
     profiles: ["copilot"]
     build:
-      context: ./assessment-copilot
-    image: r3ngine-assessment-copilot:latest
+      context: ../r3ngine-copilot
+      dockerfile: Dockerfile
+    image: r3ngine-copilot:latest
     environment:
-      - ASSESSMENT_OLLAMA_URL=${ASSESSMENT_OLLAMA_URL:-http://assessment-ollama:11434}
+      - ASSESSMENT_OLLAMA_URL=${ASSESSMENT_OLLAMA_URL:-http://ollama:11434}
       - COPILOT_MODEL_DEFAULT=${COPILOT_MODEL_DEFAULT:-qwen2.5:7b-instruct}
       - COPILOT_DATA_DIR=/data
     volumes:
       - assessment_copilot_data:/data
-      - ./assessment-copilot/app:/app/app
+      - ../r3ngine-copilot/app:/app/app
+      - ../r3ngine-copilot/data:/app/data:ro
     depends_on:
-      - assessment-ollama
+      - ollama
     networks:
       - r3ngine_network
     restart: always
@@ -468,8 +459,6 @@ volumes:
     name: r3ngine_static_volume
   ollama_data:
     name: r3ngine_ollama_data
-  assessment_ollama_data:
-    name: r3ngine_assessment_ollama_data
   assessment_copilot_data:
     name: r3ngine_assessment_copilot_data
   neo4j_data:

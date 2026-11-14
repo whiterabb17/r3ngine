@@ -1,78 +1,66 @@
 # Assessment Copilot
 
-Local, cybersecurity-focused co-pilot that runs **alongside** the stack and is
-**separate** from the AI Hub / LLM Toolkit enrichment path.
+Local, cybersecurity-focused co-pilot that runs **alongside** the stack. Chat /
+proposals are separate from the AI Hub / LLM Toolkit enrichment path, but
+**inference reuses the shared `ollama` service** (`r3ngine-ollama` image).
+
+The sidecar lives in the sibling repo
+[r3ngine-copilot](https://github.com/whiterabb17/r3ngine-copilot) (compose build
+context `../r3ngine-copilot`). Django gateway, Trace, MSF gates, and UI stay in
+**r3ngine** (same split as MCP).
 
 ## Purpose
 
-Help operators during contracted assessments to:
-
-1. Gather context from existing findings/assets (and indexed assessment memory)
-2. Propose validations of findings
-3. Propose **SAFE PoC** catalog demonstrations (prove impact)
+1. Gather context from findings/assets and indexed assessment memory
+2. Propose validations
+3. Propose **SAFE PoC** catalog demonstrations
 4. Propose short- and long-term remediations
-5. Propose targeted follow-up tool runs (existing engines/tools with `tool_args`)
+5. Propose targeted follow-up tool runs
+6. Recommend / gate allowlisted Metasploit **auxiliary/post** modules (v2)
 
-Outputs land in **existing persistence** (`Vulnerability.agent_enrichment`,
-`remediation`, `SafePocAttempt`, `FollowupPlan`, validation fields) so current
-reporting picks them up. There is **no** separate client report generator in v1.
+Outputs land in existing persistence (`Vulnerability.agent_enrichment`,
+`remediation`, `SafePocAttempt`, `FollowupPlan`, `MsfAuxAttempt`, Trace).
 
 ## Architecture
 
 | Piece | Role |
 |---|---|
-| `assessment-ollama` | Local inference (compose profile `copilot`) — not Hub `ollama` |
-| `assessment-copilot` | FastAPI sidecar: chat, RAG/memory index, constrained prompts |
-| Django `copilot` app | Sessions, proposals, settings; `/api/copilot/*` gateway |
-| Temporal | `IndexScanForCopilotActivity` after scan completion (best-effort) |
-
-Approve on a proposal **delegates** to existing SAFE PoC / follow-up / enrich
-paths — no parallel executor.
+| `ollama` | Shared local inference (profile `ollama`) — AI Hub + Copilot |
+| `assessment-copilot` | FastAPI sidecar from `r3ngine-copilot` |
+| Django `copilot` | Sessions, proposals, Trace, MSF aux gateway |
+| Temporal | Copilot index + `MsfAuxWorkflow` (MSFRPC) |
 
 ## Enable
 
 ```bash
-make up-copilot
-# or COMPOSE_PROFILES=...,copilot in .env
+make install-copilot     # clone sibling if needed; sync MSF catalog; enable ollama+copilot; start
+make up-copilot          # same entry (starts shared ollama if down)
+make update-copilot      # pull sibling + sync catalog + rebuild
+make stop-copilot        # stops assessment-copilot only (ollama stays up)
 ```
 
-Pull a model into assessment-ollama, e.g.:
+Install syncs `r3ngine-copilot/data/msf_aux_catalog.json` → `web/copilot/data/` so
+Django validation does not depend on the sibling path at runtime.
 
 ```bash
-docker exec <assessment-ollama-container> ollama pull qwen2.5:7b-instruct
-# Prefer also: WhiteRabbitNeo / Deep Hat for pentest vocabulary
+docker exec <ollama-container> ollama pull qwen2.5:7b-instruct
 ```
 
-Env (see `.env.example`):
-
-- `ASSESSMENT_COPILOT_URL` (default `http://assessment-copilot:8091`)
-- `ASSESSMENT_OLLAMA_URL` (default `http://assessment-ollama:11434`)
-- `COPILOT_MODEL_DEFAULT`
+Env: see `.env.example` (`ASSESSMENT_COPILOT_URL`, `ASSESSMENT_OLLAMA_URL`, `MSF_RPC_*`).
 
 ## UI
 
-- **Assessment dashboard** — Copilot tab with in-context panel
-- **Global FAB** (bottom-right) — support-style box with:
-  - **Chat** — save / switch conversations
-  - **Proposals** — approve / reject queue
-- **Settings → Assessment Copilot** — enable, memory scope, model id
-
-## Memory scopes
-
-Configurable per project: `project` | `org` | `global` | `tiered`.
+- Assessment dashboard Copilot tab
+- Global FAB: **Chat**, **Proposals** (incl. Open in Metasploit), **Trace**
+- Settings → Assessment Copilot
 
 ## Hard gates
 
-- SAFE PoC and status-changing writes require operator approve
-- Co-pilot never auto-sets `validation_status=verified`
-- No freeform exploits / Metasploit execution in v1
+- SAFE PoC / MSF run / status-changing writes require operator approve
+- Never auto-sets `validation_status=verified`
+- MSF: catalog aux/post only; see [assessment-copilot-msf.md](assessment-copilot-msf.md)
 
-## Deferred (v2 TODOs)
+## Related
 
-- Metasploit skill pack / gated MSF auxiliary modules
-- Fully autonomous runs
-- Separate client-facing report generator
-- Multi-user collaborative co-pilot sessions
-- Cloud-hosted co-pilot
-- Fine-tuning / weight updates
-- Stricter auto-promotion privacy for global memory
+- [assessment-copilot-msf.md](assessment-copilot-msf.md)
+- Sibling README: https://github.com/whiterabb17/r3ngine-copilot#readme

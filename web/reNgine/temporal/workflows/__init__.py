@@ -53,6 +53,7 @@ from reNgine.temporal.workflows.jobs import (
     CertificateResyncWorkflow,
     CopilotIndexWorkflow,
     FollowupPlanWorkflow,
+    MsfAuxWorkflow,
     GeoLocalizeWorkflow,
     GoExecutorTaskWorkflow,
     HackerOneImportWorkflow,

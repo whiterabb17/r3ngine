@@ -78,7 +78,7 @@ const CopilotSettingsForm: React.FC<FormProps> = ({ projectSlug, settings, statu
       <TextField
         fullWidth
         sx={{ mt: 2 }}
-        label="Model id (assessment-ollama)"
+        label="Model id (shared ollama)"
         placeholder={status?.health?.model_default || 'qwen2.5:7b-instruct'}
         value={modelId}
         onChange={(e) => setModelId(e.target.value)}

@@ -1,0 +1,227 @@
+[
+  {
+    "module": "auxiliary/scanner/http/http_version",
+    "kind": "auxiliary",
+    "summary": "Fingerprint HTTP service version",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS", "VHOST"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT", "DisablePayloadHandler"],
+    "matches": {"services": ["http", "https"], "nuclei_families": ["http"]}
+  },
+  {
+    "module": "auxiliary/scanner/http/title",
+    "kind": "auxiliary",
+    "summary": "Collect HTTP page titles",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS", "VHOST"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["http", "https"]}
+  },
+  {
+    "module": "auxiliary/scanner/http/robots_txt",
+    "kind": "auxiliary",
+    "summary": "Fetch robots.txt",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["http", "https"]}
+  },
+  {
+    "module": "auxiliary/scanner/http/dir_scanner",
+    "kind": "auxiliary",
+    "summary": "Lightweight HTTP directory probe",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS", "PATH", "DICTIONARY"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["http", "https"]}
+  },
+  {
+    "module": "auxiliary/scanner/http/http_header",
+    "kind": "auxiliary",
+    "summary": "Enumerate interesting HTTP response headers",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS", "VHOST"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["http", "https"]}
+  },
+  {
+    "module": "auxiliary/scanner/http/ssl",
+    "kind": "auxiliary",
+    "summary": "TLS/SSL certificate and protocol checks",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["https", "ssl", "tls"]}
+  },
+  {
+    "module": "auxiliary/scanner/ssl/openssl_heartbleed",
+    "kind": "auxiliary",
+    "summary": "Check for Heartbleed (CVE-2014-0160) — detection only",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"cve_tags": ["CVE-2014-0160"], "services": ["https", "ssl"]}
+  },
+  {
+    "module": "auxiliary/scanner/ssh/ssh_version",
+    "kind": "auxiliary",
+    "summary": "SSH banner / version fingerprint",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["ssh"]}
+  },
+  {
+    "module": "auxiliary/scanner/ssh/ssh_enumusers",
+    "kind": "auxiliary",
+    "summary": "SSH username enumeration (OpenSSH timing/user enum)",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS", "USER_FILE"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT", "PASS_FILE"],
+    "matches": {"services": ["ssh"]}
+  },
+  {
+    "module": "auxiliary/scanner/smb/smb_version",
+    "kind": "auxiliary",
+    "summary": "SMB protocol version fingerprint",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["smb", "microsoft-ds"]}
+  },
+  {
+    "module": "auxiliary/scanner/smb/smb_ms17_010",
+    "kind": "auxiliary",
+    "summary": "Detect MS17-010 (EternalBlue) vulnerability — check only",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"cve_tags": ["CVE-2017-0143", "CVE-2017-0144", "CVE-2017-0145", "CVE-2017-0146", "CVE-2017-0147", "CVE-2017-0148"], "services": ["smb"]}
+  },
+  {
+    "module": "auxiliary/scanner/smb/smb_enumshares",
+    "kind": "auxiliary",
+    "summary": "Enumerate SMB shares",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS", "SMBUser", "SMBPass"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["smb"]}
+  },
+  {
+    "module": "auxiliary/scanner/ftp/ftp_version",
+    "kind": "auxiliary",
+    "summary": "FTP banner version",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["ftp"]}
+  },
+  {
+    "module": "auxiliary/scanner/ftp/anonymous",
+    "kind": "auxiliary",
+    "summary": "Check FTP anonymous login",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["ftp"]}
+  },
+  {
+    "module": "auxiliary/scanner/mysql/mysql_version",
+    "kind": "auxiliary",
+    "summary": "MySQL version probe",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["mysql"]}
+  },
+  {
+    "module": "auxiliary/scanner/postgres/postgres_version",
+    "kind": "auxiliary",
+    "summary": "PostgreSQL version probe",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["postgresql", "postgres"]}
+  },
+  {
+    "module": "auxiliary/scanner/redis/redis_server",
+    "kind": "auxiliary",
+    "summary": "Redis INFO / unauthenticated probe",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["redis"]}
+  },
+  {
+    "module": "auxiliary/scanner/snmp/snmp_enum",
+    "kind": "auxiliary",
+    "summary": "SNMP community enumeration",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS", "COMMUNITY"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["snmp"]}
+  },
+  {
+    "module": "auxiliary/scanner/rdp/rdp_scanner",
+    "kind": "auxiliary",
+    "summary": "RDP service presence check",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["rdp", "ms-wbt-server"]}
+  },
+  {
+    "module": "auxiliary/scanner/vnc/vnc_none_auth",
+    "kind": "auxiliary",
+    "summary": "Detect VNC with no authentication",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["vnc"]}
+  },
+  {
+    "module": "auxiliary/scanner/mssql/mssql_ping",
+    "kind": "auxiliary",
+    "summary": "MSSQL instance discovery / ping",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["ms-sql", "mssql"]}
+  },
+  {
+    "module": "auxiliary/scanner/http/wordpress_scanner",
+    "kind": "auxiliary",
+    "summary": "WordPress presence / version hints",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS", "VHOST", "TARGETURI"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["http", "https"], "nuclei_families": ["wordpress"]}
+  },
+  {
+    "module": "auxiliary/scanner/http/apache_optionsbleed",
+    "kind": "auxiliary",
+    "summary": "Optionsbleed (CVE-2017-9798) detection",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"cve_tags": ["CVE-2017-9798"], "services": ["http", "https"]}
+  },
+  {
+    "module": "auxiliary/scanner/http/crawler",
+    "kind": "auxiliary",
+    "summary": "Simple authenticated/unauthenticated HTTP crawl",
+    "required_options": ["RHOSTS"],
+    "optional_options": ["RPORT", "THREADS", "URI", "DEPTH"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": ["http", "https"]}
+  },
+  {
+    "module": "auxiliary/gather/shodan_search",
+    "kind": "auxiliary",
+    "summary": "Shodan search helper (requires API key in MSF datastore)",
+    "required_options": ["SHODAN_APIKEY", "QUERY"],
+    "optional_options": ["MAXPAGE", "DATABASE"],
+    "forbidden_options": ["PAYLOAD", "LHOST", "LPORT"],
+    "matches": {"services": []}
+  }
+]

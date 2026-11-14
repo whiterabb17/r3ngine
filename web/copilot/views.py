@@ -8,7 +8,8 @@ from rest_framework.views import APIView
 from api.permissions import IsPenetrationTester
 from copilot import service
 from copilot.client import CopilotClientError, copilot_models
-from copilot.models import CopilotActionProposal, CopilotSession
+from copilot.models import CopilotActionProposal, CopilotSession, CopilotTraceEvent, MsfAuxAttempt
+from copilot.trace import list_trace_events, serialize_trace_event
 from mcp.operator_gate import resolve_is_operator
 
 
@@ -221,3 +222,115 @@ class CopilotProposalRejectAPIView(APIView):
         except service.CopilotError as exc:
             return Response({'error': str(exc)}, status=exc.status)
         return Response(service.serialize_proposal(proposal))
+
+
+class CopilotTraceListAPIView(APIView):
+    permission_classes = [IsPenetrationTester]
+
+    def get(self, request):
+        if not resolve_is_operator(request):
+            return Response({'error': 'operator only'}, status=403)
+        project_slug = request.query_params.get('project_slug') or ''
+        if not project_slug:
+            return Response({'error': 'project_slug is required'}, status=400)
+        session_id = request.query_params.get('session_id')
+        turn_id = request.query_params.get('turn_id') or None
+        try:
+            limit = int(request.query_params.get('limit') or 100)
+        except (TypeError, ValueError):
+            limit = 100
+        sid = None
+        if session_id:
+            try:
+                sid = int(session_id)
+            except (TypeError, ValueError):
+                return Response({'error': 'invalid session_id'}, status=400)
+        events = list_trace_events(
+            project_slug=project_slug,
+            session_id=sid,
+            turn_id=turn_id,
+            limit=limit,
+        )
+        return Response({'events': [serialize_trace_event(e) for e in events]})
+
+
+class CopilotTraceDetailAPIView(APIView):
+    permission_classes = [IsPenetrationTester]
+
+    def get(self, request, pk):
+        if not resolve_is_operator(request):
+            return Response({'error': 'operator only'}, status=403)
+        project_slug = request.query_params.get('project_slug') or ''
+        qs = CopilotTraceEvent.objects.filter(pk=pk)
+        if project_slug:
+            qs = qs.filter(project_slug=project_slug)
+        ev = qs.first()
+        if not ev:
+            return Response({'error': 'not found'}, status=404)
+        return Response(serialize_trace_event(ev))
+
+
+def _serialize_msf_attempt(a: MsfAuxAttempt) -> dict:
+    return {
+        'id': a.id,
+        'project_slug': a.project_slug,
+        'scan_id': a.scan_id,
+        'vulnerability_id': a.vulnerability_id,
+        'status': a.status,
+        'module': a.module,
+        'options': a.options or {},
+        'rationale': a.rationale,
+        'result': a.result,
+        'error': a.error,
+        'temporal_workflow_id': a.temporal_workflow_id,
+        'created_at': a.created_at.isoformat() if a.created_at else None,
+        'approved_at': a.approved_at.isoformat() if a.approved_at else None,
+        'completed_at': a.completed_at.isoformat() if a.completed_at else None,
+    }
+
+
+class MsfAuxListAPIView(APIView):
+    permission_classes = [IsPenetrationTester]
+
+    def get(self, request):
+        if not resolve_is_operator(request):
+            return Response({'error': 'operator only'}, status=403)
+        project_slug = request.query_params.get('project_slug') or ''
+        if not project_slug:
+            return Response({'error': 'project_slug is required'}, status=400)
+        qs = MsfAuxAttempt.objects.filter(project_slug=project_slug).order_by('-created_at')[:100]
+        return Response({'attempts': [_serialize_msf_attempt(a) for a in qs]})
+
+
+class MsfAuxDetailAPIView(APIView):
+    permission_classes = [IsPenetrationTester]
+
+    def get(self, request, pk):
+        if not resolve_is_operator(request):
+            return Response({'error': 'operator only'}, status=403)
+        project_slug = request.query_params.get('project_slug') or ''
+        qs = MsfAuxAttempt.objects.filter(pk=pk)
+        if project_slug:
+            qs = qs.filter(project_slug=project_slug)
+        attempt = qs.first()
+        if not attempt:
+            return Response({'error': 'not found'}, status=404)
+        return Response(_serialize_msf_attempt(attempt))
+
+
+class MsfAuxAbortAPIView(APIView):
+    permission_classes = [IsPenetrationTester]
+
+    def post(self, request, pk):
+        if not resolve_is_operator(request):
+            return Response({'error': 'operator only'}, status=403)
+        from copilot.msf_aux import MsfAuxError, abort_attempt
+
+        attempt = MsfAuxAttempt.objects.filter(pk=pk).first()
+        if not attempt:
+            return Response({'error': 'not found'}, status=404)
+        try:
+            attempt = abort_attempt(attempt, user=request.user)
+        except MsfAuxError as exc:
+            return Response({'error': str(exc)}, status=exc.status)
+        return Response(_serialize_msf_attempt(attempt))
