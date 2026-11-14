@@ -32,8 +32,10 @@ paths — no parallel executor.
 ## Enable
 
 ```bash
-make up-copilot
-# or COMPOSE_PROFILES=...,copilot in .env
+make up-copilot          # enables COMPOSE_PROFILES=copilot in .env, then builds/starts
+make update-copilot       # rebuild images; recreates containers only if they were running
+make stop-copilot        # stops containers; profile stays enabled so `make up` brings them back
+# or set COMPOSE_PROFILES=...,copilot in .env yourself
 ```
 
 Pull a model into assessment-ollama, e.g.:

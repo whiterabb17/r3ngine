@@ -14,6 +14,17 @@ set COMPOSE_ALL_FILES=--env-file .env -f docker/docker-compose.yml
 set COMPOSE_DEV_FILES=--env-file .env -f docker/docker-compose.dev.yml
 set SERVICES=db web proxy redis neo4j temporal temporal-python-orchestrator temporal-go-executor
 
+:: Mirror Makefile: if COMPOSE_PROFILES in .env includes optional profiles, add
+:: those services to SERVICES so `make.bat up` / `start` / `devup` bring them back.
+set "ENV_COMPOSE_PROFILES="
+if exist .env for /f "usebackq tokens=1* delims==" %%A in (`findstr /b /i "COMPOSE_PROFILES=" .env 2^>nul`) do set "ENV_COMPOSE_PROFILES=%%B"
+if defined ENV_COMPOSE_PROFILES (
+    set "_PROFILES=,%ENV_COMPOSE_PROFILES%,"
+    echo;%_PROFILES% | findstr /i ",tor," >nul && set "SERVICES=%SERVICES% tor"
+    echo;%_PROFILES% | findstr /i ",ollama," >nul && set "SERVICES=%SERVICES% ollama"
+    echo;%_PROFILES% | findstr /i ",copilot," >nul && set "SERVICES=%SERVICES% assessment-ollama assessment-copilot"
+)
+
 :: Check if 'docker compose' command is available
 docker compose version >nul 2>&1
 if %errorlevel% == 0 (
@@ -37,8 +48,8 @@ if "%1" == "up" set DEBUG=0 && %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% up -d --buil
 if "%1" == "start" set DEBUG=0 && %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% up -d %SERVICES%
 :: Build and start all services in development mode.
 if "%1" == "devup" set DEBUG=1 && %DOCKER_COMPOSE% %COMPOSE_DEV_FILES% up -d --build %SERVICES%
-:: Optional services (compose profiles). This script does not read COMPOSE_PROFILES
-:: from .env, so start them by name.
+:: Optional services (compose profiles). Tor/Ollama are started by name; Copilot
+:: goes through scripts/copilot-stack.mjs so enablement is persisted in .env.
 :: Build and start the optional Tor service.
 if "%1" == "up-tor" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% up -d --build tor
 :: Stop the optional Tor service.
@@ -47,10 +58,12 @@ if "%1" == "stop-tor" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% stop tor
 if "%1" == "up-ollama" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% up -d --build ollama
 :: Stop the optional Ollama service.
 if "%1" == "stop-ollama" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% stop ollama
-:: Build and start Assessment Copilot (separate from AI Hub Ollama).
-if "%1" == "up-copilot" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% up -d --build assessment-ollama assessment-copilot
-:: Stop Assessment Copilot services.
-if "%1" == "stop-copilot" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% stop assessment-copilot assessment-ollama
+:: Enable Copilot in .env and build/start assessment-ollama + assessment-copilot.
+if "%1" == "up-copilot" node scripts\copilot-stack.mjs up
+:: Rebuild Copilot images; recreate containers only if they were running.
+if "%1" == "update-copilot" node scripts\copilot-stack.mjs update
+:: Stop Copilot containers (keeps COMPOSE_PROFILES so make up can restart them).
+if "%1" == "stop-copilot" node scripts\copilot-stack.mjs stop
 :: Build and start the remote worker.
 if "%1" == "up-worker" set DEBUG=0 && %DOCKER_COMPOSE% --env-file .env -f docker/docker-compose.worker.yml up -d --build
 :: Stop the remote worker.
@@ -298,6 +311,9 @@ echo   up               Build and start all services in production mode.
 echo   start            Start all services from existing images (no rebuild).
 echo   up-worker        Build and start the remote worker.
 echo   down-worker      Stop the remote worker.
+echo   up-copilot       Enable Copilot in .env and build/start assessment-ollama + assessment-copilot.
+echo   update-copilot    Rebuild Copilot images; recreate containers only if they were running.
+echo   stop-copilot      Stop Copilot containers (keeps COMPOSE_PROFILES so make up can restart them).
 echo   devup            Build and start all services in development mode.
 echo   build            Build all services.
 echo   build-web        Build only the web/orchestrator/executor shared image.

@@ -15,6 +15,11 @@ COMPOSE_DEV_FILES := --env-file .env -f docker/docker-compose.dev.yml
 # services; `make up-tor` / `make up-ollama` / `make up-copilot` start one
 # without touching .env. Profile "copilot" expands to assessment-ollama +
 # assessment-copilot service names for compose up/stop.
+# Prefer an exported COMPOSE_PROFILES; otherwise read it from .env so `make up`
+# brings Copilot back after `make up-copilot` enabled the profile.
+ifeq ($(origin COMPOSE_PROFILES),undefined)
+COMPOSE_PROFILES := $(shell sed -n 's/^COMPOSE_PROFILES=//p' .env 2>/dev/null | tr -d '\r' | tr -d '"' | tr -d "'")
+endif
 PROFILE_SERVICES  := $(foreach s,tor ollama,$(if $(findstring $(s),$(COMPOSE_PROFILES)),$(s))) \
 	$(if $(findstring copilot,$(COMPOSE_PROFILES)),assessment-ollama assessment-copilot)
 SERVICES          := db web proxy redis neo4j temporal temporal-python-orchestrator temporal-go-executor $(PROFILE_SERVICES)
@@ -26,7 +31,7 @@ $(info Using: $(shell echo "$(DOCKER_COMPOSE)"))
 
 # --------------------------
 
-.PHONY: setup certs up start devup build username pull down stop restart rm logs fullupgrade erase install-mcp update-mcp backup restore up-tor stop-tor up-ollama stop-ollama up-copilot stop-copilot
+.PHONY: setup certs up start devup build username pull down stop restart rm logs fullupgrade erase install-mcp update-mcp backup restore up-tor stop-tor up-ollama stop-ollama up-copilot update-copilot stop-copilot
 
 certs:		    ## Generate certificates.
 	@${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} --env-file .env -f docker/docker-compose.setup.yml run --rm certs
@@ -64,11 +69,14 @@ up-ollama:		## Build and start the optional Ollama service (LLM Toolkit local mo
 stop-ollama:		## Stop the optional Ollama service.
 	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} stop ollama
 
-up-copilot:		## Build and start Assessment Copilot (assessment-ollama + assessment-copilot).
-	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} up -d --build assessment-ollama assessment-copilot
+up-copilot:		## Enable Copilot in .env and build/start assessment-ollama + assessment-copilot.
+	node scripts/copilot-stack.mjs up
 
-stop-copilot:		## Stop Assessment Copilot services.
-	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} stop assessment-copilot assessment-ollama
+update-copilot:		## Rebuild Copilot images; recreate containers only if they were running (like update-mcp).
+	node scripts/copilot-stack.mjs update
+
+stop-copilot:		## Stop Copilot containers (keeps COMPOSE_PROFILES so make up can restart them).
+	node scripts/copilot-stack.mjs stop
 
 devup:				## Build and start all services in development mode.
 	DEBUG=1 ${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_DEV_FILES} up -d --build ${SERVICES}
@@ -320,4 +328,4 @@ endif
 
 help:			## Show this help.
 	@echo "Make application Docker images and manage containers using Docker Compose files."
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m (default: help)\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m (default: help)\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)

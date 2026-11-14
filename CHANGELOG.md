@@ -13,6 +13,7 @@
   - Follow-up `run_tool` steps round-trip validated `tool_args` (REST/MCP Django path); docs note sidecar schema sync.
   - Docs: `documents/assessment-copilot.md`. Metasploit module integration deferred to v2.
   - Enable with `make up-copilot` or `COMPOSE_PROFILES=...,copilot`; migrate `copilot.0001_initial`.
+  - Make targets (listed in `make help` / `make.bat help`): `up-copilot` enables `COMPOSE_PROFILES=copilot` in `.env` then builds/starts; `update-copilot` rebuilds images and recreates containers only if they were running (MCP-style); `stop-copilot` stops containers but keeps the profile so a later `make up` / `make start` brings Copilot back. Shared helper: `scripts/copilot-stack.mjs`.
 
 ### [v3.7.9] - 2026-10-09
 
