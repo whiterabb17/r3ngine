@@ -37,7 +37,11 @@ def _vuln_chunk(vuln: Vulnerability, project_slug: str) -> dict[str, Any]:
                 text_parts.append(f"public_exploits: {len(pe)}")
                 tags.extend(['public_exploit', 'has_metasploit', 'msf_aux'])
     except Exception:
-        pass
+        logger.warning(
+            'copilot index CVE enrich failed vuln_id=%s',
+            getattr(vuln, 'id', None),
+            exc_info=True,
+        )
     if enrichment.get('has_metasploit') or (enrichment.get('apme') or {}).get('has_metasploit'):
         text_parts.append('has_metasploit: true')
         tags.extend(['has_metasploit', 'msf_aux', 'metasploit'])
