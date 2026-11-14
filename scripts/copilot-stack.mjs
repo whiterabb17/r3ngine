@@ -2,9 +2,13 @@
 /**
  * Assessment Copilot compose helpers (mirrors install-mcp Docker ensure).
  *
- *   up      Ensure COMPOSE_PROFILES includes `copilot`, then build and start.
- *   update  Rebuild images; force-recreate only if a copilot container was running.
- *   stop    Stop copilot containers (profile stays enabled so `make up` brings them back).
+ * Uses the shared `ollama` service (r3ngine-ollama image). Starts ollama if it
+ * is not already running. Never builds a separate assessment-ollama image.
+ *
+ *   up      Ensure COMPOSE_PROFILES includes `ollama` + `copilot`, start ollama
+ *           if down, then build and start assessment-copilot.
+ *   update  Rebuild assessment-copilot; force-recreate only if it was running.
+ *   stop    Stop assessment-copilot only (shared ollama stays up).
  *
  * Usage: node scripts/copilot-stack.mjs <up|update|stop>
  */
@@ -16,8 +20,10 @@ import { spawnSync } from 'node:child_process';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const ENV_PATH = path.join(ROOT, '.env');
-const PROFILE = 'copilot';
-const SERVICES = ['assessment-ollama', 'assessment-copilot'];
+const COPILOT_PROFILE = 'copilot';
+const OLLAMA_PROFILE = 'ollama';
+const COPILOT_SERVICE = 'assessment-copilot';
+const OLLAMA_SERVICE = 'ollama';
 
 function log(msg) {
   console.log(`[copilot-stack] ${msg}`);
@@ -82,18 +88,25 @@ function parseProfiles(envText) {
     .filter(Boolean);
 }
 
-/** Ensure COMPOSE_PROFILES in .env includes `copilot` (create the line if missing). */
-export function ensureCopilotProfileEnabled() {
+/** Ensure COMPOSE_PROFILES in .env includes the given profile names. */
+export function ensureProfilesEnabled(profilesToAdd) {
   let text = readEnvFile();
   if (!text && !fs.existsSync(ENV_PATH)) {
     throw new Error('.env not found. Copy .env.example to .env first.');
   }
   const profiles = parseProfiles(text);
-  if (profiles.map((p) => p.toLowerCase()).includes(PROFILE)) {
-    log(`COMPOSE_PROFILES already includes "${PROFILE}".`);
+  const lower = new Set(profiles.map((p) => p.toLowerCase()));
+  let changed = false;
+  for (const name of profilesToAdd) {
+    if (lower.has(name.toLowerCase())) continue;
+    profiles.push(name);
+    lower.add(name.toLowerCase());
+    changed = true;
+  }
+  if (!changed) {
+    log(`COMPOSE_PROFILES already includes ${profilesToAdd.join(', ')}.`);
     return false;
   }
-  profiles.push(PROFILE);
   const next = profiles.join(',');
   if (/^\s*COMPOSE_PROFILES\s*=/m.test(text)) {
     text = text.replace(
@@ -102,66 +115,95 @@ export function ensureCopilotProfileEnabled() {
     );
   } else {
     const suffix = text.endsWith('\n') || text.length === 0 ? '' : '\n';
-    text = `${text}${suffix}# Enabled by make up-copilot so make up/start bring Copilot back.\nCOMPOSE_PROFILES=${next}\n`;
+    text = `${text}${suffix}# Enabled by make up-copilot so make up/start bring Copilot + Ollama back.\nCOMPOSE_PROFILES=${next}\n`;
   }
   fs.writeFileSync(ENV_PATH, text, 'utf8');
-  log(`Enabled profile "${PROFILE}" in .env (COMPOSE_PROFILES=${next}).`);
+  log(`Enabled profiles in .env (COMPOSE_PROFILES=${next}).`);
   return true;
 }
 
-/** True if any assessment-copilot / assessment-ollama container is currently Up. */
-export function isCopilotRunning() {
+/** @deprecated Prefer ensureProfilesEnabled(['copilot','ollama']). */
+export function ensureCopilotProfileEnabled() {
+  return ensureProfilesEnabled([OLLAMA_PROFILE, COPILOT_PROFILE]);
+}
+
+function isContainerUp(nameFilter) {
   const probe = spawnSync(
     'docker',
-    [
-      'ps',
-      '--filter',
-      'name=assessment-copilot',
-      '--filter',
-      'name=assessment-ollama',
-      '--format',
-      '{{.Names}}\t{{.Status}}',
-    ],
+    ['ps', '--filter', `name=${nameFilter}`, '--format', '{{.Names}}\t{{.Status}}'],
     { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
   );
   if (probe.error || probe.status !== 0) return false;
   return (probe.stdout || '')
     .split(/\r?\n/)
     .filter(Boolean)
-    .some((line) => /^\S+\tUp\b/i.test(line));
+    .some((line) => {
+      const [name, status = ''] = line.split('\t');
+      // Prefer exact compose service suffix; avoid matching unrelated names.
+      const n = String(name || '').toLowerCase();
+      const needle = String(nameFilter || '').toLowerCase();
+      if (!n.includes(needle)) return false;
+      return /^\s*Up\b/i.test(status);
+    });
+}
+
+/** True if the shared ollama container is Up. */
+export function isOllamaRunning() {
+  return isContainerUp(OLLAMA_SERVICE);
+}
+
+/** True if assessment-copilot is currently Up. */
+export function isCopilotRunning() {
+  return isContainerUp(COPILOT_SERVICE);
+}
+
+/** Start shared ollama if it is not already running (explicit service target). */
+export function ensureOllamaRunning() {
+  if (isOllamaRunning()) {
+    log('Shared ollama is already running.');
+    return false;
+  }
+  log('Shared ollama is not running — starting it.');
+  // Explicit service name starts a profiled service without requiring the
+  // profile flag; we still persist `ollama` in COMPOSE_PROFILES for make up.
+  runCompose(['up', '-d', '--build', OLLAMA_SERVICE]);
+  return true;
 }
 
 export function upCopilot() {
-  ensureCopilotProfileEnabled();
-  runCompose(['up', '-d', '--build', ...SERVICES]);
-  log('Assessment Copilot is up.');
+  ensureProfilesEnabled([OLLAMA_PROFILE, COPILOT_PROFILE]);
+  ensureOllamaRunning();
+  runCompose(['up', '-d', '--build', COPILOT_SERVICE]);
+  log('Assessment Copilot is up (shared ollama).');
 }
 
 export function updateCopilot() {
   const wasRunning = isCopilotRunning();
   log(wasRunning
-    ? 'Copilot containers are running — rebuild and recreate.'
-    : 'Copilot containers are not running — rebuild only (will not start).');
-  runCompose(['build', ...SERVICES]);
+    ? 'Copilot container is running — rebuild and recreate.'
+    : 'Copilot container is not running — rebuild only (will not start).');
+  runCompose(['build', COPILOT_SERVICE]);
   if (wasRunning) {
-    runCompose(['up', '-d', '--force-recreate', '--no-deps', ...SERVICES]);
-    log('Assessment Copilot images rebuilt and containers recreated.');
+    ensureOllamaRunning();
+    runCompose(['up', '-d', '--force-recreate', '--no-deps', COPILOT_SERVICE]);
+    log('Assessment Copilot image rebuilt and container recreated.');
   } else {
-    log('Assessment Copilot images rebuilt. Run `make up-copilot` (or `make up` if enabled) to start.');
+    log('Assessment Copilot image rebuilt. Run `make up-copilot` (or `make up` if enabled) to start.');
   }
 }
 
 export function stopCopilot() {
-  runCompose(['stop', ...SERVICES], { allowFail: true });
-  log('Assessment Copilot stopped (COMPOSE_PROFILES left unchanged so make up can restart it).');
+  // Leave shared ollama running — AI Hub / other consumers may use it.
+  runCompose(['stop', COPILOT_SERVICE], { allowFail: true });
+  log('Assessment Copilot stopped (shared ollama left running; COMPOSE_PROFILES unchanged).');
 }
 
 function usage() {
   console.log(`Usage: node scripts/copilot-stack.mjs <up|update|stop>
 
-  up      Enable COMPOSE_PROFILES=copilot in .env, build and start Copilot
-  update  Rebuild Copilot images; recreate containers only if they were running
-  stop    Stop Copilot containers (keeps profile enabled for make up)
+  up      Enable ollama+copilot profiles, start shared ollama if needed, start Copilot
+  update  Rebuild Copilot image; recreate container only if it was running
+  stop    Stop Copilot only (shared ollama stays up)
 `);
 }
 

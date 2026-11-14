@@ -105,8 +105,8 @@ targets, since it cannot read `.env`).
 | Service | Profile | Used by | The app's view of it |
 |---|---|---|---|
 | `tor` (built from `web/tor/`) | `tor` | "TOR Mode" in Settings → Proxy; `TorNewCircuitActivity` between scan phases | `reNgine/tor_manager.py` — TCP probe of `tor:9050`, NEWNYM over `tor:9051` with `TOR_CONTROL_PASSWORD` |
-| `ollama` (built from `docker/ollama/`, `OLLAMA_DOCKERFILE` picks the GPU variant) | `ollama` | LLM Toolkit local models (`http://ollama:11434`) | `reNgine/ollama_manager.py` — `GET /api/version` |
-| `assessment-ollama` + `assessment-copilot` (built from `docker/ollama/` and `docker/assessment-copilot/`) | `copilot` | Assessment Copilot (chat, SAFE PoC / follow-up proposals; separate from AI Hub) | `ASSESSMENT_COPILOT_URL` (`http://assessment-copilot:8091`); see `documents/assessment-copilot.md` |
+| `ollama` (built from `docker/ollama/`, `OLLAMA_DOCKERFILE` picks the GPU variant) | `ollama` | LLM Toolkit + Assessment Copilot inference (`http://ollama:11434`) | `reNgine/ollama_manager.py` — `GET /api/version` |
+| `assessment-copilot` (built from sibling `../r3ngine-copilot`) | `copilot` | Assessment Copilot sidecar (chat, SAFE PoC / follow-up proposals; reuses shared `ollama`) | `ASSESSMENT_COPILOT_URL` (`http://assessment-copilot:8091`); see `documents/assessment-copilot.md` |
 
 The application never starts or stops these containers. When a service is
 down, the UI (TOR Mode card, Ollama service status) shows the `hint` from the

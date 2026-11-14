@@ -5,15 +5,17 @@
 #### Added
 
 - **Assessment Copilot (local pentest LLM)**:
-  - Separate compose profile `copilot` with `assessment-ollama` + `assessment-copilot` sidecar — fully isolated from AI Hub / LLM Toolkit enrichment (`LLMConfig` / Hub `ollama` untouched).
+  - Compose profile `copilot` with `assessment-copilot` sidecar (sibling repo `r3ngine-copilot`); inference reuses shared Hub `ollama` (`r3ngine-ollama`). Chat/proposal paths stay separate from AI Hub enrichment (`LLMConfig`).
   - Django `copilot` app: project settings (memory scope project/org/global/tiered), saved chat sessions, and operator-gated action proposals (validate, SAFE PoC, follow-up, remediation).
   - Approve delegates into existing `SafePocAttempt` / `FollowupPlan` / `agent_enrichment` + `Vulnerability.remediation` paths so current reporting picks up proof and remediations; never auto-sets `verified`.
   - Temporal best-effort indexing after scan complete (`CopilotIndexWorkflow` / `IndexScanForCopilotActivity`, fire-and-forget).
   - UI: assessment dashboard Copilot tab, global bottom-right FAB support box (Chat with save/switch conversations + Proposals approve/reject), Settings → Assessment Copilot.
   - Follow-up `run_tool` steps round-trip validated `tool_args` (REST/MCP Django path); docs note sidecar schema sync.
-  - Docs: `documents/assessment-copilot.md`. Metasploit module integration deferred to v2.
-  - Enable with `make up-copilot` or `COMPOSE_PROFILES=...,copilot`; migrate `copilot.0001_initial`.
-  - Make targets (listed in `make help` / `make.bat help`): `up-copilot` enables `COMPOSE_PROFILES=copilot` in `.env` then builds/starts; `update-copilot` rebuilds images and recreates containers only if they were running (MCP-style); `stop-copilot` stops containers but keeps the profile so a later `make up` / `make start` brings Copilot back. Shared helper: `scripts/copilot-stack.mjs`.
+  - Docs: `documents/assessment-copilot.md`, `documents/assessment-copilot-msf.md`.
+  - Enable with `make install-copilot` / `make up-copilot` or `COMPOSE_PROFILES=...,ollama,copilot`; migrate `copilot` (incl. Trace + `MsfAuxAttempt`).
+  - Make targets: `install-copilot` clones sibling `r3ngine-copilot`, syncs MSF catalog into `web/copilot/data/`, enables `ollama`+`copilot`, starts shared ollama if down, builds/starts sidecar; `update-copilot` / `stop-copilot` MCP-style. Helpers: `scripts/install-copilot.mjs`, `scripts/copilot-stack.mjs`.
+  - **Copilot v2 MSF + Trace**: allowlisted `msf_module` proposals; recommend vs gated `MsfAuxWorkflow` (MSFRPC console-only); FAB Trace tab; plugin deep-link `Open in Metasploit`.
+  - MSF hardening: project-scoped vuln RHOSTS checks, execution claim (no duplicate RPC on retry), Temporal `maximum_attempts=1` + `MsfAuxMarkFailedActivity` on timeout, abort cancels workflow and polls console, option values reject control characters, recommend mode requires `vulnerability_id`.
 
 - **Nuclei hang watchdog (go-executor + tag retry)**:
   - Go-executor stall detector for nuclei: kills the process group after `NUCLEI_STALL_TIMEOUT_SECONDS` (default 900) with no progress (idle lines or stuck `-stats`).

@@ -1,4 +1,4 @@
-"""Assessment Copilot persistence — config, conversations, action proposals."""
+"""Assessment Copilot persistence — config, conversations, proposals, MSF aux, Trace."""
 from __future__ import annotations
 
 from django.conf import settings
@@ -98,11 +98,13 @@ class CopilotActionProposal(models.Model):
     TYPE_SAFE_POC = 'safe_poc'
     TYPE_FOLLOWUP = 'followup'
     TYPE_REMEDIATION = 'remediation'
+    TYPE_MSF_MODULE = 'msf_module'
     TYPE_CHOICES = (
         (TYPE_VALIDATE, 'Validate'),
         (TYPE_SAFE_POC, 'SAFE PoC'),
         (TYPE_FOLLOWUP, 'Follow-up'),
         (TYPE_REMEDIATION, 'Remediation'),
+        (TYPE_MSF_MODULE, 'MSF module'),
     )
 
     STATUS_PENDING = 'pending'
@@ -134,9 +136,9 @@ class CopilotActionProposal(models.Model):
     summary = models.CharField(max_length=512, blank=True, default='')
     rationale = models.TextField(blank=True, default='')
     payload = models.JSONField(default=dict)
-    # Links to delegated entities after propose/approve
     safe_poc_attempt_id = models.IntegerField(null=True, blank=True)
     followup_plan_id = models.IntegerField(null=True, blank=True)
+    msf_aux_attempt_id = models.IntegerField(null=True, blank=True)
     result = models.JSONField(default=dict, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -165,3 +167,122 @@ class CopilotActionProposal(models.Model):
 
     def __str__(self):
         return f'CopilotActionProposal {self.id} ({self.action_type}/{self.status})'
+
+
+class MsfAuxAttempt(models.Model):
+    """Gated Metasploit auxiliary/post run (propose → approve → Temporal → MSFRPC)."""
+
+    STATUS_PROPOSED = 'proposed'
+    STATUS_APPROVED = 'approved'
+    STATUS_RUNNING = 'running'
+    STATUS_SUCCEEDED = 'succeeded'
+    STATUS_FAILED = 'failed'
+    STATUS_ABORTED = 'aborted'
+    STATUS_REJECTED = 'rejected'
+    STATUS_CHOICES = (
+        (STATUS_PROPOSED, 'Proposed'),
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_RUNNING, 'Running'),
+        (STATUS_SUCCEEDED, 'Succeeded'),
+        (STATUS_FAILED, 'Failed'),
+        (STATUS_ABORTED, 'Aborted'),
+        (STATUS_REJECTED, 'Rejected'),
+    )
+
+    project_slug = models.CharField(max_length=255, db_index=True)
+    scan_id = models.IntegerField(null=True, blank=True, db_index=True)
+    vulnerability_id = models.IntegerField(null=True, blank=True, db_index=True)
+    status = models.CharField(
+        max_length=16, choices=STATUS_CHOICES, default=STATUS_PROPOSED, db_index=True,
+    )
+    module = models.CharField(max_length=255)
+    options = models.JSONField(default=dict)
+    rationale = models.TextField(blank=True, default='')
+    result = models.JSONField(null=True, blank=True)
+    error = models.TextField(blank=True, default='')
+    temporal_workflow_id = models.CharField(max_length=255, blank=True, default='')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='msf_aux_attempts_created',
+    )
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='msf_aux_attempts_decided',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['project_slug', 'status', '-created_at'],
+                name='copilot_msf_project_idx',
+            ),
+            models.Index(
+                fields=['vulnerability_id', 'status'],
+                name='copilot_msf_vuln_idx',
+            ),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'MsfAuxAttempt {self.id} ({self.module}/{self.status})'
+
+
+class CopilotTraceEvent(models.Model):
+    """Operator-visible audit stream for Copilot turns, proposals, and MSF runs."""
+
+    TYPE_RETRIEVE = 'retrieve'
+    TYPE_DECISION = 'decision'
+    TYPE_PROPOSAL = 'proposal'
+    TYPE_MSF_AUX = 'msf_aux'
+    TYPE_THOUGHT = 'thought'
+    TYPE_ERROR = 'error'
+    TYPE_CHOICES = (
+        (TYPE_RETRIEVE, 'Retrieve'),
+        (TYPE_DECISION, 'Decision'),
+        (TYPE_PROPOSAL, 'Proposal'),
+        (TYPE_MSF_AUX, 'MSF aux'),
+        (TYPE_THOUGHT, 'Thought'),
+        (TYPE_ERROR, 'Error'),
+    )
+
+    project_slug = models.CharField(max_length=255, db_index=True)
+    session = models.ForeignKey(
+        CopilotSession,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='trace_events',
+    )
+    turn_id = models.CharField(max_length=64, blank=True, default='', db_index=True)
+    event_type = models.CharField(max_length=32, choices=TYPE_CHOICES, db_index=True)
+    summary = models.CharField(max_length=512, blank=True, default='')
+    payload = models.JSONField(default=dict, blank=True)
+    proposal_id = models.IntegerField(null=True, blank=True, db_index=True)
+    msf_aux_attempt_id = models.IntegerField(null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['project_slug', '-created_at'],
+                name='copilot_tr_project_idx',
+            ),
+            models.Index(
+                fields=['session', 'turn_id'],
+                name='copilot_tr_session_idx',
+            ),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'CopilotTraceEvent {self.id} ({self.event_type})'

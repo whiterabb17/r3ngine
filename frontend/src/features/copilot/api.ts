@@ -28,16 +28,30 @@ export interface CopilotProposal {
   assessment_id?: number | null;
   vulnerability_id?: number | null;
   session_id?: number | null;
-  action_type: 'validate' | 'safe_poc' | 'followup' | 'remediation';
+  action_type: 'validate' | 'safe_poc' | 'followup' | 'remediation' | 'msf_module';
   status: 'pending' | 'approved' | 'rejected' | 'failed';
   summary: string;
   rationale: string;
   payload: Record<string, unknown>;
   safe_poc_attempt_id?: number | null;
   followup_plan_id?: number | null;
+  msf_aux_attempt_id?: number | null;
   result?: Record<string, unknown>;
   created_at?: string;
   decided_at?: string | null;
+}
+
+export interface CopilotTraceEvent {
+  id: number;
+  project_slug: string;
+  session_id?: number | null;
+  turn_id: string;
+  event_type: 'retrieve' | 'decision' | 'proposal' | 'msf_aux' | 'thought' | 'error' | string;
+  summary: string;
+  payload: Record<string, unknown>;
+  proposal_id?: number | null;
+  msf_aux_attempt_id?: number | null;
+  created_at?: string | null;
 }
 
 export interface CopilotSettings {
@@ -62,6 +76,22 @@ export interface CopilotStatus {
 }
 
 const csrf = () => ({ headers: { 'X-CSRFToken': getCsrfToken() || '' } });
+
+export function msfPluginHandoffUrl(
+  projectSlug: string,
+  payload: Record<string, unknown>,
+): string {
+  const module = String(payload.module || '');
+  const options = (payload.options && typeof payload.options === 'object'
+    ? (payload.options as Record<string, unknown>)
+    : {}) as Record<string, unknown>;
+  const params = new URLSearchParams();
+  if (module) params.set('module', module);
+  const rhosts = options.RHOSTS ?? options.RHOST;
+  if (rhosts != null) params.set('rhosts', String(rhosts));
+  if (options.RPORT != null) params.set('rport', String(options.RPORT));
+  return `/${projectSlug}/p/metasploit_integration?${params.toString()}`;
+}
 
 export function useCopilotStatus(projectSlug: string) {
   return useQuery({
@@ -163,6 +193,7 @@ export function useCopilotChat(projectSlug: string) {
       qc.invalidateQueries({ queryKey: ['copilot', 'sessions', projectSlug] });
       qc.invalidateQueries({ queryKey: ['copilot', 'proposals', projectSlug] });
       qc.invalidateQueries({ queryKey: ['copilot', 'status', projectSlug] });
+      qc.invalidateQueries({ queryKey: ['copilot', 'trace', projectSlug] });
     },
   });
 }
@@ -191,6 +222,7 @@ export function useApproveCopilotProposal(projectSlug: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['copilot', 'proposals', projectSlug] });
       qc.invalidateQueries({ queryKey: ['copilot', 'status', projectSlug] });
+      qc.invalidateQueries({ queryKey: ['copilot', 'trace', projectSlug] });
     },
   });
 }
@@ -206,5 +238,40 @@ export function useRejectCopilotProposal(projectSlug: string) {
       qc.invalidateQueries({ queryKey: ['copilot', 'proposals', projectSlug] });
       qc.invalidateQueries({ queryKey: ['copilot', 'status', projectSlug] });
     },
+  });
+}
+
+export function useCopilotTrace(
+  projectSlug: string,
+  opts?: { sessionId?: number | null; enabled?: boolean },
+) {
+  const sessionId = opts?.sessionId ?? null;
+  return useQuery({
+    queryKey: ['copilot', 'trace', projectSlug, sessionId],
+    queryFn: async () => {
+      const { data } = await axios.get<{ events: CopilotTraceEvent[] }>('/api/copilot/trace/', {
+        params: {
+          project_slug: projectSlug,
+          ...(sessionId != null ? { session_id: sessionId } : {}),
+          limit: 100,
+        },
+      });
+      return data.events;
+    },
+    enabled: Boolean(projectSlug) && (opts?.enabled ?? true),
+    refetchInterval: 15_000,
+  });
+}
+
+export function useCopilotTraceDetail(projectSlug: string, eventId: number | null) {
+  return useQuery({
+    queryKey: ['copilot', 'trace', 'detail', projectSlug, eventId],
+    queryFn: async () => {
+      const { data } = await axios.get<CopilotTraceEvent>(`/api/copilot/trace/${eventId}/`, {
+        params: { project_slug: projectSlug },
+      });
+      return data;
+    },
+    enabled: Boolean(projectSlug && eventId),
   });
 }

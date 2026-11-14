@@ -10,6 +10,11 @@ from copilot.views import (
     CopilotSessionListCreateAPIView,
     CopilotSettingsAPIView,
     CopilotStatusAPIView,
+    CopilotTraceDetailAPIView,
+    CopilotTraceListAPIView,
+    MsfAuxAbortAPIView,
+    MsfAuxDetailAPIView,
+    MsfAuxListAPIView,
 )
 
 urlpatterns = [
@@ -22,4 +27,9 @@ urlpatterns = [
     path('proposals/', CopilotProposalListCreateAPIView.as_view()),
     path('proposals/<int:pk>/approve/', CopilotProposalApproveAPIView.as_view()),
     path('proposals/<int:pk>/reject/', CopilotProposalRejectAPIView.as_view()),
+    path('trace/', CopilotTraceListAPIView.as_view()),
+    path('trace/<int:pk>/', CopilotTraceDetailAPIView.as_view()),
+    path('msf-aux/', MsfAuxListAPIView.as_view()),
+    path('msf-aux/<int:pk>/', MsfAuxDetailAPIView.as_view()),
+    path('msf-aux/<int:pk>/abort/', MsfAuxAbortAPIView.as_view()),
 ]

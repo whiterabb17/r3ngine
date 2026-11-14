@@ -22,7 +22,10 @@ if defined ENV_COMPOSE_PROFILES (
     set "_PROFILES=,%ENV_COMPOSE_PROFILES%,"
     echo;%_PROFILES% | findstr /i ",tor," >nul && set "SERVICES=%SERVICES% tor"
     echo;%_PROFILES% | findstr /i ",ollama," >nul && set "SERVICES=%SERVICES% ollama"
-    echo;%_PROFILES% | findstr /i ",copilot," >nul && set "SERVICES=%SERVICES% assessment-ollama assessment-copilot"
+    echo;%_PROFILES% | findstr /i ",copilot," >nul && (
+      echo;%_PROFILES% | findstr /i ",ollama," >nul || set "SERVICES=%SERVICES% ollama"
+      set "SERVICES=%SERVICES% assessment-copilot"
+    )
 )
 
 :: Check if 'docker compose' command is available
@@ -42,6 +45,10 @@ if "%1" == "setup" %DOCKER_COMPOSE% --env-file .env -f docker/docker-compose.set
 if "%1" == "install-mcp" node scripts\install-mcp.mjs %2 %3 %4 %5 %6 %7 %8 %9
 :: Pull latest r3ngine-mcp and re-run setup (--update).
 if "%1" == "update-mcp" node scripts\install-mcp.mjs --update %2 %3 %4 %5 %6 %7 %8 %9
+:: Clone r3ngine-copilot (if needed), enable ollama+copilot, build & start.
+if "%1" == "install-copilot" node scripts\install-copilot.mjs %2 %3 %4 %5 %6 %7 %8 %9
+:: Pull sibling checkout + rebuild Copilot; recreate/start containers.
+if "%1" == "update-copilot" node scripts\install-copilot.mjs --update %2 %3 %4 %5 %6 %7 %8 %9
 :: Build and start all services in production mode.
 if "%1" == "up" set DEBUG=0 && %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% up -d --build %SERVICES%
 :: Start all services from existing images (no rebuild).
@@ -58,12 +65,10 @@ if "%1" == "stop-tor" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% stop tor
 if "%1" == "up-ollama" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% up -d --build ollama
 :: Stop the optional Ollama service.
 if "%1" == "stop-ollama" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% stop ollama
-:: Enable Copilot in .env and build/start assessment-ollama + assessment-copilot.
-if "%1" == "up-copilot" node scripts\copilot-stack.mjs up
-:: Rebuild Copilot images; recreate containers only if they were running.
-if "%1" == "update-copilot" node scripts\copilot-stack.mjs update
+:: Enable Copilot in .env and build/start (requires sibling checkout).
+if "%1" == "up-copilot" node scripts\install-copilot.mjs %2 %3 %4 %5 %6 %7 %8 %9
 :: Stop Copilot containers (keeps COMPOSE_PROFILES so make up can restart them).
-if "%1" == "stop-copilot" node scripts\copilot-stack.mjs stop
+if "%1" == "stop-copilot" node scripts\install-copilot.mjs --stop
 :: Build and start the remote worker.
 if "%1" == "up-worker" set DEBUG=0 && %DOCKER_COMPOSE% --env-file .env -f docker/docker-compose.worker.yml up -d --build
 :: Stop the remote worker.
@@ -307,13 +312,14 @@ echo   certs            Generate certificates.
 echo   setup            Generate certificates.
 echo   install-mcp      Clone r3ngine-mcp (if needed) and run its Node setup script.
 echo   update-mcp       Pull latest r3ngine-mcp and re-run setup (--update).
+echo   install-copilot  Clone r3ngine-copilot (if needed), enable ollama+copilot, build ^& start.
+echo   update-copilot   Pull sibling checkout + rebuild Copilot; recreate/start containers.
 echo   up               Build and start all services in production mode.
 echo   start            Start all services from existing images (no rebuild).
 echo   up-worker        Build and start the remote worker.
 echo   down-worker      Stop the remote worker.
-echo   up-copilot       Enable Copilot in .env and build/start assessment-ollama + assessment-copilot.
-echo   update-copilot    Rebuild Copilot images; recreate containers only if they were running.
-echo   stop-copilot      Stop Copilot containers (keeps COMPOSE_PROFILES so make up can restart them).
+echo   up-copilot       Alias of install-copilot (enable profile, build/start).
+echo   stop-copilot     Stop Copilot containers (keeps COMPOSE_PROFILES so make up can restart them).
 echo   devup            Build and start all services in development mode.
 echo   build            Build all services.
 echo   build-web        Build only the web/orchestrator/executor shared image.

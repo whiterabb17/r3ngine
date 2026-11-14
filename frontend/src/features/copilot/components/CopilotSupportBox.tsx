@@ -15,22 +15,27 @@ import {
   MenuItem,
   FormControl,
   Alert,
+  Drawer,
   alpha,
 } from '@mui/material';
-import { Plus, Send, Check, X } from 'lucide-react';
+import { Plus, Send, Check, X, ExternalLink } from 'lucide-react';
 import { useTheme } from '@mui/material/styles';
 import { useThemeTokens } from '../../../theme/useThemeTokens';
-import { getSurfaceSx } from '../../../theme/semanticColors';
+import { getDialogPaperSx, getSurfaceSx } from '../../../theme/semanticColors';
 import {
+  msfPluginHandoffUrl,
   useApproveCopilotProposal,
   useCopilotChat,
   useCopilotProposals,
   useCopilotSession,
   useCopilotSessions,
   useCopilotStatus,
+  useCopilotTrace,
+  useCopilotTraceDetail,
   useCreateCopilotSession,
   useRejectCopilotProposal,
   type CopilotProposal,
+  type CopilotTraceEvent,
 } from '../api';
 
 type Props = {
@@ -38,7 +43,7 @@ type Props = {
   scanId?: number | null;
   assessmentId?: number | null;
   compact?: boolean;
-  defaultTab?: 'chat' | 'proposals';
+  defaultTab?: 'chat' | 'proposals' | 'trace';
   onClose?: () => void;
 };
 
@@ -52,14 +57,13 @@ export const CopilotSupportBox: React.FC<Props> = ({
 }) => {
   const theme = useTheme();
   const { tokens, isLight } = useThemeTokens();
-  const [tab, setTab] = useState<'chat' | 'proposals'>(defaultTab);
+  const [tab, setTab] = useState<'chat' | 'proposals' | 'trace'>(defaultTab);
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [draft, setDraft] = useState('');
+  const [traceEventId, setTraceEventId] = useState<number | null>(null);
 
   const { data: status } = useCopilotStatus(projectSlug);
   const { data: sessions } = useCopilotSessions(projectSlug);
-  // Prefer an explicit selection; otherwise fall back to the newest session
-  // without syncing into state from an effect (react-hooks/set-state-in-effect).
   const activeSessionId = sessionId ?? sessions?.[0]?.id ?? null;
   const { data: session } = useCopilotSession(projectSlug, activeSessionId);
   const createSession = useCreateCopilotSession(projectSlug);
@@ -67,6 +71,11 @@ export const CopilotSupportBox: React.FC<Props> = ({
   const { data: proposals } = useCopilotProposals(projectSlug, 'pending');
   const approve = useApproveCopilotProposal(projectSlug);
   const reject = useRejectCopilotProposal(projectSlug);
+  const { data: traceEvents } = useCopilotTrace(projectSlug, {
+    sessionId: activeSessionId,
+    enabled: tab === 'trace',
+  });
+  const { data: traceDetail } = useCopilotTraceDetail(projectSlug, traceEventId);
 
   const sessionDefaults = {
     title: 'New conversation' as const,
@@ -133,6 +142,7 @@ export const CopilotSupportBox: React.FC<Props> = ({
           label={`Proposals${proposals?.length ? ` (${proposals.length})` : ''}`}
           sx={{ minHeight: 36, fontSize: '0.7rem' }}
         />
+        <Tab value="trace" label="Trace" sx={{ minHeight: 36, fontSize: '0.7rem' }} />
       </Tabs>
 
       {tab === 'chat' ? (
@@ -172,7 +182,6 @@ export const CopilotSupportBox: React.FC<Props> = ({
                 key={m.id ?? idx}
                 sx={{
                   mb: 1.25,
-                  alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
                   ml: m.role === 'user' ? 4 : 0,
                   mr: m.role === 'user' ? 0 : 4,
                   p: 1.25,
@@ -199,7 +208,7 @@ export const CopilotSupportBox: React.FC<Props> = ({
             <TextField
               size="small"
               fullWidth
-              placeholder="Ask about findings, SAFE PoCs, remediations…"
+              placeholder="Ask about findings, SAFE PoCs, MSF aux, remediations…"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
@@ -221,7 +230,7 @@ export const CopilotSupportBox: React.FC<Props> = ({
             </IconButton>
           </Box>
         </Box>
-      ) : (
+      ) : tab === 'proposals' ? (
         <Box sx={{ flex: 1, overflowY: 'auto', p: 1.5 }}>
           {!proposals?.length && (
             <Typography variant="body2" color="text.secondary" sx={{ p: 1 }}>
@@ -232,26 +241,97 @@ export const CopilotSupportBox: React.FC<Props> = ({
             {(proposals || []).map((p) => (
               <ProposalRow
                 key={p.id}
+                projectSlug={projectSlug}
                 proposal={p}
                 onApprove={() => approve.mutate(p.id)}
                 onReject={() => reject.mutate(p.id)}
+                onViewTrace={() => {
+                  setTab('trace');
+                  if (p.session_id) setSessionId(p.session_id);
+                }}
                 busy={approve.isPending || reject.isPending}
               />
             ))}
           </List>
         </Box>
+      ) : (
+        <Box sx={{ flex: 1, overflowY: 'auto', p: 1.5 }}>
+          {!traceEvents?.length && (
+            <Typography variant="body2" color="text.secondary" sx={{ p: 1 }}>
+              No trace events yet. Chat or approve proposals to populate Trace.
+            </Typography>
+          )}
+          <List dense disablePadding>
+            {(traceEvents || []).map((ev) => (
+              <TraceRow key={ev.id} event={ev} onOpen={() => setTraceEventId(ev.id)} />
+            ))}
+          </List>
+        </Box>
       )}
+
+      <Drawer
+        anchor="right"
+        open={traceEventId != null}
+        onClose={() => setTraceEventId(null)}
+        slotProps={{
+          paper: {
+            sx: {
+              width: { xs: '100%', sm: 380 },
+              ...getDialogPaperSx(isLight, theme, tokens),
+            },
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+            <Typography sx={{ fontWeight: 700, flex: 1, fontSize: '0.9rem' }}>Trace detail</Typography>
+            <IconButton size="small" onClick={() => setTraceEventId(null)} aria-label="Close trace">
+              <X size={16} />
+            </IconButton>
+          </Box>
+          {traceDetail ? (
+            <>
+              <Chip size="small" label={traceDetail.event_type} sx={{ mb: 1 }} />
+              <Typography sx={{ fontSize: '0.85rem', mb: 1 }}>{traceDetail.summary}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                {traceDetail.created_at}
+                {traceDetail.turn_id ? ` · turn ${traceDetail.turn_id.slice(0, 8)}` : ''}
+              </Typography>
+              <Box
+                component="pre"
+                sx={{
+                  m: 0,
+                  p: 1.25,
+                  borderRadius: 1,
+                  bgcolor: alpha(theme.palette.text.primary, 0.04),
+                  fontSize: '0.7rem',
+                  overflow: 'auto',
+                  maxHeight: '70vh',
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                {JSON.stringify(traceDetail.payload || {}, null, 2)}
+              </Box>
+            </>
+          ) : (
+            <CircularProgress size={20} />
+          )}
+        </Box>
+      </Drawer>
     </Box>
   );
 };
 
 const ProposalRow: React.FC<{
+  projectSlug: string;
   proposal: CopilotProposal;
   onApprove: () => void;
   onReject: () => void;
+  onViewTrace: () => void;
   busy: boolean;
-}> = ({ proposal, onApprove, onReject, busy }) => {
+}> = ({ projectSlug, proposal, onApprove, onReject, onViewTrace, busy }) => {
   const theme = useTheme();
+  const isMsf = proposal.action_type === 'msf_module';
   return (
     <Box
       sx={{
@@ -261,8 +341,11 @@ const ProposalRow: React.FC<{
         border: `1px solid ${alpha(theme.palette.divider, 0.25)}`,
       }}
     >
-      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
         <Chip size="small" label={proposal.action_type} />
+        {isMsf && typeof proposal.payload?.mode === 'string' && (
+          <Chip size="small" variant="outlined" label={String(proposal.payload.mode)} />
+        )}
         {proposal.vulnerability_id != null && (
           <Typography variant="caption" color="text.secondary">
             vuln #{proposal.vulnerability_id}
@@ -275,7 +358,12 @@ const ProposalRow: React.FC<{
           {proposal.rationale.slice(0, 240)}
         </Typography>
       )}
-      <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+      {isMsf && typeof proposal.payload?.module === 'string' && (
+        <Typography variant="caption" sx={{ display: 'block', mt: 0.5, fontFamily: 'monospace' }}>
+          {String(proposal.payload.module)}
+        </Typography>
+      )}
+      <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
         <Button
           size="small"
           variant="contained"
@@ -295,7 +383,47 @@ const ProposalRow: React.FC<{
         >
           Reject
         </Button>
+        {isMsf && (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<ExternalLink size={14} />}
+            href={msfPluginHandoffUrl(projectSlug, proposal.payload || {})}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open in Metasploit
+          </Button>
+        )}
+        <Button size="small" variant="text" onClick={onViewTrace}>
+          View trace
+        </Button>
       </Box>
+    </Box>
+  );
+};
+
+const TraceRow: React.FC<{ event: CopilotTraceEvent; onOpen: () => void }> = ({ event, onOpen }) => {
+  const theme = useTheme();
+  return (
+    <Box
+      onClick={onOpen}
+      sx={{
+        mb: 1,
+        p: 1.25,
+        borderRadius: 1.5,
+        border: `1px solid ${alpha(theme.palette.divider, 0.25)}`,
+        cursor: 'pointer',
+        '&:hover': { bgcolor: alpha(theme.palette.text.primary, 0.03) },
+      }}
+    >
+      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+        <Chip size="small" label={event.event_type} />
+        <Typography variant="caption" color="text.secondary">
+          {event.created_at}
+        </Typography>
+      </Box>
+      <Typography sx={{ fontSize: '0.8rem' }}>{event.summary || '(no summary)'}</Typography>
     </Box>
   );
 };
