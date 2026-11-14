@@ -152,7 +152,12 @@ def monitor_target_task(domain_id):
 		# 2. Subdomain Discovery (Subfinder)
 		subdomain_file = f"{results_dir}/subdomains_monitor.txt"
 		_validate_hostname(domain.name)
-		subprocess.run(['subfinder', '-d', domain.name, '-silent', '-o', subdomain_file], check=False)
+		from reNgine.utils.task import run_command
+		run_command(
+			['subfinder', '-d', domain.name, '-silent', '-o', subdomain_file],
+			shell=False,
+			scan_id=scan_history.id,
+		)
 
 		if os.path.exists(subdomain_file):
 			with open(subdomain_file, 'r') as f:
@@ -177,7 +182,11 @@ def monitor_target_task(domain_id):
 
 		# 3. URL Discovery (GAU)
 		url_file = f"{results_dir}/urls_monitor.txt"
-		subprocess.run(['gau', domain.name, '--subs', '--silent', '-o', url_file], check=False)
+		run_command(
+			['gau', domain.name, '--subs', '--silent', '-o', url_file],
+			shell=False,
+			scan_id=scan_history.id,
+		)
 
 		if os.path.exists(url_file):
 			with open(url_file, 'r') as f:

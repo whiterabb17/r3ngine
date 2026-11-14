@@ -1,14 +1,15 @@
 name: Docker image
 
 # The full image compiles dozens of tools and takes a long time, so it is built
-# on demand rather than on every push. With `push` enabled the result is
-# published to GHCR and can be deployed by setting R3NGINE_IMAGE in .env.
+# on demand rather than on every push. With `push` enabled the three role
+# images are published to GHCR for R3NGINE_WEB_IMAGE / R3NGINE_PYTHON_IMAGE /
+# R3NGINE_GO_IMAGE deploys.
 
 on:
   workflow_dispatch:
     inputs:
       push:
-        description: 'Push the image to ghcr.io'
+        description: 'Push the images to ghcr.io'
         type: boolean
         default: false
 
@@ -20,6 +21,16 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: web
+            suffix: web
+          - target: python-orchestrator
+            suffix: python
+          - target: go-executor
+            suffix: go-executor
     steps:
       # The runner's ~14 GB of free disk is not enough for this image.
       - name: Free disk space
@@ -42,15 +53,16 @@ jobs:
 
       - name: Compute image name
         id: meta
-        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}-${{ matrix.suffix }}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/web/Dockerfile
+          target: ${{ matrix.target }}
           push: ${{ inputs.push }}
           tags: |
             ${{ steps.meta.outputs.image }}:latest
             ${{ steps.meta.outputs.image }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}

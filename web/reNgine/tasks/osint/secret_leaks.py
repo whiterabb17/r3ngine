@@ -6,7 +6,6 @@ reNgine.tasks.osint for backward compatibility.
 import logging
 import math
 import shutil
-import subprocess
 import json
 import requests
 import os
@@ -17,6 +16,7 @@ from reNgine.definitions import *  # noqa: F401,F403
 from startScan.models import *  # noqa: F401,F403
 from reNgine.tasks.persistence import save_secret_leak
 from reNgine.tasks.vuln import semgrep_scan
+from reNgine.utils.task import run_command
 
 logger = logging.getLogger(__name__)
 
@@ -105,11 +105,13 @@ def secret_scanning(self, config=None, host=None, ctx=None, **kwargs):
 
     findings_count = 0
 
+    scan_id = getattr(self.scan, 'id', None)
+
     # Run Gitleaks
     if config.get(GITLEAKS):
         report_path = f"{temp_dir}/gitleaks_report.json"
-        # Gitleaks v8+ detect command
-        subprocess.run(
+        # Gitleaks v8+ detect command (routed to go-executor via ROUTED_TOOLS)
+        run_command(
             [
                 "gitleaks",
                 "detect",
@@ -122,7 +124,8 @@ def secret_scanning(self, config=None, host=None, ctx=None, **kwargs):
                 "--exit-code",
                 "0",
             ],
-            check=False,
+            shell=False,
+            scan_id=scan_id,
         )
 
         if os.path.exists(report_path):
@@ -145,16 +148,14 @@ def secret_scanning(self, config=None, host=None, ctx=None, **kwargs):
 
     # Run Trufflehog
     if config.get(TRUFFLEHOG):
-        # Trufflehog v3 filesystem command
-        process = subprocess.Popen(
+        # Trufflehog v3 filesystem command (routed to go-executor via ROUTED_TOOLS)
+        _code, stdout = run_command(
             ["trufflehog", "filesystem", temp_dir, "--json"],
             shell=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            scan_id=scan_id,
         )
-        stdout, stderr = process.communicate()
 
-        for line in stdout.decode().splitlines():
+        for line in (stdout or "").splitlines():
             if not line:
                 continue
             try:
@@ -181,16 +182,13 @@ def secret_scanning(self, config=None, host=None, ctx=None, **kwargs):
         # It's good for finding secrets like API keys, passwords, etc.
         # Command: betterleaks -p {temp_dir}
         logger.info("Running Betterleaks on %s", temp_dir)
-        process = subprocess.Popen(
+        _code, stdout = run_command(
             ["betterleaks", "-p", temp_dir],
             shell=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+            scan_id=scan_id,
         )
-        stdout, stderr = process.communicate()
         logger.info("Betterleaks output: %s", stdout)
-        for line in stdout.splitlines():
+        for line in (stdout or "").splitlines():
             if line.strip():
                 # Assuming betterleaks outputs findings in a recognizable format
                 # For now, let's just log it and save if it looks like a finding

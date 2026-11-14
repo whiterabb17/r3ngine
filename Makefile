@@ -87,8 +87,11 @@ devup:				## Build and start all services in development mode.
 build:			## Build all services.
 	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} build ${SERVICES}
 
-build-web:		## Build only the web/orchestrator/executor shared image.
+build-web:		## Build the web role image (alias of build-app-images web target).
 	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} build web
+
+build-app-images:	## Build web + python-orchestrator + go-executor role images (shared bake cache).
+	docker buildx bake -f docker-bake.hcl
 
 build-clean:		## Rebuild ALL services from scratch (no cache).
 	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} build --no-cache ${SERVICES}
@@ -115,7 +118,7 @@ makemigrations:		## Create migration files (optional: make makemigrations APP=st
 migrate:		## Apply migrations
 	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} exec web python3 manage.py migrate
 
-pull:			## Pull third-party Docker images (the app image is built locally, or set R3NGINE_IMAGE).
+pull:			## Pull third-party Docker images (app role images are built locally, or set R3NGINE_*_IMAGE).
 	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} pull --ignore-buildable
 
 down:			## Down all services.

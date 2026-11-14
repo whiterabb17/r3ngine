@@ -1,35 +1,38 @@
 #!/bin/bash
-# Sync GF patterns from bind-mount or staged image into volume
-echo "Syncing GF patterns..."
-mkdir -p /root/.gf
-if [ -d "/usr/src/app/gf-patterns" ]; then
-  cp -f /usr/src/app/gf-patterns/*.json /root/.gf/
-elif [ -d "/usr/src/gf-patterns" ]; then
-  cp -f /usr/src/gf-patterns/*.json /root/.gf/
-else
-  echo "Warning: no GF patterns directory found!"
-fi
-echo "GF patterns synced: $(ls /root/.gf/*.json | wc -l) patterns installed"
-
 # Entrypoint for the Temporal Python Orchestrator container.
-# Handles one-time setup (wordlists, templates, tools) then starts the Temporal worker.
-
-
-# ---------------------------------------------------------------------------
-# Start deferred tool installer in the background so normal setup tasks
-# (wordlists, nuclei templates, etc.) run in parallel. We wait for it to
-# finish just before the Temporal worker starts.
-# *Disabled temporarily*
-# ---------------------------------------------------------------------------
-# echo "[entrypoint] Starting deferred tool installer in background..."
-# /usr/src/internal_tools.sh &
-# INTERNAL_TOOLS_PID=$!
+# Handles one-time Python-only setup/updates then starts the Temporal worker.
+#
+# Go owns the shared `wordlist` and `nuclei_templates` volumes (sole writer),
+# and now owns `gf` (routed via ROUTED_TOOLS). This script must not download
+# scanner wordlists, nuclei community templates, vulscan, `kr`, or run
+# `vulnx update` — those belong to docker/temporal-go-executor/entrypoint.sh.
 
 # ---------------------------------------------------------------------------
-# Tool updates (pip upgrades, whatportis, vulnx, template repo pulls) are
-# network-bound and take minutes, so running them on every start made a PyPI or
-# GitHub outage enough to block the worker from coming up at all. Run them at
-# most once a week, tracked by a sentinel on the persistent tool_config volume.
+# GF patterns — go is the primary owner of /root/.gf now that `gf` is routed
+# via ROUTED_TOOLS. This is a backup sync only: it copies the baked-in
+# patterns shipped in the image if go hasn't seeded the shared volume yet
+# (e.g. go hasn't started), so `gf` still has something to work with. It
+# never clones the Gf-Patterns repo itself — that clone is go's job.
+# ---------------------------------------------------------------------------
+if [ -z "$(ls -A /root/.gf/*.json 2>/dev/null)" ]; then
+  echo "No GF patterns found in /root/.gf yet (go executor may not have seeded); syncing backup patterns..."
+  mkdir -p /root/.gf
+  if [ -d "/usr/src/app/gf-patterns" ]; then
+    cp -f /usr/src/app/gf-patterns/*.json /root/.gf/
+  elif [ -d "/usr/src/gf-patterns" ]; then
+    cp -f /usr/src/gf-patterns/*.json /root/.gf/
+  else
+    echo "Warning: no GF patterns directory found for backup sync!"
+  fi
+else
+  echo "GF patterns already present in /root/.gf; skipping backup sync."
+fi
+
+# ---------------------------------------------------------------------------
+# Tool updates (pip upgrades, whatportis, spiderfoot deps) are network-bound
+# and take minutes, so running them on every start made a PyPI or GitHub
+# outage enough to block the worker from coming up at all. Run them at most
+# once a week, tracked by a sentinel on the persistent tool_config volume.
 # A first-ever start has no sentinel and therefore updates as before.
 # ---------------------------------------------------------------------------
 TOOL_UPDATE_STAMP="/root/.config/r3ngine/python-orchestrator-tool-update.stamp"
@@ -49,18 +52,13 @@ else
   echo "[entrypoint] Tool updates ran within ${TOOL_UPDATE_MAX_AGE_DAYS} days - skipping."
 fi
 
-# Ensure OpenSSL compatibility
+# Python-only pip upgrades (OpenSSL/cryptography compatibility, retry backoff lib).
 if [ "$RUN_TOOL_UPDATES" = "1" ]; then
   pip3 install --upgrade --no-cache-dir pyOpenSSL==24.0.0 tenacity==8.2.2 || TOOL_UPDATE_RC=1
 fi
 
-
-
-python3 manage.py loaddata \
-    fixtures/default_keywords.yaml \
-    fixtures/external_tools.yaml
-
-
+# Fixtures/engines/hardware profiles are loaded once by the web entrypoint
+# (sole loaddata owner). Python does not reload any fixtures here.
 
 # Temporary fix for whatportis bug
 sed -i 's/purge()/truncate()/g' "$(python3 -c "import whatportis.cli; print(whatportis.cli.__file__)")"
@@ -147,59 +145,17 @@ print('[entrypoint] SwaggerSpy regex patch applied')
 EOF
 fi
 
-
 # update whatportis
 if [ "$RUN_TOOL_UPDATES" = "1" ]; then
   yes | whatportis --update || TOOL_UPDATE_RC=1
 fi
 
-# clone dirsearch default wordlist
-if [ ! -d "/usr/src/wordlist" ]; then
-  echo "Making Wordlist directory"
-  mkdir /usr/src/wordlist
-fi
-
-if [ ! -f "/usr/src/wordlist/dicc.txt" ]; then
-  echo "Downloading Default Directory Bruteforce Wordlist"
-  wget https://raw.githubusercontent.com/maurosoria/dirsearch/master/db/dicc.txt -O /usr/src/wordlist/dicc.txt
-fi
-
-if [ ! -f "/usr/src/wordlist/raft-large-directories.txt" ]; then
-  echo "Downloading raft-large-directories.txt Wordlist"
-  wget https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/raft-large-directories.txt -O /usr/src/wordlist/raft-large-directories.txt
-fi
-
-if [ ! -f "/usr/src/wordlist/deepmagic.com-prefixes-top50000.txt" ]; then
-  echo "Downloading Deepmagic top 50000 Wordlist"
-  wget https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/DNS/deepmagic.com-prefixes-top50000.txt -O /usr/src/wordlist/deepmagic.com-prefixes-top50000.txt
-fi
-
-if [ ! -f "/usr/src/wordlist/api-endpoints.txt" ]; then
-  echo "Downloading API endpoints wordlist"
-  wget -q https://wordlists-cdn.assetnote.io/data/automated/httparchive_apiroutes_2023_01_28.txt -O /usr/src/wordlist/api-endpoints.txt || true
-fi
-
-# Setup Auth Brute-Force Wordlists
-if [ ! -d "/usr/src/wordlist/auth" ]; then
-  mkdir -p /usr/src/wordlist/auth
-fi
-echo "Copying Auth Wordlists"
-cp -r /usr/src/app/wordlist/auth/* /usr/src/wordlist/auth/
-
-# SMTP username enumeration wordlist
-cp /usr/src/app/wordlist/smtp-usernames.txt /usr/src/wordlist/smtp-usernames.txt
-
-# vulscan (nmap script)
-if [ ! -d "/usr/src/github/scipag_vulscan" ]; then
-  echo "Cloning Nmap Vulscan script"
-  git clone https://github.com/scipag/vulscan /usr/src/github/scipag_vulscan
-  ln -s /usr/src/github/scipag_vulscan /usr/share/nmap/scripts/vulscan
-fi
-
-# Assetnote *2shell scanners are baked into the image under /usr/src/github, but
-# the shared github_repos volume overlays that path and keeps whatever was on
-# the volume when it was first created. Ensure missing scanners land on the
-# volume here (internal_tools.sh is not used).
+# ---------------------------------------------------------------------------
+# Assetnote *2shell scanners are baked into the image under /usr/src/github,
+# but the shared github_repos volume overlays that path and keeps whatever
+# was on the volume when it was first created. Python owns github_repos'
+# first populate, so it ensures any missing scanners land on the volume here.
+# ---------------------------------------------------------------------------
 mkdir -p /usr/src/github
 ensure_github_tool() {
   # usage: ensure_github_tool <dir-name> <git-url>
@@ -224,130 +180,10 @@ ensure_github_tool react2shell-scanner https://github.com/assetnote/react2shell-
 ensure_github_tool php2shell-scanner https://github.com/assetnote/php2shell-scanner
 ensure_github_tool node2shell-scanner https://github.com/assetnote/node2shell-scanner
 
-if [ ! -f '/usr/local/bin/kr' ]; then
-  echo "Installing kiterunner"
-  cd /usr/src/github
-  ARCH=$(dpkg --print-architecture) && \
-  wget https://github.com/assetnote/kiterunner/releases/download/v1.0.2/kiterunner_1.0.2_linux_${ARCH}.tar.gz && \
-  tar -xvf kiterunner_1.0.2_linux_${ARCH}.tar.gz && \
-  mv kr /usr/local/bin/ && \
-  rm -rf kiterunner_1.0.2_linux_${ARCH}.tar.gz
-  cd /usr/src/app
-fi
-
-# Each wordlist is fetched on its own and only moved into place once fully
-# extracted, so a failed or partial download is retried on the next start.
-mkdir -p /usr/src/wordlist/kr
-for kite in routes-small routes-large; do
-  if [ ! -s "/usr/src/wordlist/kr/${kite}.kite" ]; then
-    kr_tmp=$(mktemp -d)
-    if wget -q "https://wordlists-cdn.assetnote.io/data/kiterunner/${kite}.kite.tar.gz" -O "${kr_tmp}/${kite}.tar.gz" \
-      && tar -xzf "${kr_tmp}/${kite}.tar.gz" -C "${kr_tmp}" \
-      && [ -s "${kr_tmp}/${kite}.kite" ]; then
-      cp "${kr_tmp}/${kite}.kite" "/usr/src/wordlist/kr/${kite}.kr"
-      mv "${kr_tmp}/${kite}.kite" "/usr/src/wordlist/kr/${kite}.kite"
-    else
-      echo "WARNING: could not fetch the kiterunner ${kite} wordlist; kiterunner skips it until the next start"
-    fi
-    rm -rf "${kr_tmp}"
-  fi
-done
-
-if [ ! -f '/usr/src/wordlist/cpanel_users.txt' ]; then
-  echo "Fetching cPanel2Shell wordlist"
-  mkdir -p /usr/src/wordlist
-  wget -qO- https://raw.githubusercontent.com/danielmiessler/SecLists/master/Usernames/top-usernames-shortlist.txt >> /usr/src/wordlist/cpanel_users.txt
-  sort -u /usr/src/wordlist/cpanel_users.txt -o /usr/src/wordlist/cpanel_users.txt
-fi
-
 cd /usr/src/app
 
-# install gf patterns
-if [ ! -d "/root/Gf-Patterns" ]; then
-  echo "Installing GF Patterns"
-  mkdir -p ~/.gf
-  cp -r $GOPATH/src/github.com/tomnomnom/gf/examples/*.json ~/.gf
-  git clone https://github.com/1ndianl33t/Gf-Patterns ~/Gf-Patterns
-  mv ~/Gf-Patterns/*.json ~/.gf
-fi
-
 # store scan_results
-if [ ! -d "/usr/src/scan_results" ]; then
-  mkdir /usr/src/scan_results
-fi
-
-# test tools, required for configuration
-naabu -version && subfinder -version && amass -version
-nuclei -version
-
-# Community Nuclei Templates
-# All cloned into /root/nuclei-templates/ — the shared nuclei_templates volume.
-# nuclei runs with -t /root/nuclei-templates so subdirs are picked up automatically.
-
-if [ ! -d "/root/nuclei-templates/geeknik" ]; then
-  echo "Installing Geeknik Nuclei templates"
-  git clone --depth 1 https://github.com/geeknik/the-nuclei-templates.git /root/nuclei-templates/geeknik
-fi
-
-if [ ! -f "/root/nuclei-templates/ssrf_nagli.yaml" ]; then
-  echo "Downloading ssrf_nagli SSRF template"
-  wget -q https://raw.githubusercontent.com/NagliNagli/BountyTricks/main/ssrf.yaml \
-    -O /root/nuclei-templates/ssrf_nagli.yaml || true
-fi
-
-# BishopFox AI Map templates — LangServe, MCP, OpenAI-compat, prompt-leak detection
-AI_TPL_DIR="/root/nuclei-templates/aimap"
-mkdir -p "$AI_TPL_DIR"
-for tpl in langserve-detect mcp-server-detect mcp-tool-enum openai-compat-detect prompt-leak; do
-  if [ ! -f "$AI_TPL_DIR/${tpl}.yaml" ]; then
-    wget -q "https://github.com/BishopFox/aimap/raw/refs/heads/main/templates/${tpl}.yaml" \
-      -O "$AI_TPL_DIR/${tpl}.yaml" || true
-  fi
-done
-
-# edoardottt/missing-cve-nuclei-templates — ~64k CVEs absent from the official set
-# Covers XSS (22k), SQLi (12k), DoS (15k), RCE (3k), Path Traversal, SSRF, LFI, XXE, SSTI
-if [ ! -d "/root/nuclei-templates/missing-cve" ]; then
-  echo "Installing missing-cve nuclei templates (~64k additional CVEs)"
-  git clone --depth 1 https://github.com/edoardottt/missing-cve-nuclei-templates.git \
-    /root/nuclei-templates/missing-cve
-fi
-
-# emadshanab/Nuclei-Templates-Collection — aggregates 400+ community repos
-# Includes Log4Shell, Spring RCE, F5, WAF detection, Kubernetes, SAP, Oracle, WebSphere
-if [ ! -d "/root/nuclei-templates/community-collection" ]; then
-  echo "Installing Nuclei Templates Collection (400+ community repos)"
-  git clone --depth 1 https://github.com/emadshanab/Nuclei-Templates-Collection.git \
-    /root/nuclei-templates/community-collection
-fi
-
-# 0xKayala/Custom-Nuclei-Templates — bug-bounty focused custom templates
-if [ ! -d "/root/nuclei-templates/kayala-custom" ]; then
-  echo "Installing 0xKayala custom nuclei templates"
-  git clone --depth 1 https://github.com/0xKayala/Custom-Nuclei-Templates.git \
-    /root/nuclei-templates/kayala-custom
-fi
-
-# topscoder/nuclei-wordfence-cve — 70k+ WordPress CVE templates (daily-updated)
-# Pre-loaded so WordPress scans don't incur a git clone mid-scan.
-if [ ! -d "/root/nuclei-templates/wordfence/.git" ]; then
-  echo "Installing Wordfence nuclei templates"
-  git clone --depth 1 https://github.com/topscoder/nuclei-wordfence-cve.git \
-    /root/nuclei-templates/wordfence
-elif [ "$RUN_TOOL_UPDATES" = "1" ]; then
-  echo "Updating Wordfence nuclei templates"
-  git -C /root/nuclei-templates/wordfence pull --ff-only --quiet || TOOL_UPDATE_RC=1
-fi
-# Install repo dependencies
-if [ "$RUN_TOOL_UPDATES" = "1" ]; then
-  pip3 install -q -r /root/nuclei-templates/wordfence/requirements.txt || TOOL_UPDATE_RC=1
-fi
-# Merge wordfence nuclei-templates/ into the main templates directory so nuclei
-# picks them up directly under /root/nuclei-templates without extra nesting.
-cp -ru /root/nuclei-templates/wordfence/nuclei-templates/. /root/nuclei-templates/
-
-# httpx alias
-echo 'alias httpx="/usr/local/bin/httpx"' >> ~/.bashrc
+mkdir -p /usr/src/scan_results
 
 # Install spiderfoot packages
 if [ -d '/usr/src/github/spiderfoot' ] && [ "$RUN_TOOL_UPDATES" = "1" ]; then
@@ -360,8 +196,6 @@ if [ -d '/usr/src/github/spiderfoot' ] && [ "$RUN_TOOL_UPDATES" = "1" ]; then
 fi
 
 if [ "$RUN_TOOL_UPDATES" = "1" ]; then
-  vulnx update || TOOL_UPDATE_RC=1
-
   if [ "$TOOL_UPDATE_RC" = "0" ]; then
     touch "$TOOL_UPDATE_STAMP"
     echo "[entrypoint] Tool updates completed; sentinel refreshed."
@@ -370,10 +204,5 @@ if [ "$RUN_TOOL_UPDATES" = "1" ]; then
   fi
 fi
 
-# Split oversized nuclei tags
-# echo "[entrypoint] Running Nuclei tag splitter..."
-# python3 /usr/src/scripts/nuclei_tag_splitter.py
-
-# wait $INTERNAL_TOOLS_PID
 echo "[entrypoint] Starting Temporal Python Orchestrator..."
 exec python3 /usr/src/app/manage.py run_temporal_orchestrator "$@"

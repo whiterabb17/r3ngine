@@ -274,16 +274,31 @@ def tool_specific_settings(request, slug):
             messages.add_message(request, messages.INFO, 'SpiderFoot config updated!')
             return http.HttpResponseRedirect(reverse('tool_settings', kwargs={'slug': slug}))
 
+    # List patterns from the shared gf_patterns volume. Do not call the `gf`
+    # binary here — web no longer ships scanner CLIs after the image split.
     gf_list = []
     try:
-        gf_list = (subprocess.check_output(['gf', '-list'])).decode("utf-8").split('\n')
-    except (OSError, subprocess.CalledProcessError):
-        logger.warning("Could not list gf patterns", exc_info=True)
+        gf_dir = '/root/.gf'
+        if os.path.isdir(gf_dir):
+            gf_list = [
+                os.path.splitext(name)[0]
+                for name in os.listdir(gf_dir)
+                if name.endswith('.json')
+            ]
+    except OSError:
+        logger.warning("Could not list gf patterns from %s", '/root/.gf', exc_info=True)
+    # Only operator-owned templates at the volume root (and optional custom/).
+    # Do not recurse into community trees (geeknik/missing-cve/wordfence/…) —
+    # those are seeded by go-executor and would freeze Tool Settings.
     _tpl_base = "/root/nuclei-templates"
     nuclei_custom_pattern = sorted(
         os.path.relpath(f, _tpl_base)
-        for f in glob.glob(f"{_tpl_base}/**/*.yaml", recursive=True)
-                 + glob.glob(f"{_tpl_base}/**/*.yml", recursive=True)
+        for f in (
+            glob.glob(f"{_tpl_base}/*.yaml")
+            + glob.glob(f"{_tpl_base}/*.yml")
+            + glob.glob(f"{_tpl_base}/custom/**/*.yaml", recursive=True)
+            + glob.glob(f"{_tpl_base}/custom/**/*.yml", recursive=True)
+        )
     )
 
     if request.headers.get('Accept') == 'application/json':

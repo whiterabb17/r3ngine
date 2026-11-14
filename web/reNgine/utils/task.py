@@ -40,11 +40,24 @@ _COMMAND_OUTPUT_MAX_CHARS = 512_000
 _COMMAND_OUTPUT_FLUSH_INTERVAL = 5.0
 PRECRAWL_MAX_URLS = 500
 
+# CLI binaries executed on temporal-go-executor via GoExecutorTaskWorkflow.
+# Companion checklist when adding a tool:
+#   1. Binary present in the go-executor image (docker/web/Dockerfile target)
+#   2. Name matches argv[0] / basename after sanitize (see should_route below)
+#   3. Call sites use run_command/stream_command (not raw subprocess)
+#   4. Fixture / Tool Arsenal metadata if the tool is user-visible
+#   5. documents/tool-distribution.md ownership rule stays accurate
 ROUTED_TOOLS = {
     'semgrep', 'nuclei', 'ffuf', 'naabu', 'amass', 'subfinder', 'httpx',
     'dalfox', 'crlfuzz', 's3scanner', 'dirsearch', 'gospider', 'gau',
     'waybackurls', 'hakrawler', 'tlsx', 'katana', 'aquatone', 'nmap', 'vigolium',
-    'sslscan', 'ike-scan', 'hping3', 'wrk', 'k6', 'brutus', 'wpscan'
+    'sslscan', 'ike-scan', 'hping3', 'wrk', 'k6', 'brutus', 'wpscan',
+    # Expanded for three-image split: keep compiled CLIs off the python image
+    'gf', 'feroxbuster', 'kr', 'kiterunner', 'gitleaks', 'trufflehog',
+    'betterleaks', 'dnsx', 'bbot', 'grype', 'trivy', 'retire', 'lighthouse',
+    'noseyparker', 'smugglex', 'chaos', 'mapcidr', 'urlfinder',
+    'cariddi', 'wpprobe', 'vulnx', 'unfurl', 'favirecon',
+    'sourcemapper', 'gosearch', 'julius', 'grpcurl', 'exifray', 'testssl.sh',
 }
 
 

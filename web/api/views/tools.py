@@ -379,7 +379,8 @@ class UpdateTool(_ToolCommandView):
 			update_command = 'cd /usr/src/github/' + tool_name + ' && git pull && cd -'
 
 		try:
-			return_code, output = run_command(update_command, shell=True)
+			from reNgine.tool_workers import run_on_workers
+			return_code, output = run_on_workers(command=update_command, shell=True, timeout=600)
 		except Exception:
 			logger.exception('Update command failed to run for %s', tool.name)
 			return Response({'status': False, 'message': 'Update failed to run; see server logs.'})
@@ -398,25 +399,26 @@ def _remove_installed_tool_files(tool):
 	"""Delete what the tool's install_command put on disk; return an error message or None.
 
 	Only two install styles are known: ``go install`` (one binary in GO_BIN_DIR)
-	and ``git clone`` (a checkout under GITHUB_TOOLS_DIR). Nothing is passed to a
-	shell, and neither path can leave its directory.
+	and ``git clone`` (a checkout under GITHUB_TOOLS_DIR). Removals run on the
+	tool host via Temporal (web no longer holds those files).
 	"""
+	from reNgine.tool_workers import remove_on_workers
+
 	install_command = tool.install_command or ''
 	if 'go install' in install_command:
 		binary = install_command.rstrip('/').split('/')[-1].split('@')[0]
 		if not _BINARY_NAME_RE.fullmatch(binary):
 			return 'Cannot work out the installed binary name.'
 		binary_path = os.path.join(GO_BIN_DIR, binary)
-		if os.path.isfile(binary_path):
-			os.remove(binary_path)
-		return None
+		ok, err = remove_on_workers(kind='binary', path=binary_path)
+		return None if ok else (err or 'Uninstall failed on tool host.')
 	if 'git clone' in install_command:
 		clone_path = tool.github_clone_path or ''
 		root = os.path.realpath(GITHUB_TOOLS_DIR)
 		if not clone_path or os.path.realpath(clone_path) == root or not is_safe_path(root, clone_path):
 			return 'Tool checkout is not inside the tools directory.'
-		shutil.rmtree(clone_path, ignore_errors=True)
-		return None
+		ok, err = remove_on_workers(kind='github', path=clone_path)
+		return None if ok else (err or 'Uninstall failed on tool host.')
 	return 'Cannot uninstall tool!'
 
 
@@ -456,7 +458,12 @@ class GetExternalToolCurrentVersion(APIView):
 
 		version_number = None
 		try:
-			return_code, stdout = run_command(tool.version_lookup_command, shell=True)
+			from reNgine.tool_workers import run_on_workers
+			return_code, stdout = run_on_workers(
+				command=tool.version_lookup_command,
+				shell=True,
+				timeout=60,
+			)
 			if return_code != 0:
 				logger.warning("Version lookup failed for %s with code %s", tool.name, return_code)
 				return Response({'status': False, 'message': 'Tool not found or check failed.'})

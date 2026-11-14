@@ -1,8 +1,7 @@
 """Resolve and probe scan tools where they are installed.
 
-Entrypoint-installed binaries (kr, trufflehog, …) live on the Temporal worker
-containers, which run from the same image as ``web`` but finish installing
-tools in their entrypoints. The probes therefore run *inside* a worker:
+Scan CLIs live on the ``r3ngine-python`` / ``r3ngine-go-executor`` role images
+(not on ``r3ngine-web``). Probes therefore run *inside* a worker:
 
 * In the Python orchestrator (``R3NGINE_WORKER_ROLE`` is set by
   ``run_temporal_orchestrator``) every function here works locally with
@@ -10,11 +9,11 @@ tools in their entrypoints. The probes therefore run *inside* a worker:
 * Anywhere else (the web container, a management command) the same call is
   sent to the orchestrator as a ``ToolProbeWorkflow`` on the Python task queue
   and the worker answers with what it found. No Docker socket is involved.
+  ``run`` / ``remove`` ops cover Tool Arsenal updates and interactive recon.
 
 Paths found on a worker are stored encoded as ``<role>:<path>``
-(``python:/usr/local/bin/kr``) so a later sync knows which side reported them.
-The ``go`` role stays decodable for rows written before the Go executor shared
-the orchestrator's image; both roles are probed by the orchestrator today.
+(``python:/usr/local/bin/kr`` or ``go:/usr/local/bin/kr``) so a later sync
+knows which side reported them.
 """
 from __future__ import annotations
 
@@ -62,6 +61,8 @@ _DISPATCH_TIMEOUT_SEC = {
     'help': 180.0,
     'summary': 30.0,
     'sync': 900.0,
+    'run': 600.0,
+    'remove': 120.0,
 }
 
 # Cobra/clap CLIs where root --help is only a command index; probe the
@@ -115,12 +116,17 @@ def decode_worker_path(value: Optional[str]) -> tuple[Optional[str], Optional[st
 
 
 def prefer_roles_for_tool(tool_name: str) -> tuple[str, ...]:
-    """Role order for a tool. One worker answers today; kept for callers and rows."""
+    """Role order for a tool after the three-image split.
+
+    Python-native / pipx tools prefer the python orchestrator. Compiled PATH
+    CLIs prefer go-executor (and are listed in ROUTED_TOOLS for scan execution).
+    """
     key = (tool_name or '').strip().lower()
     pythonish = {
-        'theharvester', 'wafw00f', 'arjun', 'semgrep', 'wpscan', 'sqlmap',
-        'dirsearch', 'linkfinder', 'paramspider', 'holehe', 'maigret',
+        'theharvester', 'wafw00f', 'arjun', 'sqlmap',
+        'linkfinder', 'paramspider', 'holehe', 'maigret',
         'bbot', 'xnldorker', 'postleaksng', 'porch-pirate',
+        'cmseek', 'spiderfoot', 'oneforall', 'sublist3r',
     }
     if key in pythonish or 'harvest' in key:
         return ('python', 'go')
@@ -302,12 +308,52 @@ def _summary_local() -> dict[str, Any]:
     }
 
 
+def _run_shell_local(payload: dict) -> dict[str, Any]:
+    """Run argv or a shell command on this worker; used by web Tool Arsenal / recon."""
+    timeout = float(payload.get('timeout') or 300)
+    shell = bool(payload.get('shell'))
+    argv = payload.get('argv')
+    command = payload.get('command')
+    if shell:
+        if not command or not isinstance(command, str):
+            return {'exit_code': -1, 'output': '', 'error': 'shell run requires command string'}
+        code, text = _run_local(['bash', '-lc', command], timeout=timeout)
+        return {'exit_code': code, 'output': text, 'error': None}
+    if not isinstance(argv, list) or not argv or not all(isinstance(x, str) for x in argv):
+        return {'exit_code': -1, 'output': '', 'error': 'run requires argv list of strings'}
+    code, text = _run_local(list(argv), timeout=timeout)
+    return {'exit_code': code, 'output': text, 'error': None}
+
+
+def _remove_path_local(payload: dict) -> dict[str, Any]:
+    """Delete an installed binary or github checkout on this worker."""
+    kind = str(payload.get('kind') or '')
+    if kind == 'binary':
+        path = str(payload.get('path') or '')
+        if not path.startswith('/usr/local/bin/') or '/' in path[len('/usr/local/bin/'):]:
+            return {'ok': False, 'error': 'binary path must be under /usr/local/bin'}
+        if os.path.isfile(path):
+            os.remove(path)
+        return {'ok': True, 'error': None}
+    if kind == 'github':
+        from reNgine.utilities import is_safe_path
+        clone_path = str(payload.get('path') or '')
+        root = os.path.realpath('/usr/src/github')
+        if not clone_path or os.path.realpath(clone_path) == root or not is_safe_path(root, clone_path):
+            return {'ok': False, 'error': 'checkout is not inside /usr/src/github'}
+        import shutil
+        shutil.rmtree(clone_path, ignore_errors=True)
+        return {'ok': True, 'error': None}
+    return {'ok': False, 'error': f'unknown remove kind {kind!r}'}
+
+
 def run_probe_op(op: str, payload: Optional[dict] = None) -> dict[str, Any]:
     """Execute one probe operation on this host. Body of ``ToolProbeActivity``.
 
     Ops: ``resolve`` {candidates}, ``version`` {path, version_lookup_command},
     ``help`` {tool_name, candidates, encoded_path, timeout}, ``summary`` {},
-    ``sync`` {probe_versions}. Every result is JSON-serialisable.
+    ``sync`` {probe_versions}, ``run`` {argv|command, shell, timeout},
+    ``remove`` {kind, path}. Every result is JSON-serialisable.
     """
     payload = payload or {}
     if op == 'resolve':
@@ -328,6 +374,10 @@ def run_probe_op(op: str, payload: Optional[dict] = None) -> dict[str, Any]:
     if op == 'sync':
         from reNgine.tool_inventory import sync_installed_tools
         return sync_installed_tools(probe_versions=bool(payload.get('probe_versions', True)))
+    if op == 'run':
+        return _run_shell_local(payload)
+    if op == 'remove':
+        return _remove_path_local(payload)
     raise ValueError(f'unknown tool probe op {op!r}')
 
 
@@ -436,6 +486,42 @@ def run_version_on_workers(
     except ToolProbeError as exc:
         return '', str(exc)
     return str(result.get('output') or ''), result.get('error')
+
+
+def run_on_workers(
+    *,
+    argv: Optional[list[str]] = None,
+    command: Optional[str] = None,
+    shell: bool = False,
+    timeout: float = 300.0,
+) -> tuple[int, str]:
+    """Run a command on the tool host (orchestrator). Returns (exit_code, output)."""
+    payload: dict[str, Any] = {'shell': shell, 'timeout': timeout}
+    if shell:
+        payload['command'] = command or ''
+    else:
+        payload['argv'] = list(argv or [])
+    if probe_is_local():
+        result = _run_shell_local(payload)
+    else:
+        try:
+            result = dispatch_probe('run', payload)
+        except ToolProbeError as exc:
+            return -1, str(exc)
+    return int(result.get('exit_code') or 0), str(result.get('output') or '')
+
+
+def remove_on_workers(*, kind: str, path: str) -> tuple[bool, Optional[str]]:
+    """Delete an installed tool path on the tool host."""
+    payload = {'kind': kind, 'path': path}
+    if probe_is_local():
+        result = _remove_path_local(payload)
+    else:
+        try:
+            result = dispatch_probe('remove', payload)
+        except ToolProbeError as exc:
+            return False, str(exc)
+    return bool(result.get('ok')), result.get('error')
 
 
 def worker_probe_summary() -> dict[str, Any]:

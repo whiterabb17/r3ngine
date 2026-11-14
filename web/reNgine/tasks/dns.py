@@ -220,7 +220,7 @@ def _check_dnssec(self, ctx, target):
 # ---------------------------------------------------------------------------
 
 def _brute_subdomains(self, ctx, target, results_dir):
-    wordlist = '/usr/src/wordlist/default_wordlist/deepmagic.com-prefixes-top50000.txt'
+    wordlist = '/usr/src/wordlist/deepmagic.com-prefixes-top50000.txt'
     if not os.path.isfile(wordlist):
         logger.warning("fierce wordlist not found at %s; skipping brute-force.", wordlist)
         return

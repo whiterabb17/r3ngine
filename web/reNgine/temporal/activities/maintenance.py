@@ -61,8 +61,9 @@ def tool_probe_activity(op: str, payload: dict) -> dict:
 
     The web container has no Docker socket and cannot exec into this
     container, so it asks through ToolProbeWorkflow instead. ``op`` selects
-    resolve / version / help / summary / sync; ``payload`` carries the op's
-    arguments and the result is the op's JSON-serialisable answer.
+    resolve / version / help / summary / sync / run / remove; ``payload``
+    carries the op's arguments and the result is the op's JSON-serialisable
+    answer.
     """
     from reNgine.tool_workers import run_probe_op
 

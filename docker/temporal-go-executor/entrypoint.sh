@@ -1,6 +1,15 @@
 #!/bin/bash
 # Entrypoint for the Temporal Go Executor container.
-# Handles one-time setup and tool updates then starts the Go executor worker.
+#
+# Go is the sole writer into the shared `wordlist` and `nuclei_templates`
+# volumes (compose mounts them on both python and go, but only this script
+# downloads/clones into them). Go must be self-sufficient: it never depends
+# on the `/usr/src/app` Django tree (no `../web` bind-mount on this service)
+# other than this entrypoint file itself, which compose bind-mounts directly
+# at `/usr/src/app/executor-entrypoint.sh`. Auth/SMTP wordlists are baked
+# into the image at `/opt/r3ngine/wordlist` for exactly this reason.
+#
+# Handles one-time setup and tool updates, then starts the Go executor worker.
 
 # ---------------------------------------------------------------------------
 # Tool updates (nuclei/vigolium/vulnx, template repo pulls) are network-bound
@@ -27,124 +36,150 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Start deferred tool installer in the background so normal setup tasks
-# run in parallel. We wait for it to finish just before the executor starts.
+# vulscan (nmap script) — cloned under /opt (not /usr/src/github, which is
+# python's github_repos volume) and symlinked into nmap's scripts dir.
 # ---------------------------------------------------------------------------
-# echo "[entrypoint] Starting deferred tool installer in background..."
-# /usr/src/internal_tools.sh &
-# INTERNAL_TOOLS_PID=$!
-
-# vulscan (nmap script)
-if [ ! -d "/usr/src/github/scipag_vulscan" ]; then
+if [ ! -d "/opt/nmap-vulscan/.git" ]; then
   echo "Cloning Nmap Vulscan script..."
-  git clone https://github.com/scipag/vulscan /usr/src/github/scipag_vulscan
+  rm -rf /opt/nmap-vulscan
+  git clone --depth 1 https://github.com/scipag/vulscan /opt/nmap-vulscan || \
+    echo "WARNING: vulscan clone failed; will retry next start"
 fi
-if [ ! -L "/usr/share/nmap/scripts/vulscan" ] && [ -d "/usr/src/github/scipag_vulscan" ]; then
+if [ ! -L "/usr/share/nmap/scripts/vulscan" ] && [ -d "/opt/nmap-vulscan" ]; then
   echo "Linking vulscan script..."
-  ln -sf /usr/src/github/scipag_vulscan /usr/share/nmap/scripts/vulscan
+  ln -sf /opt/nmap-vulscan /usr/share/nmap/scripts/vulscan
 fi
 
-# Assetnote *2shell scanners are baked into the image under /usr/src/github, but
-# the shared github_repos volume overlays that path. Seed missing scanners onto
-# the volume here (internal_tools.sh is not used).
-mkdir -p /usr/src/github
-ensure_github_tool() {
-  # usage: ensure_github_tool <dir-name> <git-url>
-  local name="$1" url="$2"
-  if [ ! -f "/usr/src/github/${name}/scanner.py" ]; then
-    echo "Installing ${name} into github_repos volume..."
-    rm -rf "/usr/src/github/${name}"
-    if git clone --depth 1 "$url" "/usr/src/github/${name}"; then
-      if [ -f "/usr/src/github/${name}/requirements.txt" ]; then
-        pip3 install -q -r "/usr/src/github/${name}/requirements.txt" || \
-          echo "WARNING: pip install for ${name} failed; will retry next start"
-      fi
-      rm -rf "/usr/src/github/${name}/.git"
-    else
-      echo "WARNING: could not clone ${name}; will retry next start"
-      rm -rf "/usr/src/github/${name}"
-    fi
-  fi
-}
-ensure_github_tool cpanel2shell-scanner https://github.com/assetnote/cpanel2shell-scanner
-ensure_github_tool react2shell-scanner https://github.com/assetnote/react2shell-scanner
-ensure_github_tool php2shell-scanner https://github.com/assetnote/php2shell-scanner
-ensure_github_tool node2shell-scanner https://github.com/assetnote/node2shell-scanner
-
-# kiterunner
+# ---------------------------------------------------------------------------
+# kiterunner binary — compiled CLI, go-owned. Downloaded to a scratch tmpdir
+# so this never touches /usr/src/app.
+# ---------------------------------------------------------------------------
 if [ ! -f '/usr/local/bin/kr' ]; then
   echo "Installing kiterunner..."
-  cd /usr/src/github
-  ARCH=$(dpkg --print-architecture) && \
-  wget -q https://github.com/assetnote/kiterunner/releases/download/v1.0.2/kiterunner_1.0.2_linux_${ARCH}.tar.gz && \
-  tar -xvf kiterunner_1.0.2_linux_${ARCH}.tar.gz && \
-  mv kr /usr/local/bin/ && \
-  rm -rf kiterunner_1.0.2_linux_${ARCH}.tar.gz
-  cd /usr/src/app
+  kr_build_tmp=$(mktemp -d)
+  ARCH=$(dpkg --print-architecture)
+  if wget -q "https://github.com/assetnote/kiterunner/releases/download/v1.0.2/kiterunner_1.0.2_linux_${ARCH}.tar.gz" \
+      -O "${kr_build_tmp}/kiterunner.tar.gz" \
+    && tar -xf "${kr_build_tmp}/kiterunner.tar.gz" -C "${kr_build_tmp}" kr; then
+    mv "${kr_build_tmp}/kr" /usr/local/bin/kr
+  else
+    echo "WARNING: could not install kiterunner; will retry next start"
+  fi
+  rm -rf "${kr_build_tmp}"
 fi
 
-# clone dirsearch default wordlist
-if [ ! -d "/usr/src/wordlist" ]; then
-  echo "Making Wordlist directory..."
-  mkdir -p /usr/src/wordlist
-fi
+# ---------------------------------------------------------------------------
+# Wordlists — go is the sole writer into the shared `wordlist` volume.
+# Each asset is independently idempotent via its own existence check.
+# ---------------------------------------------------------------------------
+mkdir -p /usr/src/wordlist
 
-if [ ! -f "/usr/src/wordlist/dicc.txt" ]; then
-  echo "Downloading Default Directory Bruteforce Wordlist..."
-  wget -q https://raw.githubusercontent.com/maurosoria/dirsearch/master/db/dicc.txt -O /usr/src/wordlist/dicc.txt
-fi
+_fetch_wordlist() {
+  # $1 = dest path, $2 = url. Retries next start if the file is missing or empty.
+  dest="$1"
+  url="$2"
+  if [ -s "$dest" ]; then
+    return 0
+  fi
+  echo "Downloading $(basename "$dest")..."
+  tmp=$(mktemp)
+  if wget -q "$url" -O "$tmp" && [ -s "$tmp" ]; then
+    mv "$tmp" "$dest"
+  else
+    echo "WARNING: could not fetch $(basename "$dest"); will retry next start"
+    rm -f "$tmp" "$dest"
+    return 1
+  fi
+}
 
-if [ ! -f "/usr/src/wordlist/raft-large-directories.txt" ]; then
-  echo "Downloading raft-large-directories.txt Wordlist..."
-  wget -q https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/raft-large-directories.txt -O /usr/src/wordlist/raft-large-directories.txt
-fi
+_fetch_wordlist "/usr/src/wordlist/dicc.txt" \
+  "https://raw.githubusercontent.com/maurosoria/dirsearch/master/db/dicc.txt"
+_fetch_wordlist "/usr/src/wordlist/raft-large-directories.txt" \
+  "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/raft-large-directories.txt"
+_fetch_wordlist "/usr/src/wordlist/deepmagic.com-prefixes-top50000.txt" \
+  "https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/DNS/deepmagic.com-prefixes-top50000.txt"
+_fetch_wordlist "/usr/src/wordlist/api-endpoints.txt" \
+  "https://wordlists-cdn.assetnote.io/data/automated/httparchive_apiroutes_2023_01_28.txt"
 
-if [ ! -f "/usr/src/wordlist/deepmagic.com-prefixes-top50000.txt" ]; then
-  echo "Downloading Deepmagic top 50000 Wordlist..."
-  wget -q https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/DNS/deepmagic.com-prefixes-top50000.txt -O /usr/src/wordlist/deepmagic.com-prefixes-top50000.txt
-fi
-
-# Setup Auth Brute-Force Wordlists
-if [ ! -d "/usr/src/wordlist/auth" ]; then
-  mkdir -p /usr/src/wordlist/auth
-fi
+# Auth brute-force wordlists — copied from the image-baked path, never from
+# a bind-mounted Django tree (go has no `../web` mount).
+mkdir -p /usr/src/wordlist/auth
 echo "Copying Auth Wordlists..."
-cp -r /usr/src/app/wordlist/auth/* /usr/src/wordlist/auth/
+cp -r /opt/r3ngine/wordlist/auth/* /usr/src/wordlist/auth/
 
-if [ ! -f '/usr/src/wordlist/cpanel_users.txt' ]; then
+# SMTP username enumeration wordlist — same image-baked source.
+cp /opt/r3ngine/wordlist/smtp-usernames.txt /usr/src/wordlist/smtp-usernames.txt
+
+if [ ! -s '/usr/src/wordlist/cpanel_users.txt' ]; then
   echo "Fetching cPanel2Shell wordlist..."
-  wget -qO- https://raw.githubusercontent.com/danielmiessler/SecLists/master/Usernames/top-usernames-shortlist.txt >> /usr/src/wordlist/cpanel_users.txt
-  sort -u /usr/src/wordlist/cpanel_users.txt -o /usr/src/wordlist/cpanel_users.txt
+  cpanel_tmp=$(mktemp)
+  if wget -qO- https://raw.githubusercontent.com/danielmiessler/SecLists/master/Usernames/top-usernames-shortlist.txt > "$cpanel_tmp" \
+    && [ -s "$cpanel_tmp" ]; then
+    sort -u "$cpanel_tmp" -o /usr/src/wordlist/cpanel_users.txt
+  else
+    echo "WARNING: could not fetch cpanel_users.txt; will retry next start"
+    rm -f /usr/src/wordlist/cpanel_users.txt
+  fi
+  rm -f "$cpanel_tmp"
 fi
 
-cd /usr/src/app
+# kiterunner route wordlists (.kite). Each is fetched on its own and only
+# moved into place once fully extracted, so a failed or partial download is
+# retried on the next start rather than leaving a truncated file behind.
+mkdir -p /usr/src/wordlist/kr
+for kite in routes-small routes-large; do
+  if [ ! -s "/usr/src/wordlist/kr/${kite}.kite" ]; then
+    kr_tmp=$(mktemp -d)
+    if wget -q "https://wordlists-cdn.assetnote.io/data/kiterunner/${kite}.kite.tar.gz" -O "${kr_tmp}/${kite}.tar.gz" \
+      && tar -xzf "${kr_tmp}/${kite}.tar.gz" -C "${kr_tmp}" \
+      && [ -s "${kr_tmp}/${kite}.kite" ]; then
+      mv "${kr_tmp}/${kite}.kite" "/usr/src/wordlist/kr/${kite}.kite"
+    else
+      echo "WARNING: could not fetch the kiterunner ${kite} wordlist; kiterunner skips it until the next start"
+    fi
+    rm -rf "${kr_tmp}"
+  fi
+done
 
-# install gf patterns
-if [ ! -d "/root/Gf-Patterns" ]; then
-  echo "Installing GF Patterns..."
-  mkdir -p ~/.gf
-  # Note: GOPATH is /go in the go-tools-builder, but in the final runtime it's not set.
-  # We copy patterns if the builder directory exists, otherwise clone
-  git clone https://github.com/1ndianl33t/Gf-Patterns ~/Gf-Patterns
-  mv ~/Gf-Patterns/*.json ~/.gf
-fi
-
+# ---------------------------------------------------------------------------
 # store scan_results
-if [ ! -d "/usr/src/scan_results" ]; then
-  mkdir -p /usr/src/scan_results
+# ---------------------------------------------------------------------------
+mkdir -p /usr/src/scan_results
+
+# ---------------------------------------------------------------------------
+# GF patterns — go owns `gf` now that it is in ROUTED_TOOLS, so go is the
+# sole writer of /root/.gf.
+# ---------------------------------------------------------------------------
+mkdir -p /root/.gf
+if ! compgen -G "/root/.gf/*.json" > /dev/null; then
+  echo "Installing GF Patterns..."
+  rm -rf /root/Gf-Patterns
+  if git clone --depth 1 https://github.com/1ndianl33t/Gf-Patterns /root/Gf-Patterns; then
+    mv /root/Gf-Patterns/*.json /root/.gf/ 2>/dev/null || true
+  else
+    echo "WARNING: Gf-Patterns clone failed; will retry next start"
+    rm -rf /root/Gf-Patterns
+  fi
 fi
 
-# test tools, required for configuration
+# ---------------------------------------------------------------------------
+# Soft version checks, required for configuration. None of these may block
+# worker startup if a binary is temporarily missing or misbehaving.
+# ---------------------------------------------------------------------------
 naabu -version || true
 subfinder -version || true
 amass -version || true
 nuclei -version || true
 
-# nuclei templates setup
-# Every guard below uses "$HOME/..." rather than "~/...": a tilde does not
-# expand inside double quotes, so these tests were all unconditionally true and
-# re-downloaded (or re-cloned) the whole set on every container start.
-GEEKNIK_DIR="$HOME/nuclei-templates/geeknik_nuclei_templates"
+# ---------------------------------------------------------------------------
+# Community Nuclei Templates — go is the sole writer into the shared
+# nuclei_templates volume. Layout matches what vuln.py / definitions.py
+# expect (flat geeknik/aimap/missing-cve/etc. dirs directly under
+# /root/nuclei-templates, which nuclei walks recursively via -t).
+# ---------------------------------------------------------------------------
+mkdir -p /root/nuclei-templates
+
+GEEKNIK_DIR="/root/nuclei-templates/geeknik"
 if [ ! -d "$GEEKNIK_DIR/.git" ]; then
   echo "Installing Geeknik Nuclei templates..."
   rm -rf "$GEEKNIK_DIR"
@@ -154,65 +189,81 @@ elif [ "$RUN_TOOL_UPDATES" = "1" ]; then
   git -C "$GEEKNIK_DIR" pull --ff-only --quiet || TOOL_UPDATE_RC=1
 fi
 
-if [ ! -f "$HOME/nuclei-templates/ssrf_nagli.yaml" ]; then
+if [ ! -f "/root/nuclei-templates/ssrf_nagli.yaml" ]; then
   echo "Downloading ssrf_nagli for Nuclei..."
-  wget -q https://raw.githubusercontent.com/NagliNagli/BountyTricks/main/ssrf.yaml -O "$HOME/nuclei-templates/ssrf_nagli.yaml"
+  wget -q https://raw.githubusercontent.com/NagliNagli/BountyTricks/main/ssrf.yaml -O "/root/nuclei-templates/ssrf_nagli.yaml" || true
 fi
 
-# AI Map Templates
-echo "Checking for AI Map Templates..."
-if [ ! -f "$HOME/nuclei-templates/langserve-detect.yaml" ]; then
-  wget -q https://raw.githubusercontent.com/BishopFox/aimap/refs/heads/main/templates/langserve-detect.yaml -O "$HOME/nuclei-templates/langserve-detect.yaml"
-fi
-
-if [ ! -f "$HOME/nuclei-templates/mcp-server-detect.yaml" ]; then
-  wget -q https://github.com/BishopFox/aimap/raw/refs/heads/main/templates/mcp-server-detect.yaml -O "$HOME/nuclei-templates/mcp-server-detect.yaml"
-fi
-
-if [ ! -f "$HOME/nuclei-templates/mcp-tool-enum.yaml" ]; then
-  wget -q https://github.com/BishopFox/aimap/raw/refs/heads/main/templates/mcp-tool-enum.yaml -O "$HOME/nuclei-templates/mcp-tool-enum.yaml"
-fi
-
-if [ ! -f "$HOME/nuclei-templates/openai-compat-detect.yaml" ]; then
-  wget -q https://github.com/BishopFox/aimap/raw/refs/heads/main/templates/openai-compat-detect.yaml -O "$HOME/nuclei-templates/openai-compat-detect.yaml"
-fi
-
-if [ ! -f "$HOME/nuclei-templates/prompt-leak.yaml" ]; then
-  wget -q https://github.com/BishopFox/aimap/raw/refs/heads/main/templates/prompt-leak.yaml -O "$HOME/nuclei-templates/prompt-leak.yaml"
-fi
+# BishopFox AI Map templates — LangServe, MCP, OpenAI-compat, prompt-leak detection
+AI_TPL_DIR="/root/nuclei-templates/aimap"
+mkdir -p "$AI_TPL_DIR"
+for tpl in langserve-detect mcp-server-detect mcp-tool-enum openai-compat-detect prompt-leak; do
+  if [ ! -f "$AI_TPL_DIR/${tpl}.yaml" ]; then
+    wget -q "https://github.com/BishopFox/aimap/raw/refs/heads/main/templates/${tpl}.yaml" \
+      -O "$AI_TPL_DIR/${tpl}.yaml" || true
+  fi
+done
 
 # edoardottt/missing-cve-nuclei-templates — ~64k CVEs absent from the official set
-# Covers XSS (22k), SQLi (12k), DoS (15k), RCE (3k), Path Traversal, SSRF, LFI, XXE, SSTI
-echo "Checking for missing-cve nuclei templates"
-if [ ! -d "$HOME/nuclei-templates/missing-cve" ]; then
-  echo "Installing missing-cve nuclei templates (~64k additional CVEs)"
+if [ ! -d "/root/nuclei-templates/missing-cve/.git" ]; then
+  echo "Installing missing-cve nuclei templates (~64k additional CVEs)..."
+  rm -rf "/root/nuclei-templates/missing-cve"
   git clone --depth 1 https://github.com/edoardottt/missing-cve-nuclei-templates.git \
-    "$HOME/nuclei-templates/missing-cve"
+    "/root/nuclei-templates/missing-cve" || \
+    echo "WARNING: missing-cve clone failed; will retry next start"
 fi
 
 # emadshanab/Nuclei-Templates-Collection — aggregates 400+ community repos
-# Includes Log4Shell, Spring RCE, F5, WAF detection, Kubernetes, SAP, Oracle, WebSphere
-echo "Checking for Nuclei Templates Collection (400+ community repos)"
-if [ ! -d "$HOME/nuclei-templates/community-collection" ]; then
-  echo "Installing Nuclei Templates Collection (400+ community repos)"
+if [ ! -d "/root/nuclei-templates/community-collection/.git" ]; then
+  echo "Installing Nuclei Templates Collection (400+ community repos)..."
+  rm -rf "/root/nuclei-templates/community-collection"
   git clone --depth 1 https://github.com/emadshanab/Nuclei-Templates-Collection.git \
-    "$HOME/nuclei-templates/community-collection"
+    "/root/nuclei-templates/community-collection" || \
+    echo "WARNING: community-collection clone failed; will retry next start"
 fi
 
 # 0xKayala/Custom-Nuclei-Templates — bug-bounty focused custom templates
-  echo "Checking for 0xKayala custom nuclei templates"
-if [ ! -d "$HOME/nuclei-templates/kayala-custom" ]; then
-  echo "Installing 0xKayala custom nuclei templates"
+if [ ! -d "/root/nuclei-templates/kayala-custom/.git" ]; then
+  echo "Installing 0xKayala custom nuclei templates..."
+  rm -rf "/root/nuclei-templates/kayala-custom"
   git clone --depth 1 https://github.com/0xKayala/Custom-Nuclei-Templates.git \
-    "$HOME/nuclei-templates/kayala-custom"
+    "/root/nuclei-templates/kayala-custom" || \
+    echo "WARNING: kayala-custom clone failed; will retry next start"
 fi
 
-if [ "$RUN_TOOL_UPDATES" = "1" ]; then
-  vulnx update || TOOL_UPDATE_RC=1
+# topscoder/nuclei-wordfence-cve — 70k+ WordPress CVE templates (daily-updated)
+if [ ! -d "/root/nuclei-templates/wordfence/.git" ]; then
+  echo "Installing Wordfence nuclei templates..."
+  rm -rf "/root/nuclei-templates/wordfence"
+  git clone --depth 1 https://github.com/topscoder/nuclei-wordfence-cve.git \
+    "/root/nuclei-templates/wordfence" || \
+    echo "WARNING: wordfence clone failed; will retry next start"
+elif [ "$RUN_TOOL_UPDATES" = "1" ]; then
+  echo "Updating Wordfence nuclei templates..."
+  git -C /root/nuclei-templates/wordfence pull --ff-only --quiet || TOOL_UPDATE_RC=1
+fi
+# Keep Wordfence under wordfence/ only — do not flatten into the volume root
+# (Tool Settings lists root-level YAML as operator customs; a flatten would
+# flood that UI with tens of thousands of CVE templates). nuclei -t walks
+# /root/nuclei-templates recursively, so wordfence/ is still scanned.
+
+# ---------------------------------------------------------------------------
+# Seed sentinels — require substantive template content, not just mkdir.
+# ---------------------------------------------------------------------------
+if [ -s "/usr/src/wordlist/dicc.txt" ] \
+  && [ -s "/usr/src/wordlist/raft-large-directories.txt" ] \
+  && [ -d "/root/nuclei-templates/geeknik/.git" ] \
+  && compgen -G "/root/.gf/*.json" > /dev/null; then
+  touch /usr/src/wordlist/.seeded
+  touch /root/nuclei-templates/.seeded
+  echo "[entrypoint] Wordlist/nuclei-template seed sentinels written."
+else
+  echo "[entrypoint] WARNING: required wordlist/nuclei-template/GF assets missing; seed sentinels not written."
 fi
 
-# Configure vigolium to scan all severity levels for known issues.
-# Local config writes, not network calls, so these stay on every start.
+# ---------------------------------------------------------------------------
+# Configure vigolium (local config writes — stay on every start).
+# ---------------------------------------------------------------------------
 vigolium config set known_issue_scan.severities "critical,high,medium,low,info" || true
 vigolium config set dynamic-assessment.max_feedback_rounds=3 || true
 vigolium config set known_issue_scan.enrich_targets=true || true
@@ -220,23 +271,27 @@ vigolium config set discovery.enrich_targets=true || true
 vigolium config set spidering.max_duration "20m" || true
 vigolium config set known_issue_scan.templates_dir="/root/nuclei-templates" || true
 
+# Weekly CLI updates run in the background so the worker can become healthy
+# (seed sentinels + r3ngine-executor) without waiting on nuclei/vigolium/vulnx.
 if [ "$RUN_TOOL_UPDATES" = "1" ]; then
-  vigolium update || TOOL_UPDATE_RC=1
-  vigolium doctor --fix || TOOL_UPDATE_RC=1
-  nuclei -update || TOOL_UPDATE_RC=1
-
-  if [ "$TOOL_UPDATE_RC" = "0" ]; then
-    touch "$TOOL_UPDATE_STAMP"
-    echo "[entrypoint] Tool updates completed; sentinel refreshed."
-  else
-    echo "[entrypoint] Some tool updates failed; sentinel left stale so the next start retries."
-  fi
+  (
+    upd_rc=0
+    if [ -f /root/nuclei-templates/wordfence/requirements.txt ]; then
+      pip3 install -q -r /root/nuclei-templates/wordfence/requirements.txt || upd_rc=1
+    fi
+    vigolium update || upd_rc=1
+    vigolium doctor --fix || upd_rc=1
+    nuclei -update || upd_rc=1
+    vulnx update || upd_rc=1
+    if [ "$upd_rc" = "0" ]; then
+      touch "$TOOL_UPDATE_STAMP"
+      echo "[entrypoint] Background tool updates completed; sentinel refreshed."
+    else
+      echo "[entrypoint] Background tool updates failed; sentinel left stale for retry."
+    fi
+  ) &
 fi
-# Split oversized nuclei tags
-# echo "[entrypoint] Running Nuclei tag splitter..."
-# python3 /usr/src/scripts/nuclei_tag_splitter.py
 
-# wait $INTERNAL_TOOLS_PID
 echo "[entrypoint] Starting Temporal Go Executor..."
 # Forward the container command (docker-compose.worker.yml passes --worker-name).
 exec /usr/local/bin/r3ngine-executor "$@"

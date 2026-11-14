@@ -271,7 +271,10 @@ class WafDetector(APIView):
 			response['message'] = 'Invalid Domain/URL provided!'
 			return Response(response)
 		
-		_, output = run_command(['wafw00f', url], shell=False, remove_ansi_sequence=True)
+		from reNgine.tool_workers import run_on_workers
+		from reNgine.common_func import remove_ansi_escape_sequences
+		_, output = run_on_workers(argv=['wafw00f', url], shell=False, timeout=120)
+		output = remove_ansi_escape_sequences(output or '')
 		regex = r"behind (.*?) WAF"
 		group = re.search(regex, output)
 		if group:
@@ -690,10 +693,15 @@ class CMSDetector(APIView):
 		try:
 			# response = get_cms_details(url)
 			response = {}
-			_, output = run_command(
-				['python3', '/usr/src/github/CMSeeK/cmseek.py',
-				 '--random-agent', '--batch', '--follow-redirect', '-u', url],
-				shell=False, remove_ansi_sequence=True)
+			from reNgine.tool_workers import run_on_workers
+			from reNgine.common_func import remove_ansi_escape_sequences
+			_, output = run_on_workers(
+				argv=['python3', '/usr/src/github/CMSeeK/cmseek.py',
+				      '--random-agent', '--batch', '--follow-redirect', '-u', url],
+				shell=False,
+				timeout=300,
+			)
+			output = remove_ansi_escape_sequences(output or '')
 
 			response['message'] = 'Could not detect CMS!'
 

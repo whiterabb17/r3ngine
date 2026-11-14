@@ -158,14 +158,14 @@ services:
     build:
       context: ../
       dockerfile: docker/web/${WEB_DOCKERFILE:-Dockerfile}
+      target: web
     entrypoint: /usr/src/app/entrypoint.sh
     restart: always
     logging: *default-logging
     init: true
-    # Tag of the locally built image, shared with the orchestrator and executor
-    # below. Point R3NGINE_IMAGE at a registry image built from this fork to
-    # deploy without building.
-    image: ${R3NGINE_IMAGE:-r3ngine:local}
+    # Role image for the API/UI. Registry deploys set R3NGINE_WEB_IMAGE.
+    # Legacy R3NGINE_IMAGE is still accepted as a fallback for this service only.
+    image: ${R3NGINE_WEB_IMAGE:-${R3NGINE_IMAGE:-r3ngine-web:local}}
     environment:
       - DEBUG=${DEBUG:-0}
       - LLM_ENABLED=${LLM_ENABLED:-0}
@@ -201,12 +201,16 @@ services:
       - ../web:/usr/src/app
       - ../frontend:/usr/src/app/frontend
       - /usr/src/app/frontend/node_modules
-      - github_repos:/usr/src/github
+      # Shared volumes also used by Tool Settings (GF/nuclei/config uploads) and
+      # custom wordlists / scan media. Web does not download into these; go/python
+      # entrypoints own seeding. github_repos is shared so theHarvester/SpiderFoot
+      # config writes reach the python worker trees.
       - wordlist:/usr/src/wordlist
       - scan_results:/usr/src/scan_results
       - gf_patterns:/root/.gf
       - nuclei_templates:/root/nuclei-templates
       - tool_config:/root/.config
+      - github_repos:/usr/src/github
       - static_volume:/usr/src/app/staticfiles/
       #- plugins_data:/usr/src/app/plugins_data
       - ../secrets/certs/ca.crt:/usr/src/app/ca.crt:ro
@@ -516,7 +520,11 @@ services:
       - r3ngine_network
 
   temporal-python-orchestrator:
-    image: ${R3NGINE_IMAGE:-r3ngine:local}
+    build:
+      context: ../
+      dockerfile: docker/web/${WEB_DOCKERFILE:-Dockerfile}
+      target: python-orchestrator
+    image: ${R3NGINE_PYTHON_IMAGE:-r3ngine-python:local}
     restart: always
     logging: *default-logging
     init: true
@@ -553,6 +561,9 @@ services:
         condition: service_healthy
       neo4j:
         condition: service_healthy
+      # Readiness only: go seeds shared wordlists/templates before scans run.
+      temporal-go-executor:
+        condition: service_healthy
     volumes:
       - ../web:/usr/src/app
       - github_repos:/usr/src/github
@@ -561,7 +572,6 @@ services:
       - gf_patterns:/root/.gf
       - nuclei_templates:/root/nuclei-templates
       - tool_config:/root/.config
-      - static_volume:/usr/src/app/staticfiles/
       - ./temporal-python-orchestrator/entrypoint.sh:/usr/src/app/temporal-entrypoint.sh:ro
     networks:
       - r3ngine_network
@@ -570,9 +580,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      # The entrypoint fetches wordlists and template repos before the worker
-      # process exists; 30s marked a normally-starting container unhealthy.
-      start_period: 300s
+      start_period: 180s
     deploy:
       resources:
         limits:
@@ -582,7 +590,11 @@ services:
           memory: 1G
 
   temporal-go-executor:
-    image: ${R3NGINE_IMAGE:-r3ngine:local}
+    build:
+      context: ../
+      dockerfile: docker/web/${WEB_DOCKERFILE:-Dockerfile}
+      target: go-executor
+    image: ${R3NGINE_GO_IMAGE:-r3ngine-go-executor:local}
     restart: always
     logging: *default-logging
     init: true
@@ -591,35 +603,33 @@ services:
       - TEMPORAL_HOST=temporal:7233
       - TEMPORAL_NAMESPACE=default
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
     depends_on:
       temporal:
         condition: service_healthy
-      db:
-        condition: service_healthy
     volumes:
-      - ../web:/usr/src/app
-      - github_repos:/usr/src/github
+      # No ../web bind: auth wordlists are baked at /opt/r3ngine/wordlist.
+      # No github_repos: vulscan lives under /opt so python owns that volume.
       - wordlist:/usr/src/wordlist
       - scan_results:/usr/src/scan_results
       - gf_patterns:/root/.gf
       - nuclei_templates:/root/nuclei-templates
       - tool_config:/root/.config
-      - static_volume:/usr/src/app/staticfiles/
       - ./temporal-go-executor/entrypoint.sh:/usr/src/app/executor-entrypoint.sh:ro
     networks:
       - r3ngine_network
     healthcheck:
-      test: [ "CMD", "pgrep", "-f", "r3ngine-executor" ]
+      # Seed sentinels prove wordlists/templates exist; process proves worker is up.
+      test:
+        [
+          "CMD-SHELL",
+          "test -f /usr/src/wordlist/.seeded && test -f /root/nuclei-templates/.seeded && pgrep -f r3ngine-executor >/dev/null",
+        ]
       interval: 30s
       timeout: 10s
-      retries: 3
-      # Same reason as the orchestrator: setup runs long before the binary execs.
-      start_period: 300s
+      retries: 5
+      # First boot clones community template repos before the executor execs;
+      # weekly tool updates now run in the background after seed.
+      start_period: 600s
     deploy:
       resources:
         limits:

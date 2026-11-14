@@ -183,23 +183,16 @@ RUN cargo install --git https://github.com/hahwul/smugglex.git --root /usr/local
 
 
 # ===========================================================================
-# Stage 4: Runtime Image
+# Stage 4: Shared runtime (runtime-full)
 #
-# Ubuntu 22.04 base. Contains ONLY what r3ngine needs to run:
-#   - Python + pip + runtime shared libs
-#   - Ruby (WPScan)
-#   - Node.js (Retire.js)
-#   - Pre-compiled Go tool binaries (copied from go-tools-builder)
-#   - r3ngine-executor binary (copied from executor-builder)
-#   - Dalfox binary (copied from dalfox-builder)
-#   - Built frontend dist (copied from frontend-builder)
-#   - Python-based tools (shallow-cloned, .git stripped)
-#   - Playwright Chromium
+# Ubuntu 22.04 base used as the common layer for the three role targets
+# (web, python-orchestrator, go-executor). Phase-1 keeps tool content shared
+# so routing can land before binaries are stripped from web/python.
 #
 # NOT present: Go SDK, Rust toolchain, build caches, full git histories,
 #              nuclei-templates (volume), wordlists (volume).
 # ===========================================================================
-FROM ubuntu:22.04
+FROM ubuntu:22.04 AS runtime-full
 
 # Prevent interactive APT prompts during build
 ENV DEBIAN_FRONTEND="noninteractive" \
@@ -729,3 +722,46 @@ RUN find /usr/src -name "*.pyc" -delete 2>/dev/null; \
 
 # gau config — place before any gau invocation so it reads the custom provider/filter settings
 COPY config/tools/gau.toml /root/.gau.toml
+
+# Auth wordlists baked for the go-executor entrypoint (no Django bind-mount required).
+RUN mkdir -p /opt/r3ngine/wordlist && \
+    cp -a /usr/src/app/wordlist/auth /opt/r3ngine/wordlist/auth && \
+    cp -a /usr/src/app/wordlist/smtp-usernames.txt /opt/r3ngine/wordlist/smtp-usernames.txt
+
+
+# ===========================================================================
+# Role targets — three images from one bake. Content starts identical in the
+# shared runtime-full layer; compose selects the target per service.
+# Strip of web/python CLIs happens only after ROUTED_TOOLS + call-site audit.
+# ===========================================================================
+FROM runtime-full AS web
+LABEL r3ngine.role="web"
+ENV R3NGINE_IMAGE_ROLE=web
+# Web no longer runs scan CLIs locally (recon/Tool Arsenal go through Temporal).
+# Drop the heaviest scanner artifacts from the API image; Django + frontend remain.
+RUN set -eux; \
+    for bin in \
+      nuclei naabu subfinder amass httpx ffuf katana gospider gau waybackurls \
+      hakrawler tlsx dalfox crlfuzz s3scanner aquatone vigolium feroxbuster \
+      gitleaks trufflehog betterleaks dnsx grype trivy noseyparker smugglex \
+      brutus k6 vulnx reconx chaos mapcidr urlfinder cariddi wpprobe unfurl \
+      favirecon sourcemapper gosearch julius grpcurl exifray gf kr nmap \
+      sslscan ike-scan hping3 wrk; do \
+        rm -f "/usr/local/bin/${bin}" "/usr/bin/${bin}" || true; \
+    done; \
+    rm -rf /root/.cache/ms-playwright /usr/src/github || true; \
+    mkdir -p /usr/src/github
+
+FROM runtime-full AS python-orchestrator
+LABEL r3ngine.role="python"
+ENV R3NGINE_IMAGE_ROLE=python
+# Python keeps Playwright + Python-native tools. Compiled CLIs that are in
+# ROUTED_TOOLS still remain in this image until remaining raw-subprocess
+# call sites (e.g. long-lived reconx monitor) are fully migrated; they are
+# unused for routed tools because run_command sends those to go-executor.
+
+FROM runtime-full AS go-executor
+LABEL r3ngine.role="go"
+ENV R3NGINE_IMAGE_ROLE=go
+# Go does not serve the SPA; drop the baked frontend dist to shrink the image.
+RUN rm -rf /usr/src/frontend || true

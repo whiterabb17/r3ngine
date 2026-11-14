@@ -24,9 +24,17 @@
   - `nuclei_scan` retries the same tag batch on `WATCHDOG_STALL_KILL` up to `NUCLEI_HANG_MAX_ATTEMPTS` (default 2), then soft-skips so `NucleiPlannerWorkflow` continues to the next batch; wall-timeout kills soft-skip without retry.
   - Env knobs: `NUCLEI_STALL_TIMEOUT_SECONDS`, `NUCLEI_HANG_MAX_ATTEMPTS`. Requires a **go-executor** image rebuild + recreate for the watchdog to be live.
 
+- **Three role app images (docker-optimization)**:
+  - Multi-target `docker/web/Dockerfile` + `docker-bake.hcl` produce `r3ngine-web`, `r3ngine-python`, and `r3ngine-go-executor` instead of one shared mega-image.
+  - Compose / worker / CI / Makefile use `R3NGINE_WEB_IMAGE` / `R3NGINE_PYTHON_IMAGE` / `R3NGINE_GO_IMAGE`; `make build-app-images` bakes all three.
+  - Entrypoint ownership: go sole-writes shared `wordlist` + `nuclei_templates` (seed sentinels + healthcheck); python owns `/usr/src/github` tool trees; web is API/UI boot only.
+  - Expanded `ROUTED_TOOLS` and call-site fixes so compiled CLIs run on go-executor; web Tool Arsenal / interactive recon use Temporal `tool_workers` (`run` / `remove`).
+  - Docs: `documents/tool-distribution.md` ownership matrix and empty-volume first-boot notes.
+
 #### Fixed
 
 - **Hung nuclei tag batches no longer sit for hours**: processes that heartbeat but make no progress (0% CPU / empty stdout / hang-monitor dumps) are killed and retried instead of consuming the Tier 6 stage budget until soft cancel.
+- **Image-split readiness**: go healthcheck requires non-empty core wordlists, `geeknik/.git`, and GF patterns before python starts; Tool Settings lists only operator-owned nuclei templates (root + `custom/`), not the full community corpus.
 
 ### [v3.7.9] - 2026-10-09
 

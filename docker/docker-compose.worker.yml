@@ -2,9 +2,9 @@ version: '3.8'
 
 services:
   temporal-python-orchestrator:
-    # A worker host builds nothing, so the image must come from a registry
-    # that holds a build of this fork.
-    image: ${R3NGINE_IMAGE:?set R3NGINE_IMAGE to a registry image built from this fork}
+    # A worker host builds nothing, so both role images must come from a registry
+    # that holds builds of this fork.
+    image: ${R3NGINE_PYTHON_IMAGE:?set R3NGINE_PYTHON_IMAGE to the python orchestrator registry image}
     restart: always
     init: true
     entrypoint: /usr/src/app/temporal-entrypoint.sh
@@ -33,19 +33,23 @@ services:
       - MASTER_CA_BUNDLE=${MASTER_CA_BUNDLE:-}
       - MASTER_TLS_VERIFY=${MASTER_TLS_VERIFY:-1}
     volumes:
+      # Prefer shipping code in the image; bind-mount only when iterating locally.
       - ../web:/usr/src/app
       - github_repos:/usr/src/github
       - wordlist:/usr/src/wordlist
       - scan_results:/usr/src/scan_results
       - gf_patterns:/root/.gf
       - nuclei_templates:/root/nuclei-templates
+      - tool_config:/root/.config
     networks:
       - r3ngine_network
+    depends_on:
+      temporal-go-executor:
+        condition: service_healthy
 
   temporal-go-executor:
-    # Same app image as the orchestrator: the executor binary is built into it
-    # (docker/web/Dockerfile, executor-builder stage); there is no separate Go image.
-    image: ${R3NGINE_IMAGE:?set R3NGINE_IMAGE to a registry image built from this fork}
+    # Separate go role image; do not reuse the python image tag.
+    image: ${R3NGINE_GO_IMAGE:?set R3NGINE_GO_IMAGE to the go executor registry image}
     restart: always
     init: true
     entrypoint: /usr/src/app/executor-entrypoint.sh
@@ -61,8 +65,7 @@ services:
     volumes:
       # Tool output paths are handed over by the Python orchestrator, so the
       # shared volumes must be mounted at the same paths as in that service.
-      - ../web:/usr/src/app
-      - github_repos:/usr/src/github
+      # No ../web bind: auth wordlists are baked into the go image.
       - wordlist:/usr/src/wordlist
       - scan_results:/usr/src/scan_results
       - gf_patterns:/root/.gf
@@ -71,6 +74,16 @@ services:
       - ./temporal-go-executor/entrypoint.sh:/usr/src/app/executor-entrypoint.sh:ro
     networks:
       - r3ngine_network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "test -f /usr/src/wordlist/.seeded && test -f /root/nuclei-templates/.seeded && pgrep -f r3ngine-executor >/dev/null",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 600s
 
 volumes:
   scan_results:

@@ -334,10 +334,14 @@ def fetch_url(self, urls=[], ctx={}, description=None):
 			logger.info('Ignoring jsvar as it is causing issues.')
 			continue
 
-		# Run gf on current pattern
+		# Run gf on current pattern. Lead with `gf` so ROUTED_TOOLS sends this
+		# to go-executor (a leading `cat` would keep it local on python).
 		logger.warning('Running gf on pattern "%s"', gf_pattern)
 		gf_output_file = f'{self.results_dir}/gf_patterns_{gf_pattern}.txt'
-		cmd = f'cat {self.output_path} | gf {gf_pattern} | grep -Eo {host_regex} | tee -a {gf_output_file}'
+		cmd = (
+			f'gf {gf_pattern} < {self.output_path} '
+			f'| grep -Eo {host_regex} | tee -a {gf_output_file}'
+		)
 		run_command(
 			cmd,
 			shell=True,

@@ -1,15 +1,8 @@
 #!/bin/bash
-# Sync GF patterns from bind-mount or staged image into volume
-echo "Syncing GF patterns..."
-mkdir -p /root/.gf
-if [ -d "/usr/src/app/gf-patterns" ]; then
-  cp -f /usr/src/app/gf-patterns/*.json /root/.gf/
-elif [ -d "/usr/src/gf-patterns" ]; then
-  cp -f /usr/src/gf-patterns/*.json /root/.gf/
-else
-  echo "Warning: no GF patterns directory found!"
-fi
-echo "GF patterns synced: $(ls /root/.gf/*.json | wc -l) patterns installed"
+# Entrypoint for the web (Django API/UI) container.
+# GF patterns are not synced here — web does not run `gf`; go owns
+# /root/.gf now that `gf` is routed via ROUTED_TOOLS, and web does not
+# mount the gf_patterns volume at all.
 
 # Install/update frontend dependencies only when package.json is updated or node_modules doesn't exist
 echo "Checking frontend dependencies..."

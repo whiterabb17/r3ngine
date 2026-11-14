@@ -70,10 +70,11 @@ services:
     build:
       context: ../
       dockerfile: docker/web/${WEB_DOCKERFILE:-Dockerfile}
+      target: web
     entrypoint: /usr/src/app/entrypoint.sh
     restart: always
     init: true
-    image: ${R3NGINE_IMAGE:-r3ngine:local}
+    image: ${R3NGINE_WEB_IMAGE:-${R3NGINE_IMAGE:-r3ngine-web:local}}
     environment:
       - DEBUG=1
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
@@ -90,12 +91,12 @@ services:
       - ../web:/usr/src/app
       - ../frontend:/usr/src/app/frontend
       - /usr/src/app/frontend/node_modules
-      - github_repos:/usr/src/github
       - wordlist:/usr/src/wordlist
       - scan_results:/usr/src/scan_results
       - gf_patterns:/root/.gf
       - nuclei_templates:/root/nuclei-templates
       - tool_config:/root/.config
+      - github_repos:/usr/src/github
       - static_volume:/usr/src/app/staticfiles/
       #- plugins_data:/usr/src/app/plugins_data
       - ../secrets/certs/ca.crt:/usr/src/app/ca.crt:ro
@@ -344,7 +345,11 @@ services:
           memory: 256M
 
   temporal-python-orchestrator:
-    image: ${R3NGINE_IMAGE:-r3ngine:local}
+    build:
+      context: ../
+      dockerfile: docker/web/${WEB_DOCKERFILE:-Dockerfile}
+      target: python-orchestrator
+    image: ${R3NGINE_PYTHON_IMAGE:-r3ngine-python:local}
     restart: always
     init: true
     entrypoint: /usr/src/app/temporal-entrypoint.sh
@@ -368,47 +373,7 @@ services:
         condition: service_healthy
       neo4j:
         condition: service_healthy
-    volumes:
-      - ../web:/usr/src/app
-      - github_repos:/usr/src/github
-      - wordlist:/usr/src/wordlist
-      - scan_results:/usr/src/scan_results
-      - gf_patterns:/root/.gf
-      - nuclei_templates:/root/nuclei-templates
-      - tool_config:/root/.config
-      - static_volume:/usr/src/app/staticfiles/
-      - ./temporal-python-orchestrator/entrypoint.sh:/usr/src/app/temporal-entrypoint.sh:ro
-    networks:
-      - r3ngine_network
-    healthcheck:
-      test: [ "CMD-SHELL", "pgrep -f run_temporal_orchestrator || exit 1" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-        reservations:
-          memory: 2G
-
-  temporal-go-executor:
-    image: ${R3NGINE_IMAGE:-r3ngine:local}
-    restart: always
-    init: true
-    entrypoint: /usr/src/app/executor-entrypoint.sh
-    environment:
-      - TEMPORAL_HOST=temporal:7233
-      - TEMPORAL_NAMESPACE=default
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
-    depends_on:
-      db:
+      temporal-go-executor:
         condition: service_healthy
     volumes:
       - ../web:/usr/src/app
@@ -418,16 +383,57 @@ services:
       - gf_patterns:/root/.gf
       - nuclei_templates:/root/nuclei-templates
       - tool_config:/root/.config
-      - static_volume:/usr/src/app/staticfiles/
+      - ./temporal-python-orchestrator/entrypoint.sh:/usr/src/app/temporal-entrypoint.sh:ro
+    networks:
+      - r3ngine_network
+    healthcheck:
+      test: [ "CMD-SHELL", "pgrep -f run_temporal_orchestrator || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  temporal-go-executor:
+    build:
+      context: ../
+      dockerfile: docker/web/${WEB_DOCKERFILE:-Dockerfile}
+      target: go-executor
+    image: ${R3NGINE_GO_IMAGE:-r3ngine-go-executor:local}
+    restart: always
+    init: true
+    entrypoint: /usr/src/app/executor-entrypoint.sh
+    environment:
+      - TEMPORAL_HOST=temporal:7233
+      - TEMPORAL_NAMESPACE=default
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+    depends_on:
+      temporal:
+        condition: service_healthy
+    volumes:
+      - wordlist:/usr/src/wordlist
+      - scan_results:/usr/src/scan_results
+      - gf_patterns:/root/.gf
+      - nuclei_templates:/root/nuclei-templates
+      - tool_config:/root/.config
       - ./temporal-go-executor/entrypoint.sh:/usr/src/app/executor-entrypoint.sh:ro
     networks:
       - r3ngine_network
     healthcheck:
-      test: [ "CMD", "pgrep", "-f", "r3ngine-executor" ]
+      test:
+        [
+          "CMD-SHELL",
+          "test -f /usr/src/wordlist/.seeded && test -f /root/nuclei-templates/.seeded && pgrep -f r3ngine-executor >/dev/null",
+        ]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 600s
     deploy:
       resources:
         limits:

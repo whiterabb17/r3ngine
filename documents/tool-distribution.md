@@ -9,6 +9,38 @@ This separation allows:
 - **Isolation**: Tool crashes don't affect the Python orchestrator.
 - **Scalability**: The Go executor can be independently scaled.
 
+### Three role images
+
+The app stack is built as **three images** from one multi-target Dockerfile (`docker/web/Dockerfile` via `docker-bake.hcl`):
+
+| Image tag (local) | Compose service | Owns |
+|---|---|---|
+| `r3ngine-web:local` | `web` | Django API/UI, frontend static, migrations, `pg_dump` for plugins |
+| `r3ngine-python:local` | `temporal-python-orchestrator` | Temporal workflows/activities, ORM/Neo4j/LLM, Playwright, Python-native tools under `/usr/src/github` |
+| `r3ngine-go-executor:local` | `temporal-go-executor` | `r3ngine-executor` + compiled/apt/Ruby CLI scanners |
+
+Registry / worker hosts set `R3NGINE_WEB_IMAGE`, `R3NGINE_PYTHON_IMAGE`, and `R3NGINE_GO_IMAGE` (not a single shared tag).
+
+**Ownership rule for new tools:**
+- New **compiled/PATH CLI** → add to the go image **and** add the binary name to `ROUTED_TOOLS` in `web/reNgine/utils/task.py` (plus fixture/`version_lookup` if it appears in Tool Arsenal).
+- New **Python-native** tool (`python3 /usr/src/github/...`, pipx-only, in-process Playwright) → python image only; do **not** add to `ROUTED_TOOLS`.
+- Interactive UI actions that need a tool must go through Temporal (`tool_workers` / orchestrator), never assume the binary exists in the web container.
+
+### Shared volumes
+
+Same pattern as `scan_results`: both workers **mount** these; only one entrypoint **downloads** into each:
+
+| Volume | Mount | Who downloads/writes |
+|---|---|---|
+| `scan_results` | python + go | Tool/activity output (not entrypoint downloads) |
+| `wordlist` | python + go | **Go entrypoint only** |
+| `nuclei_templates` | python + go | **Go entrypoint only** |
+| `gf_patterns` | consumer of `gf` | Single owner (go once `gf` is routed) |
+| `github_repos` | python (+ go for vulscan only) | **Python owns** tool-tree first populate |
+| `tool_config` | python + go | Per-role stamps/config keys |
+
+Empty-volume first boot: go seeds wordlists/templates (healthcheck waits for seed sentinels); python seeds `/usr/src/github` tool trees. Web does not mount `github_repos` / nuclei / gf / tool_config.
+
 ---
 
 ## Architecture
@@ -126,49 +158,30 @@ class GoExecutorTaskWorkflow:
 
 **Source:** `web/executor/main.go` (queue derivation and worker-name validation in `queue.go`)  
 **Container:** `temporal-go-executor`  
+**Image:** `r3ngine-go-executor` (`R3NGINE_GO_IMAGE`)  
 **Task Queue:** `go-executor-queue`, or `go-executor-queue-<WORKER_NAME>` on a remote worker (`--worker-name` flag or `WORKER_NAME` env, flag wins)
 
 ### Responsibilities
 
 1. Registers `RunToolSubprocessActivity` with Temporal.
 2. When an activity is dispatched, executes the command as a subprocess.
-3. Streams stdout/stderr to the `Command` DB record (PostgreSQL) for real-time log viewing.
+3. Streams stdout/stderr via Redis for real-time log viewing; Command rows are owned by Python.
 4. Sends periodic heartbeats to Temporal to prevent activity timeouts during long-running tools.
 5. Returns the subprocess result dict.
 
 ### Heartbeating
 
-The Go worker sends heartbeats every 30 seconds during subprocess execution. If the subprocess takes longer than `heartbeat_timeout` without a heartbeat, Temporal reschedules the activity.
+The Go worker sends heartbeats every 5 seconds during subprocess execution. If the subprocess takes longer than `heartbeat_timeout` without a heartbeat, Temporal reschedules the activity.
 
 ---
 
 ## Which Tools Run on Which Queue?
 
+Canonical allowlist: `ROUTED_TOOLS` in `web/reNgine/utils/task.py`. Anything in that set that goes through `run_command` / `stream_command` is executed on the go executor. Do not maintain a second list here.
+
 ### `go-executor-queue` (Go Worker)
 
-| Tool | Description |
-|---|---|
-| Nuclei | Template-based vulnerability scanner |
-| Nmap | Network port scanner |
-| Ffuf | Directory/path fuzzing |
-| Httpx | HTTP probing and crawling |
-| Aquatone | Web screenshot and asset discovery |
-| Amass | Subdomain enumeration |
-| Subfinder | Passive subdomain discovery |
-| Assetfinder | Subdomain discovery |
-| Hakrawler | Web spider/crawl |
-| GAU | URL archive fetching |
-| Gospider | Web spider |
-| Katana | JavaScript-aware web spider |
-| WaybackURLs | Wayback Machine URL fetcher |
-| Dirsearch | Directory fuzzing |
-| SQLMap | SQL injection exploitation |
-| Dalfox | XSS scanner |
-| CRLFuzz | CRLF injection fuzzer |
-| WPScan | WordPress scanner |
-| S3Scanner | S3 bucket misconfiguration scanner |
-| BadDNS | DNS takeover checker |
-| SpiderFoot | Attack surface intelligence |
+Compiled and PATH CLIs routed via `ROUTED_TOOLS`, including (non-exhaustive): Nuclei, Nmap, Ffuf, Httpx, Aquatone, Amass, Subfinder, Hakrawler, GAU, Gospider, Katana, WaybackURLs, Dirsearch, Dalfox, CRLFuzz, WPScan, S3Scanner, Naabu, Semgrep, Vigolium, TLSX, and other entries maintained in code.
 
 ### `python-orchestrator-queue` (Python Worker)
 
@@ -181,6 +194,8 @@ The Go worker sends heartbeats every 30 seconds during subprocess execution. If 
 | LLM calls | AI impact assessment and APME |
 | Neo4j sync | Graph database synchronization |
 | WebSocket events | Real-time progress push to frontend |
+| Playwright / screenshots | Browser-based tasks |
+| Python-native tools | spiderfoot, CMSeeK, OneForAll, Sublist3r, jwt_tool, *2shell scanners, etc. |
 
 ---
 
@@ -191,10 +206,10 @@ The single activity registered on the Go worker. Executes any command as a subpr
 ### Implementation Details
 
 - Uses `os/exec` to spawn the subprocess.
-- Reads stdout line-by-line and writes to the `Command` DB record.
-- Sends Temporal heartbeats every 30 seconds.
-- On heartbeat timeout, the activity is cancelled and the subprocess is killed with `SIGTERM`.
-- Buffers large tool outputs to prevent DB row size issues.
+- Streams stdout/stderr to Redis (`scan:logs:<scan_id>`) and updates Command output from Python when applicable.
+- Sends Temporal heartbeats periodically.
+- On cancel/abort, the subprocess process group is killed.
+- Caps large tool outputs to prevent DB row size issues.
 
 ---
 
@@ -202,23 +217,22 @@ The single activity registered on the Go worker. Executes any command as a subpr
 
 The Go executor container:
 
-1. Waits for the Temporal server and PostgreSQL to be ready.
-2. Builds the Go executor binary if not already built.
-3. Runs database tool installer scripts to ensure all security tools are present.
-4. Starts the Temporal Go worker.
+1. Idempotently seeds shared `wordlist` and `nuclei_templates` volumes (sole writer).
+2. Installs/links go-owned extras (vulscan, `kr`) and runs weekly CLI updates (nuclei/vigolium/vulnx).
+3. Writes seed sentinels used by the compose healthcheck.
+4. Starts `/usr/local/bin/r3ngine-executor`.
+
+Python never re-downloads those assets; it mounts the same volumes and waits for go to become healthy on first boot.
 
 ---
 
 ## Tool Installation
 
-Tools are installed in the Go executor container via Dockerfile (`web/Dockerfile`):
+Tools are installed into the **go** and **python** images via the multi-target Dockerfile (`docker/web/Dockerfile`), not a single shared mega-image. Build with:
 
-```dockerfile
-# Example tool installations
-RUN go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
-RUN go install github.com/projectdiscovery/httpx/cmd/httpx@latest
-RUN go install github.com/projectdiscovery/amass/v4/...@latest
-RUN pip install sqlmap xsstrike
+```bash
+docker buildx bake -f docker-bake.hcl
+# or: make build-app-images
 ```
 
-Tools that require Python are installed via pip; Go-based tools via `go install`.
+Remote workers pull `R3NGINE_PYTHON_IMAGE` and `R3NGINE_GO_IMAGE` separately (`docker/docker-compose.worker.yml`).
