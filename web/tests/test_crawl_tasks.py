@@ -174,19 +174,19 @@ class TestFeroxbusterScan(TestCase):
 
 
 class TestGFScan(TestCase):
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.crawl.gf_patterns.run_command')
     def test_returns_empty_for_no_urls(self, mock_run):
         from reNgine.tasks.crawl import gf_scan
         result = gf_scan(_make_proxy(), scan_history_id=1, pattern='xss')
         self.assertEqual(result, [])
         mock_run.assert_not_called()
 
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.crawl.gf_patterns.run_command')
     def test_returns_matched_urls(self, mock_run):
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout='https://example.com/search?q=<script>\nhttps://example.com/name?n=test\n',
-            stderr='',
+        # gf is ROUTED_TOOLS → run_command (Temporal), not local subprocess.run
+        mock_run.return_value = (
+            0,
+            'https://example.com/search?q=<script>\nhttps://example.com/name?n=test\n',
         )
         from reNgine.tasks.crawl import gf_scan
         result = gf_scan(
@@ -195,8 +195,9 @@ class TestGFScan(TestCase):
         )
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 2)
+        mock_run.assert_called_once()
 
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.crawl.gf_patterns.run_command')
     def test_handles_timeout(self, mock_run):
         mock_run.side_effect = subprocess.TimeoutExpired('gf', 60)
         from reNgine.tasks.crawl import gf_scan

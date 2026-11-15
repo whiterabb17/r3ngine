@@ -98,7 +98,11 @@ class RunCommandCancelTests(SimpleTestCase):
         self.assertEqual(watchdog_calls[0].kwargs.get('args')[1], 30)
 
     def test_quiet_tool_db_abort_is_not_reported_as_timeout(self):
-        """Watchdog kill on ABORTED_TASK must return -1, not 124."""
+        """Watchdog kill on ABORTED_TASK must return -1, not 124.
+
+        Use a non-ROUTED_TOOLS binary so this exercises the local Popen path
+        (smugglex itself is routed to go-executor in production).
+        """
         fake_proc = MagicMock()
         # Quiet tool: first readline blocks until stdout is closed by watchdog path;
         # simulate EOF after the child was killed for abort.
@@ -115,7 +119,7 @@ class RunCommandCancelTests(SimpleTestCase):
                 patch('reNgine.utils.task.threading.Thread') as thread_cls, \
                 patch('reNgine.utils.task.is_scan_aborted', return_value=True):
             thread_cls.return_value = MagicMock()
-            code, output = run_command('smugglex --fuzz', scan_id=9, timeout=30)
+            code, output = run_command('quiettool --fuzz', scan_id=9, timeout=30)
 
         self.assertEqual(code, -1)
         self.assertNotIn('timed out', output.lower())

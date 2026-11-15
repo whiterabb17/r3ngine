@@ -201,23 +201,22 @@ class ToolExecutionTest(TransactionTestCase):
             with open(sample_file, 'rb') as f:
                 mock_stdout = f.read()
             
-            with patch('reNgine.tasks.subprocess.Popen') as mock_popen, \
-                 patch('reNgine.tasks.requests.get') as mock_get:
-                
+            # trufflehog is ROUTED_TOOLS → secret_scanning uses run_command, not Popen
+            stdout_text = mock_stdout.decode('utf-8', errors='replace')
+            with patch('reNgine.tasks.osint.secret_leaks.run_command', return_value=(0, stdout_text)) as mock_run, \
+                 patch('reNgine.tasks.osint.secret_leaks.requests.get') as mock_get:
+
                 # Mock requests.get for JS download
                 mock_resp = MagicMock()
                 mock_resp.status_code = 200
                 mock_resp.text = "console.log('test');"
                 mock_get.return_value = mock_resp
-                
-                process_mock = MagicMock()
-                process_mock.communicate.return_value = (mock_stdout, b"")
-                mock_popen.return_value = process_mock
-                
+
                 # Update ctx for trufflehog
                 self.ctx['yaml_configuration'] = {'vulnerability_scan': {'trufflehog': True}}
                 res = secret_scanning(self.task, config={'trufflehog': True}, ctx=self.ctx)
                 print(f"[DEBUG] secret_scanning result: {res}")
+                mock_run.assert_called()
             
             leaks = SecretLeak.objects.filter(scan_history=self.scan, tool_name='trufflehog')
             print(f"[DEBUG] Secret leaks found in DB for current scan: {leaks.count()}")

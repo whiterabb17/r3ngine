@@ -46,14 +46,14 @@ class ToolCommandViewTests(TestCase):
 
     def test_session_get_is_refused_without_running_anything(self):
         tool = _tool()
-        with patch('api.views.tools.run_command') as run:
+        with patch('reNgine.tool_workers.run_on_workers') as run:
             resp = self.client.get('/api/tool/update/', {'tool_id': tool.id})
         self.assertEqual(resp.status_code, 405)
         run.assert_not_called()
 
     def test_post_update_runs_the_update_command(self):
         tool = _tool()
-        with patch('api.views.tools.run_command', return_value=(0, '')) as run:
+        with patch('reNgine.tool_workers.run_on_workers', return_value=(0, '')) as run:
             resp = self.client.post('/api/tool/update/', {'tool_id': tool.id}, format='json')
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data['status'])
@@ -65,7 +65,7 @@ class ToolCommandViewTests(TestCase):
         token = str(RefreshToken.for_user(self.admin).access_token)
         client = APIClient()
         client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
-        with patch('api.views.tools.run_command', return_value=(0, '')):
+        with patch('reNgine.tool_workers.run_on_workers', return_value=(0, '')):
             resp = client.get('/mapi/tool/update/', {'tool_id': tool.id})
         self.assertEqual(resp.status_code, 200)
 
@@ -80,15 +80,12 @@ class ToolCommandViewTests(TestCase):
     def test_uninstall_go_tool_removes_only_its_binary(self):
         tool = _tool()
         binary = os.path.join(self.bin_dir, 'sometool')
-        other = os.path.join(self.bin_dir, 'othertool')
-        for path in (binary, other):
-            open(path, 'w').close()
 
-        resp = self.client.post('/api/tool/uninstall/', {'tool_id': tool.id}, format='json')
+        with patch('reNgine.tool_workers.remove_on_workers', return_value=(True, None)) as rem:
+            resp = self.client.post('/api/tool/uninstall/', {'tool_id': tool.id}, format='json')
 
         self.assertEqual(resp.status_code, 200, resp.data)
-        self.assertFalse(os.path.exists(binary))
-        self.assertTrue(os.path.exists(other))
+        rem.assert_called_once_with(kind='binary', path=binary)
         self.assertFalse(InstalledExternalTool.objects.filter(pk=tool.pk).exists())
 
     def test_uninstall_git_tool_removes_its_checkout(self):
@@ -96,10 +93,12 @@ class ToolCommandViewTests(TestCase):
         os.makedirs(checkout)
         tool = _tool(install_command='git clone https://github.com/example/sometool', github_clone_path=checkout)
 
-        resp = self.client.post('/api/tool/uninstall/', {'tool_id': tool.id}, format='json')
+        with patch('reNgine.tool_workers.remove_on_workers', return_value=(True, None)) as rem:
+            resp = self.client.post('/api/tool/uninstall/', {'tool_id': tool.id}, format='json')
 
         self.assertEqual(resp.status_code, 200, resp.data)
-        self.assertFalse(os.path.exists(checkout))
+        rem.assert_called_once_with(kind='github', path=checkout)
+        self.assertFalse(InstalledExternalTool.objects.filter(pk=tool.pk).exists())
 
     def test_uninstall_refuses_checkout_outside_tools_dir(self):
         outside = tempfile.mkdtemp(prefix='rengine_outside_')
