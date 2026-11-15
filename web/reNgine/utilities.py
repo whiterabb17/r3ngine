@@ -16,6 +16,47 @@ def is_safe_path(basedir, path, follow_symlinks=True):
 	return os.path.normpath(basedir) == os.path.commonpath((basedir, matchpath))
 
 
+# Tool Arsenal clone dirs under /usr/src/github — same charset as go binary names.
+_GITHUB_TOOL_DIR_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
+GITHUB_TOOLS_DIR = '/usr/src/github'
+
+
+def github_tool_dir_name(raw: str) -> str | None:
+	"""Return a safe single-segment tool directory name, or None if unsafe."""
+	name = (raw or '').strip().rstrip('/')
+	if name.endswith('.git'):
+		name = name[:-4]
+	name = name.split('/')[-1]
+	if not name or not _GITHUB_TOOL_DIR_RE.fullmatch(name):
+		return None
+	return name
+
+
+def safe_github_clone_path(raw_name_or_path: str) -> str | None:
+	"""Absolute checkout path under GITHUB_TOOLS_DIR, or None if unsafe."""
+	name = github_tool_dir_name(raw_name_or_path)
+	if not name:
+		# Allow a full path that already sits safely under GITHUB_TOOLS_DIR.
+		path = (raw_name_or_path or '').strip()
+		root = os.path.realpath(GITHUB_TOOLS_DIR)
+		if not path or os.path.realpath(path) == root or not is_safe_path(root, path):
+			return None
+		base = os.path.basename(os.path.realpath(path))
+		if not _GITHUB_TOOL_DIR_RE.fullmatch(base):
+			return None
+		return os.path.join(GITHUB_TOOLS_DIR, base)
+	return os.path.join(GITHUB_TOOLS_DIR, name)
+
+
+def safe_github_update_command(clone_path: str) -> str | None:
+	"""Shell-safe ``cd <quoted-path> && git pull`` for Tool Arsenal updates."""
+	import shlex
+	path = safe_github_clone_path(clone_path)
+	if not path:
+		return None
+	return f'cd {shlex.quote(path)} && git pull'
+
+
 # Source: https://stackoverflow.com/a/10408992
 def remove_lead_and_trail_slash(s):
 	if s.startswith('/'):

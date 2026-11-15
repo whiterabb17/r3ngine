@@ -5,10 +5,13 @@ reNgine.tasks.crawl for backward compatibility.
 """
 import os
 import json
+import shlex
 import subprocess
 from typing import List, Optional
 
+from reNgine.settings import RENGINE_RESULTS
 from reNgine.utils.logger import get_module_logger
+from reNgine.utils.task import run_command
 
 logger = get_module_logger(__name__)
 
@@ -95,18 +98,21 @@ def urlparser_scan(self, scan_history_id: int, domain_id: int,
         logger.log_line("[URLPARSER]", "SKIP", "no URLs to parse")
         return True
 
-    input_file = '/tmp/urlparser_input_%s.txt' % scan_history_id
+    out_dir = os.path.join(RENGINE_RESULTS, f'scan_{scan_history_id}', 'urlparser')
+    os.makedirs(out_dir, exist_ok=True)
+    input_file = os.path.join(out_dir, 'urlparser_input.txt')
     try:
         with open(input_file, 'w') as f:
             f.write('\n'.join(t for t in targets if t))
 
         logger.log_line("[URLPARSER]", "START", "parsing %d URLs" % len(targets))
-        with open(input_file, 'rb') as stdin_f:
-            result = subprocess.run(
-                ['unfurl', '-u', 'keypairs'],
-                stdin=stdin_f,
-                capture_output=True, text=True, timeout=120,
-            )
+        # Shared volume + shell redirect so go-executor unfurl can read the input.
+        _code, stdout = run_command(
+            f'unfurl -u keypairs < {shlex.quote(input_file)}',
+            shell=True,
+            scan_id=scan_history_id,
+            timeout=120,
+        )
 
         # Build lookup: http_url → EndPoint for fast matching
         ep_map = {
@@ -119,7 +125,7 @@ def urlparser_scan(self, scan_history_id: int, domain_id: int,
 
         params_to_create: List[Parameter] = []
         seen: set = set()
-        for line in result.stdout.splitlines():
+        for line in (stdout or '').splitlines():
             line = line.strip()
             if not line or '=' not in line:
                 continue

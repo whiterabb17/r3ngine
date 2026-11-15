@@ -1230,18 +1230,38 @@ def add_tool(request, slug):
         form = ExternalToolForm(request.POST)
         if form.is_valid():
             # add tool
+            import shlex
+            from reNgine.utilities import safe_github_clone_path
+            from reNgine.tool_workers import run_on_workers
+
             install_command = form.cleaned_data['install_command']
             github_clone_path = None
             if 'git clone' in install_command:
                 project_name = install_command.split('/')[-1]
-                # If project name ends with .git remove it
-                if project_name.endswith('.git'):
-                    project_name = project_name[:-4]
-                github_clone_path = '/usr/src/github/' + project_name
-                install_command = install_command + ' ' + github_clone_path + ' && pip3 install -r ' + github_clone_path + '/requirements.txt'
+                github_clone_path = safe_github_clone_path(project_name)
+                if not github_clone_path:
+                    msg = 'Invalid git clone target name; use a simple alphanumeric directory.'
+                    if request.headers.get('Accept') == 'application/json':
+                        return http.JsonResponse({'status': 'error', 'message': msg}, status=400)
+                    messages.add_message(request, messages.ERROR, msg)
+                    return http.HttpResponseRedirect(reverse('tool_arsenal', kwargs={'slug': slug}))
+                # Quote paths so a crafted install_command cannot break out of the clone dir.
+                install_command = (
+                    f'{install_command} {shlex.quote(github_clone_path)}'
+                    f' && pip3 install -r {shlex.quote(github_clone_path + "/requirements.txt")}'
+                )
 
+            # Install on the tool host (python for git clones, go for go install),
+            # never on web — web strips scanner CLIs.
             import threading as _threading
-            _threading.Thread(target=run_command, args=(install_command,), daemon=True).start()
+
+            def _install():
+                try:
+                    run_on_workers(command=install_command, shell=True, timeout=600)
+                except Exception:
+                    logger.exception('Tool Arsenal install failed: %s', install_command)
+
+            _threading.Thread(target=_install, daemon=True).start()
             saved_form = form.save()
             if github_clone_path:
                 tool = InstalledExternalTool.objects.get(id=saved_form.pk)
@@ -1296,11 +1316,30 @@ def modify_tool_in_arsenal(request, slug, id):
 def update_github_tool(request, slug, id):
     tool = get_object_or_404(InstalledExternalTool, id=id)
     if tool.github_clone_path:
-        update_command = f"cd {tool.github_clone_path} && git pull"
-        if tool.update_command:
-             update_command = tool.update_command
+        from reNgine.utilities import safe_github_update_command
+        from reNgine.tool_workers import run_on_workers
+
+        # Prefer the operator-configured update_command only when it is not the
+        # default git-pull path; otherwise always build a quoted safe cd+pull.
+        if tool.update_command and tool.update_command.strip().lower() != 'git pull':
+            update_command = tool.update_command
+        else:
+            update_command = safe_github_update_command(tool.github_clone_path)
+            if not update_command:
+                messages.add_message(
+                    request, messages.ERROR,
+                    f'Update refused for {tool.name}: checkout path is not under /usr/src/github.',
+                )
+                return http.HttpResponseRedirect(reverse('tool_arsenal', kwargs={'slug': slug}))
         import threading as _threading
-        _threading.Thread(target=run_command, args=(update_command,), daemon=True).start()
+
+        def _update():
+            try:
+                run_on_workers(command=update_command, shell=True, timeout=600)
+            except Exception:
+                logger.exception('Tool Arsenal update failed for %s', tool.name)
+
+        _threading.Thread(target=_update, daemon=True).start()
         messages.add_message(request, messages.INFO, f'Update started for {tool.name}')
     return http.HttpResponseRedirect(reverse('tool_arsenal', kwargs={'slug': slug}))
 

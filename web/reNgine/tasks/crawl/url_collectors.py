@@ -7,17 +7,9 @@ import subprocess
 from typing import List
 
 from reNgine.utils.logger import get_module_logger
+from reNgine.utils.task import run_command
 
 logger = get_module_logger(__name__)
-
-#---------------------#
-# Notifications tasks #
-#---------------------#
-
-#-------------#
-# Utils tasks #
-#-------------#
-
 
 
 def xurlfind3r_scan(self, scan_history_id: int, domain: str = None,
@@ -74,8 +66,8 @@ def urlfinder_scan(self, scan_history_id: int, domain: str = None) -> bool:
     logger.log_line("[URLFINDER]", "START", "passive crawl for %s" % domain)
     endpoints = []
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        for line in result.stdout.splitlines():
+        _code, stdout = run_command(cmd, shell=False, scan_id=scan_history_id, timeout=300)
+        for line in (stdout or '').splitlines():
             line = line.strip()
             if line.startswith('http'):
                 endpoints.append(EndPoint(
@@ -84,8 +76,8 @@ def urlfinder_scan(self, scan_history_id: int, domain: str = None) -> bool:
                     is_default=False,
                     source='urlfinder',
                 ))
-    except subprocess.TimeoutExpired:
-        logger.log_line("[URLFINDER]", "WARN", "timed out for %s" % domain)
+    except Exception:
+        logger.log_line("[URLFINDER]", "WARN", "timed out or failed for %s" % domain)
 
     if endpoints:
         with transaction.atomic():
@@ -113,8 +105,8 @@ def cariddi_scan(self, scan_history_id: int, url: str = None,
         logger.log_line("[CARIDDI]", "START", "crawling %s" % target)
         endpoints = []
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-            for line in result.stdout.splitlines():
+            _code, stdout = run_command(cmd, shell=False, scan_id=scan_history_id, timeout=600)
+            for line in (stdout or '').splitlines():
                 line = line.strip()
                 # cariddi outputs "url\t[tag]..." format
                 ep_url = line.split('\t')[0].strip() if '\t' in line else line
@@ -125,15 +117,11 @@ def cariddi_scan(self, scan_history_id: int, url: str = None,
                         is_default=False,
                         source='cariddi',
                     ))
-        except subprocess.TimeoutExpired:
-            logger.log_line("[CARIDDI]", "WARN", "timed out for %s" % target)
+        except Exception:
+            logger.log_line("[CARIDDI]", "WARN", "timed out or failed for %s" % target)
 
         if endpoints:
             with transaction.atomic():
                 EndPoint.objects.bulk_create(endpoints, ignore_conflicts=True, batch_size=500)
-            logger.log_line(
-                "[CARIDDI]", "RESULT",
-                "saved %d endpoints for %s" % (len(endpoints), target),
-            )
-
+            logger.log_line("[CARIDDI]", "RESULT", "saved %d URLs for %s" % (len(endpoints), target))
     return True

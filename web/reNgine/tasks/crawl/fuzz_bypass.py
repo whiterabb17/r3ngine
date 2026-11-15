@@ -7,7 +7,10 @@ import os
 import subprocess
 from typing import List
 
+from reNgine.definitions import FFUF_DEFAULT_WORDLIST_PATH
+from reNgine.settings import RENGINE_RESULTS
 from reNgine.utils.logger import get_module_logger
+from reNgine.utils.task import run_command
 
 logger = get_module_logger(__name__)
 
@@ -66,17 +69,18 @@ def feroxbuster_scan(self, scan_history_id: int, url: str = None,
 
     yaml_config = getattr(self, 'yaml_configuration', {}) or {}
     scan_config = yaml_config.get('feroxbuster', {})
-    wordlist = scan_config.get(
-        'wordlist',
-        '/usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt',
-    )
+    wordlist = scan_config.get('wordlist', FFUF_DEFAULT_WORDLIST_PATH)
 
     targets = urls or ([url] if url else [])
     if not targets:
         return True
 
+    out_dir = os.path.join(RENGINE_RESULTS, f'scan_{scan_history_id}', 'feroxbuster')
+    os.makedirs(out_dir, exist_ok=True)
+
     for target in targets:
-        output_file = f"/tmp/feroxbuster_{scan_history_id}.txt"
+        # Shared scan_results volume so go-executor output is readable here.
+        output_file = os.path.join(out_dir, 'feroxbuster_out.txt')
         cmd = [
             'feroxbuster', '--url', target,
             '--no-state', '--output', output_file,
@@ -88,7 +92,7 @@ def feroxbuster_scan(self, scan_history_id: int, url: str = None,
         logger.log_line("[FEROXBUSTER]", "START", "fuzzing %s" % target)
         endpoints = []
         try:
-            subprocess.run(cmd, capture_output=True, timeout=1800)
+            run_command(cmd, shell=False, scan_id=scan_history_id, timeout=1800)
             if os.path.exists(output_file):
                 with open(output_file) as f:
                     for line in f:
@@ -103,8 +107,8 @@ def feroxbuster_scan(self, scan_history_id: int, url: str = None,
                                     is_default=False,
                                     source='feroxbuster',
                                 ))
-        except subprocess.TimeoutExpired:
-            logger.log_line("[FEROXBUSTER]", "WARN", "timed out for %s" % target)
+        except Exception:
+            logger.log_line("[FEROXBUSTER]", "WARN", "timed out or failed for %s" % target)
         finally:
             try:
                 os.remove(output_file)

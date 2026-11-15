@@ -59,6 +59,33 @@ class ToolCommandViewTests(TestCase):
         self.assertTrue(resp.data['status'])
         run.assert_called_once()
 
+    def test_git_pull_update_rejects_unsafe_clone_path(self):
+        tool = _tool(
+            update_command='git pull',
+            install_command='git clone https://github.com/example/sometool',
+            github_clone_path='/usr/src/github/foo;id',
+        )
+        with patch('reNgine.tool_workers.run_on_workers') as run:
+            resp = self.client.post('/api/tool/update/', {'tool_id': tool.id}, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(resp.data['status'])
+        run.assert_not_called()
+
+    def test_git_pull_update_quotes_safe_clone_path(self):
+        tool = _tool(
+            update_command='git pull',
+            install_command='git clone https://github.com/example/sometool',
+            github_clone_path='/usr/src/github/sometool',
+        )
+        with patch('reNgine.tool_workers.run_on_workers', return_value=(0, '')) as run:
+            resp = self.client.post('/api/tool/update/', {'tool_id': tool.id}, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['status'])
+        cmd = run.call_args.kwargs['command']
+        self.assertIn('/usr/src/github/sometool', cmd)
+        self.assertIn('git pull', cmd)
+        self.assertTrue(run.call_args.kwargs.get('shell'))
+
     def test_token_client_may_still_use_get(self):
         """The mobile app authenticates with a JWT, which carries no ambient credentials."""
         tool = _tool()

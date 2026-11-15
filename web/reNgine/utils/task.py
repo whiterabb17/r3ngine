@@ -1,5 +1,6 @@
 import os
 import re
+import shlex
 import signal
 import subprocess
 import threading
@@ -54,11 +55,24 @@ ROUTED_TOOLS = {
     'sslscan', 'ike-scan', 'hping3', 'wrk', 'k6', 'brutus', 'wpscan',
     # Expanded for three-image split: keep compiled CLIs off the python image
     'gf', 'feroxbuster', 'kr', 'kiterunner', 'gitleaks', 'trufflehog',
-    'betterleaks', 'dnsx', 'bbot', 'grype', 'trivy', 'retire', 'lighthouse',
+    'betterleaks', 'dnsx', 'grype', 'trivy', 'retire', 'lighthouse',
     'noseyparker', 'smugglex', 'chaos', 'mapcidr', 'urlfinder',
     'cariddi', 'wpprobe', 'vulnx', 'unfurl', 'favirecon',
     'sourcemapper', 'gosearch', 'julius', 'grpcurl', 'exifray', 'testssl.sh',
+    # bbot is pipx/Python-native — keep it off this set (stays on python host).
 }
+
+
+def _normalize_routed_command(cmd):
+    """Flatten run_command argv for GoExecutorTaskWorkflow.
+
+    Go expects ``command`` as ``[]string``. A Python list must become a single
+    shell string (bash -c) via shlex.join — wrapping the list produces a nested
+    JSON array that fails unmarshalling and breaks secret/monitor scans.
+    """
+    if isinstance(cmd, list):
+        return shlex.join(str(part) for part in cmd)
+    return cmd if cmd is not None else ''
 
 
 def _go_executor_workflow_input(
@@ -74,6 +88,7 @@ def _go_executor_workflow_input(
     Nuclei gets stall_timeout_seconds so the go-executor idle / hang-monitor
     dump watchdog can kill stuck process groups.
     """
+    command_str = _normalize_routed_command(command_str)
     payload = {
         'command': [command_str],
         'scan_id': scan_history_id or 0,
@@ -473,13 +488,14 @@ def run_command(
                 asyncio.set_event_loop(loop)
 
             # Route sync-to-async boundary safely depending on event loop state
+            routed_cmd = _normalize_routed_command(cmd)
             if loop.is_running():
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor() as pool:
-                    future = pool.submit(asyncio.run, _execute_remote_command(cmd, scan_id, command_obj_id))
+                    future = pool.submit(asyncio.run, _execute_remote_command(routed_cmd, scan_id, command_obj_id))
                     exec_res = future.result()
             else:
-                exec_res = loop.run_until_complete(_execute_remote_command(cmd, scan_id, command_obj_id))
+                exec_res = loop.run_until_complete(_execute_remote_command(routed_cmd, scan_id, command_obj_id))
 
             return_code = exec_res.get("exit_code", 0)
             stdout = exec_res.get("stdout", "")
@@ -1296,13 +1312,14 @@ def stream_command(
 				asyncio.set_event_loop(loop)
 
 			# Route sync-to-async boundary safely depending on event loop state
+			routed_cmd = _normalize_routed_command(cmd)
 			if loop.is_running():
 				import concurrent.futures
 				with concurrent.futures.ThreadPoolExecutor() as pool:
-					future = pool.submit(asyncio.run, _execute_remote_command(cmd, scan_id, command_obj_id))
+					future = pool.submit(asyncio.run, _execute_remote_command(routed_cmd, scan_id, command_obj_id))
 					exec_res = future.result()
 			else:
-				exec_res = loop.run_until_complete(_execute_remote_command(cmd, scan_id, command_obj_id))
+				exec_res = loop.run_until_complete(_execute_remote_command(routed_cmd, scan_id, command_obj_id))
 
 			return_code = exec_res.get("exit_code", 0)
 			stdout = exec_res.get("stdout", "")

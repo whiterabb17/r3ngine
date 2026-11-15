@@ -26,7 +26,7 @@
 
 - **Three role app images (docker-optimization)**:
   - Multi-target `docker/web/Dockerfile` + `docker-bake.hcl` produce `r3ngine-web`, `r3ngine-python`, and `r3ngine-go-executor` instead of one shared mega-image.
-  - Compose / worker / CI / Makefile use `R3NGINE_WEB_IMAGE` / `R3NGINE_PYTHON_IMAGE` / `R3NGINE_GO_IMAGE`; `make build-app-images` bakes all three.
+  - Compose / worker / CI / Makefile / `make.bat` use `R3NGINE_WEB_IMAGE` / `R3NGINE_PYTHON_IMAGE` / `R3NGINE_GO_IMAGE`; `make build-app-images` (and `build-app-images-sequential`) bake all three.
   - Entrypoint ownership: go sole-writes shared `wordlist` + `nuclei_templates` (seed sentinels + healthcheck); python owns `/usr/src/github` tool trees; web is API/UI boot only.
   - Expanded `ROUTED_TOOLS` and call-site fixes so compiled CLIs run on go-executor; web Tool Arsenal / interactive recon use Temporal `tool_workers` (`run` / `remove`).
   - Docs: `documents/tool-distribution.md` ownership matrix and empty-volume first-boot notes.
@@ -34,7 +34,10 @@
 #### Fixed
 
 - **Hung nuclei tag batches no longer sit for hours**: processes that heartbeat but make no progress (0% CPU / empty stdout / hang-monitor dumps) are killed and retried instead of consuming the Tier 6 stage budget until soft cancel.
-- **Image-split readiness**: go healthcheck requires non-empty core wordlists, `geeknik/.git`, and GF patterns before python starts; Tool Settings lists only operator-owned nuclei templates (root + `custom/`), not the full community corpus.
+- **Image-split readiness**: go healthcheck requires non-empty core wordlists, `api-endpoints.txt`, `kr/routes-small.kite`, `geeknik/.git`, and GF patterns before python starts; Tool Settings lists only operator-owned nuclei templates (root + `custom/`), not the full community corpus.
+- **Routed CLI argv / scan pipelines**: `run_command` list argv is flattened with `shlex.join` before `GoExecutorTaskWorkflow` (fixes nested JSON that broke gitleaks/trufflehog/monitor-style calls); remaining `ROUTED_TOOLS` call sites (dnsx, feroxbuster, urlfinder, cariddi, unfurl, mapcidr, wpprobe, grype, trivy, tlsx, nuclei `-tl`) use `run_command` with I/O under shared `RENGINE_RESULTS`.
+- **Tool Arsenal on workers**: add/update install via `run_on_workers`; python `ToolProbeActivity` forwards go-preferred run/resolve/version/binary-remove to go-executor; git clone paths and `cd … && git pull` updates are validated with `safe_github_clone_path` / `shlex.quote` (same trust bar as uninstall).
+- **Ferox default wordlist**: uses go-seeded `/usr/src/wordlist/raft-large-directories.txt` instead of a missing SecLists path.
 
 ### [v3.7.9] - 2026-10-09
 

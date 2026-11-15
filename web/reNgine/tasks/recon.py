@@ -19,7 +19,9 @@ import socket
 import subprocess
 from typing import List, Optional
 
+from reNgine.settings import RENGINE_RESULTS
 from reNgine.utils.logger import get_module_logger
+from reNgine.utils.task import run_command
 
 logger = get_module_logger(__name__)
 
@@ -44,8 +46,10 @@ def dnsx_scan(self, scan_history_id: int, domain_id: int,
         logger.log_line("[DNSX]", "SKIP", "no targets provided")
         return True
 
-    input_file = f"/tmp/dnsx_input_{scan_history_id}.txt"
-    output_file = f"/tmp/dnsx_output_{scan_history_id}.json"
+    out_dir = os.path.join(RENGINE_RESULTS, f'scan_{scan_history_id}', 'dnsx')
+    os.makedirs(out_dir, exist_ok=True)
+    input_file = os.path.join(out_dir, 'dnsx_input.txt')
+    output_file = os.path.join(out_dir, 'dnsx_output.json')
 
     try:
         with open(input_file, 'w') as f:
@@ -56,7 +60,7 @@ def dnsx_scan(self, scan_history_id: int, domain_id: int,
             cmd += ['-w', wordlist]
 
         logger.log_line("[DNSX]", "START", "resolving %d targets" % len(targets))
-        subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        run_command(cmd, shell=False, scan_id=scan_history_id, timeout=300)
 
         if not os.path.exists(output_file):
             logger.log_line("[DNSX]", "WARN", "no output produced")
@@ -309,12 +313,12 @@ def mapcidr_expand(self, scan_history_id: int, cidr: str) -> List[str]:
     logger.log_line("[MAPCIDR]", "START", "expanding %s" % cidr)
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        ips = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        _code, stdout = run_command(cmd, shell=False, scan_id=scan_history_id, timeout=60)
+        ips = [line.strip() for line in (stdout or '').splitlines() if line.strip()]
         logger.log_line("[MAPCIDR]", "RESULT", "expanded to %d IPs" % len(ips))
         return ips
-    except subprocess.TimeoutExpired:
-        logger.log_line("[MAPCIDR]", "WARN", "mapcidr timed out")
+    except Exception:
+        logger.log_line("[MAPCIDR]", "WARN", "mapcidr timed out or failed")
         return []
 
 
@@ -428,8 +432,8 @@ def wpprobe_scan(self, scan_history_id: int, url: str) -> bool:
     logger.log_line("[WPPROBE]", "START", "scanning %s" % url)
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        findings = json.loads(result.stdout) if result.stdout.strip().startswith('[') else []
+        _code, stdout = run_command(cmd, shell=False, scan_id=scan_history_id, timeout=300)
+        findings = json.loads(stdout) if (stdout or '').strip().startswith('[') else []
         vulns = []
         for finding in findings:
             sev_str = finding.get('severity', 'medium').lower()

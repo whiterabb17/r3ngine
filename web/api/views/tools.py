@@ -369,14 +369,23 @@ class UpdateTool(_ToolCommandView):
 
 		# if git clone was used for installation, then we must use git pull inside project directory,
 		# otherwise use the same command as given
-		update_command = (tool.update_command or '').lower()
+		raw_update = (tool.update_command or '').strip()
+		update_command = raw_update.lower()
 
 		if not update_command:
 			return Response({'status': False, 'message': tool.name + ' has missing update command! Cannot update the tool.'})
 		elif update_command == 'git pull':
-			tool_name = tool.install_command[:-1] if tool.install_command[-1] == '/' else tool.install_command
-			tool_name = tool_name.split('/')[-1]
-			update_command = 'cd /usr/src/github/' + tool_name + ' && git pull && cd -'
+			from reNgine.utilities import safe_github_update_command
+			# Prefer the stored clone path; fall back to the install_command basename.
+			clone_hint = tool.github_clone_path or (tool.install_command or '')
+			update_command = safe_github_update_command(clone_hint)
+			if not update_command:
+				return Response({
+					'status': False,
+					'message': 'Update refused: checkout path is not a safe directory under /usr/src/github.',
+				}, status=status.HTTP_400_BAD_REQUEST)
+		else:
+			update_command = raw_update
 
 		try:
 			from reNgine.tool_workers import run_on_workers

@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, List, Optional
 
 from django.utils.dateparse import parse_datetime
 
+from reNgine.utils.task import run_command
+
 if TYPE_CHECKING:
     from startScan.models import CertificateIntelligence
 
@@ -161,13 +163,13 @@ def run_certificate_intel(
         cmd = shlex.split(
             f"tlsx -json -silent -ro -p {_TLS_PORTS} -list {tmp_path}"
         )
-        proc = subprocess.run(
+        _code, output = run_command(
             cmd,
-            capture_output=True,
-            text=True,
+            shell=False,
+            scan_id=scan_history_id,
             timeout=300,
         )
-        output = proc.stdout or ""
+        output = output or ""
 
         for line in output.splitlines():
             parsed = parse_tlsx_json_line(line)
@@ -218,10 +220,6 @@ def run_certificate_intel(
                 )
             results.append(obj)
 
-    except subprocess.TimeoutExpired:
-        logger.error("certificate_tasks: tlsx timed out for scan %s", scan_history_id)
-    except FileNotFoundError:
-        logger.error("certificate_tasks: tlsx not found in PATH for scan %s", scan_history_id)
     except Exception as exc:
         logger.error(
             "certificate_tasks: Unexpected error for scan %s: %s", scan_history_id, exc
@@ -272,18 +270,9 @@ def resync_single_certificate(cert_id: int) -> Optional["CertificateIntelligence
 
     try:
         cmd = shlex.split(f"tlsx -json -silent -ro -p {_TLS_PORTS} -host {host}")
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        output = proc.stdout or ""
-    except subprocess.TimeoutExpired:
-        logger.error(
-            "certificate_tasks: tlsx timed out for cert %s host %s", cert_id, host
-        )
-        return None
-    except FileNotFoundError:
-        logger.error(
-            "certificate_tasks: tlsx not found in PATH for cert %s", cert_id
-        )
-        return None
+        scan_id = getattr(getattr(cert, 'scan_history', None), 'id', None)
+        _code, output = run_command(cmd, shell=False, scan_id=scan_id, timeout=60)
+        output = output or ""
     except Exception as exc:
         logger.error(
             "certificate_tasks: Unexpected error for cert %s: %s", cert_id, exc

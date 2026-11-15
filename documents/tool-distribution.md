@@ -25,6 +25,8 @@ Registry / worker hosts set `R3NGINE_WEB_IMAGE`, `R3NGINE_PYTHON_IMAGE`, and `R3
 - New **compiled/PATH CLI** → add to the go image **and** add the binary name to `ROUTED_TOOLS` in `web/reNgine/utils/task.py` (plus fixture/`version_lookup` if it appears in Tool Arsenal).
 - New **Python-native** tool (`python3 /usr/src/github/...`, pipx-only, in-process Playwright) → python image only; do **not** add to `ROUTED_TOOLS`.
 - Interactive UI actions that need a tool must go through Temporal (`tool_workers` / orchestrator), never assume the binary exists in the web container.
+- Tool Arsenal **add / update / uninstall / version** use `run_on_workers` / `remove_on_workers`. Python's `ToolProbeActivity` forwards compiled-CLI `run` / binary `remove` / go-preferred `resolve` to `GoExecutorTaskWorkflow` so installs land on go-executor, not web or a stripped python image.
+- Scan tasks must call `run_command` (not raw `subprocess`) for anything in `ROUTED_TOOLS`, and put `-o` / input files under the shared `scan_results` volume (`RENGINE_RESULTS`) so go-executor I/O is visible to python.
 
 ### Shared volumes
 

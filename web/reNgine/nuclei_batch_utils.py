@@ -1,6 +1,5 @@
 import os
 import logging
-import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +51,9 @@ def count_templates_for_tag(tag: str, template_dirs: list) -> int:
         cmd += ['-t', d]
     cmd += ['-tags', tag]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        lines = [line for line in result.stdout.splitlines() if line.strip()]
+        from reNgine.utils.task import run_command
+        _code, stdout = run_command(cmd, shell=False, timeout=30)
+        lines = [line for line in (stdout or '').splitlines() if line.strip()]
         return len(lines)
     except Exception as exc:
         logger.warning('count_templates_for_tag failed for tag %s: %s', tag, exc)

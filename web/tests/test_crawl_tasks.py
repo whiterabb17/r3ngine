@@ -45,20 +45,18 @@ class TestXURLFind3rScan(TestCase):
 
 
 class TestURLFinderScan(TestCase):
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.crawl.url_collectors.run_command')
     def test_returns_true_no_domain(self, mock_run):
         from reNgine.tasks.crawl import urlfinder_scan
         result = urlfinder_scan(_make_proxy(), scan_history_id=1)
         self.assertTrue(result)
         mock_run.assert_not_called()
 
-    @patch('subprocess.run')
+    @patch(
+        'reNgine.tasks.crawl.url_collectors.run_command',
+        return_value=(0, 'https://example.com/api\nftp://example.com/file\nhttps://example.com/login\n'),
+    )
     def test_filters_non_http_lines(self, mock_run):
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout='https://example.com/api\nftp://example.com/file\nhttps://example.com/login\n',
-            stderr='',
-        )
         with patch('startScan.models.EndPoint.objects') as mock_ep:
             saved = []
             mock_ep.bulk_create = lambda items, **kw: saved.extend(items)
@@ -70,20 +68,18 @@ class TestURLFinderScan(TestCase):
 
 
 class TestCariddiScan(TestCase):
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.crawl.url_collectors.run_command')
     def test_returns_true_no_targets(self, mock_run):
         from reNgine.tasks.crawl import cariddi_scan
         result = cariddi_scan(_make_proxy(), scan_history_id=1)
         self.assertTrue(result)
         mock_run.assert_not_called()
 
-    @patch('subprocess.run')
+    @patch(
+        'reNgine.tasks.crawl.url_collectors.run_command',
+        return_value=(0, 'https://example.com/api.js\t[secret:api_key]\nhttps://example.com/login\n'),
+    )
     def test_parses_tab_separated_output(self, mock_run):
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout='https://example.com/api.js\t[secret:api_key]\nhttps://example.com/login\n',
-            stderr='',
-        )
         with patch('startScan.models.EndPoint.objects') as mock_ep:
             saved = []
             mock_ep.bulk_create = lambda items, **kw: saved.extend(items)
@@ -150,24 +146,22 @@ class TestArjunScan(TestCase):
 
 
 class TestFeroxbusterScan(TestCase):
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.crawl.fuzz_bypass.run_command')
     def test_returns_true_no_targets(self, mock_run):
         from reNgine.tasks.crawl import feroxbuster_scan
         result = feroxbuster_scan(_make_proxy(), scan_history_id=1)
         self.assertTrue(result)
         mock_run.assert_not_called()
 
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.crawl.fuzz_bypass.run_command', return_value=(0, ''))
     @patch('os.path.exists', return_value=False)
     def test_handles_missing_output_file(self, mock_exists, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout='', stderr=b'')
         from reNgine.tasks.crawl import feroxbuster_scan
         result = feroxbuster_scan(_make_proxy(), scan_history_id=1, url='https://example.com')
         self.assertTrue(result)
 
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.crawl.fuzz_bypass.run_command', side_effect=Exception('timeout'))
     def test_handles_timeout(self, mock_run):
-        mock_run.side_effect = subprocess.TimeoutExpired('feroxbuster', 1800)
         from reNgine.tasks.crawl import feroxbuster_scan
         result = feroxbuster_scan(_make_proxy(), scan_history_id=1, url='https://example.com')
         self.assertTrue(result)

@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import shlex
 import shutil
 import socket
 import subprocess
@@ -27,7 +28,7 @@ import uuid
 from datetime import timedelta
 from typing import Any, Optional
 
-from reNgine.utils.task_queues import PYTHON_ORCHESTRATOR_QUEUE
+from reNgine.utils.task_queues import PYTHON_ORCHESTRATOR_QUEUE, python_orchestrator_queue
 
 logger = logging.getLogger(__name__)
 
@@ -308,12 +309,94 @@ def _summary_local() -> dict[str, Any]:
     }
 
 
+def _tool_name_from_run_payload(payload: dict) -> str:
+    """Best-effort binary name from a run payload (argv or shell command)."""
+    argv = payload.get('argv')
+    if isinstance(argv, list) and argv:
+        return os.path.basename(str(argv[0])).lower()
+    command = payload.get('command')
+    if isinstance(command, str) and command.strip():
+        try:
+            parts = shlex.split(command)
+        except ValueError:
+            parts = command.split()
+        if parts:
+            return os.path.basename(parts[0]).lower()
+    return ''
+
+
+def _prefers_go_host(tool_name: str = '', *, install_command: str = '') -> bool:
+    """True when the binary or install style belongs on go-executor."""
+    from reNgine.utils.task import ROUTED_TOOLS
+
+    key = (tool_name or '').strip().lower()
+    if key in ROUTED_TOOLS:
+        return True
+    if 'go install' in (install_command or '').lower():
+        return True
+    if key and prefer_roles_for_tool(key)[0] == 'go':
+        return True
+    return False
+
+
+def _execute_on_go_executor(command: str, *, timeout: float = 300.0) -> dict[str, Any]:
+    """Run a shell command on go-executor via GoExecutorTaskWorkflow."""
+    from reNgine.temporal_client import TemporalClientProvider, run_and_close
+    from reNgine.utils.task import _go_executor_workflow_input
+
+    async def _run():
+        client = await TemporalClientProvider.get_client()
+        return await client.execute_workflow(
+            'GoExecutorTaskWorkflow',
+            _go_executor_workflow_input(command, timeout=timeout),
+            id=f'tool-go-run-{uuid.uuid4().hex[:12]}',
+            task_queue=python_orchestrator_queue(),
+            execution_timeout=timedelta(seconds=max(timeout + 60.0, 120.0)),
+        )
+
+    try:
+        result = run_and_close(asyncio.new_event_loop(), _run())
+    except Exception as exc:
+        logger.warning('go-executor run failed: %s', exc)
+        return {'exit_code': -1, 'output': '', 'error': str(exc)}
+    if not isinstance(result, dict):
+        return {'exit_code': -1, 'output': '', 'error': 'go-executor returned non-dict'}
+    return {
+        'exit_code': int(result.get('exit_code') or 0),
+        'output': (result.get('stdout') or '') + '\n' + (result.get('stderr') or ''),
+        'error': None,
+    }
+
+
+def _resolve_on_go(candidates: list[str]) -> Optional[dict[str, str]]:
+    """Ask go-executor for the first resolvable candidate path."""
+    for cand in candidates:
+        name = os.path.basename(cand) if cand else ''
+        if not name or name in ('.', '..'):
+            continue
+        res = _execute_on_go_executor(f'command -v {shlex.quote(name)} 2>/dev/null || true', timeout=30)
+        for line in (res.get('output') or '').splitlines():
+            path = line.strip()
+            if path.startswith('/'):
+                return {'role': 'go', 'container': 'go-executor', 'path': path}
+    return None
+
+
 def _run_shell_local(payload: dict) -> dict[str, Any]:
     """Run argv or a shell command on this worker; used by web Tool Arsenal / recon."""
     timeout = float(payload.get('timeout') or 300)
     shell = bool(payload.get('shell'))
     argv = payload.get('argv')
     command = payload.get('command')
+    # Compiled CLIs live on go-executor — forward even when this activity runs on python.
+    if local_role() != 'go' and _prefers_go_host(_tool_name_from_run_payload(payload), install_command=str(command or '')):
+        if shell:
+            if not command or not isinstance(command, str):
+                return {'exit_code': -1, 'output': '', 'error': 'shell run requires command string'}
+            return _execute_on_go_executor(command, timeout=timeout)
+        if not isinstance(argv, list) or not argv or not all(isinstance(x, str) for x in argv):
+            return {'exit_code': -1, 'output': '', 'error': 'run requires argv list of strings'}
+        return _execute_on_go_executor(shlex.join(str(x) for x in argv), timeout=timeout)
     if shell:
         if not command or not isinstance(command, str):
             return {'exit_code': -1, 'output': '', 'error': 'shell run requires command string'}
@@ -332,6 +415,12 @@ def _remove_path_local(payload: dict) -> dict[str, Any]:
         path = str(payload.get('path') or '')
         if not path.startswith('/usr/local/bin/') or '/' in path[len('/usr/local/bin/'):]:
             return {'ok': False, 'error': 'binary path must be under /usr/local/bin'}
+        # Go-installed binaries live on go-executor's filesystem, not python's.
+        if local_role() != 'go':
+            res = _execute_on_go_executor(f'rm -f -- {shlex.quote(path)}', timeout=60)
+            if res.get('error') or int(res.get('exit_code') or 0) != 0:
+                return {'ok': False, 'error': res.get('error') or res.get('output') or 'go remove failed'}
+            return {'ok': True, 'error': None}
         if os.path.isfile(path):
             os.remove(path)
         return {'ok': True, 'error': None}
@@ -341,7 +430,6 @@ def _remove_path_local(payload: dict) -> dict[str, Any]:
         root = os.path.realpath('/usr/src/github')
         if not clone_path or os.path.realpath(clone_path) == root or not is_safe_path(root, clone_path):
             return {'ok': False, 'error': 'checkout is not inside /usr/src/github'}
-        import shutil
         shutil.rmtree(clone_path, ignore_errors=True)
         return {'ok': True, 'error': None}
     return {'ok': False, 'error': f'unknown remove kind {kind!r}'}
@@ -354,12 +442,47 @@ def run_probe_op(op: str, payload: Optional[dict] = None) -> dict[str, Any]:
     ``help`` {tool_name, candidates, encoded_path, timeout}, ``summary`` {},
     ``sync`` {probe_versions}, ``run`` {argv|command, shell, timeout},
     ``remove`` {kind, path}. Every result is JSON-serialisable.
+
+    ``run`` / binary ``remove`` / go-preferred ``resolve`` forward to
+    go-executor when this activity is on python.
     """
     payload = payload or {}
     if op == 'resolve':
-        return {'found': _resolve_local(list(payload.get('candidates') or []))}
+        candidates = list(payload.get('candidates') or [])
+        tool_hint = str(payload.get('tool_name') or '') or (
+            os.path.basename(str(candidates[0])) if candidates else ''
+        )
+        order = prefer_roles_for_tool(tool_hint)
+        found = None
+        for role in order:
+            if role == 'go' and local_role() != 'go':
+                found = _resolve_on_go(candidates)
+            else:
+                found = _resolve_local(candidates)
+            if found:
+                break
+        return {'found': found}
     if op == 'version':
-        text, error = _version_local(str(payload.get('path') or ''), payload.get('version_lookup_command'))
+        path = str(payload.get('path') or '')
+        encoded = str(payload.get('encoded_path') or '')
+        role, raw_path = decode_worker_path(encoded) if encoded else (None, None)
+        target = raw_path or path
+        go_path = (
+            local_role() != 'go'
+            and (
+                role == 'go'
+                or (not role and target.startswith('/usr/local/bin/'))
+            )
+        )
+        if go_path:
+            cmd = shlex.join(version_argv(target, payload.get('version_lookup_command')))
+            res = _execute_on_go_executor(cmd, timeout=_VERSION_TIMEOUT_SEC)
+            text = (res.get('output') or '').strip()
+            err = res.get('error')
+            if not text and not err:
+                err = f'empty version output (exit {res.get("exit_code")})'
+            return {'output': text, 'error': err}
+        text, error = _version_local(target, payload.get('version_lookup_command'))
         return {'output': text, 'error': error}
     if op == 'help':
         text, flag, encoded = _help_local(
@@ -368,6 +491,24 @@ def run_probe_op(op: str, payload: Optional[dict] = None) -> dict[str, Any]:
             payload.get('encoded_path'),
             float(payload.get('timeout') or _HELP_TIMEOUT_SEC),
         )
+        if not text.strip() and local_role() != 'go':
+            # Fall back to go-executor for compiled CLIs missing on python.
+            tool_name = str(payload.get('tool_name') or '')
+            if _prefers_go_host(tool_name):
+                found = _resolve_on_go(list(payload.get('candidates') or [tool_name]))
+                if found and found.get('path'):
+                    for flag in _HELP_FLAGS:
+                        res = _execute_on_go_executor(
+                            shlex.join([found['path'], flag]),
+                            timeout=float(payload.get('timeout') or _HELP_TIMEOUT_SEC),
+                        )
+                        help_text = (res.get('output') or '').strip()
+                        if help_text:
+                            return {
+                                'help_text': help_text,
+                                'flag': flag,
+                                'encoded_path': encode_worker_path('go', found['path']),
+                            }
         return {'help_text': text, 'flag': flag, 'encoded_path': encoded}
     if op == 'summary':
         return _summary_local()
@@ -426,17 +567,26 @@ def resolve_on_workers(
     prefer_roles: Optional[tuple[str, ...]] = None,
 ) -> Optional[dict[str, str]]:
     """Find tool_name on the tool host. Returns {role, container, path} or None."""
-    order = prefer_roles or WORKER_ROLES
+    order = prefer_roles or prefer_roles_for_tool(tool_name)
     cache_key = (tuple(order), tuple(c for c in candidates if c))
     if cache_key in _resolve_cache:
         return _resolve_cache[cache_key]
 
-    found: Optional[dict[str, str]]
+    found: Optional[dict[str, str]] = None
     if probe_is_local():
-        found = _resolve_local(candidates)
+        for role in order:
+            if role == 'go' and local_role() != 'go':
+                found = _resolve_on_go(candidates)
+            else:
+                found = _resolve_local(candidates)
+            if found:
+                break
     else:
         try:
-            found = dispatch_probe('resolve', {'candidates': candidates}).get('found') or None
+            found = dispatch_probe('resolve', {
+                'candidates': candidates,
+                'tool_name': tool_name,
+            }).get('found') or None
         except ToolProbeError:
             # Not an answer: leave the cache alone so the next call retries.
             return None

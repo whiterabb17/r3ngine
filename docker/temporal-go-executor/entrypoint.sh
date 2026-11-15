@@ -250,15 +250,19 @@ fi
 # ---------------------------------------------------------------------------
 # Seed sentinels — require substantive template content, not just mkdir.
 # ---------------------------------------------------------------------------
+# Require core fuzz/API wordlists + at least one kiterunner .kite so python
+# does not become healthy while API/KR stages would immediately miss inputs.
 if [ -s "/usr/src/wordlist/dicc.txt" ] \
   && [ -s "/usr/src/wordlist/raft-large-directories.txt" ] \
+  && [ -s "/usr/src/wordlist/api-endpoints.txt" ] \
+  && [ -s "/usr/src/wordlist/kr/routes-small.kite" ] \
   && [ -d "/root/nuclei-templates/geeknik/.git" ] \
   && compgen -G "/root/.gf/*.json" > /dev/null; then
   touch /usr/src/wordlist/.seeded
   touch /root/nuclei-templates/.seeded
   echo "[entrypoint] Wordlist/nuclei-template seed sentinels written."
 else
-  echo "[entrypoint] WARNING: required wordlist/nuclei-template/GF assets missing; seed sentinels not written."
+  echo "[entrypoint] WARNING: required wordlist/nuclei-template/GF/kite assets missing; seed sentinels not written."
 fi
 
 # ---------------------------------------------------------------------------
