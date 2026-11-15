@@ -87,11 +87,16 @@ devup:				## Build and start all services in development mode.
 build:			## Build all services.
 	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} build ${SERVICES}
 
-build-web:		## Build the web role image (alias of build-app-images web target).
+build-web:		## Build the web role image (compose build of the web service).
 	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} build web
 
 build-app-images:	## Build web + python-orchestrator + go-executor role images (shared bake cache).
 	docker buildx bake -f docker-bake.hcl
+
+build-app-images-sequential:	## Bake the three role images one target at a time.
+	docker buildx bake -f docker-bake.hcl web
+	docker buildx bake -f docker-bake.hcl python-orchestrator
+	docker buildx bake -f docker-bake.hcl go-executor
 
 build-clean:		## Rebuild ALL services from scratch (no cache).
 	${COMPOSE_PREFIX_CMD} ${DOCKER_COMPOSE} ${COMPOSE_ALL_FILES} build --no-cache ${SERVICES}
@@ -334,4 +339,4 @@ endif
 
 help:			## Show this help.
 	@echo "Make application Docker images and manage containers using Docker Compose files."
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m (default: help)\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m (default: help)\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-30s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)

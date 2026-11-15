@@ -96,11 +96,22 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # ===========================================================================
 FROM golang:1.25-bookworm AS executor-builder
 
+# Parallel bake + Desktop NAT often flaky against proxy.golang.org (TLS handshake
+# timeouts). Prefer the proxy with a direct fallback, and retry mod download.
+ENV GOPROXY=https://proxy.golang.org,direct \
+    GOSUMDB=sum.golang.org
+
 WORKDIR /build
 # Copy executor source from the repo root context
 COPY web/executor/go.mod web/executor/go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
-    go mod download
+    for attempt in 1 2 3 4 5; do \
+      go mod download && exit 0; \
+      echo "go mod download failed (attempt $$attempt/5); retrying in 20s..."; \
+      sleep 20; \
+    done; \
+    echo "go mod download failed after 5 attempts"; \
+    exit 1
 COPY web/executor/ ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \

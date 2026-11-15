@@ -75,8 +75,18 @@ if "%1" == "up-worker" set DEBUG=0 && %DOCKER_COMPOSE% --env-file .env -f docker
 if "%1" == "down-worker" %DOCKER_COMPOSE% --env-file .env -f docker/docker-compose.worker.yml down
 :: Build all services.
 if "%1" == "build" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% build %SERVICES%
-:: Build only the web/orchestrator/executor shared image.
+:: Build the web role image (compose build of the web service).
 if "%1" == "build-web" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% build web
+:: Build web + python-orchestrator + go-executor role images (shared bake cache).
+if "%1" == "build-app-images" docker buildx bake -f docker-bake.hcl
+:: Bake the three role images one target at a time (use when parallel bake flakes on proxy.golang.org).
+if "%1" == "build-app-images-sequential" (
+    docker buildx bake -f docker-bake.hcl web
+    if errorlevel 1 exit /b 1
+    docker buildx bake -f docker-bake.hcl python-orchestrator
+    if errorlevel 1 exit /b 1
+    docker buildx bake -f docker-bake.hcl go-executor
+)
 :: Rebuild ALL services from scratch (no cache).
 if "%1" == "build-clean" %DOCKER_COMPOSE% %COMPOSE_ALL_FILES% build --no-cache %SERVICES%
 :: Build all services no cache. (alias of build-clean)
@@ -321,9 +331,11 @@ echo   down-worker      Stop the remote worker.
 echo   up-copilot       Alias of install-copilot (enable profile, build/start).
 echo   stop-copilot     Stop Copilot containers (keeps COMPOSE_PROFILES so make up can restart them).
 echo   devup            Build and start all services in development mode.
-echo   build            Build all services.
-echo   build-web        Build only the web/orchestrator/executor shared image.
-echo   build-clean      Rebuild ALL services from scratch (no cache).
+echo   build                        Build all services.
+echo   build-web                    Build the web role image (compose build of the web service).
+echo   build-app-images             Build web + python-orchestrator + go-executor role images (shared bake cache).
+echo   build-app-images-sequential  Bake the three role images one target at a time.
+echo   build-clean                  Rebuild ALL services from scratch (no cache).
 echo   restart-apps     Restart only web, temporal-python-orchestrator, and temporal-go-executor.
 echo   username         Generate Username (Use only after make up).
 echo   changepassword   Change password for user
