@@ -571,9 +571,10 @@ def _run_task(task_func, ctx: dict, task_name: str, description: str = None, db_
                     cancel_event.set()  # signal stream_command/run_command to abort
                     return  # stop heartbeating; kill switch will stop the subprocess
                 except Exception as hb_err:
+                    # TimeoutError() and similar have empty str(); use !r.
                     logger.log_line(
                         "[TEMPORAL]", "HEARTBEAT_FAIL",
-                        "activity_type=%s workflow_id=%s scan_id=%s error=%s" % (
+                        "activity_type=%s workflow_id=%s scan_id=%s error=%r" % (
                             task_name, _workflow_id, _scan_id, hb_err,
                         ),
                         level="warning",

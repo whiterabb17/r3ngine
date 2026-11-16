@@ -32,6 +32,7 @@
 
 #### Fixed
 
+- **LinkedIn OSINT `SynchronousOnlyOperation`**: Playwright sync API runs an event loop under the hood; ORM saves during LinkedIn auth/state persistence now set `DJANGO_ALLOW_ASYNC_UNSAFE` (same pattern as screenshot tasks) so `run_linkedint` no longer aborts mid-scrape and starve OSINT heartbeats. Activity `HEARTBEAT_FAIL` logs use `%r` so empty `TimeoutError()` messages are visible.
 - **WAF bypass false positives**: header probes no longer persist on the first non-403 response. `WafBypassOrchestrator` now requires a blocked baseline, a clearly allowed candidate (not 5xx), and two confirmation rounds before creating `WafBypassFinding` rows; soft-block challenge pages (same HTTP status, different body) are supported.
 - **Mobile LAN login**: nginx `:8082` now proxies `/mapi/` and `/ws/` over cleartext instead of 308-upgrading everything to HTTPS. Real devices on the local network were failing login because `8000` is loopback-only and the self-signed `:443` cert is rejected by the phone. Use `http://<lan-ip>:8082` in the app. Reload the proxy after pulling (`docker exec r3ngine-proxy-1 nginx -s reload`).
 - **SpiderFoot staging flush**: `_process_spiderfoot_batch` always drains Redis pending staging in `finally`, plus an end-of-task safety-net flush, so a mid-batch DB failure cannot leave moderate-confidence rows invisible.

@@ -262,7 +262,12 @@ def run_linkedint(company_name, scan_history_id):
             return ["LinkedIn Intelligence processed %d employees for %s" % (len(employees), company_name)]
 
     except Exception as exc:
-        logger.error("Error running LinkedIn Intelligence for %s: %s", company_name, type(exc).__name__)
+        logger.error(
+            "Error running LinkedIn Intelligence for %s: %s: %s",
+            company_name,
+            type(exc).__name__,
+            exc,
+        )
         return []
 
 

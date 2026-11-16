@@ -79,3 +79,36 @@ class MsfAuxServiceTests(TestCase):
         client_cls.assert_not_called()
         attempt.refresh_from_db()
         self.assertEqual(attempt.status, MsfAuxAttempt.STATUS_FAILED)
+
+    @patch('copilot.msf_aux.MsfrpcClient')
+    @patch('copilot.msf_aux.assert_rhosts_in_scope')
+    def test_execute_does_not_overwrite_timeout_failed(self, scope_mock, client_cls):
+        scope_mock.return_value = None
+        attempt = propose_attempt(
+            project_slug='demo',
+            module='auxiliary/scanner/http/title',
+            options={'RHOSTS': 'target.example'},
+        )
+        attempt.status = MsfAuxAttempt.STATUS_RUNNING
+        attempt.save(update_fields=['status'])
+
+        def mark_failed_then_return(*_args, **_kwargs):
+            # Simulate MsfAuxMarkFailedActivity racing while console still runs.
+            attempt.refresh_from_db()
+            attempt.status = MsfAuxAttempt.STATUS_FAILED
+            attempt.error = 'activity timeout'
+            attempt.save(update_fields=['status', 'error'])
+            return '[*] late title output'
+
+        client = MagicMock()
+        client.__enter__.return_value = client
+        client.__exit__.return_value = None
+        client.console_create_and_run.side_effect = mark_failed_then_return
+        client_cls.return_value = client
+
+        result = execute_attempt(attempt.id)
+        self.assertEqual(result['status'], MsfAuxAttempt.STATUS_FAILED)
+        attempt.refresh_from_db()
+        self.assertEqual(attempt.status, MsfAuxAttempt.STATUS_FAILED)
+        self.assertEqual(attempt.error, 'activity timeout')
+        self.assertNotIn('late title', (attempt.result or {}).get('output', ''))

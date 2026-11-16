@@ -375,6 +375,14 @@ def execute_attempt(attempt_id: int) -> dict[str, Any]:
             locked = MsfAuxAttempt.objects.select_for_update().filter(pk=attempt_id).first()
             if locked and locked.status == MsfAuxAttempt.STATUS_ABORTED:
                 return {'status': 'aborted', 'aborted': True}
+            # Do not overwrite timeout/abort reconciliation from a late RPC error.
+            if locked and locked.status != MsfAuxAttempt.STATUS_RUNNING:
+                logger.warning(
+                    'msf_aux execute failure skipped id=%s status=%s',
+                    attempt_id,
+                    locked.status,
+                )
+                return {'status': locked.status, 'error': locked.error or str(exc)}
             if locked:
                 locked.status = MsfAuxAttempt.STATUS_FAILED
                 locked.error = str(exc)[:2000]
@@ -402,6 +410,16 @@ def execute_attempt(attempt_id: int) -> dict[str, Any]:
             return {'status': 'failed', 'error': 'attempt missing'}
         if locked.status == MsfAuxAttempt.STATUS_ABORTED:
             return {'status': 'aborted', 'aborted': True}
+        # Timeout reconciliation (MsfAuxMarkFailedActivity) may have already
+        # terminalized the row while this activity thread was still running.
+        # Match Safe PoC: never overwrite a non-running terminal status.
+        if locked.status != MsfAuxAttempt.STATUS_RUNNING:
+            logger.warning(
+                'msf_aux execute result skipped id=%s status=%s',
+                attempt_id,
+                locked.status,
+            )
+            return {'status': locked.status, 'result': locked.result}
         locked.status = MsfAuxAttempt.STATUS_SUCCEEDED
         locked.result = result
         locked.error = ''

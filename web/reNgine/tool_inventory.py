@@ -28,7 +28,7 @@ _EXTRA_PATH_DIRS = (
     '/home/rengine/go/bin',
 )
 
-# name (lowercase) -> candidate binary names on disk
+# name (lowercase) -> candidate binary / script names on disk
 _BINARY_ALIASES: dict[str, list[str]] = {
     'nuclei': ['nuclei'],
     'httpx': ['httpx'],
@@ -49,13 +49,13 @@ _BINARY_ALIASES: dict[str, list[str]] = {
     'kiterunner': ['kr', 'kiterunner'],
     'kr': ['kr', 'kiterunner'],
     'arjun': ['arjun'],
-    'linkfinder': ['linkfinder'],
-    'paramspider': ['paramspider'],
+    'linkfinder': ['linkfinder.py', 'linkfinder'],
+    'paramspider': ['paramspider.py', 'paramspider'],
     'semgrep': ['semgrep'],
     'gitleaks': ['gitleaks'],
     'trufflehog': ['trufflehog'],
     'wpscan': ['wpscan'],
-    'sqlmap': ['sqlmap'],
+    'sqlmap': ['sqlmap.py', 'sqlmap'],
     'testssl.sh': ['testssl.sh', 'testssl'],
     'dirsearch': ['dirsearch'],
     'baddns': ['baddns'],
@@ -66,11 +66,30 @@ _BINARY_ALIASES: dict[str, list[str]] = {
     'gowitness': ['gowitness'],
     'crlfuzz': ['crlfuzz'],
     'whatweb': ['whatweb'],
+    'oneforall': ['oneforall.py', 'oneforall'],
+    'sublist3r': ['sublist3r.py', 'sublist3r'],
+    'ctfr': ['ctfr.py', 'ctfr'],
+    'jwt_tool': ['jwt_tool.py', 'jwt_tool'],
+    'graphql-cop': ['graphql-cop.py', 'graphql_cop.py', 'graphql-cop'],
+    'cpanel2shell-scanner': ['scanner.py'],
+    'php2shell-scanner': ['scanner.py'],
+    'node2shell-scanner': ['scanner.py'],
+    'react2shell-scanner': ['scanner.py'],
     # Cloned under /usr/src/github/theHarvester; binary is camelCase in .venv/bin.
     'theharvester': ['theHarvester', 'theharvester'],
 }
 
+# Unused / plugin-only catalog rows — demoted from the required inventory gate.
+_NON_DEFAULT_TOOL_NAMES = (
+    'LinkedInt',
+    'gowitness',
+    'hydra',
+    'sqlmap',
+    'XSStrike',
+)
+
 _GITHUB_CLONE_ROOT = '/usr/src/github'
+_LOOKUP_PATH_RE = re.compile(r'(/usr/src/github/[^\s]+\.(?:py|sh|pl))')
 
 
 def _candidate_binaries(tool_name: str) -> list[str]:
@@ -89,12 +108,21 @@ def _looks_executable(path: str) -> bool:
     return bool(path) and os.path.isfile(path) and os.access(path, os.X_OK)
 
 
+def _looks_runnable(path: str) -> bool:
+    """True for PATH binaries or Python/shell scripts invoked via ``python3 path``."""
+    if not path or not os.path.isfile(path):
+        return False
+    if path.endswith(('.py', '.sh', '.pl')):
+        return True
+    return os.access(path, os.X_OK)
+
+
 def _match_in_dir(directory: str, candidates: list[str]) -> Optional[str]:
     if not directory or not os.path.isdir(directory):
         return None
     for candidate in candidates:
         direct = os.path.join(directory, candidate)
-        if _looks_executable(direct):
+        if _looks_runnable(direct):
             return direct
     # Case-insensitive fallback (Linux FS is case-sensitive; fixtures vary).
     try:
@@ -107,13 +135,13 @@ def _match_in_dir(directory: str, candidates: list[str]) -> Optional[str]:
         if not real:
             continue
         full = os.path.join(directory, real)
-        if _looks_executable(full):
+        if _looks_runnable(full):
             return full
     return None
 
 
 def _executable_in_clone(clone_dir: str, candidates: list[str]) -> Optional[str]:
-    """Prefer a real binary inside a github clone (venv/bin, bin/, root)."""
+    """Prefer a real binary/script inside a github clone (venv/bin, bin/, root)."""
     if not clone_dir or not os.path.isdir(clone_dir):
         return None
     for sub in (
@@ -135,11 +163,51 @@ def _default_github_clone(tool_name: str) -> Optional[str]:
         path = os.path.join(_GITHUB_CLONE_ROOT, name)
         if os.path.isdir(path):
             return path
+    # Acunetix client ships as acunetix-python.
+    if raw.lower().startswith('acunetix'):
+        path = os.path.join(_GITHUB_CLONE_ROOT, 'acunetix-python')
+        if os.path.isdir(path):
+            return path
     return None
 
 
-def resolve_binary_path(tool_name: str, github_clone_path: Optional[str] = None) -> Optional[str]:
-    """Return location of the primary binary.
+def _path_from_version_lookup(version_lookup_command: Optional[str]) -> Optional[str]:
+    """Extract an existing absolute github script path from a version command."""
+    if not version_lookup_command:
+        return None
+    match = _LOOKUP_PATH_RE.search(version_lookup_command)
+    if not match:
+        return None
+    path = match.group(1)
+    return path if os.path.isfile(path) else None
+
+
+def _acunetix_present(github_clone_path: Optional[str] = None) -> Optional[str]:
+    """Acunetix inventory is the pip client package + clone, not a PATH binary."""
+    clone = github_clone_path if github_clone_path and os.path.isdir(github_clone_path) else None
+    if not clone:
+        clone = os.path.join(_GITHUB_CLONE_ROOT, 'acunetix-python')
+        if not os.path.isdir(clone):
+            return None
+    try:
+        import importlib.util
+        if importlib.util.find_spec('acunetix') is None:
+            return None
+    except Exception:
+        logger.warning('acunetix package probe failed', exc_info=True)
+        return None
+    marker = os.path.join(clone, 'acunetix', '__init__.py')
+    if os.path.isfile(marker):
+        return marker
+    return clone
+
+
+def resolve_binary_path(
+    tool_name: str,
+    github_clone_path: Optional[str] = None,
+    version_lookup_command: Optional[str] = None,
+) -> Optional[str]:
+    """Return location of the primary binary or clone entry script.
 
     Asks the tool host (the Python orchestrator, locally when this process is
     it) where entrypoint-installed tools live, and returns an encoded worker
@@ -153,6 +221,13 @@ def resolve_binary_path(tool_name: str, github_clone_path: Optional[str] = None)
         prefer_roles_for_tool,
         resolve_on_workers,
     )
+
+    if (tool_name or '').strip().lower().startswith('acunetix'):
+        return _acunetix_present(github_clone_path)
+
+    lookup_path = _path_from_version_lookup(version_lookup_command)
+    if lookup_path:
+        return lookup_path
 
     candidates = _candidate_binaries(tool_name)
     remote = resolve_on_workers(
@@ -183,6 +258,19 @@ def resolve_binary_path(tool_name: str, github_clone_path: Optional[str] = None)
     if found:
         return found
     return None
+
+
+def demote_non_default_tools() -> int:
+    """One-shot: mark unused/plugin catalog rows as non-default on live DBs."""
+    from scanEngine.models import InstalledExternalTool
+
+    updated = InstalledExternalTool.objects.filter(
+        name__in=_NON_DEFAULT_TOOL_NAMES,
+        is_default=True,
+    ).update(is_default=False)
+    if updated:
+        logger.info('Demoted %s unused/plugin tools to is_default=False', updated)
+    return updated
 
 
 def _run_argv(argv: list[str], *, timeout: float = 8.0) -> tuple[int, str, str]:
@@ -286,7 +374,7 @@ def ensure_db_connection() -> None:
 
 
 def sync_installed_tools(*, probe_versions: bool = True) -> dict[str, Any]:
-    """Upsert presence/version on all InstalledExternalTool rows.
+    """Upsert presence/version on required (``is_default=True``) tool rows.
 
     Presence is determined on the tool host: this process when it is the
     Python orchestrator, otherwise the orchestrator runs the whole sync as a
@@ -306,6 +394,10 @@ def sync_installed_tools(*, probe_versions: bool = True) -> dict[str, Any]:
         worker_probe_summary,
     )
 
+    # Keep live DBs aligned with fixture hygiene even before remote sync.
+    ensure_db_connection()
+    demote_non_default_tools()
+
     if not probe_is_local():
         try:
             remote = dispatch_probe('sync', {'probe_versions': probe_versions})
@@ -321,10 +413,10 @@ def sync_installed_tools(*, probe_versions: bool = True) -> dict[str, Any]:
     errors = 0
     workers = worker_probe_summary()
 
-    # Phase 1 — snapshot rows (short DB window). Keepalive before the probes.
+    # Phase 1 — snapshot required rows only. Keepalive before the probes.
     ensure_db_connection()
     snapshots = list(
-        InstalledExternalTool.objects.order_by('id').values(
+        InstalledExternalTool.objects.filter(is_default=True).order_by('id').values(
             'id',
             'name',
             'github_clone_path',
@@ -347,7 +439,11 @@ def sync_installed_tools(*, probe_versions: bool = True) -> dict[str, Any]:
                 # Phase 3 reconnects before writing; note the outage meanwhile.
                 logger.warning('DB keepalive failed during tool sync', exc_info=True)
         try:
-            path = resolve_binary_path(row['name'], row['github_clone_path'])
+            path = resolve_binary_path(
+                row['name'],
+                row['github_clone_path'],
+                version_lookup_command=row['version_lookup_command'],
+            )
             version = None
             sync_err = None
             if path:

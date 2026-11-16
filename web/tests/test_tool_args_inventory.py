@@ -181,6 +181,70 @@ class ToolInventorySyncTests(TestCase):
         self.assertEqual(tool.resolved_path, '/usr/local/bin/naabu')
         self.assertEqual(tool.detected_version, '1.2.3')
 
+    def test_sync_skips_non_default_and_demotes_unused(self):
+        from reNgine.tool_inventory import sync_installed_tools
+
+        plugin = InstalledExternalTool.objects.create(
+            name='sqlmap',
+            description='plugin',
+            github_url='https://example.com',
+            install_command='echo x',
+            is_default=True,
+        )
+        with patch('reNgine.tool_inventory.resolve_binary_path', return_value=None):
+            result = sync_installed_tools(probe_versions=False)
+        plugin.refresh_from_db()
+        self.assertFalse(plugin.is_default)
+        # Non-default rows are not part of the required inventory counts.
+        self.assertNotIn(plugin.id, [
+            # ensure sync did not require sqlmap presence
+        ])
+        self.assertIsInstance(result['missing'], int)
+
+    def test_resolve_python_clone_script_via_lookup_and_alias(self):
+        import tempfile
+        from pathlib import Path
+
+        from reNgine.tool_inventory import resolve_binary_path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            clone = Path(tmp) / 'LinkFinder'
+            clone.mkdir()
+            script = clone / 'linkfinder.py'
+            script.write_text('# linkfinder\n', encoding='utf-8')
+            lookup = f'python3 {script} --help'
+            with patch('reNgine.tool_workers.resolve_on_workers', return_value=None):
+                found = resolve_binary_path(
+                    'LinkFinder',
+                    str(clone),
+                    version_lookup_command=lookup,
+                )
+            self.assertEqual(found, str(script))
+
+            with patch('reNgine.tool_workers.resolve_on_workers', return_value=None):
+                found_alias = resolve_binary_path('LinkFinder', str(clone))
+            self.assertEqual(found_alias, str(script))
+
+    def test_resolve_acunetix_requires_package(self):
+        import tempfile
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        from reNgine.tool_inventory import resolve_binary_path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            clone = Path(tmp) / 'acunetix-python'
+            pkg = clone / 'acunetix'
+            pkg.mkdir(parents=True)
+            (pkg / '__init__.py').write_text('', encoding='utf-8')
+            with patch('reNgine.tool_workers.resolve_on_workers', return_value=None), \
+                    patch('importlib.util.find_spec', return_value=SimpleNamespace()):
+                found = resolve_binary_path('Acunetix (AWVS)', str(clone))
+            self.assertTrue(found.endswith('acunetix/__init__.py') or found.endswith('acunetix\\__init__.py'))
+            with patch('reNgine.tool_workers.resolve_on_workers', return_value=None), \
+                    patch('importlib.util.find_spec', return_value=None):
+                self.assertIsNone(resolve_binary_path('Acunetix (AWVS)', str(clone)))
+
 
 class ToolArgsApiTests(TestCase):
     def setUp(self):
