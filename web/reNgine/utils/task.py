@@ -59,7 +59,11 @@ ROUTED_TOOLS = {
     'noseyparker', 'smugglex', 'chaos', 'mapcidr', 'urlfinder',
     'cariddi', 'wpprobe', 'vulnx', 'unfurl', 'favirecon',
     'sourcemapper', 'gosearch', 'julius', 'grpcurl', 'exifray', 'testssl.sh',
+    # Lean-image leftovers: apt/Go CLIs that still had local subprocess call sites
+    'xurlfind3r', 'getasn', 'jswhois', 'fping', 'arp-scan',
+    'enumerepo', 'titus', 'reconx',
     # bbot is pipx/Python-native — keep it off this set (stays on python host).
+    # gato is Python (uv venv under /usr/src/github) — stays on python.
 }
 
 
@@ -82,11 +86,13 @@ def _go_executor_workflow_input(
     cwd='',
     timeout=None,
     tool='',
+    env=None,
 ):
     """Build the GoExecutorTaskWorkflow input payload.
 
     Nuclei gets stall_timeout_seconds so the go-executor idle / hang-monitor
     dump watchdog can kill stuck process groups.
+    Optional ``env`` is merged into the go subprocess environment (e.g. API keys).
     """
     command_str = _normalize_routed_command(command_str)
     payload = {
@@ -100,6 +106,11 @@ def _go_executor_workflow_input(
         payload['timeout_seconds'] = timeout
     if tool == 'nuclei':
         payload['stall_timeout_seconds'] = NUCLEI_STALL_TIMEOUT_SECONDS
+    if env:
+        # Only string values; drop empties so go does not clear inherited PATH etc.
+        payload['env'] = {
+            str(k): str(v) for k, v in env.items() if v is not None and str(v) != ''
+        }
     return payload
 
 
@@ -474,6 +485,7 @@ def run_command(
                     cwd=cwd,
                     timeout=timeout,
                     tool=tool,
+                    env=env,
                 ),
                 id=f"go-exec-{tool}-{command_rec_id or int(time.time())}",
                 task_queue=python_orchestrator_queue()
@@ -1152,6 +1164,7 @@ def stream_command(
 		timeout=43200,
 		route_to_executor=True,
 		max_output_chars=_COMMAND_OUTPUT_MAX_CHARS,
+		env=None,
 	):
 	"""Run a command and yield output line by line.
 
@@ -1166,6 +1179,7 @@ def stream_command(
 		trunc_char (str): Character used to truncate the output line.
 		proxy (str): If provided, may be used for proxychains wrapping.
 		timeout (int): Overall execution timeout in seconds.
+		env (dict): Optional environment overlay for local or go-executor runs.
 	Yields:
 		str/dict: Output line.
 	"""
@@ -1240,6 +1254,7 @@ def stream_command(
 					cwd=cwd,
 					timeout=timeout,
 					tool=tool,
+					env=env,
 				),
 				id=workflow_id,
 				task_queue=python_orchestrator_queue()
@@ -1379,6 +1394,7 @@ def stream_command(
 		errors='replace',
 		shell=shell,
 		cwd=cwd,
+		env=env,
 		preexec_fn=os.setsid)
 
 	# Start a watchdog thread to terminate the command if it runs too long

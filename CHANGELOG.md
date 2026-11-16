@@ -30,6 +30,7 @@
   - Entrypoint ownership: go sole-writes shared `wordlist` + `nuclei_templates` (seed sentinels + healthcheck); python owns `/usr/src/github` tool trees; web is API/UI boot only.
   - Expanded `ROUTED_TOOLS` and call-site fixes so compiled CLIs run on go-executor; web Tool Arsenal / interactive recon use Temporal `tool_workers` (`run` / `remove`).
   - Docs: `documents/tool-distribution.md` ownership matrix and empty-volume first-boot notes.
+  - **Lean role assemblies (flattened)**: each role is stripped then published via `FROM scratch` + `COPY --from=… / /` so tags do not inherit the ~10GB `runtime-full` layer graph. Web drops scanners/Playwright/github/Ruby; python drops `ROUTED_TOOLS`/Ruby/frontend; go drops Django/pipx/github forests and keeps CLIs + Chromium + WPScan.
 
 #### Fixed
 
@@ -38,6 +39,8 @@
 - **Routed CLI argv / scan pipelines**: `run_command` list argv is flattened with `shlex.join` before `GoExecutorTaskWorkflow` (fixes nested JSON that broke gitleaks/trufflehog/monitor-style calls); remaining `ROUTED_TOOLS` call sites (dnsx, feroxbuster, urlfinder, cariddi, unfurl, mapcidr, wpprobe, grype, trivy, tlsx, nuclei `-tl`) use `run_command` with I/O under shared `RENGINE_RESULTS`.
 - **Tool Arsenal on workers**: add/update install via `run_on_workers`; python `ToolProbeActivity` forwards go-preferred run/resolve/version/binary-remove to go-executor; git clone paths and `cd … && git pull` updates are validated with `safe_github_clone_path` / `shlex.quote` (same trust bar as uninstall).
 - **Ferox default wordlist**: uses go-seeded `/usr/src/wordlist/raft-large-directories.txt` instead of a missing SecLists path.
+- **Lean-image routing completeness**: stress `k6`/`wrk`/`hping3`, vigolium audit/export, GitHub secret scanners, `vulnx`, `exifray`, `xurlfind3r`/`getasn`/`jswhois`/`fping`/`arp-scan`/`enumerepo`/`titus`/`gosearch` go through `run_command`/`stream_command`; go-executor accepts an `env` overlay for API keys/proxies; 24/7 **reconx** is supervised on go-executor (python parses findings only).
+- **Role image size**: published web/python/go tags are flattened so `docker images` no longer reports three copies of the full mega-image after `rm`-only “strips”.
 
 ### [v3.7.9] - 2026-10-09
 

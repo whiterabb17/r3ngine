@@ -194,11 +194,11 @@ RUN cargo install --git https://github.com/hahwul/smugglex.git --root /usr/local
 
 
 # ===========================================================================
-# Stage 4: Shared runtime (runtime-full)
+# Stage 4: Shared install intermediate (runtime-full)
 #
-# Ubuntu 22.04 base used as the common layer for the three role targets
-# (web, python-orchestrator, go-executor). Phase-1 keeps tool content shared
-# so routing can land before binaries are stripped from web/python.
+# Install-only cache stage. Published role tags are flattened from stripped
+# copies (web-stripped / python-stripped / go-stripped → scratch). Never tag
+# or deploy runtime-full itself — deletes on top of it do not shrink images.
 #
 # NOT present: Go SDK, Rust toolchain, build caches, full git histories,
 #              nuclei-templates (volume), wordlists (volume).
@@ -741,15 +741,22 @@ RUN mkdir -p /opt/r3ngine/wordlist && \
 
 
 # ===========================================================================
-# Role targets — three images from one bake. Content starts identical in the
-# shared runtime-full layer; compose selects the target per service.
-# Strip of web/python CLIs happens only after ROUTED_TOOLS + call-site audit.
+# Role assemblies — REAL size split.
+#
+# `rm` on top of runtime-full does NOT shrink `docker images` size: parent
+# layers still ship. Each role therefore:
+#   1. strips what it must not contain (web-stripped / python-stripped / go-stripped)
+#   2. is flattened with `FROM scratch` + `COPY --from=… / /` so only the
+#      post-delete filesystem is in the published tag.
+#
+# Keep the bin list in sync with web/reNgine/utils/task.py ROUTED_TOOLS.
 # ===========================================================================
-FROM runtime-full AS web
-LABEL r3ngine.role="web"
-ENV R3NGINE_IMAGE_ROLE=web
-# Web no longer runs scan CLIs locally (recon/Tool Arsenal go through Temporal).
-# Drop the heaviest scanner artifacts from the API image; Django + frontend remain.
+
+# Shared strip helper content — duplicated per stage (Docker ARG/ENV can't hold
+# multi-line safely across FROM boundaries without redeclare noise).
+
+FROM runtime-full AS web-stripped
+# API/UI: Django + frontend + pg_dump. No scanners / Playwright / github / Ruby.
 RUN set -eux; \
     for bin in \
       nuclei naabu subfinder amass httpx ffuf katana gospider gau waybackurls \
@@ -757,22 +764,133 @@ RUN set -eux; \
       gitleaks trufflehog betterleaks dnsx grype trivy noseyparker smugglex \
       brutus k6 vulnx reconx chaos mapcidr urlfinder cariddi wpprobe unfurl \
       favirecon sourcemapper gosearch julius grpcurl exifray gf kr nmap \
-      sslscan ike-scan hping3 wrk; do \
-        rm -f "/usr/local/bin/${bin}" "/usr/bin/${bin}" || true; \
+      sslscan ike-scan hping3 wrk xurlfind3r getasn jswhois fping arp-scan \
+      enumerepo titus wpscan dirsearch semgrep kiterunner retire lighthouse \
+      check_if_email_exists; do \
+        rm -f "/usr/local/bin/${bin}" "/usr/bin/${bin}" "/usr/sbin/${bin}" || true; \
     done; \
-    rm -rf /root/.cache/ms-playwright /usr/src/github || true; \
-    mkdir -p /usr/src/github
+    rm -f /usr/bin/testssl.sh /usr/local/bin/testssl.sh || true; \
+    rm -rf \
+      /root/.cache/ms-playwright \
+      /usr/src/github \
+      /usr/local/bin/r3ngine-executor \
+      /opt/r3ngine/wordlist \
+      /root/.local/share/pipx \
+      /root/.local/pipx \
+      /root/.gem \
+      || true; \
+    mkdir -p /usr/src/github; \
+    apt-get update -y; \
+    apt-get purge -y --auto-remove \
+      ruby-full ruby-dev \
+      nmap ike-scan sslscan hping3 wrk fping arp-scan \
+      libpcap-dev \
+      build-essential cmake ninja-build gcc \
+      python3.12-dev \
+      2>/dev/null || true; \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
-FROM runtime-full AS python-orchestrator
-LABEL r3ngine.role="python"
-ENV R3NGINE_IMAGE_ROLE=python
-# Python keeps Playwright + Python-native tools. Compiled CLIs that are in
-# ROUTED_TOOLS still remain in this image until remaining raw-subprocess
-# call sites (e.g. long-lived reconx monitor) are fully migrated; they are
-# unused for routed tools because run_command sends those to go-executor.
+FROM runtime-full AS python-stripped
+# Orchestrator: Django + pipx/github + Playwright. No ROUTED_TOOLS / Ruby / SPA.
+RUN set -eux; \
+    for bin in \
+      nuclei naabu subfinder amass httpx ffuf katana gospider gau waybackurls \
+      hakrawler tlsx dalfox crlfuzz s3scanner aquatone vigolium feroxbuster \
+      gitleaks trufflehog betterleaks dnsx grype trivy noseyparker smugglex \
+      brutus k6 vulnx reconx chaos mapcidr urlfinder cariddi wpprobe unfurl \
+      favirecon sourcemapper gosearch julius grpcurl exifray gf kr nmap \
+      sslscan ike-scan hping3 wrk xurlfind3r getasn jswhois fping arp-scan \
+      enumerepo titus wpscan dirsearch semgrep kiterunner retire lighthouse \
+      check_if_email_exists; do \
+        rm -f "/usr/local/bin/${bin}" "/usr/bin/${bin}" "/usr/sbin/${bin}" || true; \
+    done; \
+    rm -f /usr/bin/testssl.sh /usr/local/bin/testssl.sh || true; \
+    rm -rf \
+      /usr/src/frontend \
+      /usr/local/bin/r3ngine-executor \
+      /opt/r3ngine/wordlist \
+      /root/.gem \
+      || true; \
+    npm uninstall -g retire lighthouse 2>/dev/null || true; \
+    apt-get update -y; \
+    apt-get purge -y --auto-remove \
+      ruby-full ruby-dev \
+      nmap ike-scan sslscan hping3 wrk \
+      libpcap-dev \
+      build-essential cmake ninja-build gcc \
+      postgresql-client-16 \
+      2>/dev/null || true; \
+    apt-get purge -y --auto-remove fping arp-scan 2>/dev/null || true; \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
-FROM runtime-full AS go-executor
-LABEL r3ngine.role="go"
-ENV R3NGINE_IMAGE_ROLE=go
-# Go does not serve the SPA; drop the baked frontend dist to shrink the image.
-RUN rm -rf /usr/src/frontend || true
+FROM runtime-full AS go-stripped
+# Executor: CLIs + Ruby/WPScan + Chromium + thin pip. No Django / pipx / SPA / github.
+RUN set -eux; \
+    rm -rf \
+      /usr/src/frontend \
+      /usr/src/app \
+      /usr/src/github \
+      /usr/src/gf-patterns \
+      /root/.local/share/pipx \
+      /root/.local/pipx \
+      /root/.cache/pip \
+      /root/.npm \
+      || true; \
+    mkdir -p /usr/src/app /usr/src/github; \
+    # Drop pip-installed Django/orchestration packages — go only needs pip for Wordfence.
+    # Do not touch /usr/lib/python3/dist-packages (apt-managed).
+    rm -rf \
+      /usr/local/lib/python3.12/dist-packages \
+      /usr/local/lib/python3.12/site-packages \
+      || true; \
+    python3.12 -m ensurepip --upgrade; \
+    python3.12 -m pip install --no-cache-dir --upgrade pip; \
+    apt-get update -y; \
+    # Keep nodejs: retire + lighthouse are npm CLIs on PATH for ROUTED_TOOLS.
+    apt-get purge -y --auto-remove \
+      postgresql-client-16 \
+      build-essential cmake ninja-build \
+      python3.12-dev ruby-dev \
+      2>/dev/null || true; \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/* /var/tmp/*
+
+# --- Flattened publish targets (single-layer FS; no runtime-full ancestry) ---
+
+FROM scratch AS web
+COPY --from=web-stripped / /
+LABEL r3ngine.role="web" \
+      name="reNgine" \
+      description="r3ngine web/API role image (lean)"
+ENV DEBIAN_FRONTEND="noninteractive" \
+    DATABASE="postgres" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    R3NGINE_IMAGE_ROLE=web
+WORKDIR /usr/src/app
+
+FROM scratch AS python-orchestrator
+COPY --from=python-stripped / /
+LABEL r3ngine.role="python" \
+      name="reNgine" \
+      description="r3ngine python-orchestrator role image (lean)"
+ENV DEBIAN_FRONTEND="noninteractive" \
+    DATABASE="postgres" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    R3NGINE_IMAGE_ROLE=python
+WORKDIR /usr/src/app
+
+FROM scratch AS go-executor
+COPY --from=go-stripped / /
+LABEL r3ngine.role="go" \
+      name="reNgine" \
+      description="r3ngine go-executor role image (lean)"
+ENV DEBIAN_FRONTEND="noninteractive" \
+    DATABASE="postgres" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    R3NGINE_IMAGE_ROLE=go
+WORKDIR /usr/src/app

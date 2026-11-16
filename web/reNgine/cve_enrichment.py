@@ -470,58 +470,55 @@ class CVEEnrichmentService:
         Populates is_poc, is_template, and additional CVSS/EPSS fields if
         the PDCP API key is configured in the database.
         """
-        import subprocess
         import json
         import os
         from dashboard.models import ProjectDiscoveryAPIKey
+        from reNgine.utils.task import run_command
 
         pdcp_key_obj = ProjectDiscoveryAPIKey.objects.first()
         pdcp_key = pdcp_key_obj.key if pdcp_key_obj else None
         ensureAuthCmd = ["vulnx", "auth", "--api-key", pdcp_key] if pdcp_key else None
         logger.debug("Ensuring authentication: %s", ensureAuthCmd)
         if ensureAuthCmd:
-            result = subprocess.run(
-                ensureAuthCmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            if result.returncode != 0:
-                logger.warning("vulnx authentication failed with code %d: %s", result.returncode, result.stderr)
+            auth_code, auth_out = run_command(ensureAuthCmd, shell=False, timeout=30)
+            if auth_code != 0:
+                logger.warning("vulnx authentication failed with code %d: %s", auth_code, (auth_out or '')[:500])
                 return
 
         cmd = ["vulnx", "id", "--json", cve_obj.name]
-        env = os.environ.copy()
+        env = {}
         if pdcp_key:
             env["PDCP_API_KEY"] = pdcp_key
 
         logger.debug("Running vulnx command: %s", " ".join(cmd))
 
         try:
-            result = subprocess.run(
+            return_code, stdout = run_command(
                 cmd,
-                env=env,
-                capture_output=True,
-                text=True,
-                timeout=30
+                shell=False,
+                env=env or None,
+                timeout=30,
             )
 
-            if result.returncode != 0:
-                error_lines = [line.strip() for line in result.stderr.split('\n') if line.strip().startswith('[FTL]') or line.strip().startswith('[ERR]')]
+            if return_code != 0:
+                error_lines = [
+                    line.strip() for line in (stdout or '').split('\n')
+                    if line.strip().startswith('[FTL]') or line.strip().startswith('[ERR]')
+                ]
                 if error_lines:
                     logger.warning("%s", " | ".join(error_lines))
                 else:
-                    logger.debug("vulnx command failed with code %d", result.returncode)
+                    logger.debug("vulnx command failed with code %d", return_code)
                 return
 
-            if not result.stdout.strip():
+            if not (stdout or '').strip():
                 logger.debug("vulnx returned empty output for %s", cve_obj.name)
                 return
 
             try:
-                data = json.loads(result.stdout)
+                data = json.loads(stdout)
             except json.JSONDecodeError:
-                lines = [line.strip() for line in result.stdout.split('\n') if line.strip()]
+                lines = [line.strip() for line in (stdout or '').split('\n') if line.strip()]
                 data = None
                 for line in lines:
                     if line.startswith('{') or line.startswith('['):

@@ -176,13 +176,13 @@ def fping_scan(self, scan_history_id: int, cidr: str = None,
     logger.log_line("[FPING]", "START", "probing %s" % ' '.join(probe_targets))
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        for line in result.stdout.splitlines():
+        _code, stdout = run_command(cmd, shell=False, scan_id=scan_history_id, timeout=120)
+        for line in (stdout or '').splitlines():
             line = line.strip()
             if line and 'is alive' in line:
                 alive.append(line.split()[0])
-    except subprocess.TimeoutExpired:
-        logger.log_line("[FPING]", "WARN", "fping timed out")
+    except Exception:
+        logger.log_line("[FPING]", "WARN", "fping timed out or failed")
 
     logger.log_line("[FPING]", "RESULT", "found %d alive hosts" % len(alive))
     return alive
@@ -203,13 +203,13 @@ def arpscan_scan(self, scan_history_id: int, cidr: str = None) -> List[str]:
     logger.log_line("[ARPSCAN]", "START", "ARP scanning %s" % cidr)
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        for line in result.stdout.splitlines():
+        _code, stdout = run_command(cmd, shell=False, scan_id=scan_history_id, timeout=120)
+        for line in (stdout or '').splitlines():
             parts = line.split('\t')
             if parts and parts[0].strip():
                 alive.append(parts[0].strip())
-    except subprocess.TimeoutExpired:
-        logger.log_line("[ARPSCAN]", "WARN", "arp-scan timed out")
+    except Exception:
+        logger.log_line("[ARPSCAN]", "WARN", "arp-scan timed out or failed")
 
     logger.log_line("[ARPSCAN]", "RESULT", "found %d hosts via ARP" % len(alive))
     return alive
@@ -233,11 +233,11 @@ def getasn_scan(self, scan_history_id: int, domain_id: int, ips: List[str] = Non
 
     for ip_addr in targets:
         try:
-            result = subprocess.run(
+            _code, stdout = run_command(
                 ['getasn', '-ip', ip_addr],
-                capture_output=True, text=True, timeout=30,
+                shell=False, scan_id=scan_history_id, timeout=30,
             )
-            line = result.stdout.strip()
+            line = (stdout or '').strip()
             if not line:
                 continue
             parts = line.split()
@@ -256,8 +256,6 @@ def getasn_scan(self, scan_history_id: int, domain_id: int, ips: List[str] = Non
                 )
                 if updated:
                     enriched += 1
-        except subprocess.TimeoutExpired:
-            logger.log_line("[GETASN]", "WARN", "timeout for %s" % ip_addr)
         except Exception as exc:
             from reNgine.utils.logger import format_exception_for_log
             logger.log_line("[GETASN]", "ERROR", "failed for %s: %s" % (ip_addr, format_exception_for_log(exc)), level="error")
@@ -647,8 +645,8 @@ def jswhois_scan(self, scan_history_id: int, domain_id: int, domain: Optional[st
     logger.log_line("[JSWHOIS]", "START", "querying %s" % target)
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        raw = result.stdout.strip()
+        _code, stdout = run_command(cmd, shell=False, scan_id=scan_history_id, timeout=60)
+        raw = (stdout or '').strip()
         if not raw:
             return True
         try:
@@ -662,8 +660,8 @@ def jswhois_scan(self, scan_history_id: int, domain_id: int, domain: Optional[st
             domain_obj.domain_info.whois_raw = data
             domain_obj.domain_info.save(update_fields=['whois_raw'])
             logger.log_line("[JSWHOIS]", "RESULT", "stored whois_raw for %s" % target)
-    except subprocess.TimeoutExpired:
-        logger.log_line("[JSWHOIS]", "WARN", "timeout for %s" % target)
+    except Exception:
+        logger.log_line("[JSWHOIS]", "WARN", "timeout or failure for %s" % target)
 
     return True
 

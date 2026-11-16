@@ -23,12 +23,13 @@ import (
 )
 
 type ToolExecutionInput struct {
-	Command             []string `json:"command"`
-	ScanID              int      `json:"scan_id"`
-	CommandID           int      `json:"command_id"`
-	WorkingDir          string   `json:"working_dir"`
-	TimeoutSeconds      int      `json:"timeout_seconds"`
-	StallTimeoutSeconds int      `json:"stall_timeout_seconds"`
+	Command             []string          `json:"command"`
+	ScanID              int               `json:"scan_id"`
+	CommandID           int               `json:"command_id"`
+	WorkingDir          string            `json:"working_dir"`
+	TimeoutSeconds      int               `json:"timeout_seconds"`
+	StallTimeoutSeconds int               `json:"stall_timeout_seconds"`
+	Env                 map[string]string `json:"env"`
 }
 
 type ToolExecutionResult struct {
@@ -64,6 +65,18 @@ func (a *Activities) SubprocessActivity(ctx context.Context, input ToolExecution
 	}
 	if input.WorkingDir != "" {
 		cmd.Dir = input.WorkingDir
+	}
+	if len(input.Env) > 0 {
+		// Start from the process environment and overlay caller-provided keys
+		// (GITHUB_TOKEN, VIGOLIUM_API_KEY, HTTP(S)_PROXY, etc.).
+		merged := os.Environ()
+		for k, v := range input.Env {
+			if k == "" {
+				continue
+			}
+			merged = append(merged, fmt.Sprintf("%s=%s", k, v))
+		}
+		cmd.Env = merged
 	}
 	// Place the subprocess in its own process group so all children (nuclei, amass, etc.)
 	// receive SIGKILL when the Temporal context is cancelled, not just the bash shell.

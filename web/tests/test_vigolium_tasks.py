@@ -461,17 +461,16 @@ class VigoliumAuditTaskGatingTest(TestCase):
     def test_audit_skips_when_disabled(self):
         from reNgine.tasks.vigolium import vigolium_audit_scan
         task = self._make_task(enabled=False)
-        with patch('reNgine.tasks.vigolium.subprocess') as mock_sp:
+        with patch('reNgine.tasks.vigolium.run_command') as mock_run:
             vigolium_audit_scan(task)
-            mock_sp.run.assert_not_called()
+            mock_run.assert_not_called()
 
     def test_audit_uses_piolium_driver_by_default(self):
         from reNgine.tasks.vigolium import vigolium_audit_scan
         task = self._make_task(use_ai=False)
-        with patch('reNgine.tasks.vigolium.subprocess.run') as mock_run, \
+        with patch('reNgine.tasks.vigolium.run_command', return_value=(0, '')) as mock_run, \
              patch('os.makedirs'), \
              patch('os.path.exists', return_value=False):
-            mock_run.return_value = MagicMock(returncode=0, stderr='')
             vigolium_audit_scan(task, code_path='/tmp/src')
             self.assertTrue(mock_run.called)
             cmd = mock_run.call_args_list[0][0][0]
@@ -486,12 +485,11 @@ class VigoliumAuditTaskGatingTest(TestCase):
         mock_llm = MagicMock()
         mock_llm.provider = 'anthropic'
         mock_llm.api_key = 'sk-ant-test-key'
-        with patch('reNgine.tasks.vigolium.subprocess.run') as mock_run, \
+        with patch('reNgine.tasks.vigolium.run_command', return_value=(0, '')) as mock_run, \
              patch('os.makedirs'), \
              patch('os.path.exists', return_value=False), \
              patch('dashboard.models.LLMConfig') as mock_llm_cls:
             mock_llm_cls.objects.filter.return_value.first.return_value = mock_llm
-            mock_run.return_value = MagicMock(returncode=0, stderr='')
             vigolium_audit_scan(task, code_path='/tmp/src')
             self.assertTrue(mock_run.called)
             cmd = mock_run.call_args_list[0][0][0]
@@ -506,12 +504,11 @@ class VigoliumAuditTaskGatingTest(TestCase):
     def test_audit_falls_back_to_piolium_when_no_llm_config(self):
         from reNgine.tasks.vigolium import vigolium_audit_scan
         task = self._make_task(use_ai=True)
-        with patch('reNgine.tasks.vigolium.subprocess.run') as mock_run, \
+        with patch('reNgine.tasks.vigolium.run_command', return_value=(0, '')) as mock_run, \
              patch('os.makedirs'), \
              patch('os.path.exists', return_value=False), \
              patch('dashboard.models.LLMConfig') as mock_llm_cls:
             mock_llm_cls.objects.filter.return_value.first.return_value = None
-            mock_run.return_value = MagicMock(returncode=0, stderr='')
             vigolium_audit_scan(task, code_path='/tmp/src')
             cmd = mock_run.call_args_list[0][0][0]
             self.assertIn('piolium', cmd)

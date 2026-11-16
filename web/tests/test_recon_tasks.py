@@ -16,9 +16,9 @@ def _make_proxy(yaml_config=None):
 
 
 class TestDNSXScan(TestCase):
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_dnsx_creates_subdomain_records(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout='', stderr='')
+        mock_run.return_value = (0, '')
         output = json.dumps({'host': 'sub.example.com', 'a': ['1.2.3.4']}) + '\n'
 
         # Write fake output file
@@ -35,7 +35,7 @@ class TestDNSXScan(TestCase):
                         )
         self.assertTrue(result)
 
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_dnsx_returns_true_with_no_targets(self, mock_run):
         from reNgine.tasks.recon import dnsx_scan
         result = dnsx_scan(_make_proxy(), scan_history_id=1, domain_id=1)
@@ -77,13 +77,9 @@ class TestWAFW00FScan(TestCase):
 
 
 class TestFPingScan(TestCase):
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_fping_parses_alive_hosts(self, mock_run):
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout='192.0.2.1 is alive\n192.0.2.2 is alive\n192.0.2.3 is unreachable\n',
-            stderr='',
-        )
+        mock_run.return_value = (0, '192.0.2.1 is alive\n192.0.2.2 is alive\n192.0.2.3 is unreachable\n')
         from reNgine.tasks.recon import fping_scan
         result = fping_scan(_make_proxy(), scan_history_id=1, cidr='192.0.2.0/24')
         self.assertIsInstance(result, list)
@@ -91,7 +87,7 @@ class TestFPingScan(TestCase):
         self.assertIn('192.0.2.2', result)
         self.assertNotIn('192.0.2.3', result)
 
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_fping_returns_empty_for_no_targets(self, mock_run):
         from reNgine.tasks.recon import fping_scan
         result = fping_scan(_make_proxy(), scan_history_id=1)
@@ -100,18 +96,14 @@ class TestFPingScan(TestCase):
 
 
 class TestARPScanScan(TestCase):
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_arpscan_parses_ips(self, mock_run):
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout='192.0.2.1\thost1\t00:11:22:33:44:55\tVendor\n',
-            stderr='',
-        )
+        mock_run.return_value = (0, '192.0.2.1\thost1\t00:11:22:33:44:55\tVendor\n')
         from reNgine.tasks.recon import arpscan_scan
         result = arpscan_scan(_make_proxy(), scan_history_id=1, cidr='192.0.2.0/24')
         self.assertIn('192.0.2.1', result)
 
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_arpscan_returns_empty_for_no_cidr(self, mock_run):
         from reNgine.tasks.recon import arpscan_scan
         result = arpscan_scan(_make_proxy(), scan_history_id=1)
@@ -120,21 +112,17 @@ class TestARPScanScan(TestCase):
 
 
 class TestMapCIDRExpand(TestCase):
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_mapcidr_returns_ip_list(self, mock_run):
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout='192.0.2.1\n192.0.2.2\n192.0.2.3\n',
-            stderr='',
-        )
+        mock_run.return_value = (0, '192.0.2.1\n192.0.2.2\n192.0.2.3\n')
         from reNgine.tasks.recon import mapcidr_expand
         result = mapcidr_expand(_make_proxy(), scan_history_id=1, cidr='192.0.2.0/30')
         self.assertEqual(result, ['192.0.2.1', '192.0.2.2', '192.0.2.3'])
 
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_mapcidr_timeout_returns_empty(self, mock_run):
         import subprocess
-        mock_run.side_effect = subprocess.TimeoutExpired('mapcidr', 60)
+        mock_run.side_effect = Exception('timeout')
         from reNgine.tasks.recon import mapcidr_expand
         result = mapcidr_expand(_make_proxy(), scan_history_id=1, cidr='10.0.0.0/8')
         self.assertEqual(result, [])
@@ -180,17 +168,17 @@ class TestSSHAuditScan(TestCase):
 
 
 class TestWPProbeScan(TestCase):
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_wpprobe_returns_true_on_timeout(self, mock_run):
         import subprocess
-        mock_run.side_effect = subprocess.TimeoutExpired('wpprobe', 300)
+        mock_run.side_effect = Exception('timeout')
         from reNgine.tasks.recon import wpprobe_scan
         result = wpprobe_scan(_make_proxy(), scan_history_id=1, url='https://example.com')
         self.assertTrue(result)
 
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_wpprobe_handles_empty_json(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout='[]', stderr='')
+        mock_run.return_value = (0, '[]')
         from reNgine.tasks.recon import wpprobe_scan
         result = wpprobe_scan(_make_proxy(), scan_history_id=1, url='https://example.com')
         self.assertTrue(result)
@@ -263,7 +251,7 @@ from django.utils import timezone
 
 
 class TestGetASNScan(TestCase):
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_getasn_updates_ip_address_asn_fields(self, mock_run):
         from startScan.models import IpAddress, ScanHistory, Domain
         from scanEngine.models import EngineType
@@ -280,11 +268,7 @@ class TestGetASNScan(TestCase):
         )
         ip = IpAddress.objects.create(address='172.217.14.196')
 
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout='172.217.14.196 AS15169 172.217.0.0/16 GOOGLE - Google LLC US\n',
-            stderr='',
-        )
+        mock_run.return_value = (0, '172.217.14.196 AS15169 172.217.0.0/16 GOOGLE - Google LLC US\n')
         result = getasn_scan(_make_proxy(), scan_history_id=scan.id, domain_id=domain.id,
                              ips=['172.217.14.196'])
         self.assertTrue(result)
@@ -293,37 +277,35 @@ class TestGetASNScan(TestCase):
         self.assertEqual(ip.asn_cidr, '172.217.0.0/16')
         self.assertIn('GOOGLE', ip.asn_org)
 
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_getasn_returns_true_with_no_ips(self, mock_run):
         from reNgine.tasks.recon import getasn_scan
         result = getasn_scan(_make_proxy(), scan_history_id=1, domain_id=1, ips=[])
         self.assertTrue(result)
         mock_run.assert_not_called()
 
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_getasn_handles_malformed_output(self, mock_run):
         from reNgine.tasks.recon import getasn_scan
-        mock_run.return_value = MagicMock(returncode=0, stdout='bad output\n', stderr='')
+        mock_run.return_value = (0, 'bad output\n')
         result = getasn_scan(_make_proxy(), scan_history_id=1, domain_id=1, ips=['1.2.3.4'])
         self.assertTrue(result)
 
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_getasn_handles_timeout(self, mock_run):
         """getasn_scan returns True even when subprocess times out."""
         from reNgine.tasks.recon import getasn_scan
-        mock_run.side_effect = __import__('subprocess').TimeoutExpired(cmd='getasn', timeout=30)
+        mock_run.side_effect = Exception('timeout')
         result = getasn_scan(_make_proxy(), scan_history_id=1, domain_id=1, ips=['1.2.3.4'])
         self.assertTrue(result)
 
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_getasn_skips_non_asn_token(self, mock_run):
         """getasn_scan ignores lines where parts[1] does not start with AS."""
         from startScan.models import IpAddress
         from reNgine.tasks.recon import getasn_scan
         IpAddress.objects.create(address='1.2.3.4')
-        mock_run.return_value = MagicMock(
-            returncode=0, stdout='1.2.3.4 Error: lookup failed\n', stderr=''
-        )
+        mock_run.return_value = (0, '1.2.3.4 Error: lookup failed\n')
         result = getasn_scan(_make_proxy(), scan_history_id=1, domain_id=1, ips=['1.2.3.4'])
         self.assertTrue(result)
         ip = IpAddress.objects.get(address='1.2.3.4')
@@ -331,7 +313,7 @@ class TestGetASNScan(TestCase):
 
 
 class TestJsWhoisScan(TestCase):
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_jswhois_stores_raw_json_in_domain_info(self, mock_run):
         from targetApp.models import Domain as TargetDomain, DomainInfo
         from startScan.models import ScanHistory
@@ -352,7 +334,7 @@ class TestJsWhoisScan(TestCase):
             scan_type=engine,
         )
         whois_json = '{"registrar": "ACME Registrar", "creation_date": "2000-01-01"}'
-        mock_run.return_value = MagicMock(returncode=0, stdout=whois_json, stderr='')
+        mock_run.return_value = (0, whois_json)
 
         result = jswhois_scan(_make_proxy(), scan_history_id=scan.id, domain_id=domain.id,
                               domain='jswhois-test.example.com')
@@ -361,17 +343,17 @@ class TestJsWhoisScan(TestCase):
         self.assertIsNotNone(domain_info.whois_raw)
         self.assertIn('registrar', domain_info.whois_raw)
 
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_jswhois_returns_true_with_no_domain(self, mock_run):
         from reNgine.tasks.recon import jswhois_scan
         result = jswhois_scan(_make_proxy(), scan_history_id=1, domain_id=1)
         self.assertTrue(result)
         mock_run.assert_not_called()
 
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.recon.run_command')
     def test_jswhois_handles_non_json_output(self, mock_run):
         from reNgine.tasks.recon import jswhois_scan
-        mock_run.return_value = MagicMock(returncode=0, stdout='not json output', stderr='')
+        mock_run.return_value = (0, 'not json output')
         result = jswhois_scan(_make_proxy(), scan_history_id=1, domain_id=1,
                               domain='example.com')
         self.assertTrue(result)

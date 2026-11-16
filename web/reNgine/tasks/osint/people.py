@@ -327,19 +327,17 @@ def enrich_identities_task(identity, identity_type, scan_history_id, ctx={}):
 
         cmd_gs = ['gosearch', '-u', username, '--no-false-positives', '-o', results_dir]
 
-        # Check for proxy in ctx or global
         proxy_obj = Proxy.objects.first()
         proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
-        if proxy:
-            cmd_gs = ['proxychains4', '-q'] + cmd_gs
-
-        process_gs = subprocess.Popen(cmd_gs, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        stdout_gs, _ = process_gs.communicate()
+        from reNgine.utils.task import run_command
+        _code, stdout_gs = run_command(
+            cmd_gs, shell=False, proxy=proxy, timeout=600,
+            scan_id=getattr(scan_history, 'id', None),
+        )
 
         findings = []
-        for line in stdout_gs.splitlines():
+        for line in (stdout_gs or '').splitlines():
             if 'http' in line:
-                # Extract URL
                 urls = re.findall(r'(https?://[^\s]+)', line)
                 findings.extend(urls)
 

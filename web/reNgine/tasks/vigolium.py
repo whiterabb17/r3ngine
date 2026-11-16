@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import shlex
-import subprocess
 import tempfile
 
 from django.conf import settings
@@ -37,7 +36,7 @@ from reNgine.definitions import (
     VULNERABILITY_SCAN,
 )
 from reNgine.common_func import get_random_proxy, save_vulnerability
-from reNgine.utils.task import save_endpoint
+from reNgine.utils.task import run_command, save_endpoint
 from startScan.models import Subdomain
 
 logger = logging.getLogger(__name__)
@@ -881,17 +880,21 @@ def vigolium_audit_scan(self, code_path=None, ctx={}, description=None):
     logger.warning("Command: %s", ' '.join(shlex.quote(c) for c in safe_cmd))
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_seconds, env=audit_env)
-        if proc.returncode != 0:
-            logger.warning("Vigolium audit exited %s: %s", proc.returncode, proc.stderr[:500])
-    except subprocess.TimeoutExpired:
-        logger.warning("Vigolium audit timed out after %d seconds for scan_id=%s", timeout_seconds, scan_id)
-        return "Vigolium audit timed out"
+        # Pass only the overlay keys go-executor should set (API key).
+        go_env = {}
+        if audit_env.get('VIGOLIUM_API_KEY'):
+            go_env['VIGOLIUM_API_KEY'] = audit_env['VIGOLIUM_API_KEY']
+        return_code, output = run_command(
+            cmd, shell=False, scan_id=scan_id, timeout=timeout_seconds,
+            env=go_env or None,
+        )
+        if return_code != 0:
+            logger.warning("Vigolium audit exited %s: %s", return_code, (output or '')[:500])
     except Exception as exc:
         logger.error("Vigolium audit failed to run: %s", exc)
         raise
 
-    # Export findings from the temp database
+    # Export findings from the temp database (paths under RENGINE_RESULTS / shared volume).
     export_cmd = [
         'vigolium', 'export',
         '--db', temp_db,
@@ -901,7 +904,7 @@ def vigolium_audit_scan(self, code_path=None, ctx={}, description=None):
         '-o', findings_file,
     ]
     try:
-        subprocess.run(export_cmd, capture_output=True, text=True, timeout=120)
+        run_command(export_cmd, shell=False, scan_id=scan_id, timeout=120)
     except Exception as exc:
         logger.warning("Vigolium audit: export failed: %s", exc)
 

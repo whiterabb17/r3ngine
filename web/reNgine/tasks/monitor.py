@@ -15,8 +15,6 @@ from reNgine.settings import *
 from reNgine.common_func import *
 from django.db import transaction
 import yaml
-import subprocess
-import signal
 
 
 def _validate_hostname(value):
@@ -70,16 +68,40 @@ def generate_reconx_config(domain_name, reconx_dir):
 
 
 def is_reconx_running(pid_file):
-	"""Checks if a ReconX process is already running using a PID file."""
-	if os.path.exists(pid_file):
-		try:
-			with open(pid_file, 'r') as f:
-				pid = int(f.read().strip())
-			os.kill(pid, 0)
-			return True
-		except (OSError, ValueError, ProcessLookupError):
-			return False
-	return False
+	"""Checks if ReconX is running on go-executor (PID lives in that container)."""
+	import shlex
+	from reNgine.tool_workers import _execute_on_go_executor
+
+	script = (
+		'pidfile=%s; '
+		'if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; '
+		'then echo RUNNING; else echo STOPPED; fi'
+	) % shlex.quote(pid_file)
+	try:
+		res = _execute_on_go_executor(script, timeout=30)
+		return 'RUNNING' in (res.get('output') or '')
+	except Exception as exc:
+		logger.warning("reconx running-check via go-executor failed: %s", exc)
+		return False
+
+
+def ensure_reconx_supervisor(config_path, pid_file):
+	"""Start detached reconx on go-executor if not already running.
+
+	Uses nohup so the GoExecutorTaskWorkflow bash -c can exit immediately while
+	reconx keeps writing findings under the shared scan_results volume.
+	"""
+	import shlex
+	from reNgine.tool_workers import _execute_on_go_executor
+
+	script = (
+		'pidfile=%s; config=%s; '
+		'if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then '
+		'echo already_running; '
+		'else nohup reconx run -config "$config" >/dev/null 2>&1 & echo $! > "$pidfile"; '
+		'echo started; fi'
+	) % (shlex.quote(pid_file), shlex.quote(config_path))
+	return _execute_on_go_executor(script, timeout=60)
 
 
 def _process_monitor_spiderfoot_batch(batch, domain, scan_history, ctx, new_discoveries, existing_subs):
@@ -217,34 +239,26 @@ def monitor_target_task(domain_id):
 							scan_history=scan_history
 						)
 
-		# 4. ReconX Discovery (24/7 Monitoring)
+		# 4. ReconX Discovery (24/7 Monitoring) — supervised on go-executor
 		reconx_dir = os.path.join(RENGINE_RESULTS, f"{domain.name}_reconx")
 		os.makedirs(reconx_dir, exist_ok=True)
 		pid_file = os.path.join(reconx_dir, "reconx.pid")
-		
-		# Generate/Update Config
+
+		# Generate/Update Config (paths under shared scan_results)
 		config_path, findings_dir = generate_reconx_config(domain.name, reconx_dir)
-		
-		# Initiate 24/7 Monitoring if not already running
+
 		if not is_reconx_running(pid_file):
-			logger.info("Initiating 24/7 ReconX monitoring for %s", domain.name)
-			# Start reconx run in the background
+			logger.info("Initiating 24/7 ReconX monitoring on go-executor for %s", domain.name)
 			try:
-				# Use nohup or setsid to ensure it stays alive. 
-				# In Docker, we just need to detach it from the current shell.
-				process = subprocess.Popen(
-					["reconx", "run", "-config", config_path],
-					stdout=subprocess.DEVNULL,
-					stderr=subprocess.DEVNULL,
-					start_new_session=True
+				res = ensure_reconx_supervisor(config_path, pid_file)
+				logger.info(
+					"ReconX supervisor result for %s: exit=%s out=%s",
+					domain.name, res.get('exit_code'), (res.get('output') or '')[:200],
 				)
-				with open(pid_file, 'w') as f:
-					f.write(str(process.pid))
-				logger.info("ReconX started with PID %s for %s", process.pid, domain.name)
 			except Exception as e:
 				logger.error("Failed to start ReconX for %s: %s", domain.name, str(e))
 		else:
-			logger.info("ReconX is already running for %s", domain.name)
+			logger.info("ReconX is already running on go-executor for %s", domain.name)
 		
 		# Parse findings from the domain-specific findings directory
 		if os.path.exists(findings_dir):

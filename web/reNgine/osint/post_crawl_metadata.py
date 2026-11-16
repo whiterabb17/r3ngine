@@ -1,10 +1,10 @@
 import json
 import logging
 import os
-import subprocess
 
 from scanEngine.models import Proxy
 from reNgine.common_func import get_random_proxy
+from reNgine.utils.task import run_command
 from startScan.models import MetaFinderDocument
 
 logger = logging.getLogger(__name__)
@@ -15,11 +15,12 @@ def run_post_crawl_exifray(self, host: str, ctx: dict, results_dir: str) -> None
 
     exifray is a domain-level Go tool — no need to download discovered files locally.
     It Google-searches for documents (pdf, docx, etc.) indexed for the target domain
-    and extracts their metadata.
+    and extracts their metadata. Runs on go-executor via run_command; -o must be
+    under the shared scan_results volume.
     """
     output_file = os.path.join(results_dir, 'exifray_output.json')
     cmd = ['exifray', '-d', host, '--show-urls', '--timeout', '30', '-o', output_file]
-    env = os.environ.copy()
+    env = {}
 
     proxy_obj = Proxy.objects.first()
     proxy = get_random_proxy() if proxy_obj and proxy_obj.use_proxy else None
@@ -29,13 +30,12 @@ def run_post_crawl_exifray(self, host: str, ctx: dict, results_dir: str) -> None
 
     logger.info("exifray starting for %s", host)
     try:
-        result = subprocess.run(cmd, capture_output=True, env=env, timeout=300)
-        if result.returncode != 0:
-            logger.warning(
-                "exifray non-zero exit for %s: %s",
-                host,
-                result.stderr.decode('utf-8', errors='replace')[:200],
-            )
+        code, _stdout = run_command(
+            cmd, shell=False, env=env or None, timeout=300,
+            scan_id=getattr(self, 'scan_id', None) or getattr(getattr(self, 'scan', None), 'id', None),
+        )
+        if code not in (0, None) and code != 0:
+            logger.warning("exifray non-zero exit for %s: code=%s", host, code)
     except Exception as exc:
         logger.warning("exifray failed for %s: %s", host, exc)
         return

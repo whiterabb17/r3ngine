@@ -197,12 +197,6 @@ def run_stress_tool_activity(ctx: dict) -> dict:
     if temp_conf_path:
         temp_files.append(temp_conf_path)
 
-    command_obj = Command.objects.create(
-        command=cmd_str,
-        time=timezone.now(),
-        scan_history_id=scan_id,
-    )
-
     publisher.publish({
         "type": "command",
         "tool": tool,
@@ -211,20 +205,25 @@ def run_stress_tool_activity(ctx: dict) -> dict:
         "timestamp": time.time(),
     })
 
-    # Pre-declare process variable so the background heartbeat thread can inspect it safely
-    process = None
+    from reNgine.utils.task import ROUTED_TOOLS, stream_command
 
-    # Helper function to terminate the subprocess group
-    def _terminate_process():
-        is_mock = hasattr(process, 'assert_called')
-        if process and (process.poll() is None or is_mock):
-            try:
-                activity.logger.info(
-                    "[RunStressToolActivity] Terminating process group for %s (PID: %s)", tool, process.pid
-                )
-                os.killpg(os.getpgid(process.pid), os_signal.SIGTERM)
-            except Exception as kill_err:
-                activity.logger.error("[RunStressToolActivity] Kill failed: %s", kill_err)
+    def _publish_line(line: str):
+        publisher.publish({
+            "type": "log",
+            "tool": tool,
+            "endpoint": endpoint_url,
+            "line": line,
+            "timestamp": time.time(),
+        })
+        metrics = parser.parse_line(line)
+        if metrics:
+            metrics.update({
+                "type": "metric",
+                "tool": tool,
+                "endpoint": endpoint_url,
+                "timestamp": time.time(),
+            })
+            publisher.publish(metrics)
 
     # Helper to check if running inside a Temporal activity context (fails during direct unit tests)
     def _is_in_activity_context():
@@ -237,128 +236,114 @@ def run_stress_tool_activity(ctx: dict) -> dict:
     def _is_cancelled():
         return _is_in_activity_context() and activity.is_cancelled()
 
-    # Heartbeat thread — keeps the activity alive in Temporal's eyes.
-    # Copy the current contextvars context so the heartbeat thread inherits the
-    # Temporal activity context. threading.Thread does NOT copy contextvars by
-    # default, causing activity.heartbeat() to fail with "Not in activity context",
-    # which silently prevents all heartbeats from reaching Temporal and triggers
-    # the heartbeat_timeout cancellation + retry loop.
-    stop_heartbeat = threading.Event()
-    _activity_ctx = contextvars.copy_context()
-
-    def _heartbeat():
-        def _do_heartbeat():
-            while not stop_heartbeat.is_set():
-                # Perform periodic cancellation check
-                if _is_cancelled():
-                    _cd = activity.cancellation_details() if _is_in_activity_context() else None
-                    if _cd and _cd.paused:
-                        activity.logger.info(
-                            "[RunStressToolActivity] Activity paused — terminating %s (will retry when unpaused)", tool
-                        )
-                    else:
-                        activity.logger.info(
-                            "[RunStressToolActivity] Activity cancelled — terminating %s", tool
-                        )
-                    _terminate_process()
-                    break
-                if _is_in_activity_context():
-                    try:
-                        activity.heartbeat(f"Running {tool} against {endpoint_url}")
-                    except CancelledError:
-                        _cd = activity.cancellation_details()
-                        if _cd and _cd.paused:
-                            activity.logger.info(
-                                "[RunStressToolActivity] Activity paused via heartbeat — terminating %s (will retry when unpaused)", tool
-                            )
-                        else:
-                            activity.logger.info(
-                                "[RunStressToolActivity] Heartbeat received cancellation — terminating %s", tool
-                            )
-                        _terminate_process()
-                        break
-                    except Exception as hb_err:
-                        if "cancel" in str(hb_err).lower():
-                            activity.logger.info(
-                                "[RunStressToolActivity] Heartbeat received cancellation exception: %s — terminating %s", hb_err, tool
-                            )
-                            _terminate_process()
-                            break
-                        try:
-                            _info = activity.info()
-                            activity.logger.warning(
-                                "[RunStressToolActivity] Heartbeat failed — "
-                                "activity_type=%s workflow_id=%s attempt=%d tool=%s error=%s",
-                                _info.activity_type, _info.workflow_id, _info.attempt, tool, hb_err,
-                            )
-                        except Exception:
-                            activity.logger.warning(
-                                "[RunStressToolActivity] Heartbeat failed for %s: %s", tool, hb_err
-                            )
-                stop_heartbeat.wait(15)
-        _activity_ctx.run(_do_heartbeat)
-
-    hb_thread = threading.Thread(target=_heartbeat, daemon=True)
-    hb_thread.start()
+    # Parse duration like "30s" / "5m" into a generous timeout for go routing.
+    _timeout = 3600
+    try:
+        _d = str(duration).strip().lower()
+        if _d.endswith('m'):
+            _timeout = max(int(float(_d[:-1]) * 60) + 120, 180)
+        elif _d.endswith('h'):
+            _timeout = max(int(float(_d[:-1]) * 3600) + 300, 600)
+        elif _d.endswith('s'):
+            _timeout = max(int(float(_d[:-1])) + 120, 180)
+    except (TypeError, ValueError):
+        _timeout = 3600
 
     accumulated_lines = []
     try:
-        process = subprocess.Popen(
-            cmd_str,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            shell=True,
-            start_new_session=True,
-        )
-
-        while True:
-            # Check for cancellation on each iteration
-            if _is_cancelled():
-                activity.logger.info(
-                    "[RunStressToolActivity] Main thread detected cancellation — terminating %s", tool
-                )
-                _terminate_process()
-                break
-
-            line = process.stdout.readline()
-            if not line and process.poll() is not None:
-                break
-            if line:
-                line = line.strip()
+        if tool in ROUTED_TOOLS:
+            # k6 / wrk / hping3 live on go-executor — stream_command routes them.
+            # Output arrives after the remote run completes (then line-yielded).
+            for item in stream_command(
+                cmd_str, shell=True, scan_id=scan_id, timeout=_timeout,
+            ):
+                if _is_cancelled() or _kill_switch_active():
+                    activity.logger.info(
+                        "[RunStressToolActivity] Cancel/kill during routed %s — stopping line consume", tool
+                    )
+                    break
+                line = item if isinstance(item, str) else str(item)
+                if not line:
+                    continue
                 accumulated_lines.append(line)
-                publisher.publish({
-                    "type": "log",
-                    "tool": tool,
-                    "endpoint": endpoint_url,
-                    "line": line,
-                    "timestamp": time.time(),
-                })
-                metrics = parser.parse_line(line)
-                if metrics:
-                    metrics.update({
-                        "type": "metric",
-                        "tool": tool,
-                        "endpoint": endpoint_url,
-                        "timestamp": time.time(),
-                    })
-                    publisher.publish(metrics)
+                _publish_line(line)
+                if _is_in_activity_context():
+                    try:
+                        activity.heartbeat(f"Streaming {tool} against {endpoint_url}")
+                    except Exception:
+                        pass
+        else:
+            # locust / stressor stay on python — local Popen with heartbeats.
+            command_obj = Command.objects.create(
+                command=cmd_str,
+                time=timezone.now(),
+                scan_history_id=scan_id,
+            )
+            process = None
 
-            if _kill_switch_active():
-                activity.logger.info(
-                    "[RunStressToolActivity] Redis kill switch active — terminating %s", tool
+            def _terminate_process():
+                is_mock = hasattr(process, 'assert_called')
+                if process and (process.poll() is None or is_mock):
+                    try:
+                        activity.logger.info(
+                            "[RunStressToolActivity] Terminating process group for %s (PID: %s)", tool, process.pid
+                        )
+                        os.killpg(os.getpgid(process.pid), os_signal.SIGTERM)
+                    except Exception as kill_err:
+                        activity.logger.error("[RunStressToolActivity] Kill failed: %s", kill_err)
+
+            stop_heartbeat = threading.Event()
+            _activity_ctx = contextvars.copy_context()
+
+            def _heartbeat():
+                def _do_heartbeat():
+                    while not stop_heartbeat.is_set():
+                        if _is_cancelled():
+                            _terminate_process()
+                            break
+                        if _is_in_activity_context():
+                            try:
+                                activity.heartbeat(f"Running {tool} against {endpoint_url}")
+                            except CancelledError:
+                                _terminate_process()
+                                break
+                            except Exception as hb_err:
+                                if "cancel" in str(hb_err).lower():
+                                    _terminate_process()
+                                    break
+                        stop_heartbeat.wait(15)
+                _activity_ctx.run(_do_heartbeat)
+
+            hb_thread = threading.Thread(target=_heartbeat, daemon=True)
+            hb_thread.start()
+            try:
+                process = subprocess.Popen(
+                    cmd_str,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    shell=True,
+                    start_new_session=True,
                 )
-                _terminate_process()
-                break
-
-        process.wait()
-        command_obj.output = "\n".join(accumulated_lines)
-        command_obj.return_code = process.returncode
-        command_obj.save()
-
+                while True:
+                    if _is_cancelled() or _kill_switch_active():
+                        _terminate_process()
+                        break
+                    line = process.stdout.readline()
+                    if not line and process.poll() is not None:
+                        break
+                    if line:
+                        line = line.strip()
+                        accumulated_lines.append(line)
+                        _publish_line(line)
+                process.wait()
+                command_obj.output = "\n".join(accumulated_lines)
+                command_obj.return_code = process.returncode
+                command_obj.save()
+            finally:
+                stop_heartbeat.set()
+                hb_thread.join(timeout=5)
     finally:
-        stop_heartbeat.set()
-        hb_thread.join(timeout=5)
         for path in temp_files:
             if path and os.path.exists(path):
                 try:

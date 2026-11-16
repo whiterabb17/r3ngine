@@ -33,6 +33,7 @@ from reNgine.definitions import (
     USES_TOOLS,
 )
 from reNgine.tasks.persistence import save_secret_leak
+from reNgine.utils.task import run_command
 from scanEngine.models import Proxy
 
 logger = logging.getLogger(__name__)
@@ -103,18 +104,28 @@ def _get_proxy_env() -> dict:
     return env
 
 
+def _overlay_env_from_proxy(env: dict | None = None) -> dict | None:
+    """Build a go-executor env overlay (proxy + optional extras), not a full os.environ copy."""
+    out = dict(env or {})
+    for key, value in _get_proxy_env().items():
+        if key in ('HTTP_PROXY', 'HTTPS_PROXY') and value:
+            out[key] = value
+    return out or None
+
+
 def _run_enumerepo(orgs: list[str], token: str | None, results_dir: str) -> list[str]:
     """Return list of 'org/repo' strings discovered by enumerepo."""
-    env = _get_proxy_env()
+    env = {}
     if token:
         env['GITHUB_TOKEN'] = token
+    go_env = _overlay_env_from_proxy(env)
 
     repos: list[str] = []
     for org in orgs:
         cmd = ['enumerepo', '-org', org]
         try:
-            result = subprocess.run(cmd, capture_output=True, env=env, timeout=120)
-            for line in result.stdout.decode('utf-8', errors='replace').splitlines():
+            _code, stdout = run_command(cmd, shell=False, env=go_env, timeout=120)
+            for line in (stdout or '').splitlines():
                 line = line.strip()
                 if '/' in line:
                     repos.append(line)
@@ -126,7 +137,7 @@ def _run_enumerepo(orgs: list[str], token: str | None, results_dir: str) -> list
 
 def _run_trufflehog_github(repos: list[str], scan_history, results_dir: str) -> None:
     """Scan each repo with trufflehog github source and persist findings."""
-    env = _get_proxy_env()
+    go_env = _overlay_env_from_proxy()
     for repo in repos:
         cmd = [
             'trufflehog', 'github',
@@ -134,8 +145,8 @@ def _run_trufflehog_github(repos: list[str], scan_history, results_dir: str) -> 
             '--json', '--no-update',
         ]
         try:
-            result = subprocess.run(cmd, capture_output=True, env=env, timeout=300)
-            for line in result.stdout.decode('utf-8', errors='replace').splitlines():
+            _code, stdout = run_command(cmd, shell=False, env=go_env, timeout=300)
+            for line in (stdout or '').splitlines():
                 if line.strip():
                     save_secret_leak(
                         scan_history=scan_history,
@@ -149,8 +160,9 @@ def _run_trufflehog_github(repos: list[str], scan_history, results_dir: str) -> 
 
 
 def _run_gitleaks_github(repos: list[str], scan_history, results_dir: str) -> None:
-    """Clone and scan each repo with gitleaks, persist JSON findings."""
+    """Clone on python (shared volume) and scan with gitleaks on go-executor."""
     env = _get_proxy_env()
+    go_env = _overlay_env_from_proxy()
     for repo in repos:
         safe_repo = _safe_slug(repo.replace('/', '_'))
         clone_dir = os.path.join(results_dir, 'gitleaks_clone', safe_repo)
@@ -159,6 +171,7 @@ def _run_gitleaks_github(repos: list[str], scan_history, results_dir: str) -> No
         clone_cmd = ['git', 'clone', '--depth', '1',
                      f'https://github.com/{repo}', clone_dir]
         try:
+            # git stays local on python; clone lands under shared scan_results.
             subprocess.run(clone_cmd, capture_output=True, env=env, timeout=120)
             scan_cmd = [
                 'gitleaks', 'detect',
@@ -167,7 +180,7 @@ def _run_gitleaks_github(repos: list[str], scan_history, results_dir: str) -> No
                 '--report-path', report_path,
                 '--exit-code', '0',
             ]
-            subprocess.run(scan_cmd, capture_output=True, env=env, timeout=300)
+            run_command(scan_cmd, shell=False, env=go_env, timeout=300)
             if os.path.exists(report_path):
                 with open(report_path, 'r') as fh:
                     findings = json.load(fh)
@@ -185,7 +198,7 @@ def _run_gitleaks_github(repos: list[str], scan_history, results_dir: str) -> No
 
 def _run_noseyparker(repos: list[str], scan_history, results_dir: str) -> None:
     """Scan repos with noseyparker then parse the JSON report for findings."""
-    env = _get_proxy_env()
+    go_env = _overlay_env_from_proxy()
     datastore = os.path.join(results_dir, 'noseyparker_ds')
     os.makedirs(datastore, exist_ok=True)
 
@@ -196,7 +209,7 @@ def _run_noseyparker(repos: list[str], scan_history, results_dir: str) -> None:
             f'https://github.com/{repo}',
         ]
         try:
-            subprocess.run(scan_cmd, capture_output=True, env=env, timeout=300)
+            run_command(scan_cmd, shell=False, env=go_env, timeout=300)
         except Exception as exc:
             logger.warning("noseyparker scan failed for %s: %s", repo, exc)
 
@@ -206,18 +219,13 @@ def _run_noseyparker(repos: list[str], scan_history, results_dir: str) -> None:
         '--format', 'json',
     ]
     try:
-        result = subprocess.run(report_cmd, capture_output=True, env=env, timeout=60)
+        _code, stdout = run_command(report_cmd, shell=False, env=go_env, timeout=60)
         # noseyparker v0.24.0 JSON report is a list of finding objects.
-        # Each finding: {'rule_name': str, 'matches': [{'snippet': {'before': str,
-        #   'matching': str, 'after': str}, 'provenance': [{'kind': 'file'|'git_repo',
-        #   'path'|'repo_path': str, ...}], ...}], ...}
-        data = json.loads(result.stdout.decode('utf-8', errors='replace'))
+        data = json.loads(stdout or '[]')
         findings = data if isinstance(data, list) else []
         for finding in findings:
             rule_name = finding.get('rule_name', 'git_secret')
             for match in finding.get('matches', []):
-                # Extract a source URL from the first provenance entry that has
-                # a repo_path (git_repo kind) or a file path.
                 source_url = 'github'
                 for prov in match.get('provenance', []):
                     if prov.get('kind') == 'git_repo':
@@ -241,12 +249,12 @@ def _run_noseyparker(repos: list[str], scan_history, results_dir: str) -> None:
 
 def _run_titus(repos: list[str], scan_history, results_dir: str) -> None:
     """Scan repos for secrets with titus."""
-    env = _get_proxy_env()
+    go_env = _overlay_env_from_proxy()
     for repo in repos:
         cmd = ['titus', '-repo', f'https://github.com/{repo}']
         try:
-            result = subprocess.run(cmd, capture_output=True, env=env, timeout=300)
-            for line in result.stdout.decode('utf-8', errors='replace').splitlines():
+            _code, stdout = run_command(cmd, shell=False, env=go_env, timeout=300)
+            for line in (stdout or '').splitlines():
                 if line.strip():
                     save_secret_leak(
                         scan_history=scan_history,

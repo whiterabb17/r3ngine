@@ -16,29 +16,30 @@ def _make_proxy(yaml_config=None):
 
 
 class TestXURLFind3rScan(TestCase):
-    @patch('subprocess.run')
+    @patch('reNgine.tasks.crawl.url_collectors.run_command')
     def test_returns_true_no_targets(self, mock_run):
         from reNgine.tasks.crawl import xurlfind3r_scan
         result = xurlfind3r_scan(_make_proxy(), scan_history_id=1)
         self.assertTrue(result)
         mock_run.assert_not_called()
 
-    @patch('subprocess.run')
+    @patch(
+        'reNgine.tasks.crawl.url_collectors.run_command',
+        return_value=(0, 'https://example.com/path1\nhttps://example.com/path2\nnot-a-url\n'),
+    )
     def test_persists_discovered_urls(self, mock_run):
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout='https://example.com/path1\nhttps://example.com/path2\nnot-a-url\n',
-            stderr='',
-        )
         with patch('startScan.models.EndPoint.objects') as mock_ep:
             mock_ep.bulk_create = MagicMock()
             from reNgine.tasks.crawl import xurlfind3r_scan
             result = xurlfind3r_scan(_make_proxy(), scan_history_id=1, domain='example.com')
         self.assertTrue(result)
+        mock_run.assert_called()
 
-    @patch('subprocess.run')
+    @patch(
+        'reNgine.tasks.crawl.url_collectors.run_command',
+        side_effect=Exception('timeout'),
+    )
     def test_handles_timeout_gracefully(self, mock_run):
-        mock_run.side_effect = subprocess.TimeoutExpired('xurlfind3r', 300)
         from reNgine.tasks.crawl import xurlfind3r_scan
         result = xurlfind3r_scan(_make_proxy(), scan_history_id=1, domain='example.com')
         self.assertTrue(result)

@@ -21,6 +21,16 @@ The app stack is built as **three images** from one multi-target Dockerfile (`do
 
 Registry / worker hosts set `R3NGINE_WEB_IMAGE`, `R3NGINE_PYTHON_IMAGE`, and `R3NGINE_GO_IMAGE` (not a single shared tag).
 
+### Image contents (what each role must / must not ship)
+
+| Image | Must contain | Must not contain |
+|---|---|---|
+| **web** | Django app, frontend `dist` / Node (DEBUG Vite), `postgresql-client-16` (`pg_dump` for plugins) | Scanner CLIs, Playwright/Chromium for scans, `/usr/src/github` tool forests, Ruby/WPScan, vigolium |
+| **python** | Django + Temporal worker code, pipx/uv/Python-native tools, `/usr/src/github` trees, Playwright + Chromium | Compiled `ROUTED_TOOLS` binaries, vigolium, Node global `retire`/`lighthouse`, Ruby/WPScan |
+| **go** | `r3ngine-executor`, all `ROUTED_TOOLS` binaries, apt scanners those tools need, Ruby + WPScan, aquatone Chromium slice, baked `/opt/r3ngine/wordlist`, thin `python3`+pip (Wordfence seed) | Django app tree, frontend, pipx forests, SpiderFoot/theHarvester clones |
+
+Do not strip python of `ROUTED_TOOLS` binaries until every scan call site uses `run_command` / `stream_command` (no raw `subprocess` for those names). Long-running **reconx** monitoring is supervised on go-executor; python only writes config and parses findings under `scan_results`.
+
 **Ownership rule for new tools:**
 - New **compiled/PATH CLI** → add to the go image **and** add the binary name to `ROUTED_TOOLS` in `web/reNgine/utils/task.py` (plus fixture/`version_lookup` if it appears in Tool Arsenal).
 - New **Python-native** tool (`python3 /usr/src/github/...`, pipx-only, in-process Playwright) → python image only; do **not** add to `ROUTED_TOOLS`.
@@ -41,7 +51,9 @@ Same pattern as `scan_results`: both workers **mount** these; only one entrypoin
 | `github_repos` | python (+ go for vulscan only) | **Python owns** tool-tree first populate |
 | `tool_config` | python + go | Per-role stamps/config keys |
 
-Empty-volume first boot: go seeds wordlists/templates (healthcheck waits for seed sentinels); python seeds `/usr/src/github` tool trees. Web does not mount `github_repos` / nuclei / gf / tool_config.
+Empty-volume first boot: go seeds wordlists/templates (healthcheck waits for seed sentinels); python seeds `/usr/src/github` tool trees. Web may still **mount** shared volumes for Tool Settings uploads, but it does not download or execute scanners into them.
+
+**Lean assemblies (real size split):** `runtime-full` is an install-only intermediate. Each role is **stripped then flattened** (`FROM scratch` + `COPY --from=<role>-stripped / /`) so published tags do **not** inherit the fat parent layers. A plain `RUN rm` on `FROM runtime-full` does **not** shrink `docker images` size — do not ship that pattern. After rebuild, expect three different sizes (web smallest, go largest from CLIs/Chromium/WPScan, python mid from pipx/github/Playwright).
 
 ---
 

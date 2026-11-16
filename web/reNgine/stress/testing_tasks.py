@@ -223,55 +223,70 @@ def run_stress_testing(self, scan_history_id, target_domain_name, yaml_config, *
                 })
 
                 accumulated_lines = []
-                
+                from reNgine.utils.task import ROUTED_TOOLS, stream_command
+
+                def _publish_stress_line(line: str):
+                    publisher.publish({
+                        "type": "log",
+                        "tool": tool,
+                        "endpoint": endpoint.http_url,
+                        "line": line,
+                        "timestamp": time.time()
+                    })
+                    metrics = parser.parse_line(line)
+                    if metrics:
+                        metrics["type"] = "metric"
+                        metrics["tool"] = tool
+                        metrics["endpoint"] = endpoint.http_url
+                        metrics["timestamp"] = time.time()
+                        publisher.publish(metrics)
+
                 try:
-                    process = subprocess.Popen(
-                        cmd_str, 
-                        stdout=subprocess.PIPE, 
-                        stderr=subprocess.STDOUT, 
-                        text=True,
-                        shell=True,
-                        start_new_session=True
-                    )
-
-                    while True:
-                        line = process.stdout.readline()
-                        if not line and process.poll() is not None:
-                            break
-                        
-                        if line:
-                            line = line.strip()
+                    if tool in ROUTED_TOOLS:
+                        for item in stream_command(
+                            cmd_str, shell=True, scan_id=scan_history_id, timeout=3600,
+                        ):
+                            if is_kill_switch_active(scan_history_id):
+                                break
+                            line = item if isinstance(item, str) else str(item)
+                            if not line:
+                                continue
                             accumulated_lines.append(line)
+                            _publish_stress_line(line)
+                        command_obj.output = "\n".join(accumulated_lines)
+                        command_obj.return_code = 0
+                        command_obj.save()
+                    else:
+                        process = subprocess.Popen(
+                            cmd_str,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,
+                            text=True,
+                            shell=True,
+                            start_new_session=True
+                        )
 
-                            publisher.publish({
-                                "type": "log",
-                                "tool": tool,
-                                "endpoint": endpoint.http_url,
-                                "line": line,
-                                "timestamp": time.time()
-                            })
+                        while True:
+                            line = process.stdout.readline()
+                            if not line and process.poll() is not None:
+                                break
 
-                            metrics = parser.parse_line(line)
-                            if metrics:
-                                metrics["type"] = "metric"
-                                metrics["tool"] = tool
-                                metrics["endpoint"] = endpoint.http_url
-                                metrics["timestamp"] = time.time()
-                                publisher.publish(metrics)
+                            if line:
+                                line = line.strip()
+                                accumulated_lines.append(line)
+                                _publish_stress_line(line)
 
-                        if is_kill_switch_active(scan_history_id):
-                            import signal
-                            try:
-                                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-                            except Exception as kill_err:
-                                logger.error("Failed to kill process group: %s", kill_err)
-                            break
+                            if is_kill_switch_active(scan_history_id):
+                                try:
+                                    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                                except Exception as kill_err:
+                                    logger.error("Failed to kill process group: %s", kill_err)
+                                break
 
-                    process.wait()
-
-                    command_obj.output = "\n".join(accumulated_lines)
-                    command_obj.return_code = process.returncode
-                    command_obj.save()
+                        process.wait()
+                        command_obj.output = "\n".join(accumulated_lines)
+                        command_obj.return_code = process.returncode
+                        command_obj.save()
 
                     # Extract final metrics from the parser after process completes and add them to totals
                     if parser:

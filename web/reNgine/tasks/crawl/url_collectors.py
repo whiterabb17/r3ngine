@@ -3,7 +3,6 @@
 Split out of the former reNgine/tasks/crawl.py; re-exported by
 reNgine.tasks.crawl for backward compatibility.
 """
-import subprocess
 from typing import List
 
 from reNgine.utils.logger import get_module_logger
@@ -31,8 +30,8 @@ def xurlfind3r_scan(self, scan_history_id: int, domain: str = None,
         cmd = ['xurlfind3r', '-d', target, '-silent']
         logger.log_line("[XURLFIND3R]", "START", "passive crawl for %s" % target)
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-            for line in result.stdout.splitlines():
+            _code, stdout = run_command(cmd, shell=False, scan_id=scan_history_id, timeout=300)
+            for line in (stdout or '').splitlines():
                 line = line.strip()
                 if line.startswith('http'):
                     endpoints.append(EndPoint(
@@ -41,8 +40,8 @@ def xurlfind3r_scan(self, scan_history_id: int, domain: str = None,
                         is_default=False,
                         source='xurlfind3r',
                     ))
-        except subprocess.TimeoutExpired:
-            logger.log_line("[XURLFIND3R]", "WARN", "timed out for %s" % target)
+        except Exception:
+            logger.log_line("[XURLFIND3R]", "WARN", "timed out or failed for %s" % target)
 
     if endpoints:
         with transaction.atomic():
