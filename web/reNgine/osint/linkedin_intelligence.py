@@ -106,7 +106,11 @@ class LinkedInScraper:
             if self._validate_session():
                 self.session.is_valid = True
                 self.session.last_validated_at = timezone.now()
-                self.session.save(update_fields=["is_valid", "last_validated_at"])
+                # Persist default state_file_path from __init__ (mirrors _save_state)
+                # so status API / DELETE see the on-disk storage_state file.
+                self.session.save(update_fields=[
+                    "state_file_path", "is_valid", "last_validated_at",
+                ])
                 return True
             self._close_context()
             return False

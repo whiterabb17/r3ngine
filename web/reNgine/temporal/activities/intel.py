@@ -224,9 +224,10 @@ def run_email_security_activity(ctx: dict) -> dict:
                         logger.warning('[EMAIL_SECURITY] Temporal cancellation received for scan_id=%s', scan_id)
                     return
                 except Exception as hb_err:
+                    # TimeoutError() and similar have empty str(); use !r.
                     logger.log_line(
                         "[TEMPORAL]", "HEARTBEAT_FAIL",
-                        "activity_type=email_security workflow_id=%s scan_id=%s error=%s" % (
+                        "activity_type=email_security workflow_id=%s scan_id=%s error=%r" % (
                             workflow_id, scan_id, hb_err),
                         level="warning",
                     )
