@@ -1067,6 +1067,53 @@ class DeleteVulnerability(APIView):
 		return Response({'status': True})
 
 
+class ClearAcceptedRiskVulnerabilities(APIView):
+	"""Hard-delete all accepted_risk vulnerabilities for a single scan.
+
+	Requires the same role gate as VulnerabilityViewSet writes (penetration
+	tester / sys admin). ``project`` slug scopes the delete to the scan the
+	UI counted, preventing cross-project IDOR via raw scan_id.
+	"""
+	permission_classes = [IsPenetrationTester]
+
+	def post(self, request):
+		scan_id = request.data.get('scan_id')
+		project = request.data.get('project')
+		if scan_id is None or scan_id == '':
+			return Response(
+				{'error': 'scan_id is required'},
+				status=status.HTTP_400_BAD_REQUEST,
+			)
+		if not project:
+			return Response(
+				{'error': 'project is required'},
+				status=status.HTTP_400_BAD_REQUEST,
+			)
+		try:
+			scan_id = int(scan_id)
+		except (TypeError, ValueError):
+			return Response(
+				{'error': 'scan_id must be an integer'},
+				status=status.HTTP_400_BAD_REQUEST,
+			)
+		scan = ScanHistory.objects.filter(
+			id=scan_id,
+			domain__project__slug=project,
+		).first()
+		if not scan:
+			return Response(
+				{'error': 'scan not found'},
+				status=status.HTTP_404_NOT_FOUND,
+			)
+		qs = Vulnerability.objects.filter(
+			scan_history_id=scan.id,
+			validation_status='accepted_risk',
+		)
+		deleted = qs.count()
+		qs.delete()
+		return Response({'status': True, 'deleted': deleted})
+
+
 class VulnerabilityReport(APIView):
 	permission_classes = [IsPenetrationTester]
 	def get(self, request):

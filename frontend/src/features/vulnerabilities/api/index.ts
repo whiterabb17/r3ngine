@@ -140,6 +140,37 @@ export const useDeleteVulnerability = () => {
   });
 };
 
+export const useClearAcceptedRisk = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      scanId,
+      projectSlug,
+    }: {
+      scanId: number;
+      projectSlug: string;
+    }): Promise<{ status: boolean; deleted: number }> => {
+      const response = await fetch('/api/action/vulnerability/clear_accepted_risk/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || ''
+        },
+        body: JSON.stringify({ scan_id: scanId, project: projectSlug }),
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        throw new Error('Failed to clear accepted risk vulnerabilities');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
+      queryClient.invalidateQueries({ queryKey: ['scan-summary'] });
+    }
+  });
+};
+
 export const useGptVulnerabilityDetails = () => {
   return useMutation({
     mutationFn: async ({ id, name }: { id: number; name: string }): Promise<GptVulnerabilityReport> => {
