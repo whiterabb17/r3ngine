@@ -966,6 +966,25 @@ class Vulnerability(models.Model):
 			return urlparse(self.http_url).path
 		return "/"
 
+	def get_tags_str(self):
+		"""Comma-separated tag names as markdown code blocks (for notifications)."""
+		return ', '.join(f'`{tag.name}`' for tag in self.tags.all())
+
+	def get_cve_str(self):
+		"""Comma-separated CVE names as markdown code blocks (for notifications)."""
+		return ', '.join(f'`{cve.name}`' for cve in self.cve_ids.all())
+
+	def get_cwe_str(self):
+		"""Comma-separated CWE names as markdown code blocks (for notifications)."""
+		return ', '.join(f'`{cwe.name}`' for cwe in self.cwe_ids.all())
+
+	def get_refs_str(self):
+		"""Bulleted reference URLs as markdown code blocks (for notifications)."""
+		refs = list(self.references.all())
+		if not refs:
+			return ''
+		return '•' + '\n• '.join(f'`{ref.url}`' for ref in refs)
+
 	def __str__(self):
 		cve_str = ', '.join(f'`{cve.name}`' for cve in self.cve_ids.all())
 		severity = NUCLEI_REVERSE_SEVERITY_MAP[self.severity]

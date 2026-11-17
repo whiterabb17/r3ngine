@@ -32,6 +32,7 @@
 
 #### Fixed
 
+- **Nuclei notification crash**: `Vulnerability` was missing `get_tags_str` / `get_cve_str` / `get_cwe_str` / `get_refs_str` (only `ValidationResult` had them), so medium+ nuclei findings aborted the activity after persist with `AttributeError`.
 - **Subscan tools killed by stale `scan_stop` kill switch**: after a parent scan finishes (or orchestrator orphan cleanup / subscan abort on a non-live parent), Redis `scan_stop_{id}` stayed armed so the Go executor force-killed every tool ~3s after start. `initiate_subscan_temporal` now clears the switch; orphan cleanup skips scans that still have live subscans.
 - **LinkedIn OSINT `SynchronousOnlyOperation`**: Playwright sync API runs an event loop under the hood; ORM saves during LinkedIn auth/state persistence now set `DJANGO_ALLOW_ASYNC_UNSAFE` (same pattern as screenshot tasks) so `run_linkedint` no longer aborts mid-scrape and starve OSINT heartbeats. Activity `HEARTBEAT_FAIL` logs use `%r` so empty `TimeoutError()` messages are visible.
 - **WAF bypass false positives**: header probes no longer persist on the first non-403 response. `WafBypassOrchestrator` now requires a blocked baseline, a clearly allowed candidate (not 5xx), and two confirmation rounds before creating `WafBypassFinding` rows; soft-block challenge pages (same HTTP status, different body) are supported.
