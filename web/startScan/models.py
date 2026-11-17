@@ -206,7 +206,16 @@ class ScanHistory(models.Model):
 			return (self.stop_scan_date - self.start_scan_date).seconds
 
 	def get_elapsed_time(self):
-		return self.get_time_ago(self.start_scan_date)
+		"""Wall-clock duration of the scan.
+
+		Uses ``stop_scan_date`` when set (completed, aborted, failed, or paused)
+		so history rows stop growing after the scan is no longer live. Live scans
+		(no stop yet) count from ``start_scan_date`` to now.
+		"""
+		end = self.stop_scan_date or timezone.now()
+		if not self.start_scan_date:
+			return '0 seconds'
+		return get_time_taken(end, self.start_scan_date)
 
 	def get_time_ago(self, time):
 		duration = timezone.now() - time
@@ -464,7 +473,11 @@ class SubScan(models.Model):
 			return get_time_taken(self.stop_scan_date, self.start_scan_date)
 
 	def get_elapsed_time(self):
-		return get_time_taken(timezone.now(), self.start_scan_date)
+		"""Duration for live subscans; frozen at stop when finished/paused."""
+		end = self.stop_scan_date or timezone.now()
+		if not self.start_scan_date:
+			return '0 seconds'
+		return get_time_taken(end, self.start_scan_date)
 
 	def get_task_name_str(self):
 		taskmap = {
