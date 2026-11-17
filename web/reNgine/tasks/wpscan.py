@@ -387,7 +387,11 @@ def save_finding(
         try:
             vuln.refresh_from_db()
         except Exception:
-            pass
+            logger.warning(
+                "Failed to refresh WPScan finding %s before version guidance stamp",
+                getattr(vuln, 'id', None),
+                exc_info=True,
+            )
         apply_version_guidance_to_vuln(vuln, guidance)
 
 def wpscan_scan(self, urls=[], ctx={}, description=None):
