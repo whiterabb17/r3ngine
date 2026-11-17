@@ -75,6 +75,9 @@ from reNgine.tasks.parsers import (
     parse_dalfox_result,
     parse_crlfuzz_result,
     parse_s3scanner_result,
+    s3_bucket_public_issues,
+    s3_bucket_misconfig_severity,
+    build_s3_bucket_misconfig_vuln,
 )
 from reNgine.tasks.acunetix import (
     map_acunetix_severity,

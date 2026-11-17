@@ -5,6 +5,16 @@ from reNgine.definitions import *
 logger = logging.getLogger(__name__)
 
 
+# Public (all-users) ACL flags that mean the bucket is misconfigured for assessment.
+_S3_PUBLIC_PERM_LABELS = (
+	('perm_all_users_read', 'public read'),
+	('perm_all_users_write', 'public write'),
+	('perm_all_users_read_acl', 'public read ACL'),
+	('perm_all_users_write_acl', 'public write ACL'),
+	('perm_all_users_full_control', 'public full control'),
+)
+
+
 def parse_s3scanner_result(line):
 	'''
 		Parses and returns s3Scanner Data
@@ -28,6 +38,74 @@ def parse_s3scanner_result(line):
 		'perm_all_users_full_control': bucket['perm_all_users_full_control'],
 		'num_objects': bucket['num_objects'],
 		'size': bucket['bucket_size']
+	}
+
+
+def s3_bucket_public_issues(bucket_result):
+	"""Return human-readable public ACL issues from a parsed s3scanner result."""
+	issues = []
+	for key, label in _S3_PUBLIC_PERM_LABELS:
+		if int(bucket_result.get(key) or 0):
+			issues.append(label)
+	return issues
+
+
+def s3_bucket_misconfig_severity(bucket_result):
+	"""Severity for a misconfigured bucket: write/full-control → high, read → medium."""
+	if any(int(bucket_result.get(k) or 0) for k in (
+		'perm_all_users_write',
+		'perm_all_users_write_acl',
+		'perm_all_users_full_control',
+	)):
+		return 3
+	if any(int(bucket_result.get(k) or 0) for k in (
+		'perm_all_users_read',
+		'perm_all_users_read_acl',
+	)):
+		return 2
+	return 2
+
+
+def build_s3_bucket_misconfig_vuln(bucket_result, issues=None):
+	"""Build save_vulnerability kwargs for a publicly misconfigured bucket.
+
+	Returns None when the bucket has no public ACL issues.
+	"""
+	issues = list(issues) if issues is not None else s3_bucket_public_issues(bucket_result)
+	if not issues:
+		return None
+
+	provider = (bucket_result.get('provider') or 'unknown').strip() or 'unknown'
+	name = (bucket_result.get('name') or '').strip()
+	region = (bucket_result.get('region') or '').strip() or 'unknown'
+	num_objects = int(bucket_result.get('num_objects') or 0)
+	size = int(bucket_result.get('size') or 0)
+	issue_list = ', '.join(issues)
+	http_url = f's3://{provider}/{name}'
+
+	return {
+		'name': f'Misconfigured Cloud Bucket ({provider}): {name}',
+		'severity': s3_bucket_misconfig_severity(bucket_result),
+		'type': 'Cloud Misconfiguration',
+		'source': 's3scanner',
+		'template_id': 's3scanner-public-acl',
+		'http_url': http_url,
+		'description': (
+			f'Cloud object-storage bucket `{name}` on provider `{provider}` '
+			f'(region `{region}`) allows {issue_list}. '
+			f'Enumerated objects={num_objects}, size={size}.'
+		),
+		'impact': (
+			'Public bucket ACLs can expose or allow modification of stored objects, '
+			'leading to data disclosure, tampering, malware hosting, or account abuse.'
+		),
+		'remediation': (
+			'Remove public ACLs / policies that grant AllUsers read or write. '
+			'Prefer private buckets with least-privilege IAM or signed URLs. '
+			'Confirm bucket ownership and rotate any exposed credentials.'
+		),
+		'tags': ['cloud', 'bucket', 's3', 'misconfiguration', provider],
+		'dedup_fields': ['name', 'http_url', 'scan_history'],
 	}
 
 

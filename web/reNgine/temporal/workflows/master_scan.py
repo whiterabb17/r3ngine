@@ -26,6 +26,7 @@ from typing import Any, Dict
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ApplicationError, ChildWorkflowError
+from temporalio.workflow import ParentClosePolicy
 
 from reNgine.temporal.workflows._common import (
     _RETRY_INTERNAL,
@@ -888,6 +889,24 @@ class MasterScanWorkflow:
                         retry_policy=_RETRY_INTERNAL,
                         task_queue="python-orchestrator-queue"
                     )
+                    # Fire-and-forget child: index into Assessment Copilot without
+                    # holding MasterScan open (ABANDON when parent completes).
+                    try:
+                        scan_id = ctx.get('scan_history_id')
+                        if scan_id:
+                            await workflow.start_child_workflow(
+                                "CopilotIndexWorkflow",
+                                int(scan_id),
+                                id=f"copilot-index-{scan_id}",
+                                task_queue="python-orchestrator-queue",
+                                parent_close_policy=ParentClosePolicy.ABANDON,
+                            )
+                    except Exception as idx_e:
+                        workflow.logger.warning(
+                            "CopilotIndexWorkflow start skipped for scan_id=%s: %s",
+                            ctx.get('scan_history_id'),
+                            idx_e,
+                        )
                     workflow.logger.info(
                         "MasterScanWorkflow COMPLETE for scan_id=%s", ctx.get('scan_history_id')
                     )

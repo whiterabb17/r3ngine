@@ -137,6 +137,13 @@ NUCLEI_PROXY_MAX_RATE_LIMIT = int(os.environ.get('NUCLEI_PROXY_MAX_RATE_LIMIT', 
 # between attempts) before skipping that slice and moving on.
 NUCLEI_PROXY_DEAD_MAX_ATTEMPTS = int(os.environ.get('NUCLEI_PROXY_DEAD_MAX_ATTEMPTS', 3))
 NUCLEI_PROXY_DEAD_MARKER = 'all proxies are dead'
+# Go-executor stall / hang-monitor dump kill. After this many attempts on the
+# same tag batch, soft-skip the slice so NucleiPlannerWorkflow can continue.
+NUCLEI_HANG_MAX_ATTEMPTS = int(os.environ.get('NUCLEI_HANG_MAX_ATTEMPTS', 2))
+NUCLEI_HANG_KILL_MARKER = 'WATCHDOG_STALL_KILL'
+NUCLEI_TIMEOUT_KILL_MARKER = 'WATCHDOG_TIMEOUT_KILL'
+# Idle / no-progress window before go-executor kills a hung nuclei process group.
+NUCLEI_STALL_TIMEOUT_SECONDS = int(os.environ.get('NUCLEI_STALL_TIMEOUT_SECONDS', 900))
 # Wall-clock budget for the nuclei stage of Tier 6. Once it is spent the
 # remaining tag batches are skipped so that the rest of Tier 6 (Acunetix,
 # WPScan, cPanel, S3, Dalfox) and the whole of Tier 7 still run, instead of

@@ -584,7 +584,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install -r /usr/src/github/CMSeeK/requirements.txt && \
     rm -rf /usr/src/github/CMSeeK/.git
 
-RUN git clone --depth 1 https://github.com/drwetter/testssl.sh /usr/src/github/testssl.sh && \
+# Upstream moved from drwetter/testssl.sh (now empty) to testssl/testssl.sh.
+# Pin stable 3.2 — default branch is 3.3dev.
+RUN git clone --depth 1 --branch 3.2 https://github.com/testssl/testssl.sh.git /usr/src/github/testssl.sh && \
     chmod +x /usr/src/github/testssl.sh/testssl.sh && \
     ln -sf /usr/src/github/testssl.sh/testssl.sh /usr/local/bin/testssl.sh
 

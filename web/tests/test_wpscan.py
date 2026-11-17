@@ -584,6 +584,59 @@ class TestWpscanParser(TestCase):
         self.assertIsNotNone(vuln_finding, "CVE finding must exist separately")
         self.assertIn('Reflected XSS', vuln_finding.name)
 
+    def test_plugin_version_guidance_persists_installed_and_fixed_in(self):
+        """Detection + advisory rows store extracted_results / remediation version guidance."""
+        payload = {
+            'plugins': {
+                'sample-plugin': {
+                    'location': 'https://parser-test.example.com/wp-content/plugins/sample-plugin/',
+                    'outdated': True,
+                    'version': {'number': '1.0.0'},
+                    'latest_version': '2.0.0',
+                    'vulnerabilities': [{
+                        'title': 'Sample Plugin Authenticated SQL Injection',
+                        'fixed_in': '1.2.3',
+                        'description': 'Sample advisory',
+                        'references': {'cve': ['CVE-2099-00003']},
+                    }],
+                },
+            },
+        }
+        path = self._write_json(payload)
+        try:
+            from reNgine.tasks.wpscan import parse_wpscan_results
+            with patch('reNgine.tasks.get_vulnerability_gpt_report'):
+                parse_wpscan_results(self.proxy, path, self.subdomain)
+        finally:
+            os.unlink(path)
+
+        from startScan.models import Vulnerability
+        detection = Vulnerability.objects.filter(
+            scan_history=self.scan,
+            name='WordPress Plugin Detected: sample-plugin',
+        ).first()
+        self.assertIsNotNone(detection)
+        self.assertEqual(detection.template_id, 'wpscan:plugin:sample-plugin')
+        self.assertIn('installed:1.0.0', detection.extracted_results or [])
+        self.assertIn('latest:2.0.0', detection.extracted_results or [])
+        self.assertIn('**Version guidance:**', detection.remediation or '')
+        self.assertEqual(
+            (detection.agent_enrichment or {}).get('version_guidance', {}).get('installed'),
+            '1.0.0',
+        )
+
+        advisory = Vulnerability.objects.filter(
+            scan_history=self.scan,
+            name__startswith='WordPress Plugin: sample-plugin',
+        ).first()
+        self.assertIsNotNone(advisory)
+        self.assertIn('fixed_in:1.2.3', advisory.extracted_results or [])
+        self.assertIn('1.2.3', advisory.remediation or '')
+        self.assertEqual(
+            (advisory.agent_enrichment or {}).get('version_guidance', {}).get('fixed_in'),
+            '1.2.3',
+        )
+
     def test_main_theme_outdated_stored_as_medium(self):
         payload = {
             'main_theme': {

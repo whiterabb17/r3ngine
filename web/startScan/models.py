@@ -76,6 +76,19 @@ class ScanHistory(models.Model):
 	)
 	cfg_custom_dorks = models.TextField(blank=True, null=True)
 
+	class Meta:
+		indexes = [
+			# Project list/status polls: filter by domain + status, order by start.
+			models.Index(
+				fields=['domain', 'scan_status', '-start_scan_date'],
+				name='sh_domain_status_started_idx',
+			),
+			# Recent scans for a target (scan summary, history drawer).
+			models.Index(
+				fields=['domain', '-start_scan_date'],
+				name='sh_domain_started_idx',
+			),
+		]
 
 	def __str__(self):
 		return self.domain.name
@@ -193,7 +206,16 @@ class ScanHistory(models.Model):
 			return (self.stop_scan_date - self.start_scan_date).seconds
 
 	def get_elapsed_time(self):
-		return self.get_time_ago(self.start_scan_date)
+		"""Wall-clock duration of the scan.
+
+		Uses ``stop_scan_date`` when set (completed, aborted, failed, or paused)
+		so history rows stop growing after the scan is no longer live. Live scans
+		(no stop yet) count from ``start_scan_date`` to now.
+		"""
+		end = self.stop_scan_date or timezone.now()
+		if not self.start_scan_date:
+			return '0 seconds'
+		return get_time_taken(end, self.start_scan_date)
 
 	def get_time_ago(self, time):
 		duration = timezone.now() - time
@@ -451,7 +473,11 @@ class SubScan(models.Model):
 			return get_time_taken(self.stop_scan_date, self.start_scan_date)
 
 	def get_elapsed_time(self):
-		return get_time_taken(timezone.now(), self.start_scan_date)
+		"""Duration for live subscans; frozen at stop when finished/paused."""
+		end = self.stop_scan_date or timezone.now()
+		if not self.start_scan_date:
+			return '0 seconds'
+		return get_time_taken(end, self.start_scan_date)
 
 	def get_task_name_str(self):
 		taskmap = {
@@ -953,6 +979,25 @@ class Vulnerability(models.Model):
 			return urlparse(self.http_url).path
 		return "/"
 
+	def get_tags_str(self):
+		"""Comma-separated tag names as markdown code blocks (for notifications)."""
+		return ', '.join(f'`{tag.name}`' for tag in self.tags.all())
+
+	def get_cve_str(self):
+		"""Comma-separated CVE names as markdown code blocks (for notifications)."""
+		return ', '.join(f'`{cve.name}`' for cve in self.cve_ids.all())
+
+	def get_cwe_str(self):
+		"""Comma-separated CWE names as markdown code blocks (for notifications)."""
+		return ', '.join(f'`{cwe.name}`' for cwe in self.cwe_ids.all())
+
+	def get_refs_str(self):
+		"""Bulleted reference URLs as markdown code blocks (for notifications)."""
+		refs = list(self.references.all())
+		if not refs:
+			return ''
+		return '•' + '\n• '.join(f'`{ref.url}`' for ref in refs)
+
 	def __str__(self):
 		cve_str = ', '.join(f'`{cve.name}`' for cve in self.cve_ids.all())
 		severity = NUCLEI_REVERSE_SEVERITY_MAP[self.severity]
@@ -1034,6 +1079,11 @@ class ImpactAssessment(models.Model):
 	potential_impact = models.TextField(null=True, blank=True)
 	remediation_priority = models.IntegerField(default=1)
 	is_ai_generated = models.BooleanField(default=False)
+	# HTML from LLM report generation; reused across regenerations for the same scan.
+	llm_report_remediation = models.TextField(null=True, blank=True)
+	# SHA-256 of the attack-chain slice used to generate llm_report_remediation.
+	# Cleared implicitly when fingerprint mismatches on next report build.
+	llm_report_remediation_fingerprint = models.CharField(max_length=64, null=True, blank=True)
 
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)

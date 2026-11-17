@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 
@@ -17,6 +16,7 @@ from reNgine.definitions import (
 	PERFORMANCE_BENCHMARK_MAX_URLS,
 	TIMEOUT,
 )
+from reNgine.utils.task import run_command
 from startScan.models import EndPoint, PerformanceBenchmark
 
 logger = logging.getLogger(__name__)
@@ -112,16 +112,28 @@ def parse_lighthouse_json(payload):
 	return fields
 
 
-def run_lighthouse(url, timeout=PERFORMANCE_BENCHMARK_DEFAULT_TIMEOUT, chrome_path=None):
+def run_lighthouse(
+	url,
+	timeout=PERFORMANCE_BENCHMARK_DEFAULT_TIMEOUT,
+	chrome_path=None,
+	scan_id=None,
+	activity_id=None,
+):
 	"""Run Lighthouse CLI against a URL and return parsed metrics.
+
+	Uses ``run_command`` so Temporal abort / soft time-limits kill the child
+	process group instead of waiting out a raw ``subprocess.run`` timeout.
 
 	Args:
 		url (str): Target URL.
 		timeout (int): Soft timeout seconds for the Lighthouse process.
 		chrome_path (str, optional): Chromium binary path.
+		scan_id (int, optional): Scan history id for abort polling / command log.
+		activity_id (int, optional): Scan activity id for command log.
 
 	Returns:
 		dict: Parsed fields from parse_lighthouse_json, or error-only dict.
+		      Sets ``aborted=True`` when the scan/activity was cancelled.
 	"""
 	chrome = chrome_path or CHROMIUM_PATH
 	lighthouse = shutil.which(LIGHTHOUSE_BIN) or LIGHTHOUSE_BIN
@@ -145,27 +157,35 @@ def run_lighthouse(url, timeout=PERFORMANCE_BENCHMARK_DEFAULT_TIMEOUT, chrome_pa
 			'--only-categories=performance,accessibility,best-practices,seo',
 			'--no-enable-error-reporting',
 		]
+		# Hard ceiling above soft timeout; run_command's watchdog honors cancel_event.
+		proc_timeout = max(int(timeout) + 30, 90)
 		try:
-			# Lighthouse itself can hang; give a hard process ceiling above soft timeout.
-			proc = subprocess.run(
+			return_code, output = run_command(
 				cmd,
-				capture_output=True,
-				text=True,
-				timeout=max(int(timeout) + 30, 90),
-				check=False,
+				shell=False,
+				timeout=proc_timeout,
+				scan_id=scan_id,
+				activity_id=activity_id,
 			)
-		except subprocess.TimeoutExpired:
-			return {'raw_json': {}, 'error': f'Lighthouse timed out after {timeout}s'}
 		except FileNotFoundError:
 			return {'raw_json': {}, 'error': f'Lighthouse binary not found ({lighthouse})'}
 		except OSError as exc:
 			return {'raw_json': {}, 'error': f'Failed to start Lighthouse: {exc}'}
 
-		if not out_path.exists():
-			stderr = (proc.stderr or proc.stdout or '').strip()[:500]
+		if return_code == -1:
 			return {
 				'raw_json': {},
-				'error': f'Lighthouse produced no report (exit={proc.returncode}): {stderr or "no output"}',
+				'error': 'Lighthouse aborted',
+				'aborted': True,
+			}
+		if return_code == 124:
+			return {'raw_json': {}, 'error': f'Lighthouse timed out after {timeout}s'}
+
+		if not out_path.exists():
+			stderr = (output or '').strip()[:500]
+			return {
+				'raw_json': {},
+				'error': f'Lighthouse produced no report (exit={return_code}): {stderr or "no output"}',
 			}
 
 		try:
@@ -174,9 +194,9 @@ def run_lighthouse(url, timeout=PERFORMANCE_BENCHMARK_DEFAULT_TIMEOUT, chrome_pa
 			return {'raw_json': {}, 'error': f'Failed to parse Lighthouse JSON: {exc}'}
 
 		parsed = parse_lighthouse_json(payload)
-		if proc.returncode not in (0, None) and parsed.get('performance_score') is None:
-			stderr = (proc.stderr or '').strip()[:300]
-			parsed['error'] = parsed.get('error') or f'Lighthouse exit={proc.returncode}: {stderr}'
+		if return_code not in (0, None) and parsed.get('performance_score') is None:
+			stderr = (output or '').strip()[:300]
+			parsed['error'] = parsed.get('error') or f'Lighthouse exit={return_code}: {stderr}'
 		return parsed
 
 
@@ -235,10 +255,20 @@ def performance_benchmark(self, ctx={}, description=None):
 
 	success_count = 0
 	error_count = 0
+	aborted = False
 	for endpoint in endpoint_list:
 		url = endpoint.http_url
 		logger.info('Lighthouse probing %s', url)
-		parsed = run_lighthouse(url, timeout=timeout)
+		parsed = run_lighthouse(
+			url,
+			timeout=timeout,
+			scan_id=getattr(self, 'scan_id', None) or getattr(self.scan, 'id', None),
+			activity_id=getattr(self, 'activity_id', None),
+		)
+		if parsed.get('aborted'):
+			aborted = True
+			logger.warning('Lighthouse benchmarking aborted while probing %s', url)
+			break
 		PerformanceBenchmark.objects.create(
 			scan_history=self.scan,
 			subdomain=endpoint.subdomain,
@@ -263,10 +293,11 @@ def performance_benchmark(self, ctx={}, description=None):
 		else:
 			success_count += 1
 
-	self.notify(fields={
-		'Performance benchmarks': (
-			f'Lighthouse completed for {success_count} URL(s)'
-			+ (f' ({error_count} failed)' if error_count else '')
-		),
-	})
+	summary = (
+		f'Lighthouse completed for {success_count} URL(s)'
+		+ (f' ({error_count} failed)' if error_count else '')
+	)
+	if aborted:
+		summary += ' (aborted)'
+	self.notify(fields={'Performance benchmarks': summary})
 	return True

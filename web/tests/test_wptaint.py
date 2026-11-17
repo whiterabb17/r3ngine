@@ -259,3 +259,260 @@ class TestWptaintParser(TestCase):
             if os.path.exists(temp_file_name):
                 os.remove(temp_file_name)
 
+
+class TestWordpressOrgDownloadCandidates(TestCase):
+    """Unit tests for installed-version zip URL selection."""
+
+    def test_prefers_installed_version_zip_then_latest_fallback(self):
+        from reNgine.tasks.wordpress_version import wordpress_org_plugin_download_candidates
+
+        candidates = wordpress_org_plugin_download_candidates('elementor', '3.20.2')
+        self.assertEqual(len(candidates), 2)
+        self.assertEqual(
+            candidates[0][0],
+            'https://downloads.wordpress.org/plugin/elementor.3.20.2.zip',
+        )
+        self.assertEqual(candidates[0][1:], ('3.20.2', 'installed'))
+        self.assertEqual(
+            candidates[1][0],
+            'https://downloads.wordpress.org/plugin/elementor.zip',
+        )
+        self.assertEqual(candidates[1][1:], ('latest', 'latest_fallback'))
+
+    def test_unknown_installed_uses_latest_only(self):
+        from reNgine.tasks.wordpress_version import wordpress_org_plugin_download_candidates
+
+        candidates = wordpress_org_plugin_download_candidates('akismet', None)
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0][0], 'https://downloads.wordpress.org/plugin/akismet.zip')
+        self.assertEqual(candidates[0][1:], ('latest', 'latest'))
+
+    def test_rejects_unsafe_plugin_slug(self):
+        from reNgine.tasks.wordpress_version import (
+            is_safe_wordpress_plugin_slug,
+            wordpress_org_plugin_download_candidates,
+        )
+
+        self.assertFalse(is_safe_wordpress_plugin_slug('../evil'))
+        self.assertFalse(is_safe_wordpress_plugin_slug('Foo_Bar'))
+        self.assertEqual(wordpress_org_plugin_download_candidates('../evil', '1.0'), [])
+
+
+class TestWptaintWpscanCorrelator(TestCase):
+    """WPTaint findings inherit WPScan version guidance after correlation."""
+
+    def setUp(self):
+        self.domain = Domain.objects.create(name='wptaint-corr.example.com')
+        self.engine = EngineType.objects.create(engine_name='WPTaint Corr Engine')
+        self.scan = ScanHistory.objects.create(
+            domain=self.domain,
+            scan_status=1,
+            start_scan_date=timezone.now(),
+            scan_type=self.engine,
+        )
+        self.subdomain = Subdomain.objects.create(
+            name='wptaint-corr.example.com',
+            scan_history=self.scan,
+            target_domain=self.domain,
+        )
+
+    def test_correlate_stamps_installed_fixed_in_and_tainted_meta(self):
+        Vulnerability.objects.create(
+            name='WordPress Plugin Detected: elementor',
+            severity=2,
+            type='WordPress',
+            source='WPScan',
+            scan_history=self.scan,
+            subdomain=self.subdomain,
+            target_domain=self.domain,
+            http_url=f'http://{self.subdomain.name}',
+            description='Plugin **elementor** v3.20.2 detected at `/wp-content/plugins/elementor/`. Plugin is **outdated** (installed: 3.20.2, latest: 4.3.6).',
+            extracted_results=['plugin:elementor', 'installed:3.20.2', 'latest:4.3.6', 'outdated:True'],
+            agent_enrichment={
+                'version_guidance': {
+                    'component': 'plugin',
+                    'slug': 'elementor',
+                    'installed': '3.20.2',
+                    'latest': '4.3.6',
+                    'outdated': True,
+                }
+            },
+            remediation='**Version guidance:** `elementor`; installed `3.20.2`; latest `4.3.6`.',
+        )
+        Vulnerability.objects.create(
+            name='WordPress Plugin: elementor - Elementor < 4.3.6 - Stored XSS',
+            severity=0,
+            type='WordPress',
+            source='WPScan',
+            scan_history=self.scan,
+            subdomain=self.subdomain,
+            target_domain=self.domain,
+            http_url=f'http://{self.subdomain.name}',
+            description='Advisory',
+            extracted_results=['plugin:elementor', 'installed:3.20.2', 'fixed_in:4.3.6'],
+            agent_enrichment={
+                'version_guidance': {
+                    'component': 'plugin',
+                    'slug': 'elementor',
+                    'installed': '3.20.2',
+                    'fixed_in': '4.3.6',
+                }
+            },
+        )
+        taint = Vulnerability.objects.create(
+            name='WP Taint (elementor): Unauthorized File Upload',
+            severity=3,
+            type='WordPress',
+            source='WPTaintScan',
+            scan_history=self.scan,
+            subdomain=self.subdomain,
+            target_domain=self.domain,
+            http_url=f'http://{self.subdomain.name}/wp-content/plugins/elementor/x.php',
+            description='static taint',
+        )
+
+        from reNgine.tasks.wptaint import correlate_wptaint_with_wpscan
+        updated = correlate_wptaint_with_wpscan(
+            self.scan,
+            taint_run_meta={
+                'elementor': {
+                    'tainted_version': '3.20.2',
+                    'tainted_source': 'installed',
+                }
+            },
+        )
+        self.assertEqual(updated, 1)
+        taint.refresh_from_db()
+        vg = (taint.agent_enrichment or {}).get('version_guidance') or {}
+        self.assertEqual(vg.get('installed'), '3.20.2')
+        self.assertEqual(vg.get('fixed_in'), '4.3.6')
+        self.assertEqual(vg.get('tainted_version'), '3.20.2')
+        self.assertEqual(vg.get('tainted_source'), 'installed')
+        self.assertIn('installed:3.20.2', taint.extracted_results or [])
+        self.assertIn('**Version guidance:**', taint.remediation or '')
+        self.assertIn('4.3.6', taint.remediation or '')
+
+    @patch('reNgine.tasks.wptaint.stream_command', return_value=iter([]))
+    def test_wptaint_prefers_installed_version_download_url(self, mock_stream):
+        Vulnerability.objects.create(
+            name='WordPress Plugin Detected: elementor',
+            severity=2,
+            type='WordPress',
+            source='WPScan',
+            scan_history=self.scan,
+            subdomain=self.subdomain,
+            target_domain=self.domain,
+            http_url=f'http://{self.subdomain.name}',
+            extracted_results=['plugin:elementor', 'installed:3.20.2'],
+            agent_enrichment={
+                'version_guidance': {
+                    'component': 'plugin',
+                    'slug': 'elementor',
+                    'installed': '3.20.2',
+                }
+            },
+        )
+        proxy = _make_proxy(self.scan)
+        from reNgine.tasks.wptaint import wptaint_scan
+        with patch('os.path.exists', return_value=False):
+            wptaint_scan(proxy)
+
+        download_calls = [str(c) for c in mock_stream.call_args_list if 'downloads.wordpress.org' in str(c)]
+        self.assertTrue(
+            any('elementor.3.20.2.zip' in c for c in download_calls),
+            f'Expected installed-version zip first. Calls: {download_calls}',
+        )
+
+    def test_tainted_version_not_backfilled_from_installed_on_latest_fallback(self):
+        """When latest_fallback succeeds, meta must not claim installed version was analyzed."""
+        from reNgine.tasks.wordpress_version import format_version_patch_line
+
+        line = format_version_patch_line({
+            'slug': 'elementor',
+            'installed': '3.20.2',
+            'tainted_version': 'latest',
+            'tainted_source': 'latest_fallback',
+        })
+        self.assertIn('latest_fallback', line)
+        self.assertIn('WPTaint analyzed `latest`', line)
+
+        # Source-only (no version label) still records provenance.
+        line2 = format_version_patch_line({
+            'slug': 'elementor',
+            'installed': '3.20.2',
+            'tainted_source': 'latest_fallback',
+        })
+        self.assertIn('latest_fallback', line2)
+        self.assertIn('installed version unconfirmed', line2)
+
+    @patch('reNgine.tasks.wptaint.stream_command', return_value=iter([]))
+    def test_download_meta_uses_latest_label_not_installed_on_fallback(self, mock_stream):
+        """Installed zip fails, latest succeeds → tainted_version is 'latest', not installed."""
+        from reNgine.tasks.wptaint import _download_plugin_zip
+        import tempfile
+        import os
+
+        with tempfile.TemporaryDirectory() as tmp:
+            plugin_zip = os.path.join(tmp, 'elementor.zip')
+
+            def _fake_exists(path):
+                # After second wget (latest), pretend the zip is present/non-empty.
+                return path == plugin_zip and mock_stream.call_count >= 2
+
+            def _fake_getsize(path):
+                return 10 if path == plugin_zip and mock_stream.call_count >= 2 else 0
+
+            with patch('os.path.exists', side_effect=_fake_exists), \
+                 patch('os.path.getsize', side_effect=_fake_getsize), \
+                 patch('os.remove'):
+                ok, tainted_version, tainted_source = _download_plugin_zip(
+                    'elementor', plugin_zip, '3.20.2', scan_id=1, activity_id=None,
+                )
+            self.assertTrue(ok)
+            self.assertEqual(tainted_source, 'latest_fallback')
+            self.assertEqual(tainted_version, 'latest')
+            self.assertNotEqual(tainted_version, '3.20.2')
+
+    def test_correlate_keeps_latest_when_installed_missing(self):
+        Vulnerability.objects.create(
+            name='WordPress Plugin Detected: woocommerce',
+            severity=2,
+            type='WordPress',
+            source='WPScan',
+            scan_history=self.scan,
+            subdomain=self.subdomain,
+            target_domain=self.domain,
+            http_url=f'http://{self.subdomain.name}',
+            extracted_results=['plugin:woocommerce', 'latest:9.0.0', 'outdated:True'],
+            agent_enrichment={
+                'version_guidance': {
+                    'component': 'plugin',
+                    'slug': 'woocommerce',
+                    'latest': '9.0.0',
+                    'outdated': True,
+                }
+            },
+        )
+        taint = Vulnerability.objects.create(
+            name='WP Taint (woocommerce): Missing Capability Check',
+            severity=2,
+            type='WordPress',
+            source='WPTaintScan',
+            scan_history=self.scan,
+            subdomain=self.subdomain,
+            target_domain=self.domain,
+            http_url=f'http://{self.subdomain.name}/wp-content/plugins/woocommerce/x.php',
+            description='static taint',
+        )
+        from reNgine.tasks.wptaint import correlate_wptaint_with_wpscan
+        correlate_wptaint_with_wpscan(
+            self.scan,
+            taint_run_meta={'woocommerce': {'tainted_version': 'latest', 'tainted_source': 'latest'}},
+        )
+        taint.refresh_from_db()
+        vg = (taint.agent_enrichment or {}).get('version_guidance') or {}
+        self.assertEqual(vg.get('latest'), '9.0.0')
+        self.assertTrue(vg.get('outdated'))
+        self.assertEqual(vg.get('tainted_source'), 'latest')
+        self.assertIn('9.0.0', taint.remediation or '')
+

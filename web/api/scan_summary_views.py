@@ -81,7 +81,9 @@ class ScanSummaryAPIView(APIView):
         subdomain_qs = Subdomain.objects.filter(target_domain=target)
         alive_count = subdomain_qs.filter(http_status__gt=0, http_status__lt=500).exclude(http_status=404).count()
         subdomain_count = subdomain_qs.count()
-        important_subdomains = subdomain_qs.filter(is_important=True)
+        important_subdomains = subdomain_qs.filter(is_important=True).values(
+            'id', 'name', 'http_status', 'page_title'
+        )
 
         endpoint_qs = EndPoint.objects.filter(target_domain=target)
         endpoint_count = endpoint_qs.count()

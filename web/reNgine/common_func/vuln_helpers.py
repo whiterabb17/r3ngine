@@ -109,18 +109,22 @@ def save_vulnerability(vuln_data=None, scan_history=None, target_domain=None, de
 		vuln.save()
 
 		# Centralized Brute-Force Candidate Registration
+		# Only for real HTTP(S) findings — cloud URIs like s3://provider/bucket
+		# (and names containing "admin") must not create AuthCandidate rows with
+		# a bogus host (e.g. "linode" / "aws").
 		auth_keywords = ['login', 'admin', 'auth', 'portal', 'credentials', 'password']
 		name = (vuln_data.get('name') or '').lower()
 		description = (vuln_data.get('description') or '').lower()
-		
-		if any(k in name or k in description for k in auth_keywords):
+		http_url = vuln_data.get('http_url', '') or ''
+		parsed = urlparse(http_url)
+		is_http_finding = parsed.scheme in ('http', 'https') and bool(parsed.hostname)
+
+		if is_http_finding and any(k in name or k in description for k in auth_keywords):
 			try:
 				from reNgine.utilities import save_auth_candidate
-				http_url = vuln_data.get('http_url', '')
-				parsed = urlparse(http_url)
 				port = parsed.port or (443 if parsed.scheme == 'https' else 80)
 				target = parsed.hostname
-				
+
 				if target:
 					save_auth_candidate(
 						scan_history=scan_history,

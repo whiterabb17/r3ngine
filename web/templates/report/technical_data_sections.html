@@ -37,7 +37,7 @@
         <tbody>
             {% for bucket in s3_buckets_data %}
             <tr style="border-bottom: 1px solid #dee2e6;">
-                <td style="padding: 2mm; word-break: break-all;">{{ bucket.url }}</td>
+                <td style="padding: 2mm; word-break: break-all;">{{ bucket.name|default:"-" }}</td>
                 <td style="padding: 2mm;">{{ bucket.region|default:"-" }}</td>
             </tr>
             {% endfor %}
@@ -104,7 +104,7 @@
             {% for tech in technologies_data %}
             <tr style="border-bottom: 1px solid #dee2e6;">
                 <td style="padding: 2mm;">{{ tech.name }}</td>
-                <td style="padding: 2mm; word-break: break-all;">{{ tech.subdomain.name|default:"-" }}</td>
+                <td style="padding: 2mm; word-break: break-all;">{{ tech.target|default:tech.url|default:"-" }}</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -172,7 +172,13 @@
             <tr style="border-bottom: 1px solid #dee2e6;">
                 <td style="padding: 2mm; word-break: break-all;">{{ cert.subject_cn|default:"-" }}</td>
                 <td style="padding: 2mm;">{{ cert.issuer_cn|default:"-" }}</td>
-                <td style="padding: 2mm;">{{ cert.valid_from|date:"Y-m-d" }} to {{ cert.valid_to|date:"Y-m-d" }}</td>
+                <td style="padding: 2mm;">
+                    {% if cert.not_before or cert.not_after %}
+                    {{ cert.not_before|date:"Y-m-d"|default:"-" }} to {{ cert.not_after|date:"Y-m-d"|default:"-" }}
+                    {% else %}
+                    {{ cert.valid_from|date:"Y-m-d"|default:"-" }} to {{ cert.valid_to|date:"Y-m-d"|default:"-" }}
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>

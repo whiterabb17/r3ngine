@@ -16,6 +16,12 @@ import requests as req
 
 from reNgine.osint.hunter_lookup import _hunter_domain_search
 
+# Playwright's sync API drives an asyncio loop under the hood. Django ORM
+# calls (session.save during authenticate / state save) then raise
+# SynchronousOnlyOperation and abort LinkedIn OSINT mid-run — same pattern as
+# screenshot/tasks.py.
+os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+
 logger = logging.getLogger(__name__)
 
 LINKEDIN_FEED_URL = "https://www.linkedin.com/feed/"
@@ -100,7 +106,11 @@ class LinkedInScraper:
             if self._validate_session():
                 self.session.is_valid = True
                 self.session.last_validated_at = timezone.now()
-                self.session.save(update_fields=["is_valid", "last_validated_at"])
+                # Persist default state_file_path from __init__ (mirrors _save_state)
+                # so status API / DELETE see the on-disk storage_state file.
+                self.session.save(update_fields=[
+                    "state_file_path", "is_valid", "last_validated_at",
+                ])
                 return True
             self._close_context()
             return False

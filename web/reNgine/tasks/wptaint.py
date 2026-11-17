@@ -157,10 +157,87 @@ def parse_wptaint_results(task_instance, output_file, subdomains, plugin_name):
     except Exception as e:
         logger.error('Failed to parse WP Taint Scan results for plugin %s: %s', plugin_name, str(e))
 
+
+def correlate_wptaint_with_wpscan(scan, taint_run_meta=None):
+    """Stamp WPTaint findings with WPScan version guidance for the same scan.
+
+    Args:
+        scan: ScanHistory instance.
+        taint_run_meta (dict, optional): slug -> {tainted_version, tainted_source}.
+    """
+    from reNgine.tasks.wordpress_version import (
+        apply_version_guidance_to_vuln,
+        build_version_guidance,
+        collect_wpscan_plugin_versions,
+        parse_wptaint_plugin_slug,
+    )
+
+    taint_run_meta = taint_run_meta or {}
+    by_slug = collect_wpscan_plugin_versions(scan)
+    updated = 0
+    for vuln in Vulnerability.objects.filter(scan_history=scan, source='WPTaintScan'):
+        slug = parse_wptaint_plugin_slug(vuln.name or '')
+        if not slug:
+            continue
+        base = dict(by_slug.get(slug) or {})
+        run_meta = taint_run_meta.get(slug) or {}
+        guidance = build_version_guidance(
+            component=base.get('component') or 'plugin',
+            slug=slug,
+            installed=base.get('installed'),
+            latest=base.get('latest'),
+            outdated=base.get('outdated'),
+            fixed_in=base.get('fixed_in'),
+            tainted_version=run_meta.get('tainted_version') or base.get('tainted_version'),
+            tainted_source=run_meta.get('tainted_source') or base.get('tainted_source'),
+            extra={
+                k: v for k, v in base.items()
+                if k.startswith('fixed_in') and k != 'fixed_in'
+            } or None,
+        )
+        apply_version_guidance_to_vuln(
+            vuln,
+            guidance,
+            update_validation_reason=True,
+        )
+        updated += 1
+
+
+    logger.info("Correlated version guidance onto %s WPTaint findings for scan %s", updated, scan.id)
+    return updated
+
+
+def _download_plugin_zip(plugin_name, plugin_zip, installed_version, scan_id, activity_id):
+    """Download wordpress.org plugin zip for installed version when possible.
+
+    Returns:
+        tuple: (success: bool, tainted_version: str|None, tainted_source: str|None)
+    """
+    from reNgine.tasks.wordpress_version import wordpress_org_plugin_download_candidates
+
+    for url, version_label, source in wordpress_org_plugin_download_candidates(
+        plugin_name, installed_version
+    ):
+        if os.path.exists(plugin_zip):
+            try:
+                os.remove(plugin_zip)
+            except OSError:
+                pass
+        download_cmd = f"wget -q -O {plugin_zip} {url}"
+        logger.info("WP Taint downloading %s (%s)", url, source)
+        for _ in stream_command(download_cmd, scan_id=scan_id, activity_id=activity_id):
+            pass
+        if os.path.exists(plugin_zip) and os.path.getsize(plugin_zip) > 0:
+            return True, version_label, source
+        logger.info("WP Taint download failed/empty for %s via %s", plugin_name, source)
+    return False, None, None
+
+
 def wptaint_scan(self, urls=[], ctx={}, description=None):
     """
     wp-taint-scan task for WordPress plugin static analysis.
     Runs against plugins discovered by other WordPress tasks.
+    Prefers the WPScan-reported installed version zip when downloadable.
     """
     logger.info("Starting WP Taint Vulnerability Scan")
     
@@ -174,6 +251,11 @@ def wptaint_scan(self, urls=[], ctx={}, description=None):
 
     # Gather plugins discovered by WPScan/Nuclei or extracted from endpoint URLs
     import re
+    from reNgine.tasks.wordpress_version import (
+        collect_wpscan_plugin_versions,
+        is_safe_wordpress_plugin_slug,
+    )
+
     plugin_url_re = re.compile(r'/wp-content/plugins/([^/?#]+)/')
 
     # Gather plugins from three sources:
@@ -197,7 +279,7 @@ def wptaint_scan(self, urls=[], ctx={}, description=None):
             remainder = vuln.name[len('WordPress Plugin: '):]
             slug = remainder.split(' - ')[0].strip()
 
-        if not slug:
+        if not is_safe_wordpress_plugin_slug(slug):
             continue
         if slug not in plugin_subdomains:
             plugin_subdomains[slug] = set()
@@ -213,7 +295,7 @@ def wptaint_scan(self, urls=[], ctx={}, description=None):
         if not match:
             continue
         slug = match.group(1)
-        if not slug:
+        if not is_safe_wordpress_plugin_slug(slug):
             continue
         if slug not in plugin_subdomains:
             plugin_subdomains[slug] = set()
@@ -224,27 +306,48 @@ def wptaint_scan(self, urls=[], ctx={}, description=None):
         logger.info("No WordPress plugins discovered by previous tasks. Skipping WP Taint Scan.")
         return
 
+    version_by_slug = collect_wpscan_plugin_versions(self.scan)
+    taint_run_meta = {}
+
     results_dir = f"{self.scan.results_dir}/vulnerability/wptaint"
     os.makedirs(results_dir, exist_ok=True)
     temp_download_dir = f"{self.scan.results_dir}/temp_wptaint"
     os.makedirs(temp_download_dir, exist_ok=True)
 
     for plugin_name, subdomains in plugin_subdomains.items():
-        logger.info("WP Taint Scan target plugin: %s", plugin_name)
+        installed_version = (version_by_slug.get(plugin_name) or {}).get('installed')
+        logger.info(
+            "WP Taint Scan target plugin: %s (installed=%s)",
+            plugin_name,
+            installed_version or 'unknown',
+        )
         
         plugin_dir = os.path.join(temp_download_dir, plugin_name)
         plugin_zip = f"{plugin_dir}.zip"
         plugin_results_dir = os.path.join(results_dir, plugin_name)
         
         try:
-            # 1. Download plugin source
-            download_cmd = f"wget -q -O {plugin_zip} https://downloads.wordpress.org/plugin/{plugin_name}.zip"
-            for _ in stream_command(download_cmd, scan_id=self.scan_id, activity_id=self.activity_id):
-                pass
-            
-            if not os.path.exists(plugin_zip) or os.path.getsize(plugin_zip) == 0:
-                logger.info("Could not download source for plugin %s. It may be a premium or unavailable plugin.", plugin_name)
+            # 1. Download plugin source (installed version when known)
+            ok, tainted_version, tainted_source = _download_plugin_zip(
+                plugin_name,
+                plugin_zip,
+                installed_version,
+                self.scan_id,
+                self.activity_id,
+            )
+            if not ok:
+                logger.info(
+                    "Could not download source for plugin %s. It may be a premium or unavailable plugin.",
+                    plugin_name,
+                )
                 continue
+
+            # Record only the zip that actually succeeded — never backfill
+            # installed_version when analysis used latest/latest_fallback.
+            taint_run_meta[plugin_name] = {
+                'tainted_version': tainted_version,
+                'tainted_source': tainted_source,
+            }
                 
             # 2. Unzip
             os.makedirs(plugin_dir, exist_ok=True)
@@ -275,3 +378,6 @@ def wptaint_scan(self, urls=[], ctx={}, description=None):
     # Cleanup temp dir
     if os.path.exists(temp_download_dir):
         shutil.rmtree(temp_download_dir)
+
+    # Stamp WPScan version guidance onto all WPTaint findings for this scan.
+    correlate_wptaint_with_wpscan(self.scan, taint_run_meta=taint_run_meta)

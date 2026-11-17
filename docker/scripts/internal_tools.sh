@@ -375,8 +375,11 @@ log "Acquiring shared-volume lock (${SHARED_LOCK})..."
         pip3 install -q -r /usr/src/github/CMSeeK/requirements.txt
     fi
 
-    # testssl.sh (shell script, no pip)
-    if clone_repo testssl.sh https://github.com/drwetter/testssl.sh; then
+    # testssl.sh (shell script, no pip). Upstream moved to testssl/testssl.sh;
+    # pin stable 3.2 (default branch is 3.3dev).
+    if [ ! -d /usr/src/github/testssl.sh ]; then
+        log "  Cloning testssl.sh..."
+        git clone --depth 1 --branch 3.2 https://github.com/testssl/testssl.sh.git /usr/src/github/testssl.sh 2>&1 | tail -3 | sed 's/^/    /'
         chmod +x /usr/src/github/testssl.sh/testssl.sh
         log_done
     fi

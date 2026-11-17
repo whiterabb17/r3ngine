@@ -128,7 +128,7 @@
             color: {{primary_color|default:"#0f172a"}};
         }
         .toc-page::after {
-            content: target-counter(attr(data-href), page);
+            content: target-counter(attr(data-href url), page);
         }
 
         /* Style C: Modern Dark Pro Cover */
@@ -577,7 +577,7 @@
                 {% for vulnerability in unique_vulnerabilities %}
                 <tr>
                     <td>{{ forloop.counter }}</td>
-                    <td style="word-break: break-word;"><a href="#vuln_{{ vulnerability.name|slugify }}">{{ vulnerability.name }}</a></td>
+                    <td style="word-break: break-all;"><a href="#vuln_{{ vulnerability.name|slugify }}">{{ vulnerability.name }}</a></td>
                     <td style="text-align: center;">
                         <span class="severity-badge {% if vulnerability.severity == 4 %}severity-critical{% elif vulnerability.severity == 3 %}severity-high{% elif vulnerability.severity == 2 %}severity-medium{% elif vulnerability.severity == 1 %}severity-low{% elif vulnerability.severity == 0 %}severity-info{% else %}severity-unknown{% endif %}" style="display: inline-block; margin-left: 0;">
                             {% if vulnerability.severity == 4 %}Critical{% elif vulnerability.severity == 3 %}High{% elif vulnerability.severity == 2 %}Medium{% elif vulnerability.severity == 1 %}Low{% elif vulnerability.severity == 0 %}Info{% else %}Unknown{% endif %}
@@ -828,7 +828,7 @@
               <tbody>
                 {% for item in group.items %}
                 <tr>
-                  <td style="padding: 3px 6px; font-family: monospace; font-size: 7.5pt; word-break: break-word; overflow-wrap: break-word;">{{ item.name }}</td>
+                  <td style="padding: 3px 6px; font-family: monospace; font-size: 7.5pt; word-break: break-all; overflow-wrap: anywhere;">{{ item.name }}</td>
                   <td style="text-align:center; padding: 3px 6px;">{{ item.cvss_score|default:"—" }}</td>
                   <td style="text-align:center; padding: 3px 6px;">
                     {% if item.severity == 4 %}Critical{% elif item.severity == 3 %}High{% elif item.severity == 2 %}Medium{% elif item.severity == 1 %}Low{% else %}Info{% endif %}
@@ -978,10 +978,10 @@
     </article>
     {% endif %}
 
-    <!-- Final Conclusion -->
-    <article class="page-break" id="conclusion">
-        <h1>Conclusion & Next Steps</h1>
-        {% if enable_llm_report_generation %}
+    <!-- Final Conclusion — id must match TOC href="#conclusion" for WeasyPrint anchors -->
+    <article class="page-break">
+        <h1 id="conclusion">Conclusion & Next Steps</h1>
+        {% if enable_llm_report_generation and llm_conclusion %}
         <div class="llm-section">
             {{ llm_conclusion | safe }}
         </div>

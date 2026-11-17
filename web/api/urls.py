@@ -126,6 +126,7 @@ router.register(r'workers', ScanWorkerViewSet, basename='workers')
 
 urlpatterns = [
     path('mcp/', include('mcp.urls')),
+    path('copilot/', include('copilot.urls')),
     re_path(r'^', include(router.urls)),
     path('settings/workers/heartbeat/', WorkerHeartbeatAPIView.as_view(), name='worker_heartbeat'),
     path(
@@ -390,6 +391,10 @@ urlpatterns = [
         'action/vulnerability/delete/',
         DeleteVulnerability.as_view(),
         name='delete_vulnerability'),
+    path(
+        'action/vulnerability/clear_accepted_risk/',
+        ClearAcceptedRiskVulnerabilities.as_view(),
+        name='clear_accepted_risk_vulnerabilities'),
     path(
         'action/rows/delete/',
         DeleteMultipleRows.as_view(),

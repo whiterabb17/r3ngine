@@ -146,7 +146,7 @@ Tools compiled into the Docker image and invoked via Temporal activities (Python
 | Tool | Description | Source |
 |------|-------------|--------|
 | **tlsx** | TLS certificate and configuration scanner | [projectdiscovery/tlsx](https://github.com/projectdiscovery/tlsx) |
-| **testssl.sh** | Comprehensive TLS/SSL testing script | [drwetter/testssl.sh](https://github.com/drwetter/testssl.sh) |
+| **testssl.sh** | Comprehensive TLS/SSL testing script | [testssl/testssl.sh](https://github.com/testssl/testssl.sh) |
 | **sslscan** | SSL/TLS cipher and certificate scanner | system package |
 | **ssh-audit** | SSH server configuration auditor | pipx |
 

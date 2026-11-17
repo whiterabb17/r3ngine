@@ -53,6 +53,8 @@ class ToolExecutionTest(TransactionTestCase):
         enrich_patcher = patch('reNgine.tasks.osint.enrich_identities_task')
         enrich_patcher.start()
         self.addCleanup(enrich_patcher.stop)
+        from tests.redis_fakes import patch_osint_staging_redis
+        patch_osint_staging_redis(self)
         self.scan.results_dir = self.results_dir
         self.scan.save()
         
@@ -522,20 +524,18 @@ class ToolExecutionTest(TransactionTestCase):
                 process_mock = MagicMock()
                 # Mock username-anarchy output (one username per line) and gosearch output
                 process_mock.communicate.side_effect = [
-                    ("testuser\ntest.user\ntuser\n", ""), # For username-anarchy
-                    ("http://twitter.com/testuser\n", ""),   # For gosearch 1
-                    ("http://twitter.com/testuser\n", ""),   # For gosearch 2
-                    ("http://twitter.com/testuser\n", ""),   # For gosearch 3
-                    ("http://twitter.com/testuser\n", "")    # For gosearch 4
+                    ("testuser\ntest.user\ntuser\n", ""),  # username-anarchy
+                    ("https://social.example/presence/fixture-user\n", ""),
+                    ("https://social.example/presence/fixture-user\n", ""),
+                    ("https://social.example/presence/fixture-user\n", ""),
+                    ("https://social.example/presence/fixture-user\n", ""),
                 ]
                 mock_popen.return_value = process_mock
                 
-                # Mock OsintStaging to avoid DB constraint failures if any
                 res = enrich_identities_task(email, 'email', self.scan.id)
                 print(f"[DEBUG] enrich_identities_task result: {res}")
                 
-                # Check that staging object was created
                 staging = OsintStaging.objects.filter(scan_history=self.scan).first()
                 self.assertIsNotNone(staging)
-                self.assertEqual(staging.content, "http://twitter.com/testuser")
+                self.assertEqual(staging.content, "https://social.example/presence/fixture-user")
                 self.assertEqual(staging.source, "gosearch")

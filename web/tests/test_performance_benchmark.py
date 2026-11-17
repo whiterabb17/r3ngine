@@ -5,7 +5,7 @@ from django.utils import timezone
 from unittest.mock import patch
 
 from reNgine.report_performance import build_performance_context
-from reNgine.tasks.performance_benchmark import parse_lighthouse_json
+from reNgine.tasks.performance_benchmark import parse_lighthouse_json, run_lighthouse
 from reNgine.tasks.report import generate_report_task
 from startScan.models import (
     EndPoint,
@@ -59,6 +59,22 @@ class ParseLighthouseJsonTest(TestCase):
         parsed = parse_lighthouse_json(None)
         self.assertEqual(parsed['raw_json'], {})
         self.assertIn('Invalid', parsed['error'])
+
+
+class RunLighthouseCancelTest(TestCase):
+    def test_uses_run_command_and_surfaces_abort(self):
+        with patch('reNgine.tasks.performance_benchmark.shutil.which', return_value='/usr/bin/lighthouse'), \
+             patch('reNgine.tasks.performance_benchmark.run_command', return_value=(-1, '')) as mocked:
+            parsed = run_lighthouse('https://example.com/', timeout=30, scan_id=1, activity_id=2)
+
+        self.assertTrue(parsed.get('aborted'))
+        self.assertIn('aborted', parsed.get('error', '').lower())
+        mocked.assert_called_once()
+        kwargs = mocked.call_args.kwargs
+        self.assertEqual(kwargs.get('scan_id'), 1)
+        self.assertEqual(kwargs.get('activity_id'), 2)
+        self.assertFalse(kwargs.get('shell'))
+        self.assertGreaterEqual(kwargs.get('timeout'), 60)
 
 
 class PerformanceReportContextTest(TransactionTestCase):

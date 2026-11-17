@@ -198,6 +198,16 @@ def spiderfoot_scan(self, host=None, ctx={}, description=None):
     except Exception as e:
         logger.error("[SPIDERFOOT] Execution failed: %s", e)
 
+    # Safety-net drain: any Redis pending left by a failed batch flush lands here.
+    try:
+        from reNgine.osint.staging_queue import flush_osint_staging
+
+        flushed = flush_osint_staging(self.scan.id)
+        if flushed:
+            logger.warning("[SPIDERFOOT] End-of-task staging flush wrote %d row(s)", flushed)
+    except Exception as flush_err:
+        logger.error("[SPIDERFOOT] End-of-task staging flush failed: %s", flush_err)
+
     # Sync to Neo4j
     graph = Neo4jManager()
     graph.sync_scan_results(self.scan_id)
@@ -647,17 +657,20 @@ def _process_spiderfoot_batch(self, batch, ctx, host):
                         "iocs": event.get("iocs"),
                     }
                     enriched_meta = _enrich_metadata(event, base_meta)
-                    OsintStaging.objects.update_or_create(
-                        scan_history=self.scan,
-                        target_domain=self.domain,
+                    from reNgine.osint.staging_queue import enqueue_osint_staging
+
+                    # Redis enqueue is outside Django's transaction: flush in
+                    # finally so a mid-batch DB failure cannot leave pending
+                    # staging rows invisible for the rest of the scan.
+                    enqueue_osint_staging(
+                        scan_history_id=self.scan.id,
+                        target_domain_id=self.domain.id,
                         content=e_data,
                         osint_type=osint_type,
-                        defaults={
-                            "source": event.get("source", "SpiderFoot"),
-                            "confidence": confidence,
-                            "metadata": enriched_meta,
-                            "status": "pending",
-                        },
+                        source=event.get("source", "SpiderFoot"),
+                        confidence=confidence,
+                        metadata=enriched_meta,
+                        status="pending",
                     )
                 else:
                     # Discard low confidence noise
@@ -667,9 +680,17 @@ def _process_spiderfoot_batch(self, batch, ctx, host):
                         e_data,
                         confidence,
                     )
-
-        logger.warning(
-            "Processed batch of %d SpiderFoot findings with validation.", len(batch)
-        )
     except Exception as e:
         logger.error("Error processing SpiderFoot batch: %s", e)
+    finally:
+        try:
+            from reNgine.osint.staging_queue import flush_osint_staging
+
+            flushed = flush_osint_staging(self.scan.id)
+            logger.warning(
+                "Processed batch of %d SpiderFoot findings with validation (%d staging flushed).",
+                len(batch),
+                flushed,
+            )
+        except Exception as flush_err:
+            logger.error("Error flushing SpiderFoot staging after batch: %s", flush_err)

@@ -661,7 +661,7 @@
   },
   "src/features/vulnerabilities/components/VulnerabilityTable.tsx": {
     "@typescript-eslint/no-unused-vars": {
-      "count": 12
+      "count": 10
     },
     "no-useless-assignment": {
       "count": 2
