@@ -100,6 +100,8 @@ def _parse_version(task_instance, data, subdomain):
         data (dict): WPScan output dict.
         subdomain (Subdomain): Subdomain object.
     """
+    from reNgine.tasks.wordpress_version import build_version_guidance
+
     version = data.get('version')
     if not version:
         return
@@ -110,12 +112,36 @@ def _parse_version(task_instance, data, subdomain):
     extra_desc = f"WordPress core v{version_num} detected."
     if outdated:
         extra_desc += f" Version status: {status}."
-    save_finding(task_instance, {}, subdomain,
-                 f"WordPress Core Detected: v{version_num}",
-                 severity=severity, extra_description=extra_desc)
+    core_guidance = build_version_guidance(
+        component='core',
+        slug='wordpress-core',
+        installed=version_num,
+        outdated=outdated,
+        extra={'status': status} if status else None,
+    )
+    save_finding(
+        task_instance, {}, subdomain,
+        f"WordPress Core Detected: v{version_num}",
+        severity=severity,
+        extra_description=extra_desc,
+        template_id='wpscan:core',
+        version_guidance=core_guidance,
+    )
     for vuln in version.get('vulnerabilities', []):
         vuln_title = vuln.get('title', f"WordPress Core Vulnerability (v{version_num})")
-        save_finding(task_instance, vuln, subdomain, vuln_title)
+        vuln_guidance = build_version_guidance(
+            component='core',
+            slug='wordpress-core',
+            installed=version_num,
+            outdated=outdated,
+            fixed_in=vuln.get('fixed_in'),
+            extra={'status': status} if status else None,
+        )
+        save_finding(
+            task_instance, vuln, subdomain, vuln_title,
+            template_id='wpscan:core',
+            version_guidance=vuln_guidance,
+        )
 
 
 def _parse_plugins(task_instance, data, subdomain):
@@ -126,6 +152,8 @@ def _parse_plugins(task_instance, data, subdomain):
         data (dict): WPScan output dict.
         subdomain (Subdomain): Subdomain object.
     """
+    from reNgine.tasks.wordpress_version import build_version_guidance
+
     plugins = data.get('plugins', {}) or {}
     for slug, info in plugins.items():
         version_obj = info.get('version') or {}
@@ -137,13 +165,37 @@ def _parse_plugins(task_instance, data, subdomain):
         desc_parts = [f"Plugin **{slug}** v{version_num} detected at `{location}`."]
         if outdated:
             desc_parts.append(f"Plugin is **outdated** (installed: {version_num}, latest: {latest}).")
-        save_finding(task_instance, {}, subdomain,
-                     f"WordPress Plugin Detected: {slug}",
-                     severity=severity, extra_description=' '.join(desc_parts))
+        plugin_guidance = build_version_guidance(
+            component='plugin',
+            slug=slug,
+            installed=version_num,
+            latest=latest,
+            outdated=outdated,
+        )
+        save_finding(
+            task_instance, {}, subdomain,
+            f"WordPress Plugin Detected: {slug}",
+            severity=severity,
+            extra_description=' '.join(desc_parts),
+            template_id=f'wpscan:plugin:{slug}',
+            version_guidance=plugin_guidance,
+        )
         for vuln in info.get('vulnerabilities', []):
             vuln_title = vuln.get('title', f"WordPress Plugin Vulnerability: {slug}")
-            save_finding(task_instance, vuln, subdomain,
-                         f"WordPress Plugin: {slug} - {vuln_title}")
+            vuln_guidance = build_version_guidance(
+                component='plugin',
+                slug=slug,
+                installed=version_num,
+                latest=latest,
+                outdated=outdated,
+                fixed_in=vuln.get('fixed_in'),
+            )
+            save_finding(
+                task_instance, vuln, subdomain,
+                f"WordPress Plugin: {slug} - {vuln_title}",
+                template_id=f'wpscan:plugin:{slug}',
+                version_guidance=vuln_guidance,
+            )
 
 
 def _parse_themes(task_instance, data, subdomain):
@@ -154,6 +206,8 @@ def _parse_themes(task_instance, data, subdomain):
         data (dict): WPScan output dict.
         subdomain (Subdomain): Subdomain object.
     """
+    from reNgine.tasks.wordpress_version import build_version_guidance
+
     all_themes = {}
     main_theme = data.get('main_theme')
     if main_theme:
@@ -170,13 +224,37 @@ def _parse_themes(task_instance, data, subdomain):
         desc_parts = [f"Theme **{slug}** v{version_num} detected at `{location}`."]
         if outdated:
             desc_parts.append(f"Theme is **outdated** (installed: {version_num}, latest: {latest}).")
-        save_finding(task_instance, {}, subdomain,
-                     f"WordPress Theme Detected: {slug}",
-                     severity=severity, extra_description=' '.join(desc_parts))
+        theme_guidance = build_version_guidance(
+            component='theme',
+            slug=slug,
+            installed=version_num,
+            latest=latest,
+            outdated=outdated,
+        )
+        save_finding(
+            task_instance, {}, subdomain,
+            f"WordPress Theme Detected: {slug}",
+            severity=severity,
+            extra_description=' '.join(desc_parts),
+            template_id=f'wpscan:theme:{slug}',
+            version_guidance=theme_guidance,
+        )
         for vuln in info.get('vulnerabilities', []):
             vuln_title = vuln.get('title', f"WordPress Theme Vulnerability: {slug}")
-            save_finding(task_instance, vuln, subdomain,
-                         f"WordPress Theme: {slug} - {vuln_title}")
+            vuln_guidance = build_version_guidance(
+                component='theme',
+                slug=slug,
+                installed=version_num,
+                latest=latest,
+                outdated=outdated,
+                fixed_in=vuln.get('fixed_in'),
+            )
+            save_finding(
+                task_instance, vuln, subdomain,
+                f"WordPress Theme: {slug} - {vuln_title}",
+                template_id=f'wpscan:theme:{slug}',
+                version_guidance=vuln_guidance,
+            )
 
 
 def _parse_users(task_instance, data, subdomain):
@@ -216,7 +294,17 @@ _FINDING_TYPE_MAP = {
 }
 
 
-def save_finding(task_instance, finding, subdomain, name, severity='info', extra_description=''):
+def save_finding(
+    task_instance,
+    finding,
+    subdomain,
+    name,
+    severity='info',
+    extra_description='',
+    template_id=None,
+    version_guidance=None,
+    extracted_results=None,
+):
     """Saves a WPScan finding to the database.
 
     Args:
@@ -226,7 +314,15 @@ def save_finding(task_instance, finding, subdomain, name, severity='info', extra
         name (str): Vulnerability name/title to store.
         severity (str): One of 'info', 'low', 'medium', 'high', 'critical'.
         extra_description (str): Additional text prepended to the finding description.
+        template_id (str, optional): Stable grouping key (e.g. wpscan:plugin:{slug}).
+        version_guidance (dict, optional): Structured installed/latest/fixed_in metadata.
+        extracted_results (list, optional): Explicit extracted_results override.
     """
+    from reNgine.tasks.wordpress_version import (
+        apply_version_guidance_to_vuln,
+        version_guidance_to_extracted_results,
+    )
+
     description_parts = []
     if extra_description:
         description_parts.append(extra_description)
@@ -248,8 +344,13 @@ def save_finding(task_instance, finding, subdomain, name, severity='info', extra
                 ref_urls.append(str(ref_list))
 
     severity_num = NUCLEI_SEVERITY_MAP.get(severity, 0)
+    guidance = dict(version_guidance or {})
+    tokens = list(extracted_results or version_guidance_to_extracted_results(guidance))
+    enrichment = {}
+    if guidance:
+        enrichment['version_guidance'] = guidance
 
-    vuln, created = save_vulnerability(
+    vuln_kwargs = dict(
         target_domain=task_instance.domain,
         http_url=f"http://{subdomain.name}",
         scan_history=task_instance.scan,
@@ -262,6 +363,14 @@ def save_finding(task_instance, finding, subdomain, name, severity='info', extra
         cve_ids=cve_ids,
         source='WPScan',
     )
+    if template_id:
+        vuln_kwargs['template_id'] = template_id
+    if tokens:
+        vuln_kwargs['extracted_results'] = tokens
+    if enrichment:
+        vuln_kwargs['agent_enrichment'] = enrichment
+
+    vuln, created = save_vulnerability(**vuln_kwargs)
 
     if not vuln.is_gpt_used:
         try:
@@ -272,6 +381,14 @@ def save_finding(task_instance, finding, subdomain, name, severity='info', extra
             get_vulnerability_gpt_report((vuln.name, path), vulnerability_id=vuln.id)
         except Exception as e:
             logger.error("Failed to generate LLM description for finding %s: %s", vuln.name, e)
+
+    # GPT may overwrite remediation; re-stamp deterministic version guidance afterward.
+    if guidance:
+        try:
+            vuln.refresh_from_db()
+        except Exception:
+            pass
+        apply_version_guidance_to_vuln(vuln, guidance)
 
 def wpscan_scan(self, urls=[], ctx={}, description=None):
     """WPScan task for WordPress vulnerability scanning.

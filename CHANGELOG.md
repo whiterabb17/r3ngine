@@ -24,6 +24,8 @@
   - `nuclei_scan` retries the same tag batch on `WATCHDOG_STALL_KILL` up to `NUCLEI_HANG_MAX_ATTEMPTS` (default 2), then soft-skips so `NucleiPlannerWorkflow` continues to the next batch; wall-timeout kills soft-skip without retry.
   - Env knobs: `NUCLEI_STALL_TIMEOUT_SECONDS`, `NUCLEI_HANG_MAX_ATTEMPTS`. Requires a **go-executor** image rebuild + recreate for the watchdog to be live.
 
+- **WPScan ↔ WPTaint version enrichment**: WPScan persists installed/latest/`fixed_in` as `extracted_results` + `agent_enrichment.version_guidance` and a deterministic remediation line. WPTaint prefers the wordpress.org zip for the WPScan-installed plugin version (falls back to latest), then correlates the same version guidance onto taint findings for post-validation and webdev patch targets.
+
 #### Fixed
 
 - **Hung nuclei tag batches no longer sit for hours**: processes that heartbeat but make no progress (0% CPU / empty stdout / hang-monitor dumps) are killed and retried instead of consuming the Tier 6 stage budget until soft cancel.

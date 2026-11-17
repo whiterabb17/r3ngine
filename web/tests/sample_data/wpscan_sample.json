@@ -57,6 +57,7 @@
         {
           "title": "Sample Plugin Authenticated SQL Injection",
           "description": "Sample plugin vulnerability used by the fixture.",
+          "fixed_in": "1.2.3",
           "references": {
             "url": [
               "https://example.com/advisories/sample-plugin-1"
