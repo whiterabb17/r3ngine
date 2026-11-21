@@ -79,7 +79,7 @@ class StressParsersTest(unittest.TestCase):
         parser.parse_line("len=46 ip=192.168.1.1 ttl=64 id=123 sport=80 flags=SA seq=0 win=512 rtt=12.3 ms")
         parser.parse_line("len=46 ip=192.168.1.1 ttl=64 id=124 sport=80 flags=SA seq=1 win=512 rtt=15.6 ms")
         parser.parse_line("len=46 ip=192.168.1.1 ttl=64 id=125 sport=80 flags=SA seq=2 win=512 rtt=9.4 ms")
-        parser.parse_line("--- defijn.io hping statistic ---")
+        parser.parse_line("--- example.txt hping statistic ---")
         parser.parse_line("5 packets transmitted, 3 packets received, 40% packet loss")
         parser.parse_line("round-trip min/avg/max = 9.4/12.43/15.6 ms")
         

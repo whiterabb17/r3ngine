@@ -14,14 +14,15 @@
 # See documents/upgrading-infrastructure.md for the full procedure.
 #
 # Preconditions:
-#   - the db service is running; temporal, temporal-python-orchestrator and
+#   - the db-temporal service is running; temporal, temporal-python-orchestrator and
 #     temporal-go-executor are stopped (no scan is in progress)
 #   - `make temporal-upgrade` runs it; the database credentials are read from
-#     the db container unless POSTGRES_USER / POSTGRES_PASSWORD are set
+#     the db-temporal container unless POSTGRES_USER / POSTGRES_PASSWORD are set
 #
 # Optional environment:
 #   COMPOSE_PROJECT_NAME  compose project (default r3ngine)
-#   DB_CONTAINER          postgres container (default <project>-db-1)
+#   DB_CONTAINER          Temporal postgres container (default <project>-db-temporal-1)
+#   DB_HOST               Temporal postgres hostname on the compose network (default db-temporal)
 #   NETWORK               compose network (default <project>_r3ngine_network)
 #   IMAGE_PREFIX          registry prefix for the temporalio images, e.g. mirror.gcr.io/
 #   BACKUP_DIR            where the pre-upgrade dumps go (default ./backups)
@@ -33,13 +34,13 @@ set -euo pipefail
 umask 077
 
 PROJECT="${COMPOSE_PROJECT_NAME:-r3ngine}"
-DB_CONTAINER="${DB_CONTAINER:-${PROJECT}-db-1}"
+DB_CONTAINER="${DB_CONTAINER:-${PROJECT}-db-temporal-1}"
 NETWORK="${NETWORK:-${PROJECT}_r3ngine_network}"
 IMAGE_PREFIX="${IMAGE_PREFIX:-}"
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 HOP_SETTLE_SECONDS="${HOP_SETTLE_SECONDS:-30}"
 RESUME_AT="${RESUME_AT:-}"
-DB_HOST=db
+DB_HOST="${DB_HOST:-db-temporal}"
 DYNAMIC_CONFIG_DIR="$(cd "$(dirname "$0")/../docker/temporal/dynamicconfig" && pwd)"
 
 # The last release in this table must match the temporal image in docker-compose.yml.

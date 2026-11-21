@@ -278,6 +278,20 @@ log "Acquiring shared-volume lock (${SHARED_LOCK})..."
     fi
     pip3 install -q -r /usr/src/github/react2shell-scanner/requirements.txt
 
+    # PHP2Shell scanner (Assetnote de-fanged detection for CVE-2026-109618 / CVE-2026-109619)
+    if clone_repo php2shell-scanner https://github.com/assetnote/php2shell-scanner; then
+        pip3 install -q -r /usr/src/github/php2shell-scanner/requirements.txt
+        rm -rf /usr/src/github/php2shell-scanner/.git
+        log_done
+    fi
+
+    # Node2Shell scanner (Assetnote de-fanged detection for CVE-2026-111497)
+    if clone_repo node2shell-scanner https://github.com/assetnote/node2shell-scanner; then
+        pip3 install -q -r /usr/src/github/node2shell-scanner/requirements.txt
+        rm -rf /usr/src/github/node2shell-scanner/.git
+        log_done
+    fi
+
     # ctfr
     if clone_repo ctfr https://github.com/UnaPibaGeek/ctfr; then
         pip3 install -q -r /usr/src/github/ctfr/requirements.txt
@@ -361,8 +375,11 @@ log "Acquiring shared-volume lock (${SHARED_LOCK})..."
         pip3 install -q -r /usr/src/github/CMSeeK/requirements.txt
     fi
 
-    # testssl.sh (shell script, no pip)
-    if clone_repo testssl.sh https://github.com/drwetter/testssl.sh; then
+    # testssl.sh (shell script, no pip). Upstream moved to testssl/testssl.sh;
+    # pin stable 3.2 (default branch is 3.3dev).
+    if [ ! -d /usr/src/github/testssl.sh ]; then
+        log "  Cloning testssl.sh..."
+        git clone --depth 1 --branch 3.2 https://github.com/testssl/testssl.sh.git /usr/src/github/testssl.sh 2>&1 | tail -3 | sed 's/^/    /'
         chmod +x /usr/src/github/testssl.sh/testssl.sh
         log_done
     fi

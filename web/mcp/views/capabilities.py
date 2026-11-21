@@ -56,12 +56,8 @@ class McpListFollowupsView(McpDataView):
 
 class McpUpdateFollowupsView(McpScanDispatchView):
     def post(self, request, pk):
-        # Operator edit from IDE: mark operator so agent lock applies after
-        data = request.data
-        try:
-            data['operator'] = True
-        except (TypeError, AttributeError):
-            request._full_data = {**dict(data), 'operator': True}
+        # Do NOT force operator=True — MCP agents must not bypass operator_edited.
+        # JWT/UI vs agent is resolved in FollowupUpdateAPIView via resolve_is_operator.
         return _delegate_post(FollowupUpdateAPIView, request, pk=pk)
 
 

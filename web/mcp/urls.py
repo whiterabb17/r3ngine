@@ -42,6 +42,15 @@ from mcp.views.attack_path_proposals import (
     McpProposeAttackPathView,
     McpUpdateAttackPathProposalView,
 )
+from mcp.views.safe_poc import (
+    McpAbortSafePocView,
+    McpApproveSafePocView,
+    McpGetSafePocView,
+    McpListSafePocsView,
+    McpProposeSafePocView,
+    McpRunSafePocDirectView,
+    McpUpdateSafePocView,
+)
 from mcp.views.notes import McpNoteDetailView, McpNotesListCreateView
 from mcp.views.osint_verify import McpVerifyOsintStagingView
 from mcp.views.read import (
@@ -171,6 +180,13 @@ urlpatterns = [
     path('attack-path-proposals/<int:pk>/abort/', McpAbortAttackPathProposalView.as_view()),
     path('attack-path-proposals/<int:pk>/', McpGetAttackPathProposalView.as_view()),
     path('attack-path-proposals/', McpListAttackPathProposalsView.as_view()),
+    path('safe-poc/propose/', McpProposeSafePocView.as_view()),
+    path('safe-poc/run/', McpRunSafePocDirectView.as_view()),
+    path('safe-poc/<int:pk>/update/', McpUpdateSafePocView.as_view()),
+    path('safe-poc/<int:pk>/approve/', McpApproveSafePocView.as_view()),
+    path('safe-poc/<int:pk>/abort/', McpAbortSafePocView.as_view()),
+    path('safe-poc/<int:pk>/', McpGetSafePocView.as_view()),
+    path('safe-poc/', McpListSafePocsView.as_view()),
     path('engines/<int:pk>/', McpGetEngineDetailView.as_view()),
     path('engines/', McpListEnginesView.as_view()),
     path('capabilities/', McpListCapabilitiesView.as_view()),

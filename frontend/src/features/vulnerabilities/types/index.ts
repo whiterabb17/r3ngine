@@ -81,6 +81,8 @@ export interface GptVulnerabilityReport {
   impact?: string;
   remediation?: string;
   references?: string[];
+  estimated_cvss_score?: number | null;
+  cvss_estimated?: boolean;
   error?: string;
 }
 

@@ -183,13 +183,16 @@ class LLMVulnerabilityReportGenerator(LLMBaseGenerator):
         if not response:
             return {'status': False, 'error': 'Failed to parse LLM response'}
 
-        return {
+        result = {
             'status': True,
             'description': response.get('description', ''),
             'impact': response.get('impact', ''),
             'remediation': response.get('remediation', ''),
             'references': response.get('references', []),
         }
+        if response.get('estimated_cvss_score') is not None:
+            result['estimated_cvss_score'] = response['estimated_cvss_score']
+        return result
 
 class LLMAttackSuggestionGenerator(LLMBaseGenerator):
     def get_attack_suggestion(self, user_input):

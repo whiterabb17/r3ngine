@@ -267,6 +267,75 @@ class AttackPathProposal(models.Model):
         return f'AttackPathProposal {self.id} ({self.operation}/{self.status})'
 
 
+class SafePocAttempt(models.Model):
+    """SAFE PoC attempt (propose → edit → approve → execute catalog template)."""
+
+    STATUS_PROPOSED = 'proposed'
+    STATUS_APPROVED = 'approved'
+    STATUS_RUNNING = 'running'
+    STATUS_SUCCEEDED = 'succeeded'
+    STATUS_FAILED = 'failed'
+    STATUS_ABORTED = 'aborted'
+    STATUS_REJECTED = 'rejected'
+    STATUS_CHOICES = (
+        (STATUS_PROPOSED, 'Proposed'),
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_RUNNING, 'Running'),
+        (STATUS_SUCCEEDED, 'Succeeded'),
+        (STATUS_FAILED, 'Failed'),
+        (STATUS_ABORTED, 'Aborted'),
+        (STATUS_REJECTED, 'Rejected'),
+    )
+
+    project_slug = models.CharField(max_length=255, db_index=True)
+    scan_id = models.IntegerField(null=True, blank=True, db_index=True)
+    vulnerability_id = models.IntegerField(db_index=True)
+    status = models.CharField(
+        max_length=16, choices=STATUS_CHOICES, default=STATUS_PROPOSED, db_index=True
+    )
+    template_id = models.CharField(max_length=64)
+    params = models.JSONField(default=dict)
+    rationale = models.TextField(blank=True, default='')
+    agent_id = models.CharField(max_length=128, blank=True, default='')
+    result = models.JSONField(null=True, blank=True)
+    operator_edited = models.BooleanField(default=False)
+    temporal_workflow_id = models.CharField(max_length=255, blank=True, default='')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='safe_poc_attempts_created',
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='safe_poc_attempts_updated',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['project_slug', 'status', '-created_at'],
+                name='mcp_safepoc_project_idx',
+            ),
+            models.Index(fields=['scan_id', 'status'], name='mcp_safepoc_scan_id_idx'),
+            models.Index(
+                fields=['vulnerability_id', 'status'],
+                name='mcp_safepoc_vuln_id_idx',
+            ),
+        ]
+
+    def __str__(self):
+        return f'SafePocAttempt {self.id} ({self.template_id}/{self.status})'
+
+
 class McpAuditEvent(models.Model):
     session = models.ForeignKey(
         McpSession, null=True, blank=True, on_delete=models.SET_NULL, related_name='events'

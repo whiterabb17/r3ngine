@@ -348,6 +348,8 @@ class ProxychainsWrapper:
 
         # Shuffle for random distribution across the available pool
         test_list = list(self.proxies)
+        if not test_list:
+            return None
         random.shuffle(test_list)
 
         _log = logging.getLogger(__name__)
@@ -383,7 +385,7 @@ class ProxychainsWrapper:
             remove_proxy_from_pool(proxy_url)
             return None
 
-        max_workers = min(10, len(test_list))
+        max_workers = max(1, min(10, len(test_list)))
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             future_map = {pool.submit(_check_line, line): line for line in test_list}
             for fut in as_completed(future_map):

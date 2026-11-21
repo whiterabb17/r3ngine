@@ -116,7 +116,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM golang:1.26-bookworm AS vigolium-builder
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl git make unzip && \
+    apt-get install -y --no-install-recommends curl git make unzip file && \
     rm -rf /var/lib/apt/lists/*
 
 # Install bun (needed for vigolium-audit and jsscan embedded binary builds).
@@ -334,7 +334,7 @@ ENV PATH="/root/.local/bin:${PATH}"
 RUN --mount=type=cache,target=/root/.npm \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
-    npm install -g retire && \
+    npm install -g retire lighthouse && \
     rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
@@ -444,6 +444,16 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     rm -rf /usr/src/github/react2shell-scanner/.git
 
 RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/assetnote/php2shell-scanner /usr/src/github/php2shell-scanner && \
+    pip3 install -r /usr/src/github/php2shell-scanner/requirements.txt && \
+    rm -rf /usr/src/github/php2shell-scanner/.git
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    git clone --depth 1 https://github.com/assetnote/node2shell-scanner /usr/src/github/node2shell-scanner && \
+    pip3 install -r /usr/src/github/node2shell-scanner/requirements.txt && \
+    rm -rf /usr/src/github/node2shell-scanner/.git
+
+RUN --mount=type=cache,target=/root/.cache/pip \
     git clone --depth 1 https://github.com/UnaPibaGeek/ctfr /usr/src/github/ctfr && \
     pip3 install -r /usr/src/github/ctfr/requirements.txt && \
     rm -rf /usr/src/github/ctfr/.git
@@ -489,7 +499,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install -r /usr/src/github/CMSeeK/requirements.txt && \
     rm -rf /usr/src/github/CMSeeK/.git
 
-RUN git clone --depth 1 https://github.com/drwetter/testssl.sh /usr/src/github/testssl.sh && \
+# Upstream moved from drwetter/testssl.sh (now empty) to testssl/testssl.sh.
+# Pin stable 3.2 — default branch is 3.3dev.
+RUN git clone --depth 1 --branch 3.2 https://github.com/testssl/testssl.sh.git /usr/src/github/testssl.sh && \
     chmod +x /usr/src/github/testssl.sh/testssl.sh && \
     ln -sf /usr/src/github/testssl.sh/testssl.sh /usr/local/bin/testssl.sh
 

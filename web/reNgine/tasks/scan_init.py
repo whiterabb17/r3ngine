@@ -98,6 +98,7 @@ SCAN_PIPELINE_DEFINITION = [
             'vulnerability_scan', 'nuclei_scan', 'dalfox_xss_scan', 'crlfuzz_scan',
             's3scanner', 'waf_bypass', 'acunetix_scan', 'wpscan_scan',
             'vigolium_scan', 'cpanel_scan', 'react2shell_scan',
+            'php2shell_scan', 'node2shell_scan',
         ]
     },
     {
@@ -472,6 +473,12 @@ def initiate_subscan_temporal(
 		subdomain = Subdomain.objects.get(pk=subdomain_id)
 		scan = ScanHistory.objects.get(pk=subdomain.scan_history.id)
 		domain = Domain.objects.get(pk=subdomain.target_domain.id)
+
+		# Parent may already be SUCCESS/ABORTED with Redis scan_stop_{id} armed
+		# (finish path, abort_subscan, or orphan cleanup on orchestrator restart).
+		# Clear it or the Go executor force-kills every tool ~3s after start.
+		from reNgine.utils.scan_cancellation import set_scan_stop_kill_switch
+		set_scan_stop_kill_switch(scan.id, enabled=False)
 
 		# ---- Get EngineType ----
 		engine_id = engine_id or scan.scan_type.id
@@ -1186,6 +1193,14 @@ def cleanup_orphan_workflows_for_completed_scans():
 			.first()
 		)
 		if status not in (SUCCESS_TASK, ABORTED_TASK):
+			continue
+
+		# Live subscans on a finished parent are intentional post-scan work —
+		# do not cancel their workflows or arm the kill switch.
+		if SubScan.objects.filter(
+			scan_history_id=scan_id,
+			status__in=[INITIATED_TASK, RUNNING_TASK, PAUSED_TASK],
+		).exists():
 			continue
 
 		try:

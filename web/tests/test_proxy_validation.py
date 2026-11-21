@@ -208,6 +208,20 @@ class ProxyValidationTests(TestCase):
         result = get_random_proxy(http_only=True)
         self.assertEqual(result, '')
 
+    def test_get_random_proxy_http_only_socks_pool_returns_empty(self):
+        """SOCKS-only pool must not raise ThreadPoolExecutor(max_workers=0).
+
+        web_api_discovery → extract_auth_candidates calls get_random_proxy(http_only=True).
+        A SOCKS-only pool previously filtered to an empty candidate list and crashed
+        with ValueError('max_workers must be greater than 0'), failing the whole task.
+        """
+        Proxy.objects.create(
+            use_proxy=True,
+            proxies="socks5://socks-a.com:1080\nsocks5://socks-b.com:1080",
+        )
+        result = get_random_proxy(http_only=True)
+        self.assertEqual(result, '')
+
     # ------------------------------------------------------------------
     # 24-hour retention tests
     # ------------------------------------------------------------------

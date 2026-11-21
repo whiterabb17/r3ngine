@@ -27,6 +27,31 @@ services:
         reservations:
           memory: 512M
 
+  # Temporal persistence is isolated from the Django app DB (same as prod compose).
+  db-temporal:
+    restart: always
+    image: "postgres:16-alpine"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=temporal
+    volumes:
+      - postgres_temporal_data:/var/lib/postgresql/data/
+    networks:
+      - r3ngine_network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d temporal" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+
   redis:
     restart: always
     image: "redis:8.10-alpine"
@@ -162,6 +187,28 @@ services:
       - r3ngine_network
     restart: always
 
+  # Optional: COMPOSE_PROFILES=copilot or `make install-copilot` / `make up-copilot`.
+  # Uses shared `ollama`. Build context is the sibling r3ngine-copilot checkout.
+  assessment-copilot:
+    profiles: ["copilot"]
+    build:
+      context: ../r3ngine-copilot
+      dockerfile: Dockerfile
+    image: r3ngine-copilot:latest
+    environment:
+      - ASSESSMENT_OLLAMA_URL=${ASSESSMENT_OLLAMA_URL:-http://ollama:11434}
+      - COPILOT_MODEL_DEFAULT=${COPILOT_MODEL_DEFAULT:-qwen2.5:7b-instruct}
+      - COPILOT_DATA_DIR=/data
+    volumes:
+      - assessment_copilot_data:/data
+      - ../r3ngine-copilot/app:/app/app
+      - ../r3ngine-copilot/data:/app/data:ro
+    depends_on:
+      - ollama
+    networks:
+      - r3ngine_network
+    restart: always
+
   neo4j:
     image: neo4j:5.26-community
     restart: always
@@ -218,11 +265,11 @@ services:
       - DB_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PWD=${POSTGRES_PASSWORD}
-      - POSTGRES_SEEDS=db
+      - POSTGRES_SEEDS=db-temporal
     volumes:
       - ./temporal/setup-schema.sh:/scripts/setup-schema.sh:ro
     depends_on:
-      db:
+      db-temporal:
         condition: service_healthy
     networks:
       - r3ngine_network
@@ -237,11 +284,11 @@ services:
       - DB_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PWD=${POSTGRES_PASSWORD}
-      - POSTGRES_SEEDS=db
+      - POSTGRES_SEEDS=db-temporal
     volumes:
       - ./temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
     depends_on:
-      db:
+      db-temporal:
         condition: service_healthy
       temporal-schema:
         condition: service_completed_successfully
@@ -396,6 +443,8 @@ volumes:
     name: r3ngine_tool_config
   postgres_data:
     name: r3ngine_postgres_data
+  postgres_temporal_data:
+    name: r3ngine_postgres_temporal_data
   gf_patterns:
     name: r3ngine_gf_patterns
   nuclei_templates:
@@ -410,6 +459,8 @@ volumes:
     name: r3ngine_static_volume
   ollama_data:
     name: r3ngine_ollama_data
+  assessment_copilot_data:
+    name: r3ngine_assessment_copilot_data
   neo4j_data:
     name: r3ngine_neo4j_data
   plugins_data:

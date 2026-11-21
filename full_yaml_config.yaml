@@ -442,6 +442,12 @@ vulnerability_scan:
     cpanel_user_wordlist: /usr/src/wordlist/cpanel_users.txt
     proxy_type: rotating          # rotating | single
 
+  php_scanner:
+    run_php2shell: true           # Assetnote php2shell (CVE-2026-109618 / CVE-2026-109619)
+
+  node_scanner:
+    run_node2shell: true          # Assetnote node2shell (CVE-2026-111497)
+
   wpscan_enumeration: vp,vt,u     # WPScan enumeration options
   wpscan_detection_mode: mixed    # mixed | passive | aggressive
 

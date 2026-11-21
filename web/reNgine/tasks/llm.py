@@ -11,6 +11,39 @@ from startScan.models import Vulnerability, GPTVulnerabilityReport, Vulnerabilit
 
 logger = logging.getLogger(__name__)
 
+# Mid-band CVSS v3.1 estimates when the LLM omits a score (severity int → float).
+_SEVERITY_CVSS_FALLBACK = {
+	0: 0.0,   # info
+	1: 3.9,   # low
+	2: 5.5,   # medium
+	3: 7.5,   # high
+	4: 9.5,   # critical
+}
+
+
+def _severity_band_cvss(severity):
+	"""Return a mid-band CVSS estimate for a Nuclei-style severity int, or None."""
+	try:
+		return _SEVERITY_CVSS_FALLBACK.get(int(severity))
+	except (TypeError, ValueError):
+		return None
+
+
+def _resolve_estimated_cvss(response, vulnerability):
+	"""Pick an estimated CVSS from the LLM response or severity-band fallback.
+
+	Only used when the vulnerability has no tool/NVD cvss_score yet.
+	"""
+	score = response.get('estimated_cvss_score')
+	if score is not None:
+		try:
+			score = float(score)
+			if 0.0 <= score <= 10.0:
+				return score
+		except (TypeError, ValueError):
+			pass
+	return _severity_band_cvss(getattr(vulnerability, 'severity', None))
+
 
 def llm_vulnerability_description(vulnerability_id):
 	"""Generate and store Vulnerability Description using GPT.
@@ -42,12 +75,21 @@ def get_vulnerability_gpt_report(vuln, vulnerability_id=None):
 			lookup_vulnerability = Vulnerability.objects.get(id=vulnerability_id)
 			if lookup_vulnerability.is_gpt_used and lookup_vulnerability.description and lookup_vulnerability.impact and lookup_vulnerability.remediation:
 				logger.info("Returning existing GPT report from Vulnerability ID %s", vulnerability_id)
+				# Backfill estimated CVSS when the finding already has GPT text but no score.
+				if lookup_vulnerability.cvss_score is None:
+					fallback = _severity_band_cvss(lookup_vulnerability.severity)
+					if fallback is not None:
+						lookup_vulnerability.cvss_score = fallback
+						lookup_vulnerability.cvss_estimated = True
+						lookup_vulnerability.save(update_fields=['cvss_score', 'cvss_estimated'])
 				return {
 					'status': True,
 					'description': lookup_vulnerability.description,
 					'impact': lookup_vulnerability.impact,
 					'remediation': lookup_vulnerability.remediation,
-					'references': [url.url for url in lookup_vulnerability.references.all()]
+					'references': [url.url for url in lookup_vulnerability.references.all()],
+					'estimated_cvss_score': lookup_vulnerability.cvss_score if lookup_vulnerability.cvss_estimated else None,
+					'cvss_estimated': bool(lookup_vulnerability.cvss_estimated),
 				}
 		except Vulnerability.DoesNotExist:
 			pass
@@ -64,8 +106,10 @@ def get_vulnerability_gpt_report(vuln, vulnerability_id=None):
 			'description': stored.description,
 			'impact': stored.impact,
 			'remediation': stored.remediation,
-			'references': [url.url for url in stored.references.all()]
+			'references': [url.url for url in stored.references.all()],
 		}
+		if stored.estimated_cvss_score is not None:
+			response['estimated_cvss_score'] = stored.estimated_cvss_score
 	else:
 		# 3. Call LLM
 		report = LLMVulnerabilityReportGenerator(logger=logger)
@@ -81,7 +125,8 @@ def get_vulnerability_gpt_report(vuln, vulnerability_id=None):
 				response.get('description'),
 				response.get('impact'),
 				response.get('remediation'),
-				response.get('references', [])
+				response.get('references', []),
+				estimated_cvss_score=response.get('estimated_cvss_score'),
 			)
 
 	# 4. Update all matching vulnerabilities that don't have GPT info yet, or at least the specific one
@@ -91,6 +136,11 @@ def get_vulnerability_gpt_report(vuln, vulnerability_id=None):
 			v.impact = response.get('impact', v.impact)
 			v.remediation = response.get('remediation', v.remediation)
 			v.is_gpt_used = True
+			if v.cvss_score is None:
+				estimated = _resolve_estimated_cvss(response, v)
+				if estimated is not None:
+					v.cvss_score = estimated
+					v.cvss_estimated = True
 			v.save()
 			for url in response.get('references', []):
 				ref, _ = VulnerabilityReference.objects.get_or_create(url=url)
@@ -111,22 +161,46 @@ def get_vulnerability_gpt_report(vuln, vulnerability_id=None):
 		for v in qs:
 			_apply_gpt_fields(v)
 
+		# Reflect only what was actually applied to the requested finding.
+		# Never mark cvss_estimated from the LLM payload alone — tool/NVD scores
+		# are left untouched by _apply_gpt_fields and must not show as estimated.
+		if vulnerability_id:
+			try:
+				applied = Vulnerability.objects.get(id=vulnerability_id)
+				if applied.cvss_estimated and applied.cvss_score is not None:
+					response['estimated_cvss_score'] = applied.cvss_score
+					response['cvss_estimated'] = True
+				else:
+					response.pop('estimated_cvss_score', None)
+					response['cvss_estimated'] = False
+			except Vulnerability.DoesNotExist:
+				pass
+
 	return response
 
 
-def add_gpt_description_db(title, path, description, impact, remediation, references):
+def add_gpt_description_db(title, path, description, impact, remediation, references, estimated_cvss_score=None):
 	logger.info("Adding GPT Report to DB for %s, PATH: %s", title, path)
 	if not path:
 		path = '/'
 
+	defaults = {
+		'description': description,
+		'impact': impact,
+		'remediation': remediation,
+	}
+	if estimated_cvss_score is not None:
+		try:
+			score = float(estimated_cvss_score)
+			if 0.0 <= score <= 10.0:
+				defaults['estimated_cvss_score'] = score
+		except (TypeError, ValueError):
+			pass
+
 	gpt_report, created = GPTVulnerabilityReport.objects.update_or_create(
 		url_path=path,
 		title=title,
-		defaults={
-			'description': description,
-			'impact': impact,
-			'remediation': remediation
-		}
+		defaults=defaults,
 	)
 
 	if references:

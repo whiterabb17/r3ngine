@@ -1,6 +1,8 @@
 """MCP views for attack-path proposals and path detail (propose → approve)."""
 from __future__ import annotations
 
+import logging
+
 from rest_framework.response import Response
 
 from api.permissions import IsPenetrationTester
@@ -15,9 +17,12 @@ from mcp.attack_path_proposals import (
     update_proposal,
 )
 from mcp.models import AttackPathProposal
+from mcp.operator_gate import resolve_is_operator
 from mcp.views.base import McpDataView
 from mcp.views.validation import serialize_path_summary
 from startScan.models import Vulnerability
+
+logger = logging.getLogger(__name__)
 
 
 class McpGetAttackPathView(McpDataView):
@@ -115,23 +120,32 @@ class McpUpdateAttackPathProposalView(McpDataView):
         proposal = AttackPathProposal.objects.filter(pk=pk).first()
         if not proposal:
             return Response({'error': 'Not found'}, status=404)
-        data = request.data
-        # Operator edit from IDE: mark operator so agent lock applies after
-        try:
-            data['operator'] = True
-        except (TypeError, AttributeError):
-            request._full_data = {**dict(data), 'operator': True}
-            data = request.data
+        data = request.data or {}
+        # MCP agents cannot claim operator via body; JWT/UI only.
+        is_operator = resolve_is_operator(request)
         try:
             updated = update_proposal(
                 proposal,
                 payload=data['payload'] if 'payload' in data else None,
                 rationale=data['rationale'] if 'rationale' in data else None,
                 user=request.user,
-                is_operator=True,
+                is_operator=is_operator,
             )
         except AttackPathProposalError as exc:
+            logger.warning(
+                'attack_path proposal update failed id=%s status=%s err=%s is_operator=%s',
+                pk,
+                exc.status,
+                exc,
+                is_operator,
+            )
             return Response({'error': str(exc)}, status=exc.status)
+        logger.info(
+            'attack_path proposal updated id=%s is_operator=%s operator_edited=%s',
+            updated.id,
+            is_operator,
+            updated.operator_edited,
+        )
         return Response(serialize_proposal(updated))
 
 

@@ -75,6 +75,52 @@ class SubScanSerializer(serializers.ModelSerializer):
 		return ''
 
 
+class SubScanStatusSerializer(serializers.ModelSerializer):
+	"""Lean subscan payload for /api/scan_status/ polls (no M2M)."""
+
+	subdomain_name = serializers.SerializerMethodField('get_subdomain_name')
+	time_taken = serializers.SerializerMethodField('get_total_time_taken')
+	elapsed_time = serializers.SerializerMethodField('get_elapsed_time')
+	completed_ago = serializers.SerializerMethodField('get_completed_ago')
+	engine = serializers.SerializerMethodField('get_engine_name')
+
+	class Meta:
+		model = SubScan
+		fields = [
+			'id',
+			'type',
+			'status',
+			'subdomain',
+			'scan_history',
+			'start_scan_date',
+			'stop_scan_date',
+			'error_message',
+			'workflow_ids',
+			'subdomain_name',
+			'time_taken',
+			'elapsed_time',
+			'completed_ago',
+			'engine',
+		]
+
+	def get_subdomain_name(self, subscan):
+		return subscan.subdomain.name if subscan.subdomain_id else ''
+
+	def get_total_time_taken(self, subscan):
+		return subscan.get_total_time_taken()
+
+	def get_elapsed_time(self, subscan):
+		return subscan.get_elapsed_time()
+
+	def get_completed_ago(self, subscan):
+		return subscan.get_completed_ago()
+
+	def get_engine_name(self, subscan):
+		if subscan.engine:
+			return subscan.engine.engine_name
+		return ''
+
+
 class CommandSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = Command
@@ -189,6 +235,7 @@ class ScanHistorySerializer(serializers.ModelSerializer):
 		depth = 1
 
 	def get_is_spiderfoot_running(self, obj):
+
 		# Read from the related manager rather than filtering in SQL, so a
 		# prefetch_related('scanactivity_set') on the caller's queryset serves
 		# this, get_tier_info and the task counts from one shared fetch.
@@ -393,6 +440,28 @@ class ScanHistorySerializer(serializers.ModelSerializer):
 		# no prefetch can serve. The reverse accessor returns the same set and
 		# is satisfied by prefetch_related('domain__domains').
 		return [org.name for org in scan_history.domain.domains.all()]
+
+
+class ScanHistoryListSerializer(ScanHistorySerializer):
+	"""List/poll payload: depth 0 with slim nested domain/engine only."""
+
+	domain = serializers.SerializerMethodField()
+	scan_type = serializers.SerializerMethodField()
+
+	class Meta(ScanHistorySerializer.Meta):
+		depth = 0
+
+	def get_domain(self, obj):
+		domain = getattr(obj, 'domain', None)
+		if domain is None:
+			return None
+		return {'id': domain.id, 'name': domain.name}
+
+	def get_scan_type(self, obj):
+		scan_type = getattr(obj, 'scan_type', None)
+		if scan_type is None:
+			return None
+		return {'engine_name': scan_type.engine_name}
 
 
 class ScanActivitySerializer(serializers.ModelSerializer):

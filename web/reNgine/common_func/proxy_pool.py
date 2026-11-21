@@ -523,6 +523,15 @@ def get_random_proxy(http_only=False, socks5_only=False):
 	priority_proxies = _normalise(priority_raw)
 	proxies = _normalise(raw_proxies)
 
+	# Apply scheme filters before priority / pool selection so http_only never
+	# tries SOCKS entries (or the reverse), and so an empty filtered pool
+	# returns '' instead of opening ThreadPoolExecutor(max_workers=0).
+	if http_only:
+		priority_proxies = [p for p in priority_proxies if p.lower().startswith('http')]
+		proxies = [p for p in proxies if p.lower().startswith('http')]
+		if not priority_proxies and not proxies:
+			return ''
+
 	if socks5_only:
 		def _is_socks5(url):
 			lower = url.lower()
@@ -552,9 +561,6 @@ def get_random_proxy(http_only=False, socks5_only=False):
 			len(priority_proxies),
 		)
 
-	if http_only:
-		proxies = [p for p in proxies if p.lower().startswith('http')]
-
 	# Remove entries that have already failed this session (within TTL)
 	now_epoch = time.time()
 	candidates = [
@@ -565,7 +571,9 @@ def get_random_proxy(http_only=False, socks5_only=False):
 		# All known proxies have failed – clear the cache and try again fresh
 		logger.warning('All cached proxies failed this session. Clearing failure cache.')
 		_failed_proxy_cache.clear()
-		candidates = proxies
+		candidates = list(proxies)
+	if not candidates:
+		return ''
 
 	# ------------------------------------------------------------------
 	# Freshness handling — three tiers rather than one blind window.
@@ -658,8 +666,11 @@ def get_random_proxy(http_only=False, socks5_only=False):
 	# Parallel re-validation – first live proxy wins
 	# ------------------------------------------------------------------
 	random.shuffle(candidates)
-	# Cap workers to avoid spawning thousands of threads for a huge list
-	max_workers = min(50, len(candidates))
+	# Cap workers to avoid spawning thousands of threads for a huge list.
+	# len(candidates) is guaranteed > 0 by the early returns above; keep the
+	# floor defensive so an empty list can never raise ValueError from
+	# ThreadPoolExecutor (that failure previously marked web_api_discovery FAILED).
+	max_workers = max(1, min(50, len(candidates)))
 
 	result_holder = [None]  # thread-safe single-slot via GIL
 

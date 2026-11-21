@@ -653,7 +653,7 @@
     update_command: apt install hydra --upgrade
     install_command: apt install hydra
     version_match_regex: 'v(?i:v)?\d+\.\d+(?:\.\d+)*'
-    is_default: true
+    is_default: false
     is_subdomain_gathering: false
     is_github_cloned: false
     github_clone_path: null
@@ -687,7 +687,7 @@
     update_command: go install github.com/sensepost/gowitness@latest
     install_command: go install github.com/sensepost/gowitness@latest
     version_match_regex: (?i:v)?\d+\.\d+(?:\.\d+)*
-    is_default: true
+    is_default: false
     is_subdomain_gathering: false
     is_github_cloned: false
     github_clone_path: null
@@ -738,7 +738,7 @@
     update_command: cd /usr/src/github/LinkedInt && git pull
     install_command: git clone https://github.com/mdunivant/LinkedInt /usr/src/github/LinkedInt
     version_match_regex: null
-    is_default: true
+    is_default: false
     is_subdomain_gathering: false
     is_github_cloned: true
     github_clone_path: /usr/src/github/LinkedInt
@@ -772,7 +772,7 @@
     update_command: git pull
     install_command: git clone --depth 1 https://github.com/sqlmapproject/sqlmap.git
     version_match_regex: '(?i:v)?\d+\.\d+(?:\.\d+)*'
-    is_default: true
+    is_default: false
     is_subdomain_gathering: false
     is_github_cloned: true
     github_clone_path: /usr/src/github/sqlmap
@@ -790,7 +790,7 @@
     update_command: git pull
     install_command: git clone https://github.com/s0md3v/XSStrike.git
     version_match_regex: '(?i:v)?\d+\.\d+(?:\.\d+)*'
-    is_default: true
+    is_default: false
     is_subdomain_gathering: false
     is_github_cloned: true
     github_clone_path: /usr/src/github/XSStrike
@@ -819,12 +819,12 @@
     logo_url: https://testssl.sh/images/testssl.sh.png
     name: testssl.sh
     description: "testssl.sh is a comprehensive TLS/SSL testing tool that checks a server's service on any port for the support of TLS/SSL ciphers, protocols and cryptographic flaws. Covers BEAST, BREACH, POODLE, ROBOT, DROWN, Heartbleed, CRIME, LUCKY13, SWEET32, Logjam and FREAK."
-    github_url: https://github.com/drwetter/testssl.sh
-    license_url: https://github.com/drwetter/testssl.sh/blob/3.2/LICENSE
+    github_url: https://github.com/testssl/testssl.sh
+    license_url: https://github.com/testssl/testssl.sh/blob/3.2/LICENSE
     version_lookup_command: testssl.sh --version
     version_match_regex: "v?\\d+\\.\\d+"
-    install_command: "git clone --depth 1 https://github.com/drwetter/testssl.sh /usr/src/github/testssl.sh && chmod +x /usr/src/github/testssl.sh/testssl.sh"
-    update_command: "cd /usr/src/github/testssl.sh && git pull"
+    install_command: "git clone --depth 1 --branch 3.2 https://github.com/testssl/testssl.sh.git /usr/src/github/testssl.sh && chmod +x /usr/src/github/testssl.sh/testssl.sh"
+    update_command: "cd /usr/src/github/testssl.sh && git pull origin 3.2"
     is_default: true
     is_subdomain_gathering: false
     is_github_cloned: true
@@ -948,4 +948,38 @@
     is_subdomain_gathering: false
     is_github_cloned: false
     github_clone_path: null
+    subdomain_gathering_command: null
+- model: scanEngine.installedexternaltool
+  pk: 55
+  fields:
+    logo_url: null
+    name: php2shell-scanner
+    description: Assetnote de-fanged high-fidelity scanner for php2shell (CVE-2026-109618 and CVE-2026-109619). Detection only; does not execute a PoC.
+    github_url: https://github.com/assetnote/php2shell-scanner
+    license_url: https://github.com/assetnote/php2shell-scanner/blob/master/LICENSE
+    version_lookup_command: python3 /usr/src/github/php2shell-scanner/scanner.py --help
+    update_command: cd /usr/src/github/php2shell-scanner && git pull
+    install_command: git clone https://github.com/assetnote/php2shell-scanner /usr/src/github/php2shell-scanner
+    version_match_regex: '(?i:v)?\d+\.\d+(?:\.\d+)*'
+    is_default: true
+    is_subdomain_gathering: false
+    is_github_cloned: true
+    github_clone_path: /usr/src/github/php2shell-scanner
+    subdomain_gathering_command: null
+- model: scanEngine.installedexternaltool
+  pk: 56
+  fields:
+    logo_url: null
+    name: node2shell-scanner
+    description: Assetnote de-fanged high-fidelity scanner for node2shell (CVE-2026-111497). Detection only; does not execute a command.
+    github_url: https://github.com/assetnote/node2shell-scanner
+    license_url: https://github.com/assetnote/node2shell-scanner/blob/master/LICENSE
+    version_lookup_command: python3 /usr/src/github/node2shell-scanner/scanner.py --help
+    update_command: cd /usr/src/github/node2shell-scanner && git pull
+    install_command: git clone https://github.com/assetnote/node2shell-scanner /usr/src/github/node2shell-scanner
+    version_match_regex: '(?i:v)?\d+\.\d+(?:\.\d+)*'
+    is_default: true
+    is_subdomain_gathering: false
+    is_github_cloned: true
+    github_clone_path: /usr/src/github/node2shell-scanner
     subdomain_gathering_command: null

@@ -19,12 +19,14 @@ from reNgine.tasks.parsers import (
 	parse_dalfox_result,
 	parse_crlfuzz_result,
 	parse_s3scanner_result,
+	s3_bucket_public_issues,
+	build_s3_bucket_misconfig_vuln,
 )
 from reNgine.tasks.llm import get_vulnerability_gpt_report, add_gpt_description_db
 from reNgine.tasks.crawl import parse_curl_output
 from reNgine.tasks.notifications import send_hackerone_report
 from reNgine.tasks.acunetix import acunetix_scan
-from reNgine.tasks.vulnerability import cpanel_scan, react2shell_scan
+from reNgine.tasks.vulnerability import cpanel_scan, react2shell_scan, php2shell_scan, node2shell_scan
 from reNgine.tasks.wpscan import wpscan_scan
 from reNgine.nuclei_batch_utils import build_tag_batches
 from startScan.models import *
@@ -39,6 +41,22 @@ def _nuclei_line_is_proxy_dead(line) -> bool:
 		return False
 	cleaned = remove_ansi_escape_sequences(line).lower()
 	return NUCLEI_PROXY_DEAD_MARKER in cleaned
+
+
+def _nuclei_line_is_hang_kill(line) -> bool:
+	"""Return True when go-executor killed nuclei for stall / hang-monitor dump."""
+	if not isinstance(line, str):
+		return False
+	cleaned = remove_ansi_escape_sequences(line)
+	return NUCLEI_HANG_KILL_MARKER in cleaned
+
+
+def _nuclei_line_is_timeout_kill(line) -> bool:
+	"""Return True when go-executor hit the wall-clock timeout_seconds kill."""
+	if not isinstance(line, str):
+		return False
+	cleaned = remove_ansi_escape_sequences(line)
+	return NUCLEI_TIMEOUT_KILL_MARKER in cleaned
 
 
 def _refresh_nuclei_proxy_file(proxies_file_path: str) -> bool:
@@ -91,28 +109,46 @@ def _resolve_scoped_http_targets(self, urls, ctx):
 
 # Merged second-order config — covers takeover, CDN, JS, parameter, and title detection.
 # Written to disk before each scan run so we never depend on a GitHub download.
+# Shape must match mhmdiaa/second-order Configuration:
+#   LogNon200Queries / LogQueries -> map[tag]attribute (NOT CSS-selector arrays)
+#   LogInline -> []string of tags
 _SECOND_ORDER_MERGED_CONFIG: dict = {
     # Non-200 external URLs — primary takeover/hijacking signal (HIGH severity)
-    "LogNon200Queries": [
-        "img[src]", "script[src]", "link[href]", "form[action]",
-        "iframe[src]", "a[href]", "object[data]", "source[src]",
-        "frame[src]", "embed[src]", "area[href]", "base[href]",
-    ],
+    "LogNon200Queries": {
+        "img": "src",
+        "script": "src",
+        "link": "href",
+        "form": "action",
+        "iframe": "src",
+        "a": "href",
+        "object": "data",
+        "source": "src",
+        "frame": "src",
+        "embed": "src",
+        "area": "href",
+        "base": "href",
+        "svg": "src",
+    },
     # All external attribute references — recon / SSRF vector discovery (INFO)
-    "LogQueries": [
-        "img[src]", "script[src]", "link[href]", "form[action]",
-        "input[name]", "input[value]", "meta[content]", "meta[name]",
-        "iframe[src]", "a[href]", "object[data]", "source[src]",
-        "frame[src]", "embed[src]", "area[href]", "base[href]",
-    ],
+    # One attribute per tag (Go map[string]string); prefer name/content for forms/meta.
+    "LogQueries": {
+        "img": "src",
+        "script": "src",
+        "link": "href",
+        "form": "action",
+        "input": "name",
+        "meta": "content",
+        "iframe": "src",
+        "a": "href",
+        "object": "data",
+        "source": "src",
+        "frame": "src",
+        "embed": "src",
+        "area": "href",
+        "base": "href",
+    },
     # Inline content — JS and title analysis (INFO)
     "LogInline": ["script", "title", "noscript", "style"],
-    "Headers": {
-        "User-Agent": (
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
-    },
 }
 
 def vulnerability_scan(self, urls=[], ctx={}, description=None):
@@ -129,7 +165,10 @@ def vulnerability_scan(self, urls=[], ctx={}, description=None):
 	# Note: vulnerability_scan is bypassed by RunVulnerabilityScanActivity in Temporal.
 	# This path handles any direct calls by dispatching each scanner sequentially.
 	vuln_config = config.get(VULNERABILITY_SCAN) or {}
-	from reNgine.definitions import RUN_NUCLEI, RUN_CRLFUZZ, RUN_DALFOX, RUN_S3SCANNER, RUN_ACUNETIX, RUN_WPSCAN, RUN_CPANEL2SHELL, RUN_REACT2SHELL
+	from reNgine.definitions import (
+		RUN_NUCLEI, RUN_CRLFUZZ, RUN_DALFOX, RUN_S3SCANNER, RUN_ACUNETIX, RUN_WPSCAN,
+		RUN_CPANEL2SHELL, RUN_REACT2SHELL, RUN_PHP2SHELL, RUN_NODE2SHELL,
+	)
 
 	if vuln_config.get(RUN_NUCLEI, True):
 		nuclei_scan(self, urls=urls, ctx=ctx, description='Nuclei Scan')
@@ -152,6 +191,12 @@ def vulnerability_scan(self, urls=[], ctx={}, description=None):
 	react_cfg = vuln_config.get('react_scanner', {})
 	if react_cfg.get(RUN_REACT2SHELL, True):
 		react2shell_scan(self, ctx=ctx, description='React Vulnerability Scan')
+	php_cfg = vuln_config.get('php_scanner', {})
+	if php_cfg.get(RUN_PHP2SHELL, True):
+		php2shell_scan(self, ctx=ctx, description='PHP2Shell Vulnerability Scan')
+	node_cfg = vuln_config.get('node_scanner', {})
+	if node_cfg.get(RUN_NODE2SHELL, True):
+		node2shell_scan(self, ctx=ctx, description='Node2Shell Vulnerability Scan')
 	semgrep_scan(self, ctx=ctx, mode='vulnerability', description='Semgrep Vulnerability Scan')
 	
 	if vuln_config.get('run_smugglex', True):
@@ -443,12 +488,15 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 
 	import json
 	proxy_dead_skip = False
-	for attempt in range(1, NUCLEI_PROXY_DEAD_MAX_ATTEMPTS + 1):
+	hang_skip = False
+	timeout_skip = False
+	proxy_attempts = 0
+	hang_attempts = 0
+	attempt = 0
+	# Independent hang / proxy-dead budgets — do not share one combined loop cap.
+	while True:
+		attempt += 1
 		if attempt > 1:
-			logger.warning(
-				'[NUCLEI] PROXY DEAD RETRY | scan_id=%s attempt=%d/%d — refreshing proxies',
-				self.scan_id, attempt, NUCLEI_PROXY_DEAD_MAX_ATTEMPTS,
-			)
 			if proxies_file_path:
 				# Prefer a fresh write from the configured pool. If the pool was
 				# emptied or unavailable, keep the existing file so transient
@@ -464,7 +512,7 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 						results = []
 						break
 					logger.warning(
-						'[NUCLEI] PROXY DEAD RETRY | scan_id=%s — pool empty, '
+						'[NUCLEI] RETRY | scan_id=%s — pool empty, '
 						'reusing existing proxy file',
 						self.scan_id,
 					)
@@ -489,8 +537,13 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 
 		results = []
 		proxy_dead = False
+		hang_killed = False
+		timeout_killed = False
+		# Per-scan CWD so hang-monitor dumps land under results_dir and the
+		# go-executor dump watcher does not see another scan's dumps.
 		line_source = stream_command(
 			cmd,
+			cwd=self.results_dir,
 			history_file=self.history_file,
 			scan_id=self.scan_id,
 			activity_id=self.activity_id)
@@ -502,6 +555,20 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 					logger.warning(
 						'[NUCLEI] PROXY DEAD | scan_id=%s attempt=%d/%d | %s',
 						self.scan_id, attempt, NUCLEI_PROXY_DEAD_MAX_ATTEMPTS,
+						remove_ansi_escape_sequences(line),
+					)
+				elif _nuclei_line_is_hang_kill(line):
+					hang_killed = True
+					logger.warning(
+						'[NUCLEI] HANG KILL | scan_id=%s attempt=%d/%d tags=%s | %s',
+						self.scan_id, hang_attempts + 1, NUCLEI_HANG_MAX_ATTEMPTS,
+						tags or '-', remove_ansi_escape_sequences(line),
+					)
+				elif _nuclei_line_is_timeout_kill(line):
+					timeout_killed = True
+					logger.warning(
+						'[NUCLEI] TIMEOUT KILL | scan_id=%s tags=%s | %s',
+						self.scan_id, tags or '-',
 						remove_ansi_escape_sequences(line),
 					)
 				continue
@@ -630,24 +697,63 @@ def nuclei_scan(self, urls=[], ctx={}, description=None, prepare_only=False, par
 				except Exception as e:
 					logger.warning("HackerOne report send failed for vuln %s: %s", vuln.id, e)
 
-		if not proxy_dead:
+		if timeout_killed:
+			logger.warning(
+				'[NUCLEI] TIMEOUT SKIP | scan_id=%s tags=%s — wall-clock kill, not retrying',
+				self.scan_id, tags or '-',
+			)
+			timeout_skip = True
+			results = []
 			break
 
-		if attempt >= NUCLEI_PROXY_DEAD_MAX_ATTEMPTS:
+		if hang_killed:
+			hang_attempts += 1
+			if hang_attempts >= NUCLEI_HANG_MAX_ATTEMPTS:
+				logger.warning(
+					'[NUCLEI] HANG SKIP | scan_id=%s tags=%s — gave up after %d hang kills',
+					self.scan_id, tags or '-', NUCLEI_HANG_MAX_ATTEMPTS,
+				)
+				hang_skip = True
+				results = []
+				break
 			logger.warning(
-				'[NUCLEI] PROXY DEAD SKIP | scan_id=%s — gave up after %d attempts',
-				self.scan_id, NUCLEI_PROXY_DEAD_MAX_ATTEMPTS,
+				'[NUCLEI] HANG KILL RETRY | scan_id=%s tags=%s attempt=%d/%d',
+				self.scan_id, tags or '-', hang_attempts + 1, NUCLEI_HANG_MAX_ATTEMPTS,
 			)
-			proxy_dead_skip = True
-			results = []
+			continue
 
+		if proxy_dead:
+			proxy_attempts += 1
+			if proxy_attempts >= NUCLEI_PROXY_DEAD_MAX_ATTEMPTS:
+				logger.warning(
+					'[NUCLEI] PROXY DEAD SKIP | scan_id=%s — gave up after %d attempts',
+					self.scan_id, NUCLEI_PROXY_DEAD_MAX_ATTEMPTS,
+				)
+				proxy_dead_skip = True
+				results = []
+				break
+			logger.warning(
+				'[NUCLEI] PROXY DEAD RETRY | scan_id=%s attempt=%d/%d — refreshing proxies',
+				self.scan_id, proxy_attempts + 1, NUCLEI_PROXY_DEAD_MAX_ATTEMPTS,
+			)
+			continue
+
+		break
+
+	_skip_note = ''
+	if proxy_dead_skip:
+		_skip_note = ' (skipped: all proxies dead)'
+	elif hang_skip:
+		_skip_note = ' (skipped: hang watchdog)'
+	elif timeout_skip:
+		_skip_note = ' (skipped: wall-clock timeout)'
 	logger.warning(
 		'[NUCLEI] DONE | scan_id=%s severity=%s tags=%s targets=%s findings=%d elapsed=%ss%s',
 		self.scan_id, severities_str or '-', tags or '-', _target_count,
 		len(results), round(time.time() - _nuclei_started, 1),
-		' (skipped: all proxies dead)' if proxy_dead_skip else '',
+		_skip_note,
 	)
-	if not results and not proxy_dead_skip:
+	if not results and not proxy_dead_skip and not hang_skip and not timeout_skip:
 		# Distinguishes "ran and matched nothing" from "never ran" — the two were
 		# indistinguishable in the log before, which is what made nuclei look broken.
 		logger.warning(
@@ -1003,6 +1109,41 @@ def crlfuzz_scan(self, urls=[], ctx={}, description=None):
 	return results
 
 
+def _persist_s3_bucket_misconfig_finding(task, scan_history, bucket_result):
+	"""Create a Vulnerability row when s3scanner reports public ACL misconfig."""
+	issues = s3_bucket_public_issues(bucket_result)
+	vuln_data = build_s3_bucket_misconfig_vuln(bucket_result, issues=issues)
+	if not vuln_data or not scan_history:
+		return None
+
+	dedup_fields = vuln_data.pop('dedup_fields')
+	bucket_name = (bucket_result.get('name') or '').strip()
+	subdomain = None
+	if bucket_name:
+		subdomain = Subdomain.objects.filter(
+			scan_history=scan_history,
+			name=bucket_name,
+		).first()
+
+	vuln, created = save_vulnerability(
+		vuln_data,
+		scan_history=scan_history,
+		target_domain=getattr(task, 'domain', None),
+		subdomain=subdomain,
+		subscan=getattr(task, 'subscan', None),
+		dedup_fields=dedup_fields,
+	)
+	logger.info(
+		"s3scanner misconfig finding %s bucket=%s provider=%s issues=%s created=%s",
+		getattr(vuln, 'id', None),
+		bucket_name,
+		bucket_result.get('provider'),
+		','.join(issues),
+		created,
+	)
+	return vuln
+
+
 def s3scanner(self, ctx={}, description=None):
 	"""Bucket Scanner
 
@@ -1033,7 +1174,9 @@ def s3scanner(self, ctx={}, description=None):
 			if line.get('bucket', {}).get('exists', 0) == 1:
 				result = parse_s3scanner_result(line)
 				s3bucket, created = S3Bucket.objects.get_or_create(**result)
-				scan_history.buckets.add(s3bucket)
+				if scan_history:
+					scan_history.buckets.add(s3bucket)
+					_persist_s3_bucket_misconfig_finding(self, scan_history, result)
 				logger.info("s3 bucket added %s-%s-%s", result['provider'], result['name'], result['region'])
 
 
@@ -1551,9 +1694,8 @@ def smugglex_scan(self, urls=[], ctx={}, description=None):
 def second_order_scan(self, urls=[], ctx={}, description=None):
 	"""Second Order Scan — runs the second-order Go tool against each target URL.
 
-	Writes the embedded merged config (_SECOND_ORDER_MERGED_CONFIG) covering 5 detection
-	modes: LogNon200Queries, LogQueries (img/script/link/form/input/meta),
-	LogInline (script/title/noscript/style), and custom headers.
+	Writes the embedded merged config (_SECOND_ORDER_MERGED_CONFIG) covering
+	LogNon200Queries / LogQueries (tag→attribute maps) and LogInline (tag list).
 
 	Produces up to 3 output files per run:
 	  attributes.json               -> LogQueries  (INFO severity)

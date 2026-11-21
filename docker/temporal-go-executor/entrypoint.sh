@@ -44,6 +44,33 @@ if [ ! -L "/usr/share/nmap/scripts/vulscan" ] && [ -d "/usr/src/github/scipag_vu
   ln -sf /usr/src/github/scipag_vulscan /usr/share/nmap/scripts/vulscan
 fi
 
+# Assetnote *2shell scanners are baked into the image under /usr/src/github, but
+# the shared github_repos volume overlays that path. Seed missing scanners onto
+# the volume here (internal_tools.sh is not used).
+mkdir -p /usr/src/github
+ensure_github_tool() {
+  # usage: ensure_github_tool <dir-name> <git-url>
+  local name="$1" url="$2"
+  if [ ! -f "/usr/src/github/${name}/scanner.py" ]; then
+    echo "Installing ${name} into github_repos volume..."
+    rm -rf "/usr/src/github/${name}"
+    if git clone --depth 1 "$url" "/usr/src/github/${name}"; then
+      if [ -f "/usr/src/github/${name}/requirements.txt" ]; then
+        pip3 install -q -r "/usr/src/github/${name}/requirements.txt" || \
+          echo "WARNING: pip install for ${name} failed; will retry next start"
+      fi
+      rm -rf "/usr/src/github/${name}/.git"
+    else
+      echo "WARNING: could not clone ${name}; will retry next start"
+      rm -rf "/usr/src/github/${name}"
+    fi
+  fi
+}
+ensure_github_tool cpanel2shell-scanner https://github.com/assetnote/cpanel2shell-scanner
+ensure_github_tool react2shell-scanner https://github.com/assetnote/react2shell-scanner
+ensure_github_tool php2shell-scanner https://github.com/assetnote/php2shell-scanner
+ensure_github_tool node2shell-scanner https://github.com/assetnote/node2shell-scanner
+
 # kiterunner
 if [ ! -f '/usr/local/bin/kr' ]; then
   echo "Installing kiterunner..."
@@ -56,38 +83,69 @@ if [ ! -f '/usr/local/bin/kr' ]; then
   cd /usr/src/app
 fi
 
-# clone dirsearch default wordlist
-if [ ! -d "/usr/src/wordlist" ]; then
-  echo "Making Wordlist directory..."
-  mkdir -p /usr/src/wordlist
+# Shared wordlist volume seeding (non-lean: sources live under /usr/src/app/wordlist
+# from the ../web bind mount). Download to a temp path and only publish on success
+# so a failed wget cannot leave an empty file that blocks later retries.
+mkdir -p /usr/src/wordlist /usr/src/wordlist/auth /usr/src/wordlist/kr
+
+_fetch_wordlist() {
+  # usage: _fetch_wordlist <dest> <url> [url...]
+  local dest="$1"; shift
+  local tmp url base
+  if [ -s "$dest" ]; then
+    return 0
+  fi
+  base=$(basename "$dest")
+  echo "Downloading ${base}..."
+  tmp="${dest}.tmp.$$"
+  rm -f "$tmp" "$dest"
+  for url in "$@"; do
+    if wget -q --timeout=60 --tries=2 "$url" -O "$tmp" && [ -s "$tmp" ]; then
+      mv -f "$tmp" "$dest"
+      return 0
+    fi
+    rm -f "$tmp"
+  done
+  echo "WARNING: could not fetch ${base}; will retry next start"
+  return 1
+}
+
+_fetch_wordlist /usr/src/wordlist/dicc.txt \
+  https://raw.githubusercontent.com/maurosoria/dirsearch/master/db/dicc.txt
+
+_fetch_wordlist /usr/src/wordlist/raft-large-directories.txt \
+  https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/raft-large-directories.txt
+
+_fetch_wordlist /usr/src/wordlist/deepmagic.com-prefixes-top50000.txt \
+  https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/DNS/deepmagic.com-prefixes-top50000.txt
+
+# Assetnote CDN is flaky; fall back to SecLists API wordlist.
+_fetch_wordlist /usr/src/wordlist/api-endpoints.txt \
+  https://wordlists-cdn.assetnote.io/data/automated/httparchive_apiroutes_2023_01_28.txt \
+  https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/api/api-seen-in-wild.txt \
+  https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/common-api-endpoints-mazen160.txt
+
+# Curated auth + SMTP lists ship in the web tree (bind-mounted at /usr/src/app).
+if [ -d /usr/src/app/wordlist/auth ] && [ -n "$(ls -A /usr/src/app/wordlist/auth 2>/dev/null)" ]; then
+  echo "Copying Auth Wordlists..."
+  cp -r /usr/src/app/wordlist/auth/. /usr/src/wordlist/auth/
+else
+  echo "WARNING: /usr/src/app/wordlist/auth missing; auth fuzz will lack curated lists"
+fi
+if [ -f /usr/src/app/wordlist/smtp-usernames.txt ]; then
+  cp /usr/src/app/wordlist/smtp-usernames.txt /usr/src/wordlist/smtp-usernames.txt
+else
+  echo "WARNING: /usr/src/app/wordlist/smtp-usernames.txt missing"
 fi
 
-if [ ! -f "/usr/src/wordlist/dicc.txt" ]; then
-  echo "Downloading Default Directory Bruteforce Wordlist..."
-  wget -q https://raw.githubusercontent.com/maurosoria/dirsearch/master/db/dicc.txt -O /usr/src/wordlist/dicc.txt
-fi
-
-if [ ! -f "/usr/src/wordlist/raft-large-directories.txt" ]; then
-  echo "Downloading raft-large-directories.txt Wordlist..."
-  wget -q https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/raft-large-directories.txt -O /usr/src/wordlist/raft-large-directories.txt
-fi
-
-if [ ! -f "/usr/src/wordlist/deepmagic.com-prefixes-top50000.txt" ]; then
-  echo "Downloading Deepmagic top 50000 Wordlist..."
-  wget -q https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/DNS/deepmagic.com-prefixes-top50000.txt -O /usr/src/wordlist/deepmagic.com-prefixes-top50000.txt
-fi
-
-# Setup Auth Brute-Force Wordlists
-if [ ! -d "/usr/src/wordlist/auth" ]; then
-  mkdir -p /usr/src/wordlist/auth
-fi
-echo "Copying Auth Wordlists..."
-cp -r /usr/src/app/wordlist/auth/* /usr/src/wordlist/auth/
-
-if [ ! -f '/usr/src/wordlist/cpanel_users.txt' ]; then
+if [ ! -s /usr/src/wordlist/cpanel_users.txt ]; then
   echo "Fetching cPanel2Shell wordlist..."
-  wget -qO- https://raw.githubusercontent.com/danielmiessler/SecLists/master/Usernames/top-usernames-shortlist.txt >> /usr/src/wordlist/cpanel_users.txt
-  sort -u /usr/src/wordlist/cpanel_users.txt -o /usr/src/wordlist/cpanel_users.txt
+  _fetch_wordlist /usr/src/wordlist/cpanel_users.txt \
+    https://raw.githubusercontent.com/danielmiessler/SecLists/master/Usernames/top-usernames-shortlist.txt \
+    || true
+  if [ -s /usr/src/wordlist/cpanel_users.txt ]; then
+    sort -u /usr/src/wordlist/cpanel_users.txt -o /usr/src/wordlist/cpanel_users.txt
+  fi
 fi
 
 cd /usr/src/app

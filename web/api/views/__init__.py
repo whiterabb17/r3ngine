@@ -97,7 +97,7 @@ from api.views.endpoints import (
 from api.views.vulns import (
     VulnerabilityPagination, VulnerabilityViewSet, ExposurePagination, ExposureViewSet,
     CVEDetails, GenerateCveDescription, FetchMostCommonVulnerability, FetchMostVulnerable, DeleteVulnerability,
-    VulnerabilityReport,
+    ClearAcceptedRiskVulnerabilities, VulnerabilityReport,
 )
 from api.views.recon import (
     OsintStagingViewSet, MonitoringDiscoveryViewSet, WafDetector, AddReconNote,

@@ -93,7 +93,7 @@ const TASK_TIER_ORDER: string[] = [
   // Tier 2 — HTTP Crawl & Port Scan
   'http_crawl', 'port_scan', 'vigolium_discovery',
   // Tier 3 — Fetching & Screenshot
-  'fetch_url', 'screenshot',
+  'fetch_url', 'screenshot', 'performance_benchmark',
   // Tier 4 — Fuzzing
   'dir_file_fuzz',
   // Tier 5 — Analysis

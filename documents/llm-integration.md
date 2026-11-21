@@ -6,6 +6,8 @@ r3ngine integrates Large Language Models for automated security intelligence gen
 
 **File:** `web/reNgine/llm.py`
 
+> **Assessment Copilot** is a separate local pentest co-pilot (compose profile `copilot`, Django app `copilot`). It does **not** use `LLMConfig` / AI Hub. See [assessment-copilot.md](assessment-copilot.md).
+
 ---
 
 ## LLM Providers

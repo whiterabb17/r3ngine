@@ -319,17 +319,17 @@ class VigoliumTaskGatingTest(TestCase):
         task.subdomain_id = 59
         subdomain = MagicMock()
         subdomain.id = 59
-        subdomain.name = 'n8n.defijn.io'
+        subdomain.name = 'n8n.example.txt'
         task.subdomain = subdomain
         with patch('reNgine.tasks.vigolium._run_vigolium_phase') as mock_run, \
              patch('os.makedirs'), \
              patch('builtins.open', mock_open()), \
-             patch('reNgine.common_func.collect_all_scan_urls', return_value=['https://n8n.defijn.io']) as mock_collect:
-            vigolium_scan(task, urls=[], ctx={'subdomain_id': 59, 'subdomain_name': 'n8n.defijn.io'})
+             patch('reNgine.common_func.collect_all_scan_urls', return_value=['https://n8n.example.txt']) as mock_collect:
+            vigolium_scan(task, urls=[], ctx={'subdomain_id': 59, 'subdomain_name': 'n8n.example.txt'})
             self.assertTrue(mock_collect.called)
             passed_ctx = mock_collect.call_args[1]['ctx']
             self.assertEqual(passed_ctx.get('subdomain_id'), 59)
-            self.assertEqual(passed_ctx.get('subdomain_name'), 'n8n.defijn.io')
+            self.assertEqual(passed_ctx.get('subdomain_name'), 'n8n.example.txt')
             self.assertEqual(mock_collect.call_args[1]['results_dir'], '/tmp/test_scan/subscans/2')
             self.assertEqual(mock_run.call_count, 2)
 

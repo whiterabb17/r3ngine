@@ -27,7 +27,7 @@ def _no_existing_scans():
 
 class ToolExecutionTest(TransactionTestCase):
     def setUp(self):
-        self.domain_name = "defijn.io"
+        self.domain_name = "example.txt"
         self.domain = Domain.objects.create(name=self.domain_name)
         # Create an engine as it's required by ScanHistory
         self.engine = EngineType.objects.create(engine_name="Test Engine")
@@ -53,6 +53,8 @@ class ToolExecutionTest(TransactionTestCase):
         enrich_patcher = patch('reNgine.tasks.osint.enrich_identities_task')
         enrich_patcher.start()
         self.addCleanup(enrich_patcher.stop)
+        from tests.redis_fakes import patch_osint_staging_redis
+        patch_osint_staging_redis(self)
         self.scan.results_dir = self.results_dir
         self.scan.save()
         
@@ -70,7 +72,7 @@ class ToolExecutionTest(TransactionTestCase):
             'track': False
         }
         
-        self.real_target = os.environ.get('TEST_REAL_TARGET', 'defijn.io')
+        self.real_target = os.environ.get('TEST_REAL_TARGET', 'example.txt')
         self.is_real_mode = os.environ.get('TEST_REAL_MODE', 'false').lower() == 'true'
         
         self.task = MagicMock()
@@ -186,7 +188,7 @@ class ToolExecutionTest(TransactionTestCase):
             ep = EndPoint.objects.create(
                 scan_history=self.scan,
                 target_domain=self.domain,
-                http_url="http://defijn.io/app.js"
+                http_url="http://example.txt/app.js"
             )
             print(f"[DEBUG] Created EndPoint: {ep.http_url}")
             print(f"[DEBUG] EndPoint count for scan: {EndPoint.objects.filter(scan_history=self.scan).count()}")
@@ -336,16 +338,16 @@ class ToolExecutionTest(TransactionTestCase):
         )
 
         other_subdomain = Subdomain.objects.create(
-            name="tf-test.defijn.io",
+            name="tf-test.example.txt",
             scan_history=self.scan,
             target_domain=self.domain,
-            http_url="https://tf-test.defijn.io"
+            http_url="https://tf-test.example.txt"
         )
         target_subdomain = Subdomain.objects.create(
-            name="test.defijn.io",
+            name="test.example.txt",
             scan_history=self.scan,
             target_domain=self.domain,
-            http_url="https://test.defijn.io"
+            http_url="https://test.example.txt"
         )
 
         with patch('reNgine.tasks.acunetix.requests.get') as mock_requests_get, \
@@ -401,7 +403,7 @@ class ToolExecutionTest(TransactionTestCase):
 
             self.assertTrue(res)
             create_target_payload = mock_requests_post.call_args_list[0].kwargs['json']
-            self.assertEqual(create_target_payload['address'], 'https://test.defijn.io')
+            self.assertEqual(create_target_payload['address'], 'https://test.example.txt')
 
     def test_acunetix_ignores_mismatched_subdomain_http_url(self):
         AcunetixAPIKey.objects.create(
@@ -491,7 +493,7 @@ class ToolExecutionTest(TransactionTestCase):
         self.assertEqual(matched['target_id'], 'right')
 
     def test_holehe_execution(self):
-        email = "test@defijn.io"
+        email = "test@example.txt"
         print(f"\n[DEBUG] Starting Holehe test.")
         if self.is_real_mode:
             res = run_holehe(email, self.scan.id)
@@ -512,7 +514,7 @@ class ToolExecutionTest(TransactionTestCase):
                 self.assertIn('twitter', email_obj.metadata['holehe'])
 
     def test_enrich_identities_execution(self):
-        email = "test.user@defijn.io"
+        email = "test.user@example.txt"
         print(f"\n[DEBUG] Starting enrich_identities test.")
         if self.is_real_mode:
             pass
@@ -522,20 +524,18 @@ class ToolExecutionTest(TransactionTestCase):
                 process_mock = MagicMock()
                 # Mock username-anarchy output (one username per line) and gosearch output
                 process_mock.communicate.side_effect = [
-                    ("testuser\ntest.user\ntuser\n", ""), # For username-anarchy
-                    ("http://twitter.com/testuser\n", ""),   # For gosearch 1
-                    ("http://twitter.com/testuser\n", ""),   # For gosearch 2
-                    ("http://twitter.com/testuser\n", ""),   # For gosearch 3
-                    ("http://twitter.com/testuser\n", "")    # For gosearch 4
+                    ("testuser\ntest.user\ntuser\n", ""),  # username-anarchy
+                    ("https://social.example/presence/fixture-user\n", ""),
+                    ("https://social.example/presence/fixture-user\n", ""),
+                    ("https://social.example/presence/fixture-user\n", ""),
+                    ("https://social.example/presence/fixture-user\n", ""),
                 ]
                 mock_popen.return_value = process_mock
                 
-                # Mock OsintStaging to avoid DB constraint failures if any
                 res = enrich_identities_task(email, 'email', self.scan.id)
                 print(f"[DEBUG] enrich_identities_task result: {res}")
                 
-                # Check that staging object was created
                 staging = OsintStaging.objects.filter(scan_history=self.scan).first()
                 self.assertIsNotNone(staging)
-                self.assertEqual(staging.content, "http://twitter.com/testuser")
+                self.assertEqual(staging.content, "https://social.example/presence/fixture-user")
                 self.assertEqual(staging.source, "gosearch")

@@ -157,19 +157,21 @@ export const GeoMap: React.FC<{ data: CountryData[]; disableCard?: boolean }> = 
 
                 <MapContainer
                     ref={mapRef}
+                    className="r3-geomap"
                     center={[5, 15]}
                     zoom={1}
                     minZoom={1}
                     maxZoom={3}
-                    style={{ width: '100%', height: '100%' }}
+                    style={{ width: '100%', height: '100%', background: '#0a0a0f' }}
                     zoomControl={false}
-                    attributionControl={false}
+                    attributionControl={true}
                     dragging={true}
                     touchZoom={true}
                 >
                     <TileLayer
-                        url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
-                        attribution=""
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                        className="r3-geomap-tiles"
                     />
                     {geoJsonData && (
                         <GeoJSON data={geoJsonData} onEachFeature={onEachFeature} />

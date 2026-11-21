@@ -480,6 +480,20 @@ describe('useEngineConfig settings moved to where the backend reads them', () =>
     expect(mappingAt(vuln, 'react_scanner')).toEqual({ run_react2shell: false });
   });
 
+  it('writes php2shell under php_scanner', () => {
+    const { result } = renderHook(() => useEngineConfig('vulnerability_scan:\n  run_nuclei: true\n'));
+    act(() => result.current.updateSection('vulnerability_scan', { run_php2shell: false }));
+    const vuln = mappingAt(loadMapping(result.current.yaml), 'vulnerability_scan');
+    expect(mappingAt(vuln, 'php_scanner')).toEqual({ run_php2shell: false });
+  });
+
+  it('writes node2shell under node_scanner', () => {
+    const { result } = renderHook(() => useEngineConfig('vulnerability_scan:\n  run_nuclei: true\n'));
+    act(() => result.current.updateSection('vulnerability_scan', { run_node2shell: false }));
+    const vuln = mappingAt(loadMapping(result.current.yaml), 'vulnerability_scan');
+    expect(mappingAt(vuln, 'node_scanner')).toEqual({ run_node2shell: false });
+  });
+
   it('writes the OSINT breach lookups under osint.leaks_and_secrets', () => {
     const { result } = renderHook(() => useEngineConfig('osint:\n  discover: [emails]\n'));
     act(() => result.current.updateSection('osint', { leaklookup: true }));
@@ -498,6 +512,32 @@ describe('useEngineConfig settings moved to where the backend reads them', () =>
     const { result } = renderHook(() => useEngineConfig('screenshot:\n  threads: 40\n'));
     act(() => result.current.updateGlobal({ threads: 12 }));
     expect(mappingAt(loadMapping(result.current.yaml), 'screenshot')).toEqual({ threads: 40 });
+  });
+
+  it('round-trips performance_benchmark max_urls and timeout', () => {
+    const { result } = renderHook(() =>
+      useEngineConfig('performance_benchmark:\n  max_urls: 10\n  timeout: 45\n'),
+    );
+    expect(result.current.config.performance_benchmark.enabled).toBe(true);
+    expect(result.current.config.performance_benchmark.config).toEqual({
+      max_urls: 10,
+      timeout: 45,
+    });
+    act(() => result.current.updateSection('performance_benchmark', { max_urls: 30 }));
+    expect(mappingAt(loadMapping(result.current.yaml), 'performance_benchmark')).toEqual({
+      max_urls: 30,
+      timeout: 45,
+    });
+  });
+
+  it('omits performance_benchmark from YAML when disabled', () => {
+    const { result } = renderHook(() =>
+      useEngineConfig('performance_benchmark:\n  max_urls: 10\n  timeout: 45\n'),
+    );
+    expect(result.current.config.performance_benchmark.enabled).toBe(true);
+    act(() => result.current.toggleSection('performance_benchmark', false));
+    expect(result.current.config.performance_benchmark.enabled).toBe(false);
+    expect(loadMapping(result.current.yaml)).not.toHaveProperty('performance_benchmark');
   });
 
   it('round-trips the DNS security options', () => {

@@ -173,6 +173,7 @@ INSTALLED_APPS = [
     'engagements.apps.EngagementsConfig',
     'evidence.apps.EvidenceConfig',
     'mcp.apps.McpConfig',
+    'copilot.apps.CopilotConfig',
     'channels',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',

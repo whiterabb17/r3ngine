@@ -110,6 +110,7 @@ import { TacticalPanel } from '../../../components/TacticalPanel';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { VulnerabilityTable } from '../../vulnerabilities/components/VulnerabilityTable';
 import { useGptVulnerabilityDetails, useVulnerability } from '../../vulnerabilities/api';
+import { formatCvssScoreLabel } from '../../vulnerabilities/utils/cvss';
 import { SecretLeaksTab } from './SecretLeaksTab';
 import { AttackSurfaceTab } from './AttackSurfaceTab';
 import VisualizationTab from './VisualizationTab';
@@ -156,6 +157,8 @@ interface GptOverride {
   impact?: string;
   remediation?: string;
   references: string[];
+  estimated_cvss_score?: number | null;
+  cvss_estimated?: boolean;
 }
 
 /**
@@ -194,6 +197,9 @@ const VulnerabilityInfoModal: React.FC<{
           impact: result.impact,
           remediation: result.remediation,
           references: result.references ?? [],
+          // Only keep an estimate when the API applied one (tool/NVD scores stay authoritative).
+          estimated_cvss_score: result.cvss_estimated ? result.estimated_cvss_score : null,
+          cvss_estimated: Boolean(result.cvss_estimated),
         });
       } else {
         setError(result.error || 'Failed to generate GPT description');
@@ -255,7 +261,16 @@ const VulnerabilityInfoModal: React.FC<{
             <Grid container spacing={2}>
               <Grid size={{ xs: 6, md: 3 }}>
                 <Typography sx={{ color: 'text.secondary', fontSize: '0.7rem', fontWeight: 700, mb: 0.5 }}>CVSS SCORE</Typography>
-                <Typography sx={{ color: 'text.primary', fontSize: '0.9rem', fontWeight: 900 }}>{detail?.cvss_score ?? 'N/A'}</Typography>
+                <Typography sx={{ color: 'text.primary', fontSize: '0.9rem', fontWeight: 900 }}>
+                  {formatCvssScoreLabel(
+                    detail?.cvss_score != null
+                      ? detail.cvss_score
+                      : gptOverride?.estimated_cvss_score,
+                    detail?.cvss_score != null
+                      ? Boolean(detail.cvss_estimated)
+                      : Boolean(gptOverride?.cvss_estimated),
+                  )}
+                </Typography>
               </Grid>
               <Grid size={{ xs: 6, md: 3 }}>
                 <Typography sx={{ color: 'text.secondary', fontSize: '0.7rem', fontWeight: 700, mb: 0.5 }}>CVSS METRICS</Typography>

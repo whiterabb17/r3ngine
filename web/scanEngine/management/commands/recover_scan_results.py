@@ -9,7 +9,7 @@ Usage:
     python manage.py recover_scan_results --apply
 
     # Limit to one scan folder for testing:
-    python manage.py recover_scan_results --apply --scan-dir /usr/src/scan_results/defijn.io_108
+    python manage.py recover_scan_results --apply --scan-dir /usr/src/scan_results/example.txt_108
 
 What is recovered (when the files exist):
     - Domain              (targetApp.models.Domain)

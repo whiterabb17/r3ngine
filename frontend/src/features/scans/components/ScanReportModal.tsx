@@ -88,6 +88,7 @@ export const ScanReportModal: React.FC<ScanReportModalProps> = ({ open, onClose,
     metadataDorks: false,
     certificates: false,
     employees: false,
+    performanceBenchmarking: false,
   });
 
   const handleTechSettingChange = (field: keyof typeof techSettings) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -114,6 +115,7 @@ export const ScanReportModal: React.FC<ScanReportModalProps> = ({ open, onClose,
       metadataDorks: checked,
       certificates: checked,
       employees: checked,
+      performanceBenchmarking: checked,
     });
   };
 
@@ -185,6 +187,7 @@ export const ScanReportModal: React.FC<ScanReportModalProps> = ({ open, onClose,
         include_dorks_metadata: techSettings.metadataDorks ? 'True' : 'False',
         include_certificates: techSettings.certificates ? 'True' : 'False',
         include_employees: techSettings.employees ? 'True' : 'False',
+        include_performance_benchmarking: techSettings.performanceBenchmarking ? 'True' : 'False',
         download: download ? 'True' : 'False',
         comments: comments
       });
@@ -494,6 +497,7 @@ export const ScanReportModal: React.FC<ScanReportModalProps> = ({ open, onClose,
                     <FormControlLabel control={<Checkbox checked={techSettings.metadataDorks} onChange={handleTechSettingChange('metadataDorks')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>Metadata & Dorks</Typography>} />
                     <FormControlLabel control={<Checkbox checked={techSettings.certificates} onChange={handleTechSettingChange('certificates')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>Certificates</Typography>} />
                     <FormControlLabel control={<Checkbox checked={techSettings.employees} onChange={handleTechSettingChange('employees')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>Employees</Typography>} />
+                    <FormControlLabel control={<Checkbox checked={techSettings.performanceBenchmarking} onChange={handleTechSettingChange('performanceBenchmarking')} size="small" sx={{ color: alpha(tokens.accent.primary, 0.2), '&.Mui-checked': { color: tokens.accent.primary } }}/>} label={<Typography sx={{ fontSize: '0.75rem', color: tokens.text.secondary }}>Performance Benchmarking</Typography>} />
                   </Box>
                 </Box>
               </Box>

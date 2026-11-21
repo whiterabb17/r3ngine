@@ -5,6 +5,8 @@ REDACT_KEYS = {
     'authorization',
     'r3ngine_mcp_api_key',
     'cookie',
+    'cookie_value',
+    'cookies',
     'secret',
     'api_key',
     'password',

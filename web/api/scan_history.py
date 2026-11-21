@@ -1,20 +1,38 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from startScan.models import ScanHistory, EngineType, Domain
-from .serializers import ScanHistorySerializer
+from .serializers import ScanHistorySerializer, ScanHistoryListSerializer
 from .serializers.scans import with_scan_history_serializer_data
 import logging
 from reNgine.definitions import INTERNAL_ERROR_MESSAGE
 
 logger = logging.getLogger(__name__)
 
+
+class ScanHistoryPagePagination(PageNumberPagination):
+    # Match prior PAGE_SIZE capacity so ScanHistoryPage is not truncated;
+    # clients may still request a smaller page via page_size.
+    page_size = 500
+    page_size_query_param = 'page_size'
+    max_page_size = 500
+
+
 class ScanHistoryViewSet(viewsets.ModelViewSet):
     serializer_class = ScanHistorySerializer
+    pagination_class = ScanHistoryPagePagination
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ScanHistoryListSerializer
+        return ScanHistorySerializer
 
     def get_queryset(self):
-        queryset = with_scan_history_serializer_data(ScanHistory.objects.all()).order_by('-id')
+        queryset = with_scan_history_serializer_data(
+            ScanHistory.objects.all()
+        ).order_by('-start_scan_date')
         project = self.request.query_params.get('project')
         target_id = self.request.query_params.get('target_id')
         if project:
@@ -56,13 +74,17 @@ class ScanHistoryViewSet(viewsets.ModelViewSet):
         if scan.scan_status != RUNNING_TASK:
             return Response({'status': False, 'message': 'Scan is not running.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
+            from django.utils import timezone
+            now = timezone.now()
             scan.scan_status = PAUSED_TASK
-            scan.save(update_fields=['scan_status'])
+            scan.stop_scan_date = now
+            scan.save(update_fields=['scan_status', 'stop_scan_date'])
 
             subscans = SubScan.objects.filter(scan_history=scan, status=RUNNING_TASK)
             for subscan in subscans:
                 subscan.status = PAUSED_TASK
-                subscan.save(update_fields=['status'])
+                subscan.stop_scan_date = now
+                subscan.save(update_fields=['status', 'stop_scan_date'])
                 for wf_id in subscan.workflow_ids:
                     try:
                         TemporalClientProvider.pause_workflow(wf_id)
@@ -92,12 +114,14 @@ class ScanHistoryViewSet(viewsets.ModelViewSet):
             return Response({'status': False, 'message': 'Scan is not paused.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             scan.scan_status = RUNNING_TASK
-            scan.save(update_fields=['scan_status'])
+            scan.stop_scan_date = None
+            scan.save(update_fields=['scan_status', 'stop_scan_date'])
 
             subscans = SubScan.objects.filter(scan_history=scan, status=PAUSED_TASK)
             for subscan in subscans:
                 subscan.status = RUNNING_TASK
-                subscan.save(update_fields=['status'])
+                subscan.stop_scan_date = None
+                subscan.save(update_fields=['status', 'stop_scan_date'])
                 for wf_id in subscan.workflow_ids:
                     try:
                         TemporalClientProvider.resume_workflow(wf_id)
@@ -139,15 +163,19 @@ class ScanHistoryViewSet(viewsets.ModelViewSet):
         ids = request.data.get('ids', [])
         scans = ScanHistory.objects.filter(id__in=ids, scan_status=RUNNING_TASK)
         count = 0
+        from django.utils import timezone
         for scan in scans:
             try:
+                now = timezone.now()
                 scan.scan_status = PAUSED_TASK
-                scan.save(update_fields=['scan_status'])
+                scan.stop_scan_date = now
+                scan.save(update_fields=['scan_status', 'stop_scan_date'])
 
                 subscans = SubScan.objects.filter(scan_history=scan, status=RUNNING_TASK)
                 for subscan in subscans:
                     subscan.status = PAUSED_TASK
-                    subscan.save(update_fields=['status'])
+                    subscan.stop_scan_date = now
+                    subscan.save(update_fields=['status', 'stop_scan_date'])
                     for wf_id in subscan.workflow_ids:
                         try:
                             TemporalClientProvider.pause_workflow(wf_id)
@@ -178,12 +206,14 @@ class ScanHistoryViewSet(viewsets.ModelViewSet):
         for scan in scans:
             try:
                 scan.scan_status = RUNNING_TASK
-                scan.save(update_fields=['scan_status'])
+                scan.stop_scan_date = None
+                scan.save(update_fields=['scan_status', 'stop_scan_date'])
 
                 subscans = SubScan.objects.filter(scan_history=scan, status=PAUSED_TASK)
                 for subscan in subscans:
                     subscan.status = RUNNING_TASK
-                    subscan.save(update_fields=['status'])
+                    subscan.stop_scan_date = None
+                    subscan.save(update_fields=['status', 'stop_scan_date'])
                     for wf_id in subscan.workflow_ids:
                         try:
                             TemporalClientProvider.resume_workflow(wf_id)

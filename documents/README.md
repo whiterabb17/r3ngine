@@ -8,7 +8,7 @@
 | [Temporal System](temporal-system.md) | Temporal workflows, activities, task queues, and worker configuration |
 | [Scan Pipeline](scan-pipeline.md) | The 7-tier MasterScanWorkflow pipeline in detail |
 | [Mailbox Verification](email-verification.md) | Reacher mailbox confirmation (replaces smtp-user-enum) |
-| [MCP Access](mcp.md) | Agent/IDE MCP server, keys, sessions, singular tools / `tool_args`, follow-ups, `/mcp` sidecar |
+| [MCP Access](mcp.md) | Agent/IDE MCP server, keys, sessions, singular tools / `tool_args`, follow-ups, SAFE PoC, `/mcp` sidecar |
 | [Task Cancellation](task-cancellation.md) | How scan and subscan cancellation works |
 | [Task Recovery](task-recovery.md) | Crash recovery and scan resumption via Temporal |
 | [Plugin System](plugin-system.md) | Plugin architecture, installation, and Temporal integration |
@@ -18,6 +18,8 @@
 | [Scheduling](scheduling.md) | Temporal Schedules for periodic and clocked scans |
 | [WebSockets](websockets.md) | Real-time updates via Django Channels |
 | [LLM Integration](llm-integration.md) | AI/LLM features: impact assessment, APME, summaries |
+| [Assessment Copilot](assessment-copilot.md) | Local pentest co-pilot (SAFE PoC / validate / follow-ups / Trace); sibling `r3ngine-copilot` |
+| [Assessment Copilot MSF](assessment-copilot-msf.md) | Allowlisted Metasploit aux/post recommendations, gated MSFRPC runs, plugin handoff |
 | [Neo4j Integration](neo4j-integration.md) | Graph database integration and APME |
 | [Configuration](configuration.md) | Environment variables and engine YAML configuration |
 | [Docker Setup](docker-setup.md) | Container architecture and service definitions |

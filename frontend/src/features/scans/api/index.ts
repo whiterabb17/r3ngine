@@ -51,9 +51,12 @@ export const useScans = (projectSlug: string) => {
   return useQuery<ScanHistory[]>({
     queryKey: ['scans', projectSlug],
     queryFn: async () => {
-      const response = await fetch(`/api/listScanHistory/?project=${projectSlug}`, {
-        credentials: 'include'
-      });
+      // Newest-first; ask for the pagination max so large projects are not
+      // silently truncated to the default page of 100.
+      const response = await fetch(
+        `/api/listScanHistory/?project=${encodeURIComponent(projectSlug)}&limit=500`,
+        { credentials: 'include' },
+      );
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }
@@ -273,9 +276,10 @@ export const useScansHistory = (project: string) => {
   return useQuery<ScanHistory[]>({
     queryKey: ['scans-history', project],
     queryFn: async () => {
-      const response = await fetch(`/api/listScans/?project=${project}`, {
-        credentials: 'include'
-      });
+      const response = await fetch(
+        `/api/listScans/?project=${encodeURIComponent(project)}&page_size=500`,
+        { credentials: 'include' },
+      );
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }

@@ -306,6 +306,17 @@ class EnumerationWorkflow:
                 )
             )
 
+        if "performance_benchmark" in tasks:
+            tier2_futures.append(
+                workflow.execute_activity(
+                    "RunPerformanceBenchmarkActivity",
+                    ctx,
+                    start_to_close_timeout=timedelta(hours=8),
+                    retry_policy=_standard_retry,
+                    task_queue=_TASK_QUEUE,
+                )
+            )
+
         if tier2_futures:
             try:
                 await asyncio.gather(*tier2_futures, return_exceptions=True)

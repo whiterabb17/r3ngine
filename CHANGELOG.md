@@ -1,8 +1,77 @@
 # Changelog
 
-### [v3.7.9] - 2026-10-07
+### [v3.8.0] - 2026-11-14
 
 #### Added
+
+- **Assessment Copilot (local pentest LLM)**:
+  - Compose profile `copilot` with `assessment-copilot` sidecar (sibling repo `r3ngine-copilot`); inference reuses shared Hub `ollama` (`r3ngine-ollama`). Chat/proposal paths stay separate from AI Hub enrichment (`LLMConfig`).
+  - Django `copilot` app: project settings (memory scope project/org/global/tiered), saved chat sessions, and operator-gated action proposals (validate, SAFE PoC, follow-up, remediation).
+  - Approve delegates into existing `SafePocAttempt` / `FollowupPlan` / `agent_enrichment` + `Vulnerability.remediation` paths so current reporting picks up proof and remediations; never auto-sets `verified`.
+  - Temporal best-effort indexing after scan complete (`CopilotIndexWorkflow` / `IndexScanForCopilotActivity`, fire-and-forget).
+  - UI: assessment dashboard Copilot tab, global bottom-right FAB support box (Chat with save/switch conversations + Proposals approve/reject), Settings → Assessment Copilot.
+  - Follow-up `run_tool` steps round-trip validated `tool_args` (REST/MCP Django path); docs note sidecar schema sync.
+  - Docs: `documents/assessment-copilot.md`, `documents/assessment-copilot-msf.md`.
+  - Enable with `make install-copilot` / `make up-copilot` or `COMPOSE_PROFILES=...,ollama,copilot`; migrate `copilot` (incl. Trace + `MsfAuxAttempt`).
+  - Make targets: `install-copilot` clones sibling `r3ngine-copilot`, syncs MSF catalog into `web/copilot/data/`, enables `ollama`+`copilot`, starts shared ollama if down, builds/starts sidecar; `update-copilot` / `stop-copilot` MCP-style. Helpers: `scripts/install-copilot.mjs`, `scripts/copilot-stack.mjs`.
+  - **Copilot v2 MSF + Trace**: allowlisted `msf_module` proposals; recommend vs gated `MsfAuxWorkflow` (MSFRPC console-only); FAB Trace tab; plugin deep-link `Open in Metasploit`.
+  - MSF hardening: project-scoped vuln RHOSTS checks, execution claim (no duplicate RPC on retry), Temporal `maximum_attempts=1` + `MsfAuxMarkFailedActivity` on timeout, abort cancels workflow and polls console, option values reject control characters, recommend mode requires `vulnerability_id`.
+
+- **Nuclei hang watchdog (go-executor + tag retry)**:
+  - Go-executor stall detector for nuclei: kills the process group after `NUCLEI_STALL_TIMEOUT_SECONDS` (default 900) with no progress (idle lines or stuck `-stats`).
+  - Watches the scan `results_dir` for nuclei `-hang-monitor` dumps (`*-stacktrace-*.dump`, `crash-resume-file-*.dump`), kills on appearance, snips dump into stderr, and re-checks dumps after process exit so self-exits are not missed.
+  - Local wall-clock enforcement of `timeout_seconds` in go-executor (`WATCHDOG_TIMEOUT_KILL`) in addition to Temporal `start_to_close`.
+  - `nuclei_scan` retries the same tag batch on `WATCHDOG_STALL_KILL` up to `NUCLEI_HANG_MAX_ATTEMPTS` (default 2), then soft-skips so `NucleiPlannerWorkflow` continues to the next batch; wall-timeout kills soft-skip without retry.
+  - Env knobs: `NUCLEI_STALL_TIMEOUT_SECONDS`, `NUCLEI_HANG_MAX_ATTEMPTS`. Requires a **go-executor** image rebuild + recreate for the watchdog to be live.
+
+- **WPScan ↔ WPTaint version enrichment**: WPScan persists installed/latest/`fixed_in` as `extracted_results` + `agent_enrichment.version_guidance` and a deterministic remediation line. WPTaint prefers the wordpress.org zip for the WPScan-installed plugin version (falls back to latest), then correlates the same version guidance onto taint findings for post-validation and webdev patch targets.
+
+#### Fixed
+
+- **Hung nuclei tag batches no longer sit for hours**: processes that heartbeat but make no progress (0% CPU / empty stdout / hang-monitor dumps) are killed and retried instead of consuming the Tier 6 stage budget until soft cancel.
+
+### [v3.7.9] - 2026-10-09
+
+#### Fixed
+
+- **Nuclei notification crash**: `Vulnerability` was missing `get_tags_str` / `get_cve_str` / `get_cwe_str` / `get_refs_str` (only `ValidationResult` had them), so medium+ nuclei findings aborted the activity after persist with `AttributeError`.
+- **Subscan tools killed by stale `scan_stop` kill switch**: after a parent scan finishes (or orchestrator orphan cleanup / subscan abort on a non-live parent), Redis `scan_stop_{id}` stayed armed so the Go executor force-killed every tool ~3s after start. `initiate_subscan_temporal` now clears the switch; orphan cleanup skips scans that still have live subscans.
+- **LinkedIn OSINT `SynchronousOnlyOperation`**: Playwright sync API runs an event loop under the hood; ORM saves during LinkedIn auth/state persistence now set `DJANGO_ALLOW_ASYNC_UNSAFE` (same pattern as screenshot tasks) so `run_linkedint` no longer aborts mid-scrape and starve OSINT heartbeats. Activity `HEARTBEAT_FAIL` logs use `%r` so empty `TimeoutError()` messages are visible.
+- **WAF bypass false positives**: header probes no longer persist on the first non-403 response. `WafBypassOrchestrator` now requires a blocked baseline, a clearly allowed candidate (not 5xx), and two confirmation rounds before creating `WafBypassFinding` rows; soft-block challenge pages (same HTTP status, different body) are supported.
+- **Mobile LAN login**: nginx `:8082` now proxies `/mapi/` and `/ws/` over cleartext instead of 308-upgrading everything to HTTPS. Real devices on the local network were failing login because `8000` is loopback-only and the self-signed `:443` cert is rejected by the phone. Use `http://<lan-ip>:8082` in the app. Reload the proxy after pulling (`docker exec r3ngine-proxy-1 nginx -s reload`).
+- **SpiderFoot staging flush**: `_process_spiderfoot_batch` always drains Redis pending staging in `finally`, plus an end-of-task safety-net flush, so a mid-batch DB failure cannot leave moderate-confidence rows invisible.
+- **Julius TLS retry**: drop invalid `--no-banner` from the insecure retry command so certificate-error retries still produce `julius.jsonl`.
+- **Lighthouse cancel/abort**: `performance_benchmark` runs Lighthouse via `run_command` (watchdog + `cancel_event`) and stops the URL loop on abort instead of waiting out raw `subprocess.run` timeouts.
+
+#### Added
+
+- **s3scanner misconfigured buckets as findings**: public ACL hits (`perm_all_users_*`) now also create `Vulnerability` rows (`source=s3scanner`, template `s3scanner-public-acl`) alongside the existing `S3Bucket` association — write/full-control → high, read → medium — so buckets show up in the findings list without a separate buckets-only view. `save_vulnerability` only registers `AuthCandidate` for `http`/`https` URLs so `s3://…` bucket findings (e.g. names containing `admin`) do not spawn bogus brute-force targets.
+
+- **PHP2Shell / Node2Shell vulnerability scanners (Tier 6)**:
+  - Assetnote de-fanged detectors for [php2shell](https://github.com/assetnote/php2shell-scanner) (CVE-2026-109618 / CVE-2026-109619) and [node2shell](https://github.com/assetnote/node2shell-scanner) (CVE-2026-111497) — detection only, no PoC/command execution.
+  - Installed like cpanel2shell (`git clone` + pip into `/usr/src/github/…` in the web image / `internal_tools.sh`); registered as `InstalledExternalTool` fixtures.
+  - Temporal activities `RunPhp2ShellActivity` / `RunNode2ShellActivity` on the python orchestrator; scheduled in `NucleiPlannerWorkflow` Stage 2; timeline rows via `task_plan` (`php2shell_scan` / `node2shell_scan`, Tier 6).
+  - Engine YAML / editor toggles: `vulnerability_scan.php_scanner.run_php2shell` and `vulnerability_scan.node_scanner.run_node2shell` (on by default). Tech-gated to PHP or exact Node/Express/Next.js/NestJS fingerprints.
+  - Requires web image rebuild for the scanner clones and a Temporal **python orchestrator** restart so the new activities register.
+
+- **Lighthouse performance benchmarking**:
+  - Opt-in engine task `performance_benchmark` runs in the same Tier 3 wave as screenshots (MasterScan/SubScan) and alongside screenshots in assessment EnumerationWorkflow.
+  - Persists per-URL scores and Core Web Vitals on `PerformanceBenchmark` (`startScan` migration `0072`); hard-caps `max_urls` (50) / timeout (120s) under an 8h activity budget; retries clear prior rows for the scan scope.
+  - Scan report Technical Mode checkbox **Performance Benchmarking** adds a PDF section (Lighthouse KPIs + httpx probe latency); AI export includes a compact `performance_benchmarking` slice.
+  - Requires web image rebuild for the global `lighthouse` npm package and `make migrate` for `0072`.
+
+- **SAFE PoC agent (MCP)**:
+  - Propose → operator approve → Temporal `SafePocWorkflow` for catalog-only probes (`marker_reflect`, `calc_echo`, `authz_status_delta`, `open_redirect_safe`, `flag_canary_read`).
+  - `SafePocAttempt` model + migration `mcp.0008` + `/api/mcp/safe-poc/` views; results nest under `Vulnerability.agent_enrichment.poc` (never freeform `ValidationResult.payload`).
+  - Sidecar **v1.5.0** tools + Cursor/Claude specialist **`r3ngine-safe-poc`** / `skills/safe-poc/`; expanded Anthropic skill allowlist (testing/triage/canary) with stronger deny substrings.
+  - Direct run returns **410**; PoC success does **not** auto-set `verified`.
+  - Execution hardening: DNS pin against rebinding, SSRF-safe redirect hop re-checks, shared cookie jar on `authz_status_delta`, blank `allowed_paths` rejected, abort-wins row locks, `cookie_value` audit redaction.
+  - Operator privilege locked to JWT/UI via `resolve_is_operator` (MCP body flags cannot forge operator) for safe-poc, attack-path proposals, and follow-ups.
+
+- **LLM estimated CVSS for unscored findings**:
+  - GPT vulnerability reports also emit an `Estimated CVSS Score`; when `cvss_score` is null (e.g. WPTaint / Vigolium without a tool score), the estimate is persisted with `cvss_estimated=True` (`startScan` migration `0071`).
+  - Severity mid-band fallback when the model omits a score; tool/NVD scores are never overwritten.
+  - Finding UIs show `X.X (est.)` for estimated scores.
 
 - **Large-scan resilience (PR #135)**:
   - Tier 1–6 tool failures are isolated (`_isolated_tool`): one failed tool no longer aborts `MasterScanWorkflow`; Tier 7 still runs and the tool’s own timeline row keeps the failure.
@@ -42,6 +111,19 @@
 
 #### Fixed
 
+- **OsintStaging Redis queue + dedupe**:
+  - Concurrent gosearch / SpiderFoot / Spoofy writers enqueue into Redis (`osint:staging:pending:{scan_id}`) keyed by `(osint_type, content)` before any DB write; flush under a Redis lock upserts rows and collapses legacy duplicates.
+  - Re-flush no longer resets `validated` / `ignored` triage back to `pending`; missing `target_domain_id` falls back to the scan domain.
+
+- **Email security DNS hardening**:
+  - Transient DNS failures (timeout / SERVFAIL) are inconclusive — no longer reported as missing SPF/DMARC/DKIM.
+  - Multi-string TXT rdata is joined correctly; weak SPF softfail is suppressed when DMARC is enforcing (`reject` / `quarantine`).
+
+- **`run_command` time-limit / abort watchdog**:
+  - Quiet tools (e.g. smugglex writing only to `-o`) no longer block forever on `readline()` after Temporal soft `TIME_LIMIT`.
+  - Daemon watchdog kills the process group from start on wall-clock timeout, `cancel_event`, or scan abort, and closes stdout so the caller unblocks.
+  - DB abort is reported as return code `-1`, not mislabeled as timeout `124`.
+
 - **Acunetix scan outcomes (PR #133, merge caveats)**:
   - Import findings when an AWVS scan ends `completed`, `failed`, or `aborted`; `failed` still fails the step (retry starts a new scan).
   - Reuse an in-progress or completed AWVS scan for the same target during this scan history; **failed and operator-aborted scans are not reused** so an explicit retry starts fresh.
@@ -49,7 +131,7 @@
 
 #### Notes
 
-- Existing installs: run `make migrate` for `startScan.0070`. Rebuild/restart **web** and the Temporal **python orchestrator** so chunked/dedup activities register.
+- Existing installs: run `make migrate` for `startScan.0070`, `startScan.0071` (estimated CVSS), and `mcp.0008` (SAFE PoC). Rebuild/restart **web** and the Temporal **python orchestrator** so chunked/dedup/`SafePocWorkflow` activities register — and so php2shell/node2shell binaries and activities are present. Pair with **r3ngine-mcp v1.5.0**.
 - Open follow-ups: `max_batches` is backend-clamped only (not yet in the engine UI); redirect-root dedup can skip in-scope hosts by design when root redirects to another live root.
 
 ### [v3.7.8] - 2026-10-01
@@ -1182,7 +1264,7 @@
     # Inside the web or celery container:
     python manage.py recover_scan_results           # dry-run
     python manage.py recover_scan_results --apply   # write to DB
-    python manage.py recover_scan_results --apply --scan-dir /usr/src/scan_results/defijn.io_108
+    python manage.py recover_scan_results --apply --scan-dir /usr/src/scan_results/example.txt_108
     ```
 - **Configuration Export & Import**: Added a complete backup and restore system for custom user settings.
   - **Export System**: Added the `/api/settings/export/` endpoint that dynamically generates a single `.zip` backup containing API keys, custom wordlists (from `/usr/src/wordlist/`), tool configurations, and custom scan engines.

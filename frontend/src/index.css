@@ -51,25 +51,6 @@ body {
   transition: background-color 0.4s var(--r3-transition);
 }
 
-/* Grain Effect Layer - Only active in Hacker theme.
-   Static tiled PNG (no live SVG feTurbulence / CSS filter). */
-body.cyber-noise::after {
-  content: "" !important;
-  display: block !important;
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  background-image: url("/staticfiles/img/cyber_noise.png") !important;
-  background-size: 128px 128px !important;
-  background-repeat: repeat !important;
-  opacity: 0.14 !important;
-  z-index: 9999 !important;
-  pointer-events: none !important;
-  /* Avoid mix-blend-mode: forces continuous compositing with any animated UI underneath */
-}
-
 h1,
 h2,
 h3,
@@ -135,6 +116,22 @@ h6 {
 
 .map-marker-pulse.map-marker-static {
   animation: none;
+}
+
+/* GeoMap: free OSM tiles darkened to match cyber dashboard (filter on tiles only) */
+.r3-geomap .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.95);
+}
+
+.r3-geomap .leaflet-control-attribution {
+  background: rgba(5, 5, 15, 0.75) !important;
+  color: rgba(255, 255, 255, 0.45) !important;
+  font-size: 10px !important;
+  max-width: 50%;
+}
+
+.r3-geomap .leaflet-control-attribution a {
+  color: var(--r3-accent-primary) !important;
 }
 
 /* Tactical Map Tooltip */

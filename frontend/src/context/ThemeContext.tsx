@@ -41,12 +41,8 @@ export const CustomThemeProvider: React.FC<{ children: ReactNode }> = ({ childre
     document.body.setAttribute('data-ui-version', 'v3');
 
     applyThemeCssVars(themeName);
-
-    if (themeName === 'hacker') {
-      document.body.classList.add('cyber-noise');
-    } else {
-      document.body.classList.remove('cyber-noise');
-    }
+    // Clear legacy global grain overlay (was painted above all UI)
+    document.body.classList.remove('cyber-noise');
   }, [themeName]);
 
   const activeTheme = themes[themeName] || hackerTheme;

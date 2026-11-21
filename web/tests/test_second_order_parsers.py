@@ -191,22 +191,29 @@ class TestSecondOrderScan(TestCase):
         self.assertIn('LogNon200Queries', cfg)
         self.assertIn('LogQueries', cfg)
         self.assertIn('LogInline', cfg)
+        # mhmdiaa/second-order expects map[tag]attribute, not CSS-selector arrays
+        self.assertIsInstance(cfg['LogNon200Queries'], dict)
+        self.assertIsInstance(cfg['LogQueries'], dict)
+        self.assertIsInstance(cfg['LogInline'], list)
+        self.assertEqual(cfg['LogNon200Queries'].get('script'), 'src')
+        self.assertEqual(cfg['LogQueries'].get('input'), 'name')
+        self.assertIn('title', cfg['LogInline'])
 
     def test_subscan_falls_back_to_subdomain_not_apex(self):
         """Empty urls + subdomain ctx must target the subdomain, not the apex domain."""
-        proxy = _make_scan_proxy(domain_name='defijn.io')
+        proxy = _make_scan_proxy(domain_name='example.txt')
         subdomain = MagicMock()
-        subdomain.name = 'n8n.defijn.io'
+        subdomain.name = 'n8n.example.txt'
         proxy.subdomain = subdomain
         _, mock_run = self._run(
             proxy,
             urls=[],
-            ctx={'subdomain_name': 'n8n.defijn.io', 'subdomain_id': 59},
+            ctx={'subdomain_name': 'n8n.example.txt', 'subdomain_id': 59},
         )
         self.assertTrue(mock_run.called)
         cmd = mock_run.call_args[0][0]
-        self.assertIn('https://n8n.defijn.io', cmd)
-        self.assertNotIn('-target https://defijn.io ', cmd)
+        self.assertIn('https://n8n.example.txt', cmd)
+        self.assertNotIn('-target https://example.txt ', cmd)
 
 
 class TestNucleiDastProxyFilter(TestCase):

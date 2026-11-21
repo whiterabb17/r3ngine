@@ -262,7 +262,12 @@ def run_linkedint(company_name, scan_history_id):
             return ["LinkedIn Intelligence processed %d employees for %s" % (len(employees), company_name)]
 
     except Exception as exc:
-        logger.error("Error running LinkedIn Intelligence for %s: %s", company_name, type(exc).__name__)
+        logger.error(
+            "Error running LinkedIn Intelligence for %s: %s: %s",
+            company_name,
+            type(exc).__name__,
+            exc,
+        )
         return []
 
 
@@ -272,7 +277,6 @@ def enrich_identities_task(identity, identity_type, scan_history_id, ctx={}):
     identity: Email or Name
     identity_type: 'email' or 'employee'
     """
-    from startScan.models import OsintStaging, Domain
     try:
         scan_history = ScanHistory.objects.get(pk=scan_history_id)
     except ScanHistory.DoesNotExist:
@@ -345,23 +349,27 @@ def enrich_identities_task(identity, identity_type, scan_history_id, ctx={}):
                 findings.extend(urls)
 
         if findings:
+            from reNgine.osint.staging_queue import enqueue_osint_staging
+
             for url in set(findings):
-                OsintStaging.objects.get_or_create(
-                    scan_history=scan_history,
-                    target_domain=domain,
+                # Redis dedupes concurrent gosearch threads before any DB write.
+                enqueue_osint_staging(
+                    scan_history_id=scan_history.id,
+                    target_domain_id=domain.id,
                     osint_type='Social/Web Presence',
                     content=url,
-                    defaults={
-                        'source': 'gosearch',
-                        'confidence': 80,
-                        'metadata': {
-                            'username': username,
-                            'identity': full_name,
-                            'original_identity': identity
-                        }
-                    }
+                    source='gosearch',
+                    confidence=80,
+                    metadata={
+                        'username': username,
+                        'identity': full_name,
+                        'original_identity': identity,
+                    },
                 )
 
+    from reNgine.osint.staging_queue import flush_osint_staging
+
+    flush_osint_staging(scan_history.id)
     return "Enrichment completed for %s" % full_name
 
 
@@ -446,3 +454,8 @@ def osint_orchestrator(scan_history_id):
     # Wait for all threads to complete to ensure the Temporal activity blocks appropriately
     for t in threads:
         t.join()
+
+    # Final drain in case a producer enqueued after its own flush raced another.
+    from reNgine.osint.staging_queue import flush_osint_staging
+
+    flush_osint_staging(scan_history_id)

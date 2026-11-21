@@ -27,6 +27,9 @@ services:
     # this container idles at 380M of its 1536M.
     # work_mem stays at 8MB for the same reason: it is per sort, so raising it
     # multiplies against whatever the real connection count turns out to be.
+    # WAL/checkpoint knobs reduce fsync spikes when EPSS upserts and scan writes
+    # overlap. pg_stat_statements needs a recreate of this container to load,
+    # then `CREATE EXTENSION IF NOT EXISTS pg_stat_statements;` once in the DB.
     command: >
       postgres
       -c max_connections=200
@@ -37,6 +40,10 @@ services:
       -c random_page_cost=1.1
       -c idle_in_transaction_session_timeout=30000
       -c statement_timeout=300000
+      -c max_wal_size=2GB
+      -c checkpoint_timeout=15min
+      -c checkpoint_completion_target=0.9
+      -c shared_preload_libraries=pg_stat_statements
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -66,6 +73,50 @@ services:
           cpus: '1.0'
         reservations:
           memory: 512M
+
+  # Temporal persistence is isolated from the Django app DB so EPSS/catalog
+  # rewrites and scan OLTP do not contend with history_node WAL on one volume.
+  # Fresh installs get empty temporal/temporal_visibility DBs via temporal-schema.
+  # Existing installs that previously shared `db` need an explicit recreate and
+  # (if history must be kept) a dump/restore — see upgrading-infrastructure.md.
+  db-temporal:
+    restart: always
+    logging: *default-logging
+    image: "postgres:16-alpine"
+    command: >
+      postgres
+      -c max_connections=100
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c work_mem=8MB
+      -c maintenance_work_mem=128MB
+      -c random_page_cost=1.1
+      -c max_wal_size=2GB
+      -c checkpoint_timeout=15min
+      -c checkpoint_completion_target=0.9
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      # Placeholder DB for healthchecks; setup-schema creates temporal DBs.
+      - POSTGRES_DB=temporal
+    shm_size: 256mb
+    volumes:
+      - postgres_temporal_data:/var/lib/postgresql/data/
+    networks:
+      - r3ngine_network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d temporal" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 256M
 
   redis:
     restart: always
@@ -142,6 +193,10 @@ services:
       - TEMPORAL_NAMESPACE=default
       # Control-port password of the optional tor service (profile "tor").
       - TOR_CONTROL_PASSWORD=${TOR_CONTROL_PASSWORD:-}
+      # Assessment Copilot sidecar (profile "copilot"); unused when down.
+      - ASSESSMENT_COPILOT_URL=${ASSESSMENT_COPILOT_URL:-http://assessment-copilot:8091}
+      - ASSESSMENT_OLLAMA_URL=${ASSESSMENT_OLLAMA_URL:-http://ollama:11434}
+      - COPILOT_MODEL_DEFAULT=${COPILOT_MODEL_DEFAULT:-qwen2.5:7b-instruct}
     volumes:
       - ../web:/usr/src/app
       - ../frontend:/usr/src/app/frontend
@@ -346,6 +401,37 @@ services:
         reservations:
           memory: 2G
 
+  # Assessment Copilot sidecar. Uses the shared `ollama` service (same image /
+  # volume as AI Hub). Enable with COMPOSE_PROFILES=...,copilot or
+  # `make install-copilot` / `make up-copilot` (starts ollama if it is down).
+  # Build context is a sibling checkout (see documents/assessment-copilot.md).
+  # Without the profile, a missing ../r3ngine-copilot would fail the build for
+  # the whole stack.
+  assessment-copilot:
+    profiles: ["copilot"]
+    build:
+      context: ../r3ngine-copilot
+      dockerfile: Dockerfile
+    image: r3ngine-copilot:latest
+    restart: always
+    logging: *default-logging
+    environment:
+      - ASSESSMENT_OLLAMA_URL=${ASSESSMENT_OLLAMA_URL:-http://ollama:11434}
+      - COPILOT_MODEL_DEFAULT=${COPILOT_MODEL_DEFAULT:-qwen2.5:7b-instruct}
+      - COPILOT_DATA_DIR=/data
+    volumes:
+      - assessment_copilot_data:/data
+    depends_on:
+      - ollama
+    networks:
+      - r3ngine_network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+
   # Temporal runs as three services: a one-shot schema job, the server, and a
   # one-shot job that registers the "default" namespace. temporalio/auto-setup
   # did all three in one container, but it is a development image and stopped
@@ -360,11 +446,11 @@ services:
       - DB_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PWD=${POSTGRES_PASSWORD}
-      - POSTGRES_SEEDS=db
+      - POSTGRES_SEEDS=db-temporal
     volumes:
       - ./temporal/setup-schema.sh:/scripts/setup-schema.sh:ro
     depends_on:
-      db:
+      db-temporal:
         condition: service_healthy
     networks:
       - r3ngine_network
@@ -382,12 +468,12 @@ services:
       - DB_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PWD=${POSTGRES_PASSWORD}
-      - POSTGRES_SEEDS=db
+      - POSTGRES_SEEDS=db-temporal
     volumes:
       # The server refuses to start without a dynamic config file.
       - ./temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
     depends_on:
-      db:
+      db-temporal:
         condition: service_healthy
       temporal-schema:
         condition: service_completed_successfully
@@ -453,6 +539,9 @@ services:
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       # TorNewCircuitActivity rotates circuits from here (profile "tor").
       - TOR_CONTROL_PASSWORD=${TOR_CONTROL_PASSWORD:-}
+      - ASSESSMENT_COPILOT_URL=${ASSESSMENT_COPILOT_URL:-http://assessment-copilot:8091}
+      - ASSESSMENT_OLLAMA_URL=${ASSESSMENT_OLLAMA_URL:-http://ollama:11434}
+      - COPILOT_MODEL_DEFAULT=${COPILOT_MODEL_DEFAULT:-qwen2.5:7b-instruct}
     depends_on:
       temporal:
         condition: service_healthy
@@ -552,6 +641,8 @@ volumes:
     name: r3ngine_tool_config
   postgres_data:
     name: r3ngine_postgres_data
+  postgres_temporal_data:
+    name: r3ngine_postgres_temporal_data
   gf_patterns:
     name: r3ngine_gf_patterns
   nuclei_templates:
@@ -566,6 +657,8 @@ volumes:
     name: r3ngine_static_volume
   ollama_data:
     name: r3ngine_ollama_data
+  assessment_copilot_data:
+    name: r3ngine_assessment_copilot_data
   neo4j_data:
     name: r3ngine_neo4j_data
   plugins_data:

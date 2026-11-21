@@ -21,6 +21,7 @@ from startScan.models import (
     ImpactAssessment,
     MetaFinderDocument,
     Parameter,
+    PerformanceBenchmark,
     S3Bucket,
     ScanActivity,
     ScanHistory,
@@ -29,6 +30,7 @@ from startScan.models import (
     Subdomain,
     Vulnerability,
 )
+from reNgine.report_performance import build_performance_context
 
 
 FORMAT_VERSION = "ai-export.v1"
@@ -260,6 +262,7 @@ class AiBundleBuilder:
             "endpoints": serialized_endpoints,
             "directory_files": serialized_directory_files,
             "vulnerabilities": serialized_vulnerabilities,
+            "performance_benchmarking": self._serialize_performance(scan),
         }
 
         return {
@@ -535,6 +538,22 @@ class AiBundleBuilder:
             "match_content": match_preview,
             "match_content_truncated": match_truncated,
             "discovered_date": self._iso(leak.discovered_date),
+        }
+
+    def _serialize_performance(self, scan: ScanHistory) -> dict[str, Any]:
+        """Compact Lighthouse + probe-latency summary for AI export."""
+        if not PerformanceBenchmark.objects.filter(scan_history=scan).exists():
+            return {"has_benchmarks": False, "benchmark_count": 0, "rows": []}
+        ctx = build_performance_context(scan, table_limit=25)
+        return {
+            "has_benchmarks": ctx["has_benchmarks"],
+            "benchmark_count": ctx["benchmark_count"],
+            "success_count": ctx["success_count"],
+            "avg_performance_score": ctx["avg_performance_score"],
+            "avg_lcp_ms": ctx["avg_lcp_ms"],
+            "avg_fcp_ms": ctx["avg_fcp_ms"],
+            "probe_latency": ctx["probe_latency"],
+            "rows": ctx["rows"],
         }
 
     def _serialize_endpoint(self, endpoint: EndPoint, params_for_endpoint: list[Parameter]) -> dict[str, Any]:

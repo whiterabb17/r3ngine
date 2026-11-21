@@ -156,6 +156,85 @@ class CVEEnrichmentServiceTestCase(TestCase):
         
         self.assertAlmostEqual(cve.epss_score, 0.95842, places=5)
         self.assertAlmostEqual(cve.epss_percentile, 98.765, places=3)
+
+    @patch('requests.get')
+    def test_sync_epss_catalog_upserts_and_removes_stale(self, mock_get):
+        """Upsert by cve_id and delete rows absent from the new feed."""
+        import gzip
+        import io
+        from startScan.models import EpssFeedData
+
+        EpssFeedData.objects.create(
+            cve_id='CVE-2020-OLD',
+            epss_score=0.1,
+            epss_percentile=10.0,
+        )
+        EpssFeedData.objects.create(
+            cve_id='CVE-2024-KEEP',
+            epss_score=0.2,
+            epss_percentile=20.0,
+        )
+
+        csv_body = (
+            '# model_version:v2024\n'
+            'cve,epss,percentile\n'
+            'CVE-2024-KEEP,0.5,0.9\n'
+            'CVE-2024-NEW,0.1,0.2\n'
+        )
+        buf = io.BytesIO()
+        with gzip.GzipFile(fileobj=buf, mode='wb') as gz:
+            gz.write(csv_body.encode('utf-8'))
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = buf.getvalue()
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        result = self.service.sync_epss_catalog()
+
+        self.assertEqual(result.get('errors'), 0)
+        self.assertEqual(result.get('inserted'), 2)
+        self.assertFalse(EpssFeedData.objects.filter(cve_id='CVE-2020-OLD').exists())
+        keep = EpssFeedData.objects.get(cve_id='CVE-2024-KEEP')
+        self.assertAlmostEqual(keep.epss_score, 0.5, places=5)
+        self.assertAlmostEqual(keep.epss_percentile, 90.0, places=3)
+        self.assertTrue(EpssFeedData.objects.filter(cve_id='CVE-2024-NEW').exists())
+
+    @patch('requests.get')
+    def test_sync_epss_catalog_skips_stale_delete_when_truncated(self, mock_get):
+        """Partial feeds must not delete the bulk of an existing catalog."""
+        import gzip
+        import io
+        from startScan.models import EpssFeedData
+
+        for i in range(20):
+            EpssFeedData.objects.create(
+                cve_id=f'CVE-2020-{i:04d}',
+                epss_score=0.1,
+                epss_percentile=10.0,
+            )
+
+        csv_body = (
+            '# model_version:v2024\n'
+            'cve,epss,percentile\n'
+            'CVE-2020-0000,0.5,0.9\n'
+        )
+        buf = io.BytesIO()
+        with gzip.GzipFile(fileobj=buf, mode='wb') as gz:
+            gz.write(csv_body.encode('utf-8'))
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = buf.getvalue()
+        mock_response.raise_for_status = MagicMock()
+        mock_get.return_value = mock_response
+
+        result = self.service.sync_epss_catalog()
+
+        self.assertEqual(result.get('errors'), 1)
+        self.assertEqual(result.get('deleted'), 0)
+        self.assertEqual(EpssFeedData.objects.count(), 20)
     
     @patch('requests.get')
     def test_sync_cisa_kev_catalog(self, mock_get):

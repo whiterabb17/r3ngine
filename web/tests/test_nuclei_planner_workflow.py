@@ -102,6 +102,16 @@ async def _mock_react2shell(ctx: Dict[str, Any]) -> Dict:
     return {}
 
 
+@activity.defn(name="RunPhp2ShellActivity")
+async def _mock_php2shell(ctx: Dict[str, Any]) -> Dict:
+    return {}
+
+
+@activity.defn(name="RunNode2ShellActivity")
+async def _mock_node2shell(ctx: Dict[str, Any]) -> Dict:
+    return {}
+
+
 @activity.defn(name="RunSemgrepActivity")
 async def _mock_semgrep(ctx: Dict[str, Any]) -> Dict:
     return {}
@@ -136,6 +146,8 @@ _NOOP_SUPPORT_ACTIVITIES = [
     _mock_cpanel,
     _mock_wpscan,
     _mock_react2shell,
+    _mock_php2shell,
+    _mock_node2shell,
     _mock_semgrep,
     _mock_vigolium,
     _mock_wptaint_scan,
@@ -167,6 +179,8 @@ def _ctx(severities=None, run_nuclei: bool = True) -> Dict[str, Any]:
                 "run_wpscan": False,
                 "run_wptaint_scan": False,
                 "react_scanner": {"run_react2shell": False},
+                "php_scanner": {"run_php2shell": False},
+                "node_scanner": {"run_node2shell": False},
                 "run_vigolium": False,
             },
             "leaks_and_secrets": {"run_semgrep": False},

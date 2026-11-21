@@ -89,7 +89,7 @@ RUN CGO_ENABLED=0 GO111MODULE=on go build -ldflags="-s -w" -o /usr/local/bin/r3n
 FROM golang:1.26-bookworm AS vigolium-builder
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl git make unzip && \
+    apt-get install -y --no-install-recommends curl git make unzip file && \
     rm -rf /var/lib/apt/lists/*
 
 # Install bun (needed for vigolium-audit and jsscan embedded binary builds)
@@ -282,7 +282,7 @@ ENV PATH="/root/.local/bin:${PATH}"
 # ---------------------------------------------------------------------------
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
-    npm install -g retire && \
+    npm install -g retire lighthouse && \
     rm -rf /var/lib/apt/lists/* /root/.npm
 
 # ---------------------------------------------------------------------------
@@ -380,6 +380,14 @@ RUN git clone --depth 1 https://github.com/assetnote/react2shell-scanner /usr/sr
     pip3 install --no-cache-dir -r /usr/src/github/react2shell-scanner/requirements.txt && \
     rm -rf /usr/src/github/react2shell-scanner/.git
 
+RUN git clone --depth 1 https://github.com/assetnote/php2shell-scanner /usr/src/github/php2shell-scanner && \
+    pip3 install --no-cache-dir -r /usr/src/github/php2shell-scanner/requirements.txt && \
+    rm -rf /usr/src/github/php2shell-scanner/.git
+
+RUN git clone --depth 1 https://github.com/assetnote/node2shell-scanner /usr/src/github/node2shell-scanner && \
+    pip3 install --no-cache-dir -r /usr/src/github/node2shell-scanner/requirements.txt && \
+    rm -rf /usr/src/github/node2shell-scanner/.git
+
 RUN git clone --depth 1 https://github.com/UnaPibaGeek/ctfr /usr/src/github/ctfr && \
     pip3 install --no-cache-dir -r /usr/src/github/ctfr/requirements.txt && \
     rm -rf /usr/src/github/ctfr/.git
@@ -417,7 +425,9 @@ RUN git clone --depth 1 https://github.com/Tuhinshubhra/CMSeeK /usr/src/github/C
     pip3 install --no-cache-dir -r /usr/src/github/CMSeeK/requirements.txt && \
     rm -rf /usr/src/github/CMSeeK/.git
 
-RUN git clone --depth 1 https://github.com/drwetter/testssl.sh /usr/src/github/testssl.sh && \
+# Upstream moved from drwetter/testssl.sh (now empty) to testssl/testssl.sh.
+# Pin stable 3.2 — default branch is 3.3dev.
+RUN git clone --depth 1 --branch 3.2 https://github.com/testssl/testssl.sh.git /usr/src/github/testssl.sh && \
     chmod +x /usr/src/github/testssl.sh/testssl.sh && \
     ln -sf /usr/src/github/testssl.sh/testssl.sh /usr/local/bin/testssl.sh
 

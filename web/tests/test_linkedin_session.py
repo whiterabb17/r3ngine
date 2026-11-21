@@ -11,6 +11,16 @@ from startScan.models import ScanHistory
 from scanEngine.models import EngineType
 
 
+class TestLinkedInAsyncUnsafeFlag(TestCase):
+
+    def test_module_allows_orm_under_playwright_event_loop(self):
+        # Import after other tests may have cleared env; module sets this on load.
+        import importlib
+        import reNgine.osint.linkedin_intelligence as linkedin_mod
+        importlib.reload(linkedin_mod)
+        self.assertEqual(os.environ.get('DJANGO_ALLOW_ASYNC_UNSAFE'), 'true')
+
+
 class TestLinkedInCredentialsModel(TestCase):
 
     def test_model_has_session_fields(self):

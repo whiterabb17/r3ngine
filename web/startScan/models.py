@@ -76,6 +76,19 @@ class ScanHistory(models.Model):
 	)
 	cfg_custom_dorks = models.TextField(blank=True, null=True)
 
+	class Meta:
+		indexes = [
+			# Project list/status polls: filter by domain + status, order by start.
+			models.Index(
+				fields=['domain', 'scan_status', '-start_scan_date'],
+				name='sh_domain_status_started_idx',
+			),
+			# Recent scans for a target (scan summary, history drawer).
+			models.Index(
+				fields=['domain', '-start_scan_date'],
+				name='sh_domain_started_idx',
+			),
+		]
 
 	def __str__(self):
 		return self.domain.name
@@ -193,7 +206,16 @@ class ScanHistory(models.Model):
 			return (self.stop_scan_date - self.start_scan_date).seconds
 
 	def get_elapsed_time(self):
-		return self.get_time_ago(self.start_scan_date)
+		"""Wall-clock duration of the scan.
+
+		Uses ``stop_scan_date`` when set (completed, aborted, failed, or paused)
+		so history rows stop growing after the scan is no longer live. Live scans
+		(no stop yet) count from ``start_scan_date`` to now.
+		"""
+		end = self.stop_scan_date or timezone.now()
+		if not self.start_scan_date:
+			return '0 seconds'
+		return get_time_taken(end, self.start_scan_date)
 
 	def get_time_ago(self, time):
 		duration = timezone.now() - time
@@ -384,6 +406,50 @@ class Screenshot(models.Model):
 		return str(self.url)
 
 
+class PerformanceBenchmark(models.Model):
+	"""Lighthouse performance snapshot for a URL captured during asset analysis."""
+	scan_history = models.ForeignKey(
+		ScanHistory, on_delete=models.CASCADE, related_name='performance_benchmarks'
+	)
+	subdomain = models.ForeignKey(
+		Subdomain, on_delete=models.CASCADE, null=True, blank=True,
+		related_name='performance_benchmarks',
+	)
+	endpoint = models.ForeignKey(
+		'EndPoint', on_delete=models.SET_NULL, null=True, blank=True,
+		related_name='performance_benchmarks',
+	)
+	http_url = models.CharField(max_length=30000)
+	performance_score = models.FloatField(null=True, blank=True)
+	accessibility_score = models.FloatField(null=True, blank=True)
+	best_practices_score = models.FloatField(null=True, blank=True)
+	seo_score = models.FloatField(null=True, blank=True)
+	fcp_ms = models.FloatField(null=True, blank=True)
+	lcp_ms = models.FloatField(null=True, blank=True)
+	tbt_ms = models.FloatField(null=True, blank=True)
+	cls = models.FloatField(null=True, blank=True)
+	speed_index_ms = models.FloatField(null=True, blank=True)
+	tti_ms = models.FloatField(null=True, blank=True)
+	ttfb_ms = models.FloatField(null=True, blank=True)
+	raw_json = models.JSONField(default=dict, blank=True)
+	error = models.TextField(null=True, blank=True)
+	captured_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['-captured_at']
+		indexes = [
+			models.Index(
+				fields=['scan_history', 'performance_score'],
+				name='startScan_p_scan_hi_perf_idx',
+			),
+		]
+
+	def __str__(self):
+		score = self.performance_score
+		score_str = f'{score:.0f}' if score is not None else 'n/a'
+		return f'{self.http_url} (perf={score_str})'
+
+
 class SubScan(models.Model):
 	id = models.AutoField(primary_key=True)
 	type = models.CharField(max_length=100, blank=True, null=True)
@@ -407,7 +473,11 @@ class SubScan(models.Model):
 			return get_time_taken(self.stop_scan_date, self.start_scan_date)
 
 	def get_elapsed_time(self):
-		return get_time_taken(timezone.now(), self.start_scan_date)
+		"""Duration for live subscans; frozen at stop when finished/paused."""
+		end = self.stop_scan_date or timezone.now()
+		if not self.start_scan_date:
+			return '0 seconds'
+		return get_time_taken(end, self.start_scan_date)
 
 	def get_task_name_str(self):
 		taskmap = {
@@ -417,6 +487,7 @@ class SubScan(models.Model):
 			'fetch_url': 'Fetch URLs',
 			'vulnerability_scan': 'Vulnerability Scan',
 			'screenshot': 'Screenshot',
+			'performance_benchmark': 'Performance Benchmark',
 			'waf_detection': 'Waf Detection',
 			'osint': 'Open-Source Intelligence'
 		}
@@ -618,6 +689,7 @@ class GPTVulnerabilityReport(models.Model):
 	description = models.TextField(null=True, blank=True)
 	impact = models.TextField(null=True, blank=True)
 	remediation = models.TextField(null=True, blank=True)
+	estimated_cvss_score = models.FloatField(null=True, blank=True, default=None)
 	references = models.ManyToManyField('VulnerabilityReference', related_name='report_reference', blank=True)
 
 	def __str__(self):
@@ -849,6 +921,10 @@ class Vulnerability(models.Model):
 
 	cvss_metrics = models.CharField(max_length=500, null=True, blank=True)
 	cvss_score = models.FloatField(null=True, blank=True, default=None)
+	cvss_estimated = models.BooleanField(
+		default=False,
+		help_text='True when cvss_score was filled by LLM/severity-band estimate rather than a tool or NVD',
+	)
 	curl_command = models.CharField(max_length=15000, null=True, blank=True)
 	type = models.CharField(max_length=100, null=True, blank=True)
 	http_url = models.CharField(max_length=10000, null=True)
@@ -902,6 +978,25 @@ class Vulnerability(models.Model):
 		if self.http_url:
 			return urlparse(self.http_url).path
 		return "/"
+
+	def get_tags_str(self):
+		"""Comma-separated tag names as markdown code blocks (for notifications)."""
+		return ', '.join(f'`{tag.name}`' for tag in self.tags.all())
+
+	def get_cve_str(self):
+		"""Comma-separated CVE names as markdown code blocks (for notifications)."""
+		return ', '.join(f'`{cve.name}`' for cve in self.cve_ids.all())
+
+	def get_cwe_str(self):
+		"""Comma-separated CWE names as markdown code blocks (for notifications)."""
+		return ', '.join(f'`{cwe.name}`' for cwe in self.cwe_ids.all())
+
+	def get_refs_str(self):
+		"""Bulleted reference URLs as markdown code blocks (for notifications)."""
+		refs = list(self.references.all())
+		if not refs:
+			return ''
+		return '•' + '\n• '.join(f'`{ref.url}`' for ref in refs)
 
 	def __str__(self):
 		cve_str = ', '.join(f'`{cve.name}`' for cve in self.cve_ids.all())
@@ -984,6 +1079,11 @@ class ImpactAssessment(models.Model):
 	potential_impact = models.TextField(null=True, blank=True)
 	remediation_priority = models.IntegerField(default=1)
 	is_ai_generated = models.BooleanField(default=False)
+	# HTML from LLM report generation; reused across regenerations for the same scan.
+	llm_report_remediation = models.TextField(null=True, blank=True)
+	# SHA-256 of the attack-chain slice used to generate llm_report_remediation.
+	# Cleared implicitly when fingerprint mismatches on next report build.
+	llm_report_remediation_fingerprint = models.CharField(max_length=64, null=True, blank=True)
 
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)

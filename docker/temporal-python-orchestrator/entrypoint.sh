@@ -153,41 +153,59 @@ if [ "$RUN_TOOL_UPDATES" = "1" ]; then
   yes | whatportis --update || TOOL_UPDATE_RC=1
 fi
 
-# clone dirsearch default wordlist
-if [ ! -d "/usr/src/wordlist" ]; then
-  echo "Making Wordlist directory"
-  mkdir /usr/src/wordlist
-fi
+# Shared wordlist volume seeding. Download to a temp path and only publish on
+# success so a failed wget cannot leave an empty file that blocks later retries.
+mkdir -p /usr/src/wordlist /usr/src/wordlist/auth
 
-if [ ! -f "/usr/src/wordlist/dicc.txt" ]; then
-  echo "Downloading Default Directory Bruteforce Wordlist"
-  wget https://raw.githubusercontent.com/maurosoria/dirsearch/master/db/dicc.txt -O /usr/src/wordlist/dicc.txt
-fi
+_fetch_wordlist() {
+  # usage: _fetch_wordlist <dest> <url> [url...]
+  local dest="$1"; shift
+  local tmp url base
+  if [ -s "$dest" ]; then
+    return 0
+  fi
+  base=$(basename "$dest")
+  echo "Downloading ${base}..."
+  tmp="${dest}.tmp.$$"
+  rm -f "$tmp" "$dest"
+  for url in "$@"; do
+    if wget -q --timeout=60 --tries=2 "$url" -O "$tmp" && [ -s "$tmp" ]; then
+      mv -f "$tmp" "$dest"
+      return 0
+    fi
+    rm -f "$tmp"
+  done
+  echo "WARNING: could not fetch ${base}; will retry next start"
+  return 1
+}
 
-if [ ! -f "/usr/src/wordlist/raft-large-directories.txt" ]; then
-  echo "Downloading raft-large-directories.txt Wordlist"
-  wget https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/raft-large-directories.txt -O /usr/src/wordlist/raft-large-directories.txt
-fi
+_fetch_wordlist /usr/src/wordlist/dicc.txt \
+  https://raw.githubusercontent.com/maurosoria/dirsearch/master/db/dicc.txt
 
-if [ ! -f "/usr/src/wordlist/deepmagic.com-prefixes-top50000.txt" ]; then
-  echo "Downloading Deepmagic top 50000 Wordlist"
-  wget https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/DNS/deepmagic.com-prefixes-top50000.txt -O /usr/src/wordlist/deepmagic.com-prefixes-top50000.txt
-fi
+_fetch_wordlist /usr/src/wordlist/raft-large-directories.txt \
+  https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/raft-large-directories.txt
 
-if [ ! -f "/usr/src/wordlist/api-endpoints.txt" ]; then
-  echo "Downloading API endpoints wordlist"
-  wget -q https://wordlists-cdn.assetnote.io/data/automated/httparchive_apiroutes_2023_01_28.txt -O /usr/src/wordlist/api-endpoints.txt || true
-fi
+_fetch_wordlist /usr/src/wordlist/deepmagic.com-prefixes-top50000.txt \
+  https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/DNS/deepmagic.com-prefixes-top50000.txt
 
-# Setup Auth Brute-Force Wordlists
-if [ ! -d "/usr/src/wordlist/auth" ]; then
-  mkdir -p /usr/src/wordlist/auth
-fi
-echo "Copying Auth Wordlists"
-cp -r /usr/src/app/wordlist/auth/* /usr/src/wordlist/auth/
+# Assetnote CDN is flaky; fall back to SecLists API wordlists.
+_fetch_wordlist /usr/src/wordlist/api-endpoints.txt \
+  https://wordlists-cdn.assetnote.io/data/automated/httparchive_apiroutes_2023_01_28.txt \
+  https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/api/api-seen-in-wild.txt \
+  https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/common-api-endpoints-mazen160.txt
 
-# SMTP username enumeration wordlist
-cp /usr/src/app/wordlist/smtp-usernames.txt /usr/src/wordlist/smtp-usernames.txt
+# Curated auth + SMTP lists ship in the web tree (bind-mounted at /usr/src/app).
+if [ -d /usr/src/app/wordlist/auth ] && [ -n "$(ls -A /usr/src/app/wordlist/auth 2>/dev/null)" ]; then
+  echo "Copying Auth Wordlists"
+  cp -r /usr/src/app/wordlist/auth/. /usr/src/wordlist/auth/
+else
+  echo "WARNING: /usr/src/app/wordlist/auth missing; auth fuzz will lack curated lists"
+fi
+if [ -f /usr/src/app/wordlist/smtp-usernames.txt ]; then
+  cp /usr/src/app/wordlist/smtp-usernames.txt /usr/src/wordlist/smtp-usernames.txt
+else
+  echo "WARNING: /usr/src/app/wordlist/smtp-usernames.txt missing"
+fi
 
 # vulscan (nmap script)
 if [ ! -d "/usr/src/github/scipag_vulscan" ]; then
@@ -195,6 +213,70 @@ if [ ! -d "/usr/src/github/scipag_vulscan" ]; then
   git clone https://github.com/scipag/vulscan /usr/src/github/scipag_vulscan
   ln -s /usr/src/github/scipag_vulscan /usr/share/nmap/scripts/vulscan
 fi
+
+# Required github-cloned tools live on the shared github_repos volume. Seed any
+# missing clones here (internal_tools.sh is not used at startup). Sentinel is
+# the pipeline entry script (scanner.py / linkfinder.py / …), not a PATH binary.
+mkdir -p /usr/src/github
+ensure_github_tool() {
+  # usage: ensure_github_tool <dir-name> <git-url> <sentinel-relative-path> [post-install]
+  # post-install: requirements | package | setup | none (default requirements)
+  local name="$1" url="$2" sentinel="$3" mode="${4:-requirements}"
+  local dest="/usr/src/github/${name}"
+  if [ -f "${dest}/${sentinel}" ]; then
+    return 0
+  fi
+  echo "Installing ${name} into github_repos volume..."
+  rm -rf "${dest}"
+  if ! git clone --depth 1 "$url" "${dest}"; then
+    echo "WARNING: could not clone ${name}; will retry next start"
+    rm -rf "${dest}"
+    return 1
+  fi
+  case "$mode" in
+    requirements)
+      if [ -f "${dest}/requirements.txt" ]; then
+        pip3 install -q -r "${dest}/requirements.txt" || \
+          echo "WARNING: pip install for ${name} failed; will retry next start"
+      fi
+      ;;
+    package)
+      if [ -f "${dest}/acunetix/core.py" ]; then
+        sed -i 's/Sent from Acunetix-Python/r3-external/g' "${dest}/acunetix/core.py" || true
+      fi
+      pip3 install -q --no-cache-dir "${dest}" || \
+        echo "WARNING: pip package install for ${name} failed; will retry next start"
+      ;;
+    setup)
+      if [ -f "${dest}/requirements.txt" ]; then
+        pip3 install -q -r "${dest}/requirements.txt" || true
+      fi
+      if [ -f "${dest}/setup.py" ]; then
+        (cd "${dest}" && python3 setup.py install -q) || \
+          echo "WARNING: setup.py install for ${name} failed; will retry next start"
+      fi
+      pip3 install -q jsbeautifier || true
+      ;;
+  esac
+  rm -rf "${dest}/.git"
+}
+
+# Assetnote *2shell scanners
+ensure_github_tool cpanel2shell-scanner https://github.com/assetnote/cpanel2shell-scanner scanner.py
+ensure_github_tool react2shell-scanner https://github.com/assetnote/react2shell-scanner scanner.py
+ensure_github_tool php2shell-scanner https://github.com/assetnote/php2shell-scanner scanner.py
+ensure_github_tool node2shell-scanner https://github.com/assetnote/node2shell-scanner scanner.py
+
+# Subdomain / API discovery pipeline scripts
+ensure_github_tool LinkFinder https://github.com/GerbenJavado/LinkFinder.git linkfinder.py setup
+ensure_github_tool OneForAll https://github.com/shmilylty/OneForAll oneforall.py
+ensure_github_tool Sublist3r https://github.com/aboul3la/Sublist3r sublist3r.py
+ensure_github_tool ctfr https://github.com/UnaPibaGeek/ctfr ctfr.py
+ensure_github_tool jwt_tool https://github.com/ticarpi/jwt_tool jwt_tool.py
+ensure_github_tool graphql-cop https://github.com/dolevf/graphql-cop.git graphql-cop.py
+
+# Acunetix Python API client (optional engine toggle; inventory expects pip package)
+ensure_github_tool acunetix-python https://github.com/WazeHell/acunetix-python acunetix/__init__.py package
 
 if [ ! -f '/usr/local/bin/kr' ]; then
   echo "Installing kiterunner"
@@ -225,11 +307,14 @@ for kite in routes-small routes-large; do
   fi
 done
 
-if [ ! -f '/usr/src/wordlist/cpanel_users.txt' ]; then
+if [ ! -s /usr/src/wordlist/cpanel_users.txt ]; then
   echo "Fetching cPanel2Shell wordlist"
-  mkdir -p /usr/src/wordlist
-  wget -qO- https://raw.githubusercontent.com/danielmiessler/SecLists/master/Usernames/top-usernames-shortlist.txt >> /usr/src/wordlist/cpanel_users.txt
-  sort -u /usr/src/wordlist/cpanel_users.txt -o /usr/src/wordlist/cpanel_users.txt
+  _fetch_wordlist /usr/src/wordlist/cpanel_users.txt \
+    https://raw.githubusercontent.com/danielmiessler/SecLists/master/Usernames/top-usernames-shortlist.txt \
+    || true
+  if [ -s /usr/src/wordlist/cpanel_users.txt ]; then
+    sort -u /usr/src/wordlist/cpanel_users.txt -o /usr/src/wordlist/cpanel_users.txt
+  fi
 fi
 
 cd /usr/src/app

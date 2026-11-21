@@ -353,6 +353,8 @@ class SingleTaskRetryWorkflow:
                 await workflow.execute_activity("RunHTTPCrawlBridgeActivity", ctx, start_to_close_timeout=timedelta(hours=3), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_LONG_SCAN, task_queue="python-orchestrator-queue")
             elif task_name == "screenshot":
                 await workflow.execute_activity("RunScreenshotActivity", ctx, start_to_close_timeout=timedelta(hours=1), heartbeat_timeout=timedelta(minutes=5), retry_policy=_RETRY_NETWORK_SCAN, task_queue="python-orchestrator-queue")
+            elif task_name == "performance_benchmark":
+                await workflow.execute_activity("RunPerformanceBenchmarkActivity", ctx, start_to_close_timeout=timedelta(hours=8), heartbeat_timeout=timedelta(minutes=10), retry_policy=_RETRY_NETWORK_SCAN, task_queue="python-orchestrator-queue")
             elif task_name == "web_api_discovery":
                 await workflow.execute_activity("RunWebAPIDiscoveryActivity", ctx, start_to_close_timeout=timedelta(hours=4), heartbeat_timeout=timedelta(minutes=10), retry_policy=_RETRY_NETWORK_SCAN, task_queue="python-orchestrator-queue")
             elif task_name == "param_discovery":
@@ -594,3 +596,92 @@ class FollowupPlanWorkflow:
             task_queue="python-orchestrator-queue",
         )
         return {'plan_id': plan_id, **final}
+
+
+@workflow.defn(name="SafePocWorkflow")
+class SafePocWorkflow:
+    """Execute one SAFE PoC catalog template; honor abort between steps."""
+
+    @workflow.run
+    async def run(self, payload: dict) -> dict:
+        attempt_id = payload.get('attempt_id')
+        aborted = await workflow.execute_activity(
+            "SafePocCheckAbortActivity",
+            args=[attempt_id],
+            start_to_close_timeout=timedelta(seconds=30),
+            retry_policy=_RETRY_INTERNAL,
+            task_queue="python-orchestrator-queue",
+        )
+        if aborted:
+            return {'attempt_id': attempt_id, 'status': 'aborted'}
+
+        result = await workflow.execute_activity(
+            "SafePocExecuteActivity",
+            args=[attempt_id],
+            start_to_close_timeout=timedelta(minutes=2),
+            retry_policy=_RETRY_INTERNAL,
+            task_queue="python-orchestrator-queue",
+        )
+        return {'attempt_id': attempt_id, **(result or {})}
+
+
+@workflow.defn(name="CopilotIndexWorkflow")
+class CopilotIndexWorkflow:
+    """Best-effort index of a completed scan into Assessment Copilot memory.
+
+    Failures are swallowed by the activity; this workflow must never block or
+    fail the parent MasterScanWorkflow (started as a fire-and-forget child).
+    """
+
+    @workflow.run
+    async def run(self, scan_history_id: int) -> dict:
+        return await workflow.execute_activity(
+            "IndexScanForCopilotActivity",
+            args=[scan_history_id],
+            start_to_close_timeout=timedelta(minutes=10),
+            retry_policy=RetryPolicy(maximum_attempts=2),
+            task_queue="python-orchestrator-queue",
+        )
+
+
+@workflow.defn(name="MsfAuxWorkflow")
+class MsfAuxWorkflow:
+    """Execute one allowlisted Metasploit auxiliary/post module; honor abort."""
+
+    @workflow.run
+    async def run(self, payload: dict) -> dict:
+        attempt_id = payload.get('attempt_id')
+        aborted = await workflow.execute_activity(
+            "MsfAuxCheckAbortActivity",
+            args=[attempt_id],
+            start_to_close_timeout=timedelta(seconds=30),
+            retry_policy=_RETRY_INTERNAL,
+            task_queue="python-orchestrator-queue",
+        )
+        if aborted:
+            return {'attempt_id': attempt_id, 'status': 'aborted'}
+
+        # No Temporal retries: MSF traffic must not double on worker death.
+        # execute_attempt also claims the row before RPC as a second guard.
+        try:
+            result = await workflow.execute_activity(
+                "MsfAuxExecuteActivity",
+                args=[attempt_id],
+                start_to_close_timeout=timedelta(minutes=5),
+                retry_policy=RetryPolicy(maximum_attempts=1),
+                task_queue="python-orchestrator-queue",
+            )
+        except ActivityError:
+            # Timeout / cancel after claim must not leave the row stuck in running.
+            await workflow.execute_activity(
+                "MsfAuxMarkFailedActivity",
+                args=[
+                    attempt_id,
+                    'MSF execute interrupted or timed out before completion; not retried',
+                ],
+                start_to_close_timeout=timedelta(seconds=30),
+                retry_policy=_RETRY_INTERNAL,
+                task_queue="python-orchestrator-queue",
+            )
+            return {'attempt_id': attempt_id, 'status': 'failed'}
+        return {'attempt_id': attempt_id, **(result or {})}

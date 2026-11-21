@@ -51,7 +51,9 @@ from reNgine.temporal.workflows.stress import StressTestWorkflow
 from reNgine.temporal.workflows.jobs import (
     ApmeTaskWorkflow,
     CertificateResyncWorkflow,
+    CopilotIndexWorkflow,
     FollowupPlanWorkflow,
+    MsfAuxWorkflow,
     GeoLocalizeWorkflow,
     GoExecutorTaskWorkflow,
     HackerOneImportWorkflow,
@@ -60,6 +62,7 @@ from reNgine.temporal.workflows.jobs import (
     MonitoringWorkflow,
     ProxyFetchWorkflow,
     RecalculateApmeWorkflow,
+    SafePocWorkflow,
     ScheduledScanWorkflow,
     SingleTaskRetryWorkflow,
     StartupSyncWorkflow,
